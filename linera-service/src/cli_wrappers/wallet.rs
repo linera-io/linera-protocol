@@ -842,6 +842,15 @@ impl ClientWrapper {
     }
 }
 
+fn truncate_query_output(input: &str) -> String {
+    let max_len = 200;
+    if input.len() < max_len {
+        input.to_string()
+    } else {
+        format!("{} ...", input.get(..max_len).unwrap())
+    }
+}
+
 /// A running node service.
 pub struct NodeService {
     port: u16,
@@ -962,13 +971,13 @@ impl NodeService {
                 .with_context(|| {
                     format!(
                         "query_node: failed to post query={}",
-                        query.get(..200).unwrap_or(query)
+                        truncate_query_output(query)
                     )
                 })?;
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
+                truncate_query_output(query),
                 response
                     .text()
                     .await
@@ -978,7 +987,7 @@ impl NodeService {
             if let Some(errors) = value.get("errors") {
                 warn!(
                     "Query \"{}\" failed: {}",
-                    query.get(..200).unwrap_or(query),
+                    truncate_query_output(query),
                     errors
                 );
             } else {
@@ -987,7 +996,7 @@ impl NodeService {
         }
         bail!(
             "Query \"{}\" failed after {} retries.",
-            query.get(..200).unwrap_or(query),
+            truncate_query_output(query),
             n_try
         );
     }
@@ -1267,7 +1276,7 @@ impl Faucet {
             .with_context(|| {
                 format!(
                     "claim: failed to post query={}",
-                    query.get(..200).unwrap_or(&query)
+                    truncate_query_output(&query)
                 )
             })?;
         anyhow::ensure!(
@@ -1366,13 +1375,13 @@ impl<A> ApplicationWrapper<A> {
             .with_context(|| {
                 format!(
                     "raw_query: failed to post query={}",
-                    query.get(..200).unwrap_or(query)
+                    truncate_query_output(query)
                 )
             })?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
-            query.get(..200).unwrap_or(query),
+            truncate_query_output(query),
             response
                 .text()
                 .await
@@ -1382,7 +1391,7 @@ impl<A> ApplicationWrapper<A> {
         if let Some(errors) = value.get("errors") {
             bail!(
                 "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
+                truncate_query_output(query),
                 errors
             );
         }
