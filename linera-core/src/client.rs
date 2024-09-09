@@ -105,11 +105,7 @@ where
     chains: DashMap<ChainId, ChainState>,
 }
 
-impl<P, S> Client<P, S>
-where
-    P: LocalValidatorNodeProvider + Sync + 'static,
-    S: Storage + Sync + Send + Clone + 'static,
-{
+impl<P, S: Storage + Clone> Client<P, S> {
     #[tracing::instrument(level = "trace", skip_all)]
     /// Creates a new `Client` with a new cache and notifiers.
     pub fn new(
@@ -211,8 +207,14 @@ where
             },
         }
     }
+}
 
-    pub async fn download_certificates(
+impl<P, S> Client<P, S>
+where
+    P: LocalValidatorNodeProvider + Sync + 'static,
+    S: Storage + Sync + Send + Clone + 'static,
+{
+    async fn download_certificates(
         &self,
         nodes: &[(ValidatorName, P::Node)],
         chain_id: ChainId,
@@ -227,7 +229,7 @@ where
         Ok(info)
     }
 
-    pub async fn try_process_certificates(
+    async fn try_process_certificates(
         &self,
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
@@ -243,7 +245,7 @@ where
         result
     }
 
-    pub async fn handle_certificate(
+    async fn handle_certificate(
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
