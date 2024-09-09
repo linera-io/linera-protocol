@@ -270,6 +270,8 @@ impl MessagePolicy {
     }
 }
 
+/// The state of our interaction with a particular chain: how far we have synchronized it and
+/// whether we are currently attempting to propose a new block.
 pub struct ChainState {
     /// Latest block hash, if any.
     pub block_hash: Option<CryptoHash>,
@@ -278,14 +280,15 @@ pub struct ChainState {
     /// Sequence number that we plan to use for the next block.
     /// We track this value outside local storage mainly for security reasons.
     pub next_block_height: BlockHeight,
-    /// Pending block.
+    /// The block we are currently trying to propose for the next height.
     pub pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     pub known_key_pairs: BTreeMap<Owner, KeyPair>,
     /// The ID of the admin chain.
     pub admin_id: ChainId,
 
-    /// Support synchronization of received certificates.
+    /// For each validator, up to which index we have synchronized their
+    /// [`ChainStateView::received_log`].
     pub received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
@@ -787,7 +790,8 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Prepares the chain for the next operation.
+    /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
+    /// its current height.
     async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
@@ -1144,7 +1148,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(tracker, certificates))]
-    /// Processes the result of [`synchronize_received_certificates_from_validator`].
+    /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
+    /// the tracker for this validator.
     async fn receive_certificates_from_validator(
         &self,
         name: ValidatorName,
