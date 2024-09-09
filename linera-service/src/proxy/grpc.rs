@@ -48,7 +48,7 @@ use tonic::{
     Request, Response, Status,
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, Instrument as _};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util,
@@ -231,7 +231,7 @@ where
 
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
-    #[instrument(skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
+    #[instrument(name = "GrpcProxy::run", skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
     pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting gRPC server");
         let mut join_set = JoinSet::new();
@@ -246,7 +246,8 @@ where
         let internal_server = join_set.spawn_task(
             Server::builder()
                 .add_service(self.as_notifier_service())
-                .serve(self.internal_address()),
+                .serve(self.internal_address())
+                .in_current_span(),
         );
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(linera_rpc::FILE_DESCRIPTOR_SET)
@@ -262,7 +263,8 @@ where
                 .add_service(health_service)
                 .add_service(tonic_web::enable(self.as_validator_node()))
                 .add_service(tonic_web::enable(reflection_service))
-                .serve_with_shutdown(self.public_address(), shutdown_signal.cancelled_owned()),
+                .serve_with_shutdown(self.public_address(), shutdown_signal.cancelled_owned())
+                .in_current_span(),
         );
 
         select! {
