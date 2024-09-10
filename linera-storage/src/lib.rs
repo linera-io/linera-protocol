@@ -328,15 +328,13 @@ pub trait Storage: Sized {
             application_description.bytecode_id.service_blob_hash,
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
+        let compressed_service_bytecode = service_blob
+            .into_inner_service_bytecode()
+            .expect("Service Bytecode Blob is of the wrong Blob type!");
+        let service_bytecode =
+            tokio::task::spawn_blocking(move || compressed_service_bytecode.try_into()).await??;
         Ok(Arc::new(
-            WasmServiceModule::new(
-                service_blob
-                    .into_inner_service_bytecode()
-                    .expect("Service Bytecode Blob is of the wrong Blob type!")
-                    .try_into()?,
-                wasm_runtime,
-            )
-            .await?,
+            WasmServiceModule::new(service_bytecode, wasm_runtime).await?,
         ))
     }
 
