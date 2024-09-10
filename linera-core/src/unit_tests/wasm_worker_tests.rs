@@ -229,7 +229,10 @@ where
             }]],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![Vec::new()],
+            oracle_responses: vec![vec![
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+            ]],
         }
         .with(create_block),
     );

@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
+    iter,
 };
 
 use async_graphql::Enum;
@@ -617,6 +618,10 @@ where
                     bytecode_id,
                     creation: context.next_message_id(txn_tracker.next_message_index()),
                 };
+                for application in required_application_ids.iter().chain(iter::once(&id)) {
+                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
+                        .await?;
+                }
                 self.registry
                     .register_new_application(
                         id,
@@ -745,6 +750,7 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
@@ -815,6 +821,8 @@ where
             }
             RegisterApplications { applications } => {
                 for application in applications {
+                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
+                        .await?;
                     self.registry
                         .register_application(application.clone())
                         .await?;
@@ -991,11 +999,42 @@ where
             Err(SystemExecutionError::BlobNotFoundOnRead(blob_id))
         }
     }
+
+    async fn check_and_record_bytecode_blobs(
+        &mut self,
+        bytecode_id: &BytecodeId,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), SystemExecutionError> {
+        let contract_bytecode_blob_id =
+            BlobId::new_contract_bytecode_from_hash(bytecode_id.contract_blob_hash);
+        ensure!(
+            self.context()
+                .extra()
+                .contains_blob(contract_bytecode_blob_id)
+                .await?,
+            SystemExecutionError::BlobNotFoundOnRead(contract_bytecode_blob_id)
+        );
+        txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
+        let service_bytecode_blob_id =
+            BlobId::new_service_bytecode_from_hash(bytecode_id.service_blob_hash);
+        ensure!(
+            self.context()
+                .extra()
+                .contains_blob(service_bytecode_blob_id)
+                .await?,
+            SystemExecutionError::BlobNotFoundOnRead(service_bytecode_blob_id)
+        );
+        txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ApplicationId};
+    use linera_base::{
+        data_types::{Blob, BlockHeight, Bytecode},
+        identifiers::ApplicationId,
+    };
     use linera_views::context::MemoryContext;
 
     use super::*;
@@ -1029,10 +1068,11 @@ mod tests {
     #[tokio::test]
     async fn application_message_index() {
         let (mut view, context) = new_view_and_context().await;
-        let bytecode_id = BytecodeId::new(
-            CryptoHash::test_hash("contract"),
-            CryptoHash::test_hash("service"),
-        );
+        let contract = Bytecode::new(b"contract".into());
+        let service = Bytecode::new(b"service".into());
+        let contract_blob = Blob::new_contract_bytecode(contract.into());
+        let service_blob = Blob::new_service_bytecode(service.into());
+        let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
 
         let operation = SystemOperation::CreateApplication {
             bytecode_id,
@@ -1041,6 +1081,8 @@ mod tests {
             required_application_ids: vec![],
         };
         let mut txn_tracker = TransactionTracker::default();
+        view.context().extra().add_blob(contract_blob);
+        view.context().extra().add_blob(service_blob);
         let new_application = view
             .system
             .execute_operation(context, operation, &mut txn_tracker)
