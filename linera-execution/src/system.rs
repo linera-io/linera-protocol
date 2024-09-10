@@ -1070,8 +1070,8 @@ mod tests {
         let (mut view, context) = new_view_and_context().await;
         let contract = Bytecode::new(b"contract".into());
         let service = Bytecode::new(b"service".into());
-        let contract_blob = Blob::new_contract_bytecode(contract.into());
-        let service_blob = Blob::new_service_bytecode(service.into());
+        let contract_blob = Blob::new_contract_bytecode(contract.compress());
+        let service_blob = Blob::new_service_bytecode(service.compress());
         let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
 
         let operation = SystemOperation::CreateApplication {
