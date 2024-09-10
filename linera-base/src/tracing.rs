@@ -3,34 +3,10 @@
 
 //! This module provides unified handling for tracing subscribers within Linera binaries.
 
-/// Initializes tracing for the browser, sending messages to the developer console and
-/// span events to the [Performance
-/// API](https://developer.mozilla.org/en-US/docs/Web/API/Performance).
-#[cfg(web)]
-pub fn init() {
-    use tracing_subscriber::{
-        prelude::__tracing_subscriber_SubscriberExt as _, util::SubscriberInitExt as _,
-    };
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_ansi(false)
-                .without_time()
-                .with_writer(tracing_web::MakeWebConsoleWriter::new()),
-        )
-        .with(
-            tracing_web::performance_layer()
-                .with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default()),
-        )
-        .init();
-}
-
 /// Initializes tracing in a standard way.
 /// The environment variables `RUST_LOG`, `RUST_LOG_SPAN_EVENTS`, and `RUST_LOG_FORMAT`
 /// can be used to control the verbosity, the span event verbosity, and the output format,
 /// respectively.
-#[cfg(not(web))]
 pub fn init() {
     use is_terminal::IsTerminal as _;
     use tracing_subscriber::fmt::format::FmtSpan;
