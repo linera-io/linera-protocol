@@ -307,7 +307,11 @@ where
             }
 
             ReadBlobContent { blob_id, callback } => {
-                let blob = self.system.read_blob_content(blob_id).await?;
+                let blob = self
+                    .system
+                    .read_blob_content(blob_id)
+                    .await
+                    .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))?;
                 callback.respond(blob);
             }
 
