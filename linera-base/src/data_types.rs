@@ -834,6 +834,8 @@ impl Bytecode {
     /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
     #[cfg(not(target_arch = "wasm32"))]
     pub fn compress(&self) -> CompressedBytecode {
+        #[cfg(with_metrics)]
+        let _compression_latency = BYTECODE_COMPRESSION_LATENCY.measure_latency();
         let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
 
@@ -1201,6 +1203,21 @@ doc_scalar!(
     UserApplicationDescription,
     "Description of the necessary information to run a user application"
 );
+
+/// The time it takes to compress a bytecode.
+#[cfg(with_metrics)]
+static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "bytecode_compression_latency",
+        "Bytecode compression latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
 
 /// The time it takes to decompress a bytecode.
 #[cfg(with_metrics)]
