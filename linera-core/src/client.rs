@@ -2531,7 +2531,6 @@ where
             .await
     }
 
-    // TODO(#2413): Use ruztd instead of zstd for bytecode compression
     #[cfg(not(target_arch = "wasm32"))]
     #[tracing::instrument(level = "trace", skip(contract, service))]
     /// Publishes some bytecode.
