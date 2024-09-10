@@ -267,7 +267,7 @@ impl ActiveChain {
             .await
             .expect("Failed to load service bytecode from file");
 
-        tokio::task::spawn_blocking(move || (contract.into(), service.into()))
+        tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
             .await
             .expect("Failed to compress bytecodes")
     }

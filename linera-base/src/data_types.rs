@@ -824,6 +824,15 @@ impl Bytecode {
         let bytes = fs::read(path)?;
         Ok(Bytecode { bytes })
     }
+
+    /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn compress(&self) -> CompressedBytecode {
+        let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
+            .expect("Compressing bytes in memory should not fail");
+
+        CompressedBytecode { compressed_bytes }
+    }
 }
 
 impl AsRef<[u8]> for Bytecode {
@@ -858,23 +867,6 @@ pub struct CompressedBytecode {
     /// Compressed bytes of the bytecode.
     #[serde(with = "serde_bytes")]
     pub compressed_bytes: Vec<u8>,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl From<&Bytecode> for CompressedBytecode {
-    fn from(bytecode: &Bytecode) -> Self {
-        let compressed_bytes = zstd::stream::encode_all(&*bytecode.bytes, 19)
-            .expect("Compressing bytes in memory should not fail");
-
-        CompressedBytecode { compressed_bytes }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl From<Bytecode> for CompressedBytecode {
-    fn from(bytecode: Bytecode) -> Self {
-        CompressedBytecode::from(&bytecode)
-    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

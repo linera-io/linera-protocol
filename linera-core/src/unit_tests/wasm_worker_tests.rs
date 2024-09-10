@@ -115,8 +115,8 @@ where
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
 
-    let contract_blob = Blob::new_contract_bytecode(contract_bytecode.clone().into());
-    let service_blob = Blob::new_service_bytecode(service_bytecode.into());
+    let contract_blob = Blob::new_contract_bytecode(contract_bytecode.clone().compress());
+    let service_blob = Blob::new_service_bytecode(service_bytecode.compress());
 
     let contract_blob_id = contract_blob.id();
     let service_blob_id = service_blob.id();

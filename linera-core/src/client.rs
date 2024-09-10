@@ -2540,7 +2540,7 @@ where
         service: Bytecode,
     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
         let (compressed_contract, compressed_service) =
-            tokio::task::spawn_blocking(move || (contract.into(), service.into()))
+            tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
                 .await
                 .expect("Compression should not panic");
         let contract_blob = Blob::new_contract_bytecode(compressed_contract);
