@@ -62,8 +62,8 @@ where
 fn make_app_description() -> UserApplicationDescription {
     let contract = Bytecode::new(b"contract".into());
     let service = Bytecode::new(b"service".into());
-    let contract_blob = Blob::new_contract_bytecode(contract.into());
-    let service_blob = Blob::new_service_bytecode(service.into());
+    let contract_blob = Blob::new_contract_bytecode(contract.compress());
+    let service_blob = Blob::new_service_bytecode(service.compress());
 
     let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
     UserApplicationDescription {
@@ -190,9 +190,9 @@ async fn test_application_permissions() {
     extra
         .user_contracts()
         .insert(application_id, application.clone());
-    let contract_blob = Blob::new_contract_bytecode(Bytecode::new(b"contract".into()).into());
+    let contract_blob = Blob::new_contract_bytecode(Bytecode::new(b"contract".into()).compress());
     extra.add_blob(contract_blob);
-    let service_blob = Blob::new_service_bytecode(Bytecode::new(b"service".into()).into());
+    let service_blob = Blob::new_service_bytecode(Bytecode::new(b"service".into()).compress());
     extra.add_blob(service_blob);
 
     // Initialize the chain, with a chain application.
