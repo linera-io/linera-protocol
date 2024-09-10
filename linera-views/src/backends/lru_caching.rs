@@ -15,7 +15,7 @@ use std::{
 
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
-use prometheus::{register_int_counter_vec, IntCounterVec};
+use {linera_base::prometheus_util, prometheus::IntCounterVec};
 
 #[cfg(with_testing)]
 use crate::memory::MemoryStore;
@@ -30,14 +30,14 @@ use crate::{
 #[cfg(with_metrics)]
 /// The total number of cache faults
 static NUM_CACHE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec!("num_cache_fault", "Number of cache faults", &[])
+    prometheus_util::register_int_counter_vec("num_cache_fault", "Number of cache faults", &[])
         .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 /// The total number of cache successes
 static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec!("num_cache_success", "Number of cache success", &[])
+    prometheus_util::register_int_counter_vec("num_cache_success", "Number of cache success", &[])
         .expect("Counter creation should not fail")
 });
 

@@ -18,9 +18,15 @@ pub fn increment_counter(counter: &LazyLock<IntCounterVec>, struct_name: &str, b
 /// The metric tracking the latency of the loading of views.
 #[doc(hidden)]
 pub static LOAD_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new(|| {
-    use prometheus::register_histogram_vec;
-    register_histogram_vec!("load_view_latency", "Load view latency", &[])
-        .expect("Load view latency should not fail")
+    prometheus_util::register_histogram_vec(
+        "load_view_latency",
+        "Load view latency",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Load view latency should not fail")
 });
 
 /// The metric counting how often a view is read from storage.
