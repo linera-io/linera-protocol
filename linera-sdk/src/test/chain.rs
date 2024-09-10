@@ -267,7 +267,9 @@ impl ActiveChain {
             .await
             .expect("Failed to load service bytecode from file");
 
-        (contract.into(), service.into())
+        tokio::task::spawn_blocking(move || (contract.into(), service.into()))
+            .await
+            .expect("Failed to compress bytecodes")
     }
 
     /// Searches for the directory where the built WebAssembly binaries should be.
