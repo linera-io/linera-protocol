@@ -295,7 +295,8 @@ pub trait Storage: Sized {
             .into_inner_contract_bytecode()
             .expect("Contract Bytecode Blob is of the wrong Blob type!");
         let contract_bytecode =
-            tokio::task::spawn_blocking(move || compressed_contract_bytecode.try_into()).await??;
+            tokio::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
+                .await??;
         Ok(Arc::new(
             WasmContractModule::new(contract_bytecode, wasm_runtime).await?,
         ))
@@ -332,7 +333,7 @@ pub trait Storage: Sized {
             .into_inner_service_bytecode()
             .expect("Service Bytecode Blob is of the wrong Blob type!");
         let service_bytecode =
-            tokio::task::spawn_blocking(move || compressed_service_bytecode.try_into()).await??;
+            tokio::task::spawn_blocking(move || compressed_service_bytecode.decompress()).await??;
         Ok(Arc::new(
             WasmServiceModule::new(service_bytecode, wasm_runtime).await?,
         ))

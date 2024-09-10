@@ -869,26 +869,22 @@ pub struct CompressedBytecode {
     pub compressed_bytes: Vec<u8>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-impl TryFrom<&CompressedBytecode> for Bytecode {
-    type Error = DecompressionError;
-
-    fn try_from(compressed_bytecode: &CompressedBytecode) -> Result<Self, Self::Error> {
-        let bytes = zstd::stream::decode_all(&*compressed_bytecode.compressed_bytes)
+impl CompressedBytecode {
+    /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
+        let bytes = zstd::stream::decode_all(&*self.compressed_bytes)
             .map_err(DecompressionError::InvalidCompressedBytecode)?;
 
         Ok(Bytecode { bytes })
     }
-}
 
-#[cfg(target_arch = "wasm32")]
-impl TryFrom<&CompressedBytecode> for Bytecode {
-    type Error = DecompressionError;
-
-    fn try_from(compressed_bytecode: &CompressedBytecode) -> Result<Self, Self::Error> {
+    /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
+    #[cfg(target_arch = "wasm32")]
+    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
 
-        let compressed_bytes = &*compressed_bytecode.compressed_bytes;
+        let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();
         let mut decoder = StreamingDecoder::new(compressed_bytes)?;
 
@@ -901,14 +897,6 @@ impl TryFrom<&CompressedBytecode> for Bytecode {
         }
 
         Ok(Bytecode { bytes })
-    }
-}
-
-impl TryFrom<CompressedBytecode> for Bytecode {
-    type Error = DecompressionError;
-
-    fn try_from(compressed_bytecode: CompressedBytecode) -> Result<Self, Self::Error> {
-        Bytecode::try_from(&compressed_bytecode)
     }
 }
 
