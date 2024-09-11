@@ -3,6 +3,13 @@
 
 //! This module provides unified handling for tracing subscribers within Linera binaries.
 
+use std::{
+    env,
+    fs::{File, OpenOptions},
+    path::Path,
+    sync::Arc,
+};
+
 use is_terminal::IsTerminal as _;
 use tracing::Subscriber;
 use tracing_subscriber::{
@@ -44,15 +51,46 @@ pub fn init(log_name: &str) {
     let stderr_layer = prepare_formatted_layer(
         format.as_deref(),
         fmt::layer()
-            .with_span_events(span_events)
+            .with_span_events(span_events.clone())
             .with_writer(std::io::stderr)
             .with_ansi(color_output),
     );
 
+    let maybe_log_file_layer = open_log_file(log_name).map(|file_writer| {
+        prepare_formatted_layer(
+            format.as_deref(),
+            fmt::layer()
+                .with_span_events(span_events)
+                .with_writer(Arc::new(file_writer))
+                .with_ansi(false),
+        )
+    });
+
     tracing_subscriber::registry()
         .with(env_filter)
         .with(stderr_layer)
+        .with(maybe_log_file_layer)
         .init();
+}
+
+/// Opens a log file for writing.
+///
+/// The location of the file is determined by the `LINERA_LOG_DIR` environment variable,
+/// and its name by the `log_name` parameter.
+///
+/// Returns [`None`] if the `LINERA_LOG_DIR` environment variable is not set.
+fn open_log_file(log_name: &str) -> Option<File> {
+    let log_directory = env::var_os("LINERA_LOG_DIR")?;
+    let mut log_file_path = Path::new(&log_directory).join(log_name);
+    log_file_path.set_extension("log");
+
+    Some(
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(log_file_path)
+            .expect("Failed to open log file for writing"),
+    )
 }
 
 /// Applies a requested `formatting` to the log output of the provided `layer`.
