@@ -5,7 +5,10 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{collections::HashMap, env, num::NonZeroUsize, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    borrow::Cow, collections::HashMap, env, num::NonZeroUsize, path::PathBuf, sync::Arc,
+    time::Instant,
+};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -1277,6 +1280,46 @@ fn main() -> anyhow::Result<()> {
         .build()
         .expect("Failed to create Tokio runtime")
         .block_on(run(&options).instrument(span))
+}
+
+/// Returns the log file name to use based on the [`ClientCommand`] that will run.
+fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
+    match command {
+        ClientCommand::HelpMarkdown
+        | ClientCommand::Transfer { .. }
+        | ClientCommand::OpenChain { .. }
+        | ClientCommand::OpenMultiOwnerChain { .. }
+        | ClientCommand::ChangeOwnership { .. }
+        | ClientCommand::ChangeApplicationPermissions { .. }
+        | ClientCommand::CloseChain { .. }
+        | ClientCommand::LocalBalance { .. }
+        | ClientCommand::QueryBalance { .. }
+        | ClientCommand::SyncBalance { .. }
+        | ClientCommand::Sync { .. }
+        | ClientCommand::ProcessInbox { .. }
+        | ClientCommand::QueryValidator { .. }
+        | ClientCommand::QueryValidators { .. }
+        | ClientCommand::SetValidator { .. }
+        | ClientCommand::RemoveValidator { .. }
+        | ClientCommand::ResourceControlPolicy { .. }
+        | ClientCommand::CreateGenesisConfig { .. }
+        | ClientCommand::PublishBytecode { .. }
+        | ClientCommand::PublishDataBlob { .. }
+        | ClientCommand::CreateApplication { .. }
+        | ClientCommand::PublishAndCreate { .. }
+        | ClientCommand::RequestApplication { .. }
+        | ClientCommand::Keygen { .. }
+        | ClientCommand::Assign { .. }
+        | ClientCommand::Wallet { .. }
+        | ClientCommand::RetryPendingBlock { .. } => "client".into(),
+        #[cfg(feature = "benchmark")]
+        ClientCommand::Benchmark { .. } => "benchmark".into(),
+        ClientCommand::Net { .. } => "net".into(),
+        ClientCommand::Project { .. } => "project".into(),
+        ClientCommand::Watch { .. } => "watch".into(),
+        ClientCommand::Service { port, .. } => format!("service-{port}").into(),
+        ClientCommand::Faucet { .. } => "faucet".into(),
+    }
 }
 
 async fn run(options: &ClientOptions) -> anyhow::Result<()> {
