@@ -383,19 +383,19 @@ where
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
     /// queue.push_back(42);
-    /// assert_eq!(queue.front(), Some(34));
+    /// assert_eq!(queue.front().cloned(), Some(34));
     /// # })
     /// ```
-    pub fn front(&self) -> Option<T> {
+    pub fn front(&self) -> Option<&T> {
         match self.cursor.position {
             Some((i_block, position)) => {
                 let block = &self.stored_data[i_block].1;
                 let Bucket::Loaded { data } = block else {
                     unreachable!();
                 };
-                Some(data[position].clone())
+                Some(&data[position])
             }
-            None => self.new_back_values.front().cloned(),
+            None => self.new_back_values.front(),
         }
     }
 

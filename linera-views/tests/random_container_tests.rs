@@ -480,7 +480,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             }
             assert_eq!(new_elements, new_vector);
             let front1 = view.queue.front();
-            let front2 = new_vector.first().cloned();
+            let front2 = new_vector.first();
             assert_eq!(front1, front2);
             let back1 = view.queue.back().await?;
             let back2 = new_vector.last().cloned();
