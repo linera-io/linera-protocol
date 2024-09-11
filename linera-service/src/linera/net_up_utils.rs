@@ -71,6 +71,7 @@ pub async fn handle_net_up_service(
     testing_prng_seed: Option<u64>,
     table_name: &str,
     policy: ResourceControlPolicy,
+    path: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -82,9 +83,6 @@ pub async fn handle_net_up_service(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-    let tmp_dir = tempfile::tempdir()?;
-    let path = tmp_dir.path();
-
     let service_endpoint = get_free_endpoint().await.unwrap();
     let binary = get_service_storage_binary().await?.display().to_string();
     let service = StorageService::new(&service_endpoint, binary);
@@ -94,7 +92,7 @@ pub async fn handle_net_up_service(
         endpoint: service_endpoint,
     };
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
-    let path_provider = PathProvider::new(path);
+    let path_provider = PathProvider::new(path)?;
     let config = LocalNetConfig {
         network: Network::Grpc,
         database: Database::Service,

@@ -872,6 +872,11 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, num_args=0..=1)]
         binaries: Option<Option<PathBuf>>,
+
+        /// Run with a specific path where the wallet and storage are put.
+        /// If none, then a temporary directory is created.
+        #[arg(long)]
+        path: Option<String>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
