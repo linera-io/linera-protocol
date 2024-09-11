@@ -2689,7 +2689,8 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Creates an empty block to process all incoming messages. This may require several blocks.
+    /// Synchronizes the chain with the validators and creates blocks without any operations to
+    /// process all incoming messages. This may require several blocks.
     ///
     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
     /// is returned, too.
@@ -2697,6 +2698,18 @@ where
         &self,
     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
         self.prepare_chain().await?;
+        self.process_inbox_without_prepare().await
+    }
+
+    #[tracing::instrument(level = "trace")]
+    /// Creates blocks without any operations to process all incoming messages. This may require
+    /// several blocks.
+    ///
+    /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
+    /// is returned, too.
+    pub async fn process_inbox_without_prepare(
+        &self,
+    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
         let mut certificates = Vec::new();
         loop {
             let incoming_bundles = self.pending_messages().await?;
@@ -2711,19 +2724,6 @@ where
                 }
                 Err(error) => return Err(error),
             };
-        }
-    }
-
-    #[tracing::instrument(level = "trace")]
-    /// Creates an empty block to process all incoming messages. This may require several blocks.
-    /// If we are not a chain owner, this doesn't fail, and just returns an empty list.
-    pub async fn process_inbox_if_owned(
-        &self,
-    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
-        match self.process_inbox().await {
-            Ok(result) => Ok(result),
-            Err(ChainClientError::CannotFindKeyForChain(_)) => Ok((Vec::new(), None)),
-            Err(error) => Err(error),
         }
     }
 
