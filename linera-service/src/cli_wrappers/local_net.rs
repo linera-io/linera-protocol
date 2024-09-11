@@ -19,7 +19,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::storage::{StorageConfig, StorageConfigNamespace};
+use linera_client::storage::{Database, StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
@@ -234,7 +234,7 @@ pub struct LocalNetConfig {
     pub database: Database,
     pub network: Network,
     pub testing_prng_seed: Option<u64>,
-    pub table_name: String,
+    pub namespace: String,
     pub num_other_initial_chains: u32,
     pub initial_amount: Amount,
     pub num_initial_validators: usize,
@@ -254,7 +254,7 @@ pub struct LocalNet {
     num_shards: usize,
     validator_names: BTreeMap<usize, String>,
     running_validators: BTreeMap<usize, Validator>,
-    table_name: String,
+    namespace: String,
     set_init: HashSet<(usize, usize)>,
     storage_config: StorageConfig,
     path_provider: PathProvider,
@@ -263,15 +263,6 @@ pub struct LocalNet {
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the binary when starting a server.
 const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
-
-/// Description of the database engine to use inside a local Linera network.
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Database {
-    Service,
-    RocksDb,
-    DynamoDb,
-    ScyllaDb,
-}
 
 /// The processes of a running validator.
 struct Validator {
@@ -340,7 +331,7 @@ impl LocalNetConfig {
             initial_amount: Amount::from_tokens(1_000_000),
             policy: ResourceControlPolicy::devnet(),
             testing_prng_seed: Some(37),
-            table_name: linera_views::test_utils::generate_test_namespace(),
+            namespace: linera_views::test_utils::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
             storage_config_builder,
@@ -363,7 +354,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.database,
             self.network,
             self.testing_prng_seed,
-            self.table_name,
+            self.namespace,
             self.num_initial_validators,
             self.num_shards,
             server_config,
@@ -429,7 +420,7 @@ impl LocalNet {
         database: Database,
         network: Network,
         testing_prng_seed: Option<u64>,
-        table_name: String,
+        namespace: String,
         num_initial_validators: usize,
         num_shards: usize,
         storage_config: StorageConfig,
@@ -444,7 +435,7 @@ impl LocalNet {
             num_shards,
             validator_names: BTreeMap::new(),
             running_validators: BTreeMap::new(),
-            table_name,
+            namespace,
             set_init: HashSet::new(),
             storage_config,
             path_provider,
@@ -602,7 +593,7 @@ impl LocalNet {
             Database::RocksDb => format!("_{}", shard),
             _ => String::new(),
         };
-        let namespace = format!("{}_server_{}{}_db", self.table_name, validator, shard_str);
+        let namespace = format!("{}_server_{}{}_db", self.namespace, validator, shard_str);
         let storage = StorageConfigNamespace {
             storage_config: self.storage_config.clone(),
             namespace,

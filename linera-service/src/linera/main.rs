@@ -1447,11 +1447,11 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 validators,
                 shards,
                 testing_prng_seed,
-                table_name: _,
                 policy_config,
                 kubernetes: true,
                 binaries,
                 path: _,
+                storage_config_namespace: _,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
@@ -1474,9 +1474,9 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 validators,
                 shards,
                 testing_prng_seed,
-                table_name,
                 policy_config,
                 path,
+                storage_config_namespace,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1486,9 +1486,9 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     *validators,
                     *shards,
                     *testing_prng_seed,
-                    table_name,
                     policy_config.into_policy(),
                     path,
+                    storage_config_namespace,
                 )
                 .boxed()
                 .await

@@ -1,19 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use colored::Colorize as _;
 use linera_base::{data_types::Amount, time::Duration};
-use linera_client::storage::StorageConfig;
+use linera_client::storage::{Database, StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
     cli_wrappers::{
-        local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
+        local_net::{LocalNetConfig, PathProvider, StorageConfigBuilder},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     util::listen_for_shutdown_signals,
 };
 use linera_storage_service::{
-    child::{get_free_endpoint, StorageService},
+    child::{get_free_endpoint, StorageService, StorageServiceGuard},
     common::get_service_storage_binary,
 };
 use tokio_util::sync::CancellationToken;
@@ -23,6 +25,71 @@ use {
     linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig,
     std::path::PathBuf,
 };
+
+struct StorageConfigProvider {
+    /// The StorageConfig and the namespace
+    pub storage_config_namespace: StorageConfigNamespace,
+    _service_guard: Option<StorageServiceGuard>,
+}
+
+impl StorageConfigProvider {
+    pub async fn new(
+        storage_config_namespace: &Option<String>,
+    ) -> anyhow::Result<StorageConfigProvider> {
+        match storage_config_namespace {
+            None => {
+                let service_endpoint = get_free_endpoint().await?;
+                let binary = get_service_storage_binary().await?.display().to_string();
+                let service = StorageService::new(&service_endpoint, binary);
+                let _service_guard = service.run().await?;
+                let _service_guard = Some(_service_guard);
+                let storage_config = StorageConfig::Service {
+                    endpoint: service_endpoint,
+                };
+                let namespace = "table_default".to_string();
+                let storage_config_namespace = StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                };
+                Ok(StorageConfigProvider {
+                    storage_config_namespace,
+                    _service_guard,
+                })
+            }
+            Some(storage_config_namespace) => {
+                let storage_config_namespace =
+                    StorageConfigNamespace::from_str(storage_config_namespace)?;
+                let _service_guard = None;
+                Ok(StorageConfigProvider {
+                    storage_config_namespace,
+                    _service_guard,
+                })
+            }
+        }
+    }
+
+    pub fn storage_config(&self) -> StorageConfig {
+        self.storage_config_namespace.storage_config.clone()
+    }
+
+    pub fn namespace(&self) -> String {
+        self.storage_config_namespace.namespace.clone()
+    }
+
+    pub fn database(&self) -> anyhow::Result<Database> {
+        match self.storage_config_namespace.storage_config {
+            #[cfg(feature = "rocksdb")]
+            StorageConfig::Service { .. } => Ok(Database::Service),
+            StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
+            #[cfg(feature = "rocksdb")]
+            StorageConfig::RocksDb { .. } => Ok(Database::RocksDb),
+            #[cfg(feature = "dynamodb")]
+            StorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
+            #[cfg(feature = "scylladb")]
+            StorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
+        }
+    }
+}
 
 #[expect(clippy::too_many_arguments)]
 #[cfg(feature = "kubernetes")]
@@ -69,9 +136,9 @@ pub async fn handle_net_up_service(
     num_initial_validators: usize,
     num_shards: usize,
     testing_prng_seed: Option<u64>,
-    table_name: &str,
     policy: ResourceControlPolicy,
     path: &Option<String>,
+    storage_config_namespace: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -83,21 +150,17 @@ pub async fn handle_net_up_service(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-    let service_endpoint = get_free_endpoint().await.unwrap();
-    let binary = get_service_storage_binary().await?.display().to_string();
-    let service = StorageService::new(&service_endpoint, binary);
-    let _service_guard = service.run().await?;
-
-    let storage_config = StorageConfig::Service {
-        endpoint: service_endpoint,
-    };
+    let storage_config_namespace = StorageConfigProvider::new(storage_config_namespace).await?;
+    let storage_config = storage_config_namespace.storage_config();
+    let namespace = storage_config_namespace.namespace();
+    let database = storage_config_namespace.database()?;
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
     let path_provider = PathProvider::new(path)?;
     let config = LocalNetConfig {
         network: Network::Grpc,
-        database: Database::Service,
+        database,
         testing_prng_seed,
-        table_name: table_name.to_string(),
+        namespace,
         num_other_initial_chains,
         initial_amount: Amount::from_tokens(initial_amount),
         num_initial_validators,
