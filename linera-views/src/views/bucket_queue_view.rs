@@ -294,7 +294,7 @@ where
         })
     }
 
-    /// Get the number of entries in the container that are stored
+    /// Gets the number of entries in the container that are stored
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::create_test_memory_context;
@@ -543,7 +543,7 @@ where
         Ok(elements)
     }
 
-    /// Returns the last element of a bucket queue view
+    /// Returns the first elements of a bucket queue view
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::create_test_memory_context;
@@ -572,7 +572,7 @@ where
     /// queue.push_back(34);
     /// queue.push_back(37);
     /// queue.push_back(47);
-    /// assert_eq!(queue.read_front(2).await.unwrap(), vec![34, 37]);
+    /// assert_eq!(queue.read_back(2).await.unwrap(), vec![37, 47]);
     /// # })
     /// ```
     pub async fn read_back(&self, count: usize) -> Result<Vec<T>, ViewError> {
