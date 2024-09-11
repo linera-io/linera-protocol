@@ -11,8 +11,9 @@ use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 
 use fungible::{FungibleTokenAbi, InitialState};
 use linera_base::{data_types::Amount, identifiers::ChainId};
+use linera_client::storage::Database;
 use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNetConfig, ProcessInbox},
+    local_net::{LocalNetConfig, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{

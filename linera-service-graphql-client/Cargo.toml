@@ -20,6 +20,7 @@ storage-service = ["linera-service/storage-service"]
 
 [dependencies]
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }
+linera-client.workspace = true
 linera-base.workspace = true
 reqwest.workspace = true
 serde = { workspace = true, features = [ "derive" ] }

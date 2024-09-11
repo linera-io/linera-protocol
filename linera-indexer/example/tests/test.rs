@@ -14,8 +14,9 @@ use linera_indexer_graphql_client::{
     indexer::{plugins, state, Plugins, State},
     operations::{get_operation, GetOperation, OperationKey},
 };
+use linera_client::storage::Database;
 use linera_service::cli_wrappers::{
-    local_net::{Database, LocalNetConfig, PathProvider, ProcessInbox},
+    local_net::{LocalNetConfig, PathProvider, ProcessInbox},
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{block, request, transfer, Block, Transfer};

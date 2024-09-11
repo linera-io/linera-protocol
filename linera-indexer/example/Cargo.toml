@@ -23,6 +23,7 @@ wasmtime = ["linera-indexer-plugins/wasmtime"]
 test = ["linera-service/test"]
 
 [dependencies]
+linera-client.workspace = true
 linera-indexer.workspace = true
 linera-indexer-plugins.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
