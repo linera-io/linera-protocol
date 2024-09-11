@@ -9,7 +9,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, Timestamp, UserApplicationDescription,
+        Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
+        UserApplicationDescription,
     },
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
@@ -59,11 +60,14 @@ where
 }
 
 fn make_app_description() -> UserApplicationDescription {
+    let contract = Bytecode::new(b"contract".into());
+    let service = Bytecode::new(b"service".into());
+    let contract_blob = Blob::new_contract_bytecode(contract.into());
+    let service_blob = Blob::new_service_bytecode(service.into());
+
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
     UserApplicationDescription {
-        bytecode_id: BytecodeId::new(
-            CryptoHash::test_hash("contract"),
-            CryptoHash::test_hash("service"),
-        ),
+        bytecode_id,
         creation: make_admin_message_id(BlockHeight(2)),
         required_application_ids: vec![],
         parameters: vec![],
@@ -109,6 +113,10 @@ async fn test_application_permissions() {
     extra
         .user_contracts()
         .insert(application_id, application.clone());
+    let contract_blob = Blob::new_contract_bytecode(Bytecode::new(b"contract".into()).into());
+    extra.add_blob(contract_blob);
+    let service_blob = Blob::new_service_bytecode(Bytecode::new(b"service".into()).into());
+    extra.add_blob(service_blob);
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {

@@ -881,6 +881,10 @@ impl TestExecutionRuntimeContext {
             blobs: Arc::default(),
         }
     }
+
+    pub fn add_blob(&self, blob: Blob) {
+        self.blobs.insert(blob.id(), blob);
+    }
 }
 
 #[cfg(with_testing)]

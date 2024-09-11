@@ -353,7 +353,10 @@ where
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
-                let outcome = self.system.execute_message(context, message).await?;
+                let outcome = self
+                    .system
+                    .execute_message(context, message, txn_tracker)
+                    .await?;
                 txn_tracker.add_system_outcome(outcome)?;
             }
             Message::User {
