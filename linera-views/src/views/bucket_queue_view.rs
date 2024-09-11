@@ -373,7 +373,7 @@ where
     ViewError: From<C::Error>,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    /// Reads the front value, if any.
+    /// Gets a reference on the front value if any.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::create_test_memory_context;
@@ -396,6 +396,34 @@ where
                 Some(&data[position])
             }
             None => self.new_back_values.front(),
+        }
+    }
+
+    /// Reads the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::create_test_memory_context;
+    /// # use linera_views::bucket_queue_view::BucketQueueView;
+    /// # use crate::linera_views::views::View;
+    /// # let context = create_test_memory_context();
+    /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(42);
+    /// let front = queue.front_mut().unwrap();
+    /// *front = 43;
+    /// assert_eq!(queue.front().cloned(), Some(43));
+    /// # })
+    /// ```
+    pub fn front_mut(&mut self) -> Option<&mut T> {
+        match self.cursor.position {
+            Some((i_block, position)) => {
+                let block = &mut self.stored_data.get_mut(i_block).unwrap().1;
+                let Bucket::Loaded { data } = block else {
+                    unreachable!();
+                };
+                Some(data.get_mut(position).unwrap())
+            }
+            None => self.new_back_values.front_mut(),
         }
     }
 
@@ -491,7 +519,7 @@ where
     /// assert_eq!(queue.back().await.unwrap(), Some(37));
     /// # })
     /// ```
-    pub async fn back(&self) -> Result<Option<T>, ViewError> {
+    pub async fn back(&mut self) -> Result<Option<T>, ViewError> {
         if let Some(value) = self.new_back_values.back() {
             return Ok(Some(value.clone()));
         }
@@ -501,16 +529,18 @@ where
         let Some((index, bucket)) = self.stored_data.last() else {
             return Ok(None);
         };
-        let len = bucket.len();
-        if let Bucket::Loaded { data } = bucket {
-            return Ok(Some(data.last().unwrap().clone()));
+        if !bucket.is_loaded() {
+            let key = self.get_index_key(*index)?;
+            let value = self.context.read_value_bytes(&key).await?;
+            let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
+            let data = bcs::from_bytes::<Vec<T>>(value)?;
+            self.stored_data.last_mut().unwrap().1 = Bucket::Loaded { data };
+        }
+        let bucket = &self.stored_data.last_mut().unwrap().1;
+        let Bucket::Loaded { data } = bucket else {
+            unreachable!();
         };
-        let key = self.get_index_key(*index)?;
-        let value = self.context.read_value_bytes(&key).await?;
-        let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
-        let value = bcs::from_bytes::<Vec<T>>(value)?;
-        debug_assert_eq!(value.len(), len);
-        Ok(Some(value[len - 1].clone()))
+        Ok(Some(data.last().unwrap().clone()))
     }
 
     async fn read_context(
@@ -541,7 +571,7 @@ where
             }
             let values = self.context.read_multi_values_bytes(keys).await?;
             position = pair.1;
-            let mut pos = 0;
+            let mut value_pos = 0;
             count_remain = count;
             for block in i_block..self.stored_data.len() {
                 let bucket = &self.stored_data[block].1;
@@ -549,8 +579,8 @@ where
                 let vec = match bucket {
                     Bucket::Loaded { data } => data,
                     Bucket::NotLoaded { .. } => {
-                        let value = values[pos].as_ref().ok_or(ViewError::MissingEntries)?;
-                        pos += 1;
+                        let value = values[value_pos].as_ref().ok_or(ViewError::MissingEntries)?;
+                        value_pos += 1;
                         &bcs::from_bytes::<Vec<T>>(value)?
                     }
                 };
@@ -563,17 +593,14 @@ where
                     elements.push(element.clone());
                 }
                 if size >= count_remain {
-                    count_remain = 0;
-                    break;
+                    return Ok(elements);
                 }
                 count_remain -= size;
                 position = 0;
             }
         }
-        if count_remain > 0 {
-            let count_read = std::cmp::min(count_remain, self.new_back_values.len());
-            elements.extend(self.new_back_values.range(0..count_read).cloned());
-        }
+        let count_read = std::cmp::min(count_remain, self.new_back_values.len());
+        elements.extend(self.new_back_values.range(0..count_read).cloned());
         Ok(elements)
     }
 
