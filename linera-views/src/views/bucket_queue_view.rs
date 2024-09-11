@@ -39,6 +39,9 @@ static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(||
 });
 
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
+/// * The Front is special and directly accessible so that the
+/// * The Store is where the structure of the buckets is stored.
+/// * The Index is for storing the specific buckets.
 #[repr(u8)]
 enum KeyTag {
     /// Prefix for the front of the view
@@ -49,9 +52,14 @@ enum KeyTag {
     Index,
 }
 
+/// The `StoredIndices` contains the description of the stored buckets.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoredIndices {
+    /// The stored buckets with the first index being the size at most N and the
+    /// second one is the index. If the index is 0 then it correspond to the Front,
+    /// otherwise to the Index.
     indices: Vec<(usize, usize)>,
+    /// The position of the front in the first index.
     position: usize,
 }
 
@@ -59,8 +67,17 @@ impl StoredIndices {
     fn is_empty(&self) -> bool {
         self.indices.is_empty()
     }
+
+    fn len(&self) -> usize {
+        self.indices.len()
+    }
 }
 
+/// The `Cursor` is the current position of the front in the queue.
+/// If position is None, then all the stored entries have been deleted
+/// and the new_back_values are the ones accessed by the front operation.
+/// If position is not trivial, then the first index is the relevant
+/// bucket for the front and the second index is the position in the index.
 #[derive(Debug, Clone)]
 struct Cursor {
     position: Option<(usize, usize)>,
@@ -68,7 +85,7 @@ struct Cursor {
 
 impl Cursor {
     pub fn new(stored_indices: &StoredIndices) -> Self {
-        if stored_indices.indices.is_empty() {
+        if stored_indices.is_empty() {
             Cursor { position: None }
         } else {
             Cursor {
@@ -85,10 +102,15 @@ impl Cursor {
 /// A view that supports a FIFO queue for values of type `T`.
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
+    /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
     stored_data: Vec<Option<Vec<T>>>,
+    /// The newly inserted back values.
     new_back_values: VecDeque<T>,
+    /// The stored indices with the bucket size and the bucket index.
     stored_indices: StoredIndices,
+    /// The current position in the stored_data.
     cursor: Cursor,
+    /// Whether the storage is deleted or not.
     delete_storage_first: bool,
 }
 
@@ -124,7 +146,7 @@ where
             }
         };
         let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
-        for _ in 1..stored_indices.indices.len() {
+        for _ in 1..stored_indices.len() {
             stored_data.push(None);
         }
         let cursor = Cursor::new(&stored_indices);
@@ -154,7 +176,7 @@ where
         if self.delete_storage_first {
             return true;
         }
-        if !self.stored_indices.indices.is_empty() {
+        if !self.stored_indices.is_empty() {
             let Some((i_block, position)) = self.cursor.position else {
                 return true;
             };
@@ -167,7 +189,7 @@ where
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        assert_eq!(self.stored_data.len(), self.stored_indices.indices.len());
+        assert_eq!(self.stored_data.len(), self.stored_indices.len());
         if self.delete_storage_first {
             let key_prefix = self.context.base_key();
             batch.delete_key_prefix(key_prefix);
@@ -292,7 +314,7 @@ where
                 return 0;
             };
             let mut stored_count = 0;
-            for block in i_block..self.stored_indices.indices.len() {
+            for block in i_block..self.stored_indices.len() {
                 stored_count += self.stored_indices.indices[block].0;
             }
             stored_count -= position;
@@ -368,7 +390,7 @@ where
                     i_block += 1;
                     position = 0;
                 }
-                if i_block == self.stored_indices.indices.len() {
+                if i_block == self.stored_indices.len() {
                     self.cursor = Cursor { position: None };
                 } else {
                     self.cursor = Cursor {
