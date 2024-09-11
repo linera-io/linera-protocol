@@ -398,9 +398,9 @@ enum ServerCommand {
 }
 
 fn main() {
-    linera_base::tracing::init();
-
     let options = <ServerOptions as clap::Parser>::parse();
+
+    linera_base::tracing::init(&log_file_name_for(&options.command));
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()

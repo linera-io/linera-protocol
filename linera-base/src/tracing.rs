@@ -18,10 +18,15 @@ use tracing_subscriber::{
 };
 
 /// Initializes tracing in a standard way.
+///
 /// The environment variables `RUST_LOG`, `RUST_LOG_SPAN_EVENTS`, and `RUST_LOG_FORMAT`
 /// can be used to control the verbosity, the span event verbosity, and the output format,
 /// respectively.
-pub fn init() {
+///
+/// The `LINERA_LOG_DIR` environment variable can be used to configure a directory to
+/// store log files. If it is set, a file named `log_name` with the `log` extension is
+/// created in the directory.
+pub fn init(log_name: &str) {
     let env_filter = tracing_subscriber::EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();

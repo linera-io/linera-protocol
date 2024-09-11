@@ -54,7 +54,7 @@ enum Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    linera_base::tracing::init();
+    linera_base::tracing::init("benchmark");
 
     let args = Args::parse();
     match args {
