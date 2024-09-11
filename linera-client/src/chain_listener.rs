@@ -16,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
-    client::ChainClient,
+    client::{ChainClient, ChainClientError},
     node::{LocalValidatorNodeProvider, ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
@@ -183,7 +183,8 @@ where
                         continue;
                     }
                     debug!("Processing inbox");
-                    match client.process_inbox_if_owned().await {
+                    match client.process_inbox_without_prepare().await {
+                        Err(ChainClientError::CannotFindKeyForChain(_)) => continue,
                         Err(error) => {
                             warn!(%error, "Failed to process inbox.");
                             timeout = Timestamp::from(u64::MAX);
