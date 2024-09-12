@@ -73,7 +73,6 @@ where
     for _ in 0..iterations {
         let operations = generate_test_case(N_OPERATIONS, &mut rng);
         let mut view = QueueStateView::load(context.clone()).await.unwrap();
-        //
         let measurement = Instant::now();
         for operation in operations {
             match operation {

@@ -420,7 +420,6 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
         let save = rng.gen::<bool>();
         let elements = view.queue.elements().await?;
         assert_eq!(elements, vector);
-        //
         let count_oper = rng.gen_range(0..25);
         let mut new_vector = vector.clone();
         for _ in 0..count_oper {
