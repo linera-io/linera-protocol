@@ -68,8 +68,8 @@ pub fn init(log_name: &str) {
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(stderr_layer)
         .with(maybe_log_file_layer)
+        .with(stderr_layer)
         .init();
 }
 
