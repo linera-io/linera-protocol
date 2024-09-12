@@ -5,6 +5,7 @@
 #![deny(clippy::large_futures)]
 
 use std::{
+    borrow::Cow,
     num::NonZeroUsize,
     path::{Path, PathBuf},
     time::Duration,
@@ -397,9 +398,9 @@ enum ServerCommand {
 }
 
 fn main() {
-    linera_base::tracing::init();
-
     let options = <ServerOptions as clap::Parser>::parse();
+
+    linera_base::tracing::init(&log_file_name_for(&options.command));
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -418,6 +419,29 @@ fn main() {
         .build()
         .expect("Failed to create Tokio runtime")
         .block_on(run(options))
+}
+
+/// Returns the log file name to use based on the [`ServerCommand`] that will run.
+fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
+    match command {
+        ServerCommand::Run {
+            shard,
+            server_config_path,
+            ..
+        } => {
+            let server_config: ValidatorServerConfig =
+                util::read_json(server_config_path).expect("Fail to read server config");
+            let name = &server_config.validator.name;
+
+            if let Some(shard) = shard {
+                format!("validator-{name}-shard-{shard}")
+            } else {
+                format!("validator-{name}")
+            }
+            .into()
+        }
+        ServerCommand::Generate { .. } | ServerCommand::Initialize { .. } => "server".into(),
+    }
 }
 
 async fn run(options: ServerOptions) {

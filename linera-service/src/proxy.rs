@@ -331,9 +331,12 @@ where
 }
 
 fn main() -> Result<()> {
-    linera_base::tracing::init();
-
     let options = <ProxyOptions as clap::Parser>::parse();
+    let server_config: ValidatorServerConfig =
+        util::read_json(&options.config_path).expect("Fail to read server config");
+    let name = &server_config.validator.name;
+
+    linera_base::tracing::init(&format!("validator-{name}-proxy"));
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
