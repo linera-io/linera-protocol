@@ -129,6 +129,9 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 
 
 /// A view that supports a FIFO queue for values of type `T`.
+/// The size `N` has to be chosen by taking into account the size of the type `T`
+/// and the basic size of a block. For example a total size of 100bytes to 10KB
+/// seems adequate.
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
@@ -584,14 +587,7 @@ where
                         &bcs::from_bytes::<Vec<T>>(value)?
                     }
                 };
-                let end = if count_remain <= size {
-                    position + count_remain
-                } else {
-                    position + size
-                };
-                for element in &vec[position..end] {
-                    elements.push(element.clone());
-                }
+                elements.extend(vec[position..].iter().take(count_remain).cloned());
                 if size >= count_remain {
                     return Ok(elements);
                 }
