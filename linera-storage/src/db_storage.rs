@@ -21,6 +21,7 @@ use linera_execution::{
     WasmRuntime,
 };
 use linera_views::{
+    backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
     common::KeyValueStore,
     context::ViewContext,
@@ -225,6 +226,20 @@ enum BaseKey {
     CertificateValue(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
+}
+
+/// An implementation of [`DualStoreRootKeyAssignment`] that stores the
+/// chain states into the first store.
+pub struct ChainStatesFirstAssignment;
+
+impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
+    fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error> {
+        let store = match bcs::from_bytes(root_key)? {
+            BaseKey::ChainState(_) => StoreInUse::First,
+            _ => StoreInUse::Second,
+        };
+        Ok(store)
+    }
 }
 
 /// A `Clock` implementation using the system clock.
