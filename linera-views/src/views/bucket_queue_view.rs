@@ -122,7 +122,7 @@ impl<T> Bucket<T> {
 }
 
 
-fn stored_indices<T>(stored_data: &[(usize, Bucket<T>)], position: usize) -> StoredIndices {
+fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize) -> StoredIndices {
     let indices = stored_data.iter().map(|(index, bucket)| (bucket.len(), *index)).collect::<Vec<_>>();
     StoredIndices { indices, position }
 }
@@ -132,7 +132,7 @@ fn stored_indices<T>(stored_data: &[(usize, Bucket<T>)], position: usize) -> Sto
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
-    stored_data: Vec<(usize,Bucket<T>)>,
+    stored_data: VecDeque<(usize,Bucket<T>)>,
     /// The newly inserted back values.
     new_back_values: VecDeque<T>,
     /// The stored position for the data
@@ -166,19 +166,19 @@ where
         let value1 = values.first().ok_or(ViewError::PostLoadValuesError)?;
         let value2 = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
         let front = from_bytes_option::<Vec<T>, _>(value1)?;
-        let mut stored_data = match front {
+        let mut stored_data = VecDeque::from(match front {
             Some(front) => {
                 vec![(0, Bucket::Loaded { data: front })]
             }
             None => {
                 vec![]
             }
-        };
+        });
         let stored_indices = from_bytes_option_or_default::<StoredIndices, _>(value2)?;
         for i in 1..stored_indices.len() {
             let length = stored_indices.indices[i].0;
             let index = stored_indices.indices[i].1;
-            stored_data.push((index, Bucket::NotLoaded { length }));
+            stored_data.push_back((index, Bucket::NotLoaded { length }));
         }
         let cursor = Cursor::new(stored_indices.len(), stored_indices.position);
         Ok(Self {
@@ -235,8 +235,8 @@ where
                 let index = self.stored_data[block].0;
                 let key = self.get_index_key(index)?;
                 batch.delete_key(key);
+                self.stored_data.pop_front();
             }
-            self.stored_data.drain(0..i_block);
             self.cursor = Cursor {
                 position: Some((0, position)),
             };
@@ -247,7 +247,7 @@ where
                 let key = self.get_index_key(first_index)?;
                 batch.delete_key(key);
                 let key = self.get_index_key(0)?;
-                let (_, data0) = self.stored_data.first().unwrap();
+                let (_, data0) = self.stored_data.front().unwrap();
                 let Bucket::Loaded { data } = data0 else {
                     unreachable!();
                 };
@@ -256,16 +256,16 @@ where
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
-            let mut unused_index = match self.stored_data.last() {
+            let mut unused_index = match self.stored_data.back() {
                 Some((index, _)) => index + 1,
                 None => 0,
             };
-            let new_back_values: VecDeque<T> = std::mem::take(&mut self.new_back_values);
-            let new_back_values: Vec<T> = new_back_values.into_iter().collect::<Vec<_>>();
+            let new_back_values = std::mem::take(&mut self.new_back_values);
+            let new_back_values = new_back_values.into_iter().collect::<Vec<_>>();
             for value_chunk in new_back_values.chunks(N) {
                 let key = self.get_index_key(unused_index)?;
                 batch.put_key_value(key, &value_chunk)?;
-                self.stored_data.push((unused_index, Bucket::Loaded { data: value_chunk.to_vec() }));
+                self.stored_data.push_back((unused_index, Bucket::Loaded { data: value_chunk.to_vec() }));
                 unused_index += 1;
             }
             if !self.cursor.is_incrementable() {
@@ -526,7 +526,7 @@ where
         if self.cursor.position.is_none() {
             return Ok(None);
         }
-        let Some((index, bucket)) = self.stored_data.last() else {
+        let Some((index, bucket)) = self.stored_data.back() else {
             return Ok(None);
         };
         if !bucket.is_loaded() {
@@ -534,9 +534,9 @@ where
             let value = self.context.read_value_bytes(&key).await?;
             let value = value.as_ref().ok_or(ViewError::MissingEntries)?;
             let data = bcs::from_bytes::<Vec<T>>(value)?;
-            self.stored_data.last_mut().unwrap().1 = Bucket::Loaded { data };
+            self.stored_data.back_mut().unwrap().1 = Bucket::Loaded { data };
         }
-        let bucket = &self.stored_data.last_mut().unwrap().1;
+        let bucket = &self.stored_data.back_mut().unwrap().1;
         let Bucket::Loaded { data } = bucket else {
             unreachable!();
         };
