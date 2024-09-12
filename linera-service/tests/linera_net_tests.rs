@@ -29,13 +29,7 @@ use linera_sdk::DataBlobHash;
     feature = "scylladb",
     feature = "storage-service",
 ))]
-use linera_client::storage::Database;
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service",
-))]
-use linera_service::cli_wrappers::local_net::LocalNetConfig;
+use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
 #[cfg(feature = "remote-net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
 #[cfg(any(

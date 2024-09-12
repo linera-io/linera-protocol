@@ -20,10 +20,9 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, ChainId},
 };
-use linera_client::storage::Database;
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, LocalNetConfig, PathProvider, ProcessInbox},
+        local_net::{get_node_port, Database, LocalNetConfig, PathProvider, ProcessInbox},
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,

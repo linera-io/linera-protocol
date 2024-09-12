@@ -106,15 +106,6 @@ pub enum StorageConfig {
     },
 }
 
-/// Description of the database engine to use inside a local Linera network.
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Database {
-    Service,
-    RocksDb,
-    DynamoDb,
-    ScyllaDb,
-}
-
 /// The `root_key` used at startup before the `clone_with_root_key`.
 const ROOT_KEY: &[u8] = &[0];
 

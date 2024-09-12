@@ -19,7 +19,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
 };
-use linera_client::storage::{Database, StorageConfig, StorageConfigNamespace};
+use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
@@ -263,6 +263,15 @@ pub struct LocalNet {
 /// The name of the environment variable that allows specifying additional arguments to be passed
 /// to the binary when starting a server.
 const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
+
+/// Description of the database engine to use inside a local Linera network.
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum Database {
+    Service,
+    RocksDb,
+    DynamoDb,
+    ScyllaDb,
+}
 
 /// The processes of a running validator.
 struct Validator {

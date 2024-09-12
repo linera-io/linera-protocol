@@ -4489,7 +4489,6 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "linera-base",
- "linera-client",
  "linera-indexer",
  "linera-indexer-graphql-client",
  "linera-indexer-plugins",
