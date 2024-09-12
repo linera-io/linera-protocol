@@ -78,7 +78,7 @@ impl StorageConfigProvider {
 
     pub fn database(&self) -> anyhow::Result<Database> {
         match self.storage_config_namespace.storage_config {
-            #[cfg(feature = "rocksdb")]
+            #[cfg(feature = "storage-service")]
             StorageConfig::Service { .. } => Ok(Database::Service),
             StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
             #[cfg(feature = "rocksdb")]
