@@ -28,17 +28,17 @@ use linera_sdk::DataBlobHash;
     feature = "dynamodb",
     feature = "scylladb",
     feature = "storage-service",
-    feature = "kubernetes",
-))]
-use linera_service::cli_wrappers::Network;
-#[cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service",
 ))]
 use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
 #[cfg(feature = "remote-net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage-service",
+    feature = "kubernetes",
+))]
+use linera_service::cli_wrappers::Network;
 #[cfg(feature = "kubernetes")]
 use linera_service::cli_wrappers::{
     docker::BuildArg, local_kubernetes_net::SharedLocalKubernetesNetTestingConfig,
