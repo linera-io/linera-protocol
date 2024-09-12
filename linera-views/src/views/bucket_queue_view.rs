@@ -97,19 +97,15 @@ impl Cursor {
 
 #[derive(Clone)]
 enum Bucket<T> {
-    Loaded {
-        data: Vec<T>,
-    },
-    NotLoaded {
-        length: usize,
-    },
+    Loaded { data: Vec<T> },
+    NotLoaded { length: usize },
 }
 
 impl<T> Bucket<T> {
     fn len(&self) -> usize {
         match self {
             Bucket::Loaded { data } => data.len(),
-            Bucket::NotLoaded { length } => *length
+            Bucket::NotLoaded { length } => *length,
         }
     }
 
@@ -121,12 +117,13 @@ impl<T> Bucket<T> {
     }
 }
 
-
 fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize) -> StoredIndices {
-    let indices = stored_data.iter().map(|(index, bucket)| (bucket.len(), *index)).collect::<Vec<_>>();
+    let indices = stored_data
+        .iter()
+        .map(|(index, bucket)| (bucket.len(), *index))
+        .collect::<Vec<_>>();
     StoredIndices { indices, position }
 }
-
 
 /// A view that supports a FIFO queue for values of type `T`.
 /// The size `N` has to be chosen by taking into account the size of the type `T`
@@ -135,7 +132,7 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
-    stored_data: VecDeque<(usize,Bucket<T>)>,
+    stored_data: VecDeque<(usize, Bucket<T>)>,
     /// The newly inserted back values.
     new_back_values: VecDeque<T>,
     /// The stored position for the data
@@ -268,7 +265,12 @@ where
             for value_chunk in new_back_values.chunks(N) {
                 let key = self.get_index_key(unused_index)?;
                 batch.put_key_value(key, &value_chunk)?;
-                self.stored_data.push_back((unused_index, Bucket::Loaded { data: value_chunk.to_vec() }));
+                self.stored_data.push_back((
+                    unused_index,
+                    Bucket::Loaded {
+                        data: value_chunk.to_vec(),
+                    },
+                ));
                 unused_index += 1;
             }
             if !self.cursor.is_incrementable() {
@@ -458,7 +460,7 @@ where
                         position: Some((i_block, position)),
                     };
                     let (index, bucket) = self.stored_data.get_mut(i_block).unwrap();
-                    let index = index.clone();
+                    let index = *index;
                     if !bucket.is_loaded() {
                         let key = self.get_index_key(index)?;
                         let value = self.context.read_value_bytes(&key).await?;
@@ -582,7 +584,9 @@ where
                 let vec = match bucket {
                     Bucket::Loaded { data } => data,
                     Bucket::NotLoaded { .. } => {
-                        let value = values[value_pos].as_ref().ok_or(ViewError::MissingEntries)?;
+                        let value = values[value_pos]
+                            .as_ref()
+                            .ok_or(ViewError::MissingEntries)?;
                         value_pos += 1;
                         &bcs::from_bytes::<Vec<T>>(value)?
                     }
@@ -689,7 +693,7 @@ where
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
-    pub async fn iter_mut<'a>(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+    pub async fn iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }
