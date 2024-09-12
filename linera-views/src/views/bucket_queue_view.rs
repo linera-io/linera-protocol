@@ -39,7 +39,7 @@ static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(||
 });
 
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
-/// * The Front is special and directly accessible so that the
+/// * The Front is special and downloaded at the view loading.
 /// * The Store is where the structure of the buckets is stored.
 /// * The Index is for storing the specific buckets.
 #[repr(u8)]
@@ -367,7 +367,7 @@ where
     }
 }
 
-impl<'a, C, T, const N: usize> BucketQueueView<C, T, N>
+impl<C, T, const N: usize> BucketQueueView<C, T, N>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
@@ -619,6 +619,7 @@ where
     /// # })
     /// ```
     pub async fn read_front(&self, count: usize) -> Result<Vec<T>, ViewError> {
+        let count = std::cmp::min(count, self.count());
         self.read_context(self.cursor.position, count).await
     }
 
@@ -637,6 +638,7 @@ where
     /// # })
     /// ```
     pub async fn read_back(&self, count: usize) -> Result<Vec<T>, ViewError> {
+        let count = std::cmp::min(count, self.count());
         if count <= self.new_back_values.len() {
             let start = self.new_back_values.len() - count;
             Ok(self
@@ -691,7 +693,7 @@ where
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
-    pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+    pub async fn iter_mut<'a>(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }
