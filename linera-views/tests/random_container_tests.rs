@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use linera_views::{
+    bucket_queue_view::HashedBucketQueueView,
     collection_view::HashedCollectionView,
     context::{create_test_memory_context, Context},
     key_value_store_view::{KeyValueStoreView, SizeData},
@@ -403,6 +404,112 @@ async fn map_view_mutability() -> Result<()> {
 }
 
 #[derive(CryptoHashRootView)]
+pub struct BucketQueueStateView<C> {
+    pub queue: HashedBucketQueueView<C, u8, 5>,
+}
+
+#[tokio::test]
+async fn bucket_queue_view_mutability_check() -> Result<()> {
+    let context = create_test_memory_context();
+    let mut rng = test_utils::make_deterministic_rng();
+    let mut vector = Vec::new();
+    let n = 200;
+    for _ in 0..n {
+        let mut view = BucketQueueStateView::load(context.clone()).await?;
+        let hash = view.crypto_hash().await?;
+        let save = rng.gen::<bool>();
+        let elements = view.queue.elements().await?;
+        assert_eq!(elements, vector);
+        let count_oper = rng.gen_range(0..25);
+        let mut new_vector = vector.clone();
+        for _ in 0..count_oper {
+            let choice = rng.gen_range(0..6);
+            let count = view.queue.count();
+            if choice == 0 {
+                // inserting random stuff
+                let n_ins = rng.gen_range(0..10);
+                for _ in 0..n_ins {
+                    let val = rng.gen::<u8>();
+                    view.queue.push_back(val);
+                    new_vector.push(val);
+                }
+            }
+            if choice == 1 {
+                // deleting some entries
+                let n_remove = rng.gen_range(0..=count);
+                for _ in 0..n_remove {
+                    view.queue.delete_front().await?;
+                    // slow but we do not care for tests.
+                    new_vector.remove(0);
+                }
+            }
+            if choice == 2 && count > 0 {
+                // changing some random entries
+                let pos = rng.gen_range(0..count);
+                let val = rng.gen::<u8>();
+                let mut iter = view.queue.iter_mut().await?;
+                (for _ in 0..pos {
+                    iter.next();
+                });
+                if let Some(value) = iter.next() {
+                    *value = val;
+                }
+                if let Some(value) = new_vector.get_mut(pos) {
+                    *value = val;
+                }
+            }
+            if choice == 3 {
+                // Doing the clearing
+                view.clear();
+                new_vector.clear();
+            }
+            if choice == 4 {
+                // Doing the rollback
+                view.rollback();
+                assert!(!view.has_pending_changes().await);
+                new_vector.clone_from(&vector);
+            }
+            let new_elements = view.queue.elements().await?;
+            let new_hash = view.crypto_hash().await?;
+            if elements == new_elements {
+                assert_eq!(new_hash, hash);
+            } else {
+                // If equal it is a bug or a hash collision (unlikely)
+                assert_ne!(new_hash, hash);
+            }
+            assert_eq!(new_elements, new_vector);
+            let front1 = view.queue.front();
+            let front2 = new_vector.first();
+            assert_eq!(front1, front2);
+            let back1 = view.queue.back().await?;
+            let back2 = new_vector.last().cloned();
+            assert_eq!(back1, back2);
+            for _ in 0..3 {
+                let count = rng.gen_range(0..new_vector.len() + 1);
+                let vec1 = view.queue.read_front(count).await?;
+                let vec2 = new_vector[..count].to_vec();
+                assert_eq!(vec1, vec2);
+                let vec1 = view.queue.read_back(count).await?;
+                let start = new_vector.len() - count;
+                let vec2 = new_vector[start..].to_vec();
+                assert_eq!(vec1, vec2);
+            }
+        }
+        if save {
+            if vector != new_vector {
+                assert!(view.has_pending_changes().await);
+            }
+            vector.clone_from(&new_vector);
+            view.save().await?;
+            let new_elements = view.queue.elements().await?;
+            assert_eq!(new_elements, new_vector);
+            assert!(!view.has_pending_changes().await);
+        }
+    }
+    Ok(())
+}
+
+#[derive(CryptoHashRootView)]
 pub struct QueueStateView<C> {
     pub queue: HashedQueueView<C, u8>,
 }
@@ -469,6 +576,9 @@ async fn queue_view_mutability_check() -> Result<()> {
                 assert!(!view.has_pending_changes().await);
                 new_vector.clone_from(&vector);
             }
+            let front1 = view.queue.front().await?;
+            let front2 = new_vector.first().cloned();
+            assert_eq!(front1, front2);
             let new_elements = view.queue.elements().await?;
             let new_hash = view.crypto_hash().await?;
             if elements == new_elements {

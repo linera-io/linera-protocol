@@ -463,8 +463,7 @@ where
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = QUEUE_VIEW_HASH_RUNTIME.measure_latency();
-        let count = self.count();
-        let elements = self.read_front(count).await?;
+        let elements = self.elements().await?;
         let mut hasher = sha3::Sha3_256::default();
         hasher.update_with_bcs_bytes(&elements)?;
         Ok(hasher.finalize())

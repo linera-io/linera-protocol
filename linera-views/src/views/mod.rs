@@ -23,6 +23,9 @@ pub mod register_view;
 /// The `LogView` implements a log list that can be pushed.
 pub mod log_view;
 
+/// The `BucketQueueView` implements a queue that can push on the back and delete on the front and group data in buckets.
+pub mod bucket_queue_view;
+
 /// The `QueueView` implements a queue that can push on the back and delete on the front.
 pub mod queue_view;
 
