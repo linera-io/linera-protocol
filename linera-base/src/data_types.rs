@@ -6,6 +6,8 @@
 
 #[cfg(with_testing)]
 use std::ops;
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
 use std::{
     fmt::{self, Display},
     fs, io, iter,
@@ -19,9 +21,13 @@ use async_graphql::InputObject;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
+#[cfg(with_metrics)]
+use prometheus::HistogramVec;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+use crate::prometheus_util::{self, MeasureLatency};
 use crate::{
     crypto::BcsHashable,
     doc_scalar, hex_debug,
@@ -828,6 +834,8 @@ impl Bytecode {
     /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
     #[cfg(not(target_arch = "wasm32"))]
     pub fn compress(&self) -> CompressedBytecode {
+        #[cfg(with_metrics)]
+        let _compression_latency = BYTECODE_COMPRESSION_LATENCY.measure_latency();
         let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
             .expect("Compressing bytes in memory should not fail");
 
@@ -873,6 +881,8 @@ impl CompressedBytecode {
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     #[cfg(not(target_arch = "wasm32"))]
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
+        #[cfg(with_metrics)]
+        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&*self.compressed_bytes)
             .map_err(DecompressionError::InvalidCompressedBytecode)?;
 
@@ -883,6 +893,9 @@ impl CompressedBytecode {
     #[cfg(target_arch = "wasm32")]
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
+
+        #[cfg(with_metrics)]
+        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
 
         let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();
@@ -1190,6 +1203,36 @@ doc_scalar!(
     UserApplicationDescription,
     "Description of the necessary information to run a user application"
 );
+
+/// The time it takes to compress a bytecode.
+#[cfg(with_metrics)]
+static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "bytecode_compression_latency",
+        "Bytecode compression latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
+
+/// The time it takes to decompress a bytecode.
+#[cfg(with_metrics)]
+static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "bytecode_decompression_latency",
+        "Bytecode decompression latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
 
 #[cfg(test)]
 mod tests {
