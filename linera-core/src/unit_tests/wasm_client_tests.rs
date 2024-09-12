@@ -549,11 +549,17 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
+    let _admin = builder
+        .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
+        .await?;
     let sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
     let receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
+        .add_initial_chain(ChainDescription::Root(2), Amount::ONE)
+        .await?;
+    let receiver2 = builder
+        .add_initial_chain(ChainDescription::Root(3), Amount::ONE)
         .await?;
 
     let (bytecode_id, _pub_cert) = {
@@ -574,6 +580,7 @@ where
 
     let sender_owner = AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
     let receiver_owner = AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
+    let receiver2_owner = AccountOwner::User(Owner::from(receiver2.key_pair().await?.public()));
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };
@@ -671,13 +678,13 @@ where
         .flat_map(|msg| &msg.bundle.messages)
         .any(|msg| matches!(msg.message, Message::User { .. })));
 
-    // Try another transfer in the other direction except that the amount is too large.
+    // Try another transfer except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
         owner: receiver_owner,
         amount: 301.into(),
         target_account: fungible::Account {
-            chain_id: sender.chain_id(),
-            owner: sender_owner,
+            chain_id: receiver2.chain_id(),
+            owner: receiver2_owner,
         },
     };
     assert!(receiver
@@ -686,17 +693,23 @@ where
         .is_err());
     receiver.clear_pending_block();
 
-    // Try another transfer in the other direction with the correct amount.
+    // Try another transfer with the correct amount.
     let transfer = fungible::Operation::Transfer {
         owner: receiver_owner,
         amount: 300.into(),
         target_account: fungible::Account {
-            chain_id: sender.chain_id(),
-            owner: sender_owner,
+            chain_id: receiver2.chain_id(),
+            owner: receiver2_owner,
         },
     };
-    receiver
+    let certificate = receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
+        .await
+        .unwrap()
+        .unwrap();
+
+    receiver2
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
 
