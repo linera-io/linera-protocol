@@ -28,6 +28,13 @@ use linera_sdk::DataBlobHash;
     feature = "dynamodb",
     feature = "scylladb",
     feature = "storage-service",
+    feature = "kubernetes",
+))]
+use linera_service::cli_wrappers::Network;
+#[cfg(any(
+    feature = "dynamodb",
+    feature = "scylladb",
+    feature = "storage-service",
 ))]
 use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
 #[cfg(feature = "remote-net")]
@@ -39,7 +46,7 @@ use linera_service::cli_wrappers::{
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
-        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig,
     },
     test_name,
 };
@@ -2779,6 +2786,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
