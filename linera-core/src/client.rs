@@ -2717,8 +2717,8 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    /// Creates blocks without any operations to process all incoming messages. This may require
-    /// several blocks.
+    /// Synchronizes the chain with the validators and creates blocks without any operations to
+    /// process all incoming messages. This may require several blocks.
     ///
     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
     /// is returned, too.
