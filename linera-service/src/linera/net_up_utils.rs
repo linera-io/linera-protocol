@@ -14,10 +14,9 @@ use linera_service::{
     },
     util::listen_for_shutdown_signals,
 };
-use linera_storage_service::child::StorageServiceGuard;
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
-    child::{get_free_endpoint, StorageService},
+    child::{StorageService, StorageServiceGuard},
     common::get_service_storage_binary,
 };
 use tokio_util::sync::CancellationToken;
@@ -31,6 +30,7 @@ use {
 struct StorageConfigProvider {
     /// The StorageConfig and the namespace
     pub storage_config_namespace: StorageConfigNamespace,
+    #[cfg(feature = "storage-service")]
     _service_guard: Option<StorageServiceGuard>,
 }
 
@@ -41,7 +41,7 @@ impl StorageConfigProvider {
         match storage_config_namespace {
             #[cfg(feature = "storage-service")]
             None => {
-                let service_endpoint = get_free_endpoint().await?;
+                let service_endpoint = linera_base::port::get_free_endpoint().await?;
                 let binary = get_service_storage_binary().await?.display().to_string();
                 let service = StorageService::new(&service_endpoint, binary);
                 let _service_guard = service.run().await?;
@@ -63,12 +63,21 @@ impl StorageConfigProvider {
             None => {
                 panic!("When storage_config_namespace is not selected, the storage-service needs to be enabled");
             }
+            #[cfg(feature = "storage-service")]
             Some(storage_config_namespace) => {
                 let storage_config_namespace =
                     StorageConfigNamespace::from_str(storage_config_namespace)?;
                 Ok(StorageConfigProvider {
                     storage_config_namespace,
                     _service_guard: None,
+                })
+            }
+            #[cfg(not(feature = "storage-service"))]
+            Some(storage_config_namespace) => {
+                let storage_config_namespace =
+                    StorageConfigNamespace::from_str(storage_config_namespace)?;
+                Ok(StorageConfigProvider {
+                    storage_config_namespace,
                 })
             }
         }

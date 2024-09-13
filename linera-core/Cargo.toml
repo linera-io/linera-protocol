@@ -29,7 +29,7 @@ test = [
 rocksdb = ["linera-views/rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
-storage-service = []
+storage-service = ["linera-storage-service"]
 unstable-oracles = []
 metrics = [
     "prometheus",
@@ -79,7 +79,7 @@ trait-variant.workspace = true
 wasm-bindgen-futures = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-linera-storage-service.workspace = true
+linera-storage-service = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

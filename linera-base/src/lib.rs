@@ -19,6 +19,7 @@ pub mod data_types;
 mod graphql;
 pub mod identifiers;
 pub mod ownership;
+pub mod port;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
 #[cfg(not(chain))]

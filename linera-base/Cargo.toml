@@ -43,6 +43,7 @@ getrandom = { workspace = true, optional = true }
 hex.workspace = true
 is-terminal.workspace = true
 linera-witty = { workspace = true, features = ["macros"] }
+port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true, features = ["alloc"] }
 rand.workspace = true
