@@ -172,7 +172,7 @@ zstd = "0.13.2"
 
 linera-base = { version = "0.13.0", path = "./linera-base" }
 linera-chain = { version = "0.13.0", path = "./linera-chain" }
-linera-client = { version = "0.13.0", path = "./linera-client" }
+linera-client = { version = "0.13.0", path = "./linera-client", default-features = false }
 linera-core = { version = "0.13.0", path = "./linera-core", default-features = false }
 linera-ethereum = { version = "0.13.0", path = "./linera-ethereum", default-features = false }
 linera-execution = { version = "0.13.0", path = "./linera-execution", default-features = false }

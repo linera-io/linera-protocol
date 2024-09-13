@@ -14,8 +14,10 @@ use linera_service::{
     },
     util::listen_for_shutdown_signals,
 };
+use linera_storage_service::child::StorageServiceGuard;
+#[cfg(feature = "storage-service")]
 use linera_storage_service::{
-    child::{get_free_endpoint, StorageService, StorageServiceGuard},
+    child::{get_free_endpoint, StorageService},
     common::get_service_storage_binary,
 };
 use tokio_util::sync::CancellationToken;
@@ -37,6 +39,7 @@ impl StorageConfigProvider {
         storage_config_namespace: &Option<String>,
     ) -> anyhow::Result<StorageConfigProvider> {
         match storage_config_namespace {
+            #[cfg(feature = "storage-service")]
             None => {
                 let service_endpoint = get_free_endpoint().await?;
                 let binary = get_service_storage_binary().await?.display().to_string();
@@ -56,13 +59,16 @@ impl StorageConfigProvider {
                     _service_guard,
                 })
             }
+            #[cfg(not(feature = "storage-service"))]
+            None => {
+                panic!("When storage_config_namespace is not selected, the storage-service needs to be enabled");
+            }
             Some(storage_config_namespace) => {
                 let storage_config_namespace =
                     StorageConfigNamespace::from_str(storage_config_namespace)?;
-                let _service_guard = None;
                 Ok(StorageConfigProvider {
                     storage_config_namespace,
-                    _service_guard,
+                    _service_guard: None,
                 })
             }
         }
