@@ -159,7 +159,7 @@ jobs:
         | xargs -0 scripts/target/release/check_copyright_header
     - name: Put lint toolchain file in place
       run: |
-        ln -sf toolchains/lint/rust-toolchain.toml
+        ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install cargo-machete
       run: |
@@ -225,7 +225,7 @@ jobs:
     - name: Restore `rust-toolchain.toml` file
       if: '!cancelled()'
       run: |
-        ln -sf toolchains/build/rust-toolchain.toml
+        ln -sf toolchains/stable/rust-toolchain.toml
     - name: Check linera-service GraphQL schema
       run: |
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql

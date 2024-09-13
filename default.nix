@@ -1,8 +1,5 @@
-{ crane, pkgs }:
-let
-  rust-toolchain = (pkgs.rust-bin.fromRustupToolchainFile
-    ./toolchains/build/rust-toolchain.toml);
-in ((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
+{ crane, pkgs, rust-toolchain }:
+((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
   pname = "linera";
   src = ./.;
   cargoExtraArgs = "-p linera-service";
