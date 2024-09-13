@@ -4231,6 +4231,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-web",
  "wasm-bindgen-futures",
+ "wasm_thread",
  "wasmtimer",
  "web-time",
  "zstd",
@@ -4747,7 +4748,6 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
- "tokio",
 ]
 
 [[package]]
@@ -8484,6 +8484,18 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "wasm_thread"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22bc95de7e96023c115820c1b87504cdd316ed958d2dfb97dca502cc6e5772a1"
+dependencies = [
+ "futures",
+ "js-sys",
+ "wasm-bindgen",
  "web-sys",
 ]
 

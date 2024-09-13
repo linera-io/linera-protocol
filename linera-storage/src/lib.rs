@@ -193,7 +193,7 @@ pub trait Storage: Sized {
         let mut tasks = Vec::new();
         for key in keys {
             let client = self.clone();
-            tasks.push(tokio::task::spawn(async move {
+            tasks.push(linera_base::task::spawn(async move {
                 client.read_certificate(key).await
             }));
         }
@@ -295,7 +295,7 @@ pub trait Storage: Sized {
             .into_inner_contract_bytecode()
             .expect("Contract Bytecode Blob is of the wrong Blob type!");
         let contract_bytecode =
-            tokio::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
+            linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
                 .await??;
         Ok(Arc::new(
             WasmContractModule::new(contract_bytecode, wasm_runtime).await?,
@@ -333,7 +333,8 @@ pub trait Storage: Sized {
             .into_inner_service_bytecode()
             .expect("Service Bytecode Blob is of the wrong Blob type!");
         let service_bytecode =
-            tokio::task::spawn_blocking(move || compressed_service_bytecode.decompress()).await??;
+            linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
+                .await??;
         Ok(Arc::new(
             WasmServiceModule::new(service_bytecode, wasm_runtime).await?,
         ))
