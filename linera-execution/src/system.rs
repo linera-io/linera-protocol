@@ -159,8 +159,8 @@ pub enum SystemOperation {
     PublishBytecode { bytecode_id: BytecodeId },
     /// Publishes a new data blob.
     PublishDataBlob { blob_hash: CryptoHash },
-    /// Reads a blob. This is test-only, so we can test without a Wasm application.
-    #[cfg(with_testing)]
+    /// Reads a blob and discards the result.
+    // TODO(#2490): Consider removing this.
     ReadBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
@@ -658,7 +658,6 @@ where
                     BlobId::new_data_from_hash(blob_hash),
                 ))?;
             }
-            #[cfg(with_testing)]
             ReadBlob { blob_id } => {
                 txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
                 self.read_blob_content(blob_id).await?;
