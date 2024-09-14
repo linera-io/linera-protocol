@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::KeyPair,
     data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
@@ -52,6 +52,7 @@ use {
 #[cfg(feature = "fs")]
 use {
     linera_base::{
+        crypto::CryptoHash,
         data_types::{BlobContent, Bytecode},
         identifiers::{BlobId, BytecodeId},
     },

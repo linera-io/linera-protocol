@@ -728,7 +728,7 @@ impl ClientWrapper {
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let stdout = stdout.trim();
-        BlobId::from_str(&stdout)
+        BlobId::from_str(stdout)
     }
 
     /// Runs `linera read-data-blob`.
