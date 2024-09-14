@@ -38,11 +38,11 @@ The WebAssembly binaries for the bytecode can be built and published using [step
 book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
 summarized below.
 
-First set up the path and the helper functions:
+First, build Linera and add it to the path:
 
 ```bash
+cargo build --features storage-service
 export PATH=$PWD/target/debug:$PATH
-source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
 Using the helper function defined by `linera net helper`, set up a local network with two
@@ -54,6 +54,7 @@ to use the variable `LINERA_WALLET_$n` and `LINERA_STORAGE_$n`; e.g.
 `linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0"`.
 
 ```bash
+eval "$(linera net helper)"
 linera_spawn_and_read_wallet_variables \
     linera net up \
         --extra-wallets 1 \
