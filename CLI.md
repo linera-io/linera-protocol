@@ -27,6 +27,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-bytecode`↴](#linera-publish-bytecode)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
+* [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera request-application`↴](#linera-request-application)
@@ -77,6 +78,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-bytecode` — Publish bytecode
 * `publish-data-blob` — Publish a data blob of binary data
+* `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
 * `request-application` — Request an application from another chain, so it can be used on this one
@@ -548,6 +550,19 @@ Publish a data blob of binary data
 
 * `<BLOB_PATH>` — Path to data blob file to be published
 * `<PUBLISHER>` — An optional chain ID to publish the blob. The default chain of the wallet is used otherwise
+
+
+
+## `linera read-data-blob`
+
+Verify that a data blob is readable
+
+**Usage:** `linera read-data-blob <HASH> [READER]`
+
+###### **Arguments:**
+
+* `<HASH>` — The hash of the content
+* `<READER>` — An optional chain ID to verify the blob. The default chain of the wallet is used otherwise
 
 
 
