@@ -26,7 +26,7 @@ to the channel.
 
 ## Usage
 
-First set up the path and the helper functions:
+Set up the path and the helper function.
 
 ```bash
 PATH=$PWD/target/debug:$PATH
