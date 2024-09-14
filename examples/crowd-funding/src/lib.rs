@@ -46,11 +46,11 @@ The WebAssembly binaries for the bytecode can be built and published using [step
 book](https://linera-io.github.io/linera-documentation/getting_started/first_app.html),
 summarized below.
 
-First, build Linera and add it to the path:
+Set up the path and set up the helper function.
 
 ```bash
-cargo build
 export PATH=$PWD/target/debug:$PATH
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
 Using the helper function defined by `linera net helper`, set up a local network with two

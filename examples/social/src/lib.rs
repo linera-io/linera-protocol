@@ -35,11 +35,11 @@ to the channel.
 
 ## Usage
 
-To try it out, build Linera and add it to your path:
+Set up the path and the helper function.
 
 ```bash
-cargo build
 PATH=$PWD/target/debug:$PATH
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
 Then, using the helper function defined by `linera net helper`, set up a local network
