@@ -30,7 +30,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
+        Account, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
+        UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -1281,6 +1282,21 @@ where
             user_data,
         }))
         .await
+    }
+
+    #[tracing::instrument(level = "trace", skip(hash))]
+    /// Verify if a data blob is readable from storage.
+    // TODO(#2490): Consider removing or renaming this.
+    pub async fn read_data_blob(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+        let blob_id = BlobId {
+            hash,
+            blob_type: BlobType::Data,
+        };
+        self.execute_operation(Operation::System(SystemOperation::ReadBlob { blob_id }))
+            .await
     }
 
     #[tracing::instrument(level = "trace", skip(user_data))]

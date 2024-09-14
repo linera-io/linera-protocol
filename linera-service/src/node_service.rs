@@ -334,6 +334,25 @@ where
         .await
     }
 
+    /// Test if a data blob is readable from a transaction in the current chain.
+    #[allow(clippy::too_many_arguments)]
+    // TODO(#2490): Consider removing or renaming this.
+    async fn read_data_blob(
+        &self,
+        chain_id: ChainId,
+        hash: CryptoHash,
+    ) -> Result<CryptoHash, Error> {
+        self.apply_client_command(&chain_id, move |client| async move {
+            let result = client
+                .read_data_blob(hash)
+                .await
+                .map_err(Error::from)
+                .map(|outcome| outcome.map(|certificate| certificate.hash()));
+            (result, client)
+        })
+        .await
+    }
+
     /// Creates (or activates) a new chain by installing the given authentication key.
     /// This will automatically subscribe to the future committees created by `admin_id`.
     async fn open_chain(
