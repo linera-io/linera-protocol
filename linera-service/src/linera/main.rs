@@ -837,7 +837,6 @@ impl Runnable for Job {
                     .publish_bytecode(&chain_client, contract, service)
                     .await?;
                 println!("{}", bytecode_id);
-                info!("{}", "Bytecode published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
@@ -852,7 +851,6 @@ impl Runnable for Job {
                 // TODO(#2491): PublishDataBlob should return a CryptoHash.
                 let blob_id = context.publish_data_blob(&chain_client, blob_path).await?;
                 println!("{}", blob_id);
-                info!("{}", "Data blob published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
