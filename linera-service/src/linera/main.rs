@@ -1314,6 +1314,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::CreateGenesisConfig { .. }
         | ClientCommand::PublishBytecode { .. }
         | ClientCommand::PublishDataBlob { .. }
+        | ClientCommand::ReadDataBlob { .. }
         | ClientCommand::CreateApplication { .. }
         | ClientCommand::PublishAndCreate { .. }
         | ClientCommand::RequestApplication { .. }
