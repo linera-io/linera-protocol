@@ -62,7 +62,6 @@ to use the variable `LINERA_WALLET_$n` and `LINERA_STORAGE_$n`; e.g.
 `linera --wallet "$LINERA_WALLET_0" --storage "$LINERA_STORAGE_0"`.
 
 ```bash
-eval "$(linera net helper)"
 linera_spawn_and_read_wallet_variables \
     linera net up \
         --extra-wallets 1 \

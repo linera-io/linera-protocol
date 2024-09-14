@@ -47,7 +47,6 @@ with two wallets and define variables holding their wallet paths (`$LINERA_WALLE
 `$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`).
 
 ```bash
-eval "$(linera net helper)"
 linera_spawn_and_read_wallet_variables \
     linera net up \
         --extra-wallets 1
