@@ -710,6 +710,33 @@ impl ClientWrapper {
         }
     }
 
+    /// Runs `linera publish-data-blob`.
+    pub async fn publish_data_blob(
+        &self,
+        path: &Path,
+        chain_id: Option<ChainId>,
+    ) -> Result<BlobId> {
+        let mut command = self.command().await?;
+        command.arg("publish-data-blob").arg(path);
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let stdout = stdout.trim();
+        BlobId::from_str(stdout)
+    }
+
+    /// Runs `linera read-data-blob`.
+    pub async fn read_data_blob(&self, hash: CryptoHash, chain_id: Option<ChainId>) -> Result<()> {
+        let mut command = self.command().await?;
+        command.arg("read-data-blob").arg(hash.to_string());
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     pub fn load_wallet(&self) -> Result<Wallet> {
         util::read_json(self.wallet_path())
     }

@@ -5,7 +5,7 @@ use std::{collections::HashSet, env, fmt, iter, num::NonZeroU16, path::PathBuf, 
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
     identifiers::{
         Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
@@ -690,6 +690,16 @@ pub enum ClientCommand {
         /// An optional chain ID to publish the blob. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,
+    },
+
+    // TODO(#2490): Consider removing or renaming this.
+    /// Verify that a data blob is readable.
+    ReadDataBlob {
+        /// The hash of the content.
+        hash: CryptoHash,
+        /// An optional chain ID to verify the blob. The default chain of the wallet
+        /// is used otherwise.
+        reader: Option<ChainId>,
     },
 
     /// Create an application.

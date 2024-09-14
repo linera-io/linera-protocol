@@ -818,7 +818,6 @@ impl Runnable for Job {
                     .publish_bytecode(&chain_client, contract, service)
                     .await?;
                 println!("{}", bytecode_id);
-                info!("{}", "Bytecode published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
@@ -830,9 +829,19 @@ impl Runnable for Job {
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing data blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher);
+                // TODO(#2491): PublishDataBlob should return a CryptoHash.
                 let blob_id = context.publish_data_blob(&chain_client, blob_path).await?;
                 println!("{}", blob_id);
-                info!("{}", "Data blob published successfully!".green().bold());
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+            }
+
+            // TODO(#2490): Consider removing or renaming this.
+            ReadDataBlob { hash, reader } => {
+                let start_time = Instant::now();
+                let reader = reader.unwrap_or_else(|| context.default_chain());
+                info!("Verifying data blob on chain {}", reader);
+                let chain_client = context.make_chain_client(reader);
+                context.read_data_blob(&chain_client, hash).await?;
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 

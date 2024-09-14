@@ -56,6 +56,7 @@ use {
 #[cfg(feature = "fs")]
 use {
     linera_base::{
+        crypto::CryptoHash,
         data_types::{BlobContent, Bytecode},
         identifiers::{BlobId, BytecodeId},
     },
@@ -434,6 +435,28 @@ where
 
         info!("{}", "Data blob published successfully!");
         Ok(BlobId::new_data(&blob_content))
+    }
+
+    // TODO(#2490): Consider removing or renaming this.
+    pub async fn read_data_blob(
+        &mut self,
+        chain_client: &ChainClient<NodeProvider, S>,
+        hash: CryptoHash,
+    ) -> Result<(), Error> {
+        info!("Verifying data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .read_data_blob(hash)
+                    .await
+                    .context("Failed to verify data blob")
+            }
+        })
+        .await?;
+
+        info!("{}", "Data blob verified successfully!");
+        Ok(())
     }
 }
 

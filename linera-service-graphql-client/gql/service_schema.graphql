@@ -582,6 +582,10 @@ type MutationRoot {
 	"""
 	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
 	"""
+	Test if a data blob is readable from a transaction in the current chain.
+	"""
+	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
+	"""
 	Creates (or activates) a new chain by installing the given authentication key.
 	This will automatically subscribe to the future committees created by `admin_id`.
 	"""
