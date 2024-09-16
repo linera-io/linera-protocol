@@ -20,7 +20,7 @@ use linera_base::{
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlobContent, Bytecode},
-    identifiers::{Account, ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
@@ -720,7 +720,7 @@ impl ClientWrapper {
         &self,
         path: &Path,
         chain_id: Option<ChainId>,
-    ) -> Result<BlobId> {
+    ) -> Result<CryptoHash> {
         let mut command = self.command().await?;
         command.arg("publish-data-blob").arg(path);
         if let Some(chain_id) = chain_id {
@@ -728,7 +728,7 @@ impl ClientWrapper {
         }
         let stdout = command.spawn_and_wait_for_stdout().await?;
         let stdout = stdout.trim();
-        BlobId::from_str(stdout)
+        Ok(CryptoHash::from_str(stdout)?)
     }
 
     /// Runs `linera read-data-blob`.
@@ -953,7 +953,7 @@ impl NodeService {
         &self,
         chain_id: &ChainId,
         blob_content: &BlobContent,
-    ) -> Result<BlobId> {
+    ) -> Result<CryptoHash> {
         let query = format!(
             "mutation {{ publishDataBlob(chainId: {}, blobContent: {}) }}",
             chain_id.to_value(),

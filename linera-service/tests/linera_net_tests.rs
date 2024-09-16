@@ -984,10 +984,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
 
     let nft1_blob = Blob::test_data_blob("nft1_data");
     let nft1_blob_id = nft1_blob.id();
-    let blob_id = node_service1
+    let blob_hash = node_service1
         .publish_data_blob(&chain1, nft1_blob.content())
         .await?;
-    assert_eq!(nft1_blob_id, blob_id);
+    assert_eq!(nft1_blob_id.hash, blob_hash);
 
     let nft1_blob_hash = DataBlobHash(nft1_blob_id.hash);
 
@@ -1114,10 +1114,10 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft2_minter = account_owner2;
     let nft2_blob = Blob::test_data_blob("nft2_data");
     let nft2_blob_id = nft2_blob.id();
-    let blob_id = node_service2
+    let blob_hash = node_service2
         .publish_data_blob(&chain2, nft2_blob.content())
         .await?;
-    assert_eq!(nft2_blob_id, blob_id);
+    assert_eq!(nft2_blob_id.hash, blob_hash);
 
     let nft2_blob_hash = DataBlobHash(nft2_blob_id.hash);
 
@@ -2727,9 +2727,9 @@ async fn test_end_to_end_publish_data_blob_in_cli(config: impl LineraNetConfig) 
     let mut f = std::fs::File::create_new(&path)?;
     std::io::Write::write_all(&mut f, b"Hello, world!")?;
 
-    let blob_id = client1.publish_data_blob(&path, None).await?;
-    client2.read_data_blob(blob_id.hash, None).await?;
-    client1.read_data_blob(blob_id.hash, None).await?;
+    let blob_hash = client1.publish_data_blob(&path, None).await?;
+    client2.read_data_blob(blob_hash, None).await?;
+    client1.read_data_blob(blob_hash, None).await?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;

@@ -848,9 +848,8 @@ impl Runnable for Job {
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
                 info!("Publishing data blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher);
-                // TODO(#2491): PublishDataBlob should return a CryptoHash.
-                let blob_id = context.publish_data_blob(&chain_client, blob_path).await?;
-                println!("{}", blob_id);
+                let hash = context.publish_data_blob(&chain_client, blob_path).await?;
+                println!("{}", hash);
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 

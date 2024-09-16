@@ -23,7 +23,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlobContent, Bytecode, TimeDelta, Timestamp,
         UserApplicationDescription,
     },
-    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, Owner, UserApplicationId},
+    identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
@@ -614,8 +614,8 @@ where
         &self,
         chain_id: ChainId,
         blob_content: BlobContent,
-    ) -> Result<BlobId, Error> {
-        let blob_id = BlobId::new_data(&blob_content);
+    ) -> Result<CryptoHash, Error> {
+        let hash = CryptoHash::new(&blob_content);
         self.apply_client_command(&chain_id, move |client| {
             let blob_content = blob_content.clone();
             async move {
@@ -623,7 +623,7 @@ where
                     .publish_data_blob(blob_content)
                     .await
                     .map_err(Error::from)
-                    .map(|outcome| outcome.map(|_| blob_id));
+                    .map(|outcome| outcome.map(|_| hash));
                 (result, client)
             }
         })
