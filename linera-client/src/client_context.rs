@@ -54,7 +54,7 @@ use {
     linera_base::{
         crypto::CryptoHash,
         data_types::{BlobContent, Bytecode},
-        identifiers::{BlobId, BytecodeId},
+        identifiers::BytecodeId,
     },
     std::path::PathBuf,
 };
@@ -440,7 +440,7 @@ where
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
         blob_path: PathBuf,
-    ) -> Result<BlobId, Error> {
+    ) -> Result<CryptoHash, Error> {
         info!("Loading data blob file");
         let blob_content = BlobContent::load_from_file(&blob_path)
             .await
@@ -463,7 +463,7 @@ where
         .await?;
 
         info!("{}", "Data blob published successfully!");
-        Ok(BlobId::new_data(&blob_content))
+        Ok(CryptoHash::new(&blob_content))
     }
 
     // TODO(#2490): Consider removing or renaming this.

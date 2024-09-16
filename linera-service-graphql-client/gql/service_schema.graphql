@@ -46,11 +46,6 @@ A blob of binary data.
 scalar BlobContent
 
 """
-A content-addressed blob ID i.e. the hash of the `BlobContent`
-"""
-scalar BlobId
-
-"""
 A block containing operations to apply on a given chain, as well as the
 acknowledgment of a number of incoming messages from other chains.
 * Incoming messages must be selected in the order they were
@@ -672,7 +667,7 @@ type MutationRoot {
 	"""
 	Publishes a new data blob.
 	"""
-	publishDataBlob(chainId: ChainId!, blobContent: BlobContent!): BlobId!
+	publishDataBlob(chainId: ChainId!, blobContent: BlobContent!): CryptoHash!
 	"""
 	Creates a new application.
 	"""
