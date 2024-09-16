@@ -501,7 +501,7 @@ impl LocalNet {
     }
 
     async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
-        let namespace = format!("{}_server_{}_{}_db", self.namespace, validator, shard);
+        let namespace = format!("{}_server_{}_db", self.namespace, validator);
         let storage = StorageConfigNamespace {
             storage_config: self.storage_config.clone(),
             namespace,
