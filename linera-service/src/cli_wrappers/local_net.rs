@@ -330,7 +330,6 @@ impl LineraNet for LocalNet {
 }
 
 impl LocalNet {
-    #[expect(clippy::too_many_arguments)]
     fn new(
         network: Network,
         testing_prng_seed: Option<u64>,
