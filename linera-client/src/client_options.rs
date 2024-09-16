@@ -867,10 +867,6 @@ pub enum NetCommand {
         #[arg(long)]
         testing_prng_seed: Option<u64>,
 
-        /// The name for the database table to store the chain data in.
-        #[arg(long, default_value = "table_default")]
-        table_name: String,
-
         /// Start the local network on a local Kubernetes deployment.
         #[cfg(feature = "kubernetes")]
         #[arg(long)]
@@ -882,6 +878,16 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, num_args=0..=1)]
         binaries: Option<Option<PathBuf>>,
+
+        /// Run with a specific path where the wallet and validator input files are.
+        /// If none, then a temporary directory is created.
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Run with a specific storage.
+        /// If none, then a linera-storage-service is spanned on a random free port.
+        #[arg(long)]
+        storage_config_namespace: Option<String>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

@@ -850,9 +850,8 @@ Start a Local Linera Network
   Possible values: `default`, `only-fuel`, `fuel-and-block`, `all-categories`, `devnet`
 
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
-* `--table-name <TABLE_NAME>` — The name for the database table to store the chain data in
-
-  Default value: `table_default`
+* `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
+* `--storage-config-namespace <STORAGE_CONFIG_NAMESPACE>` — Run with a specific storage. If none, then a linera-storage-service is spanned on a random free port
 
 
 

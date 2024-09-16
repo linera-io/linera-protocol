@@ -35,11 +35,11 @@ to the channel.
 
 ## Usage
 
-To try it out, build Linera and add it to your path:
+Set up the path and the helper function.
 
 ```bash
-cargo build
 PATH=$PWD/target/debug:$PATH
+source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
 ```
 
 Then, using the helper function defined by `linera net helper`, set up a local network
@@ -47,7 +47,6 @@ with two wallets and define variables holding their wallet paths (`$LINERA_WALLE
 `$LINERA_WALLET_1`) and storage paths (`$LINERA_STORAGE_0`, `$LINERA_STORAGE_1`).
 
 ```bash
-eval "$(linera net helper)"
 linera_spawn_and_read_wallet_variables \
     linera net up \
         --extra-wallets 1

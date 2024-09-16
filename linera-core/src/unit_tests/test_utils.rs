@@ -25,24 +25,24 @@ use linera_execution::{
     ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+use linera_storage_service::{
+    client::{service_config_from_endpoint, ServiceStoreClient},
+    common::storage_service_test_endpoint,
+};
 use linera_version::VersionInfo;
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{
     create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
 };
-use linera_views::memory::{create_memory_store_test_config, MemoryStore};
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_common_config, ScyllaDbStore, ScyllaDbStoreConfig};
+use linera_views::{
+    memory::{create_memory_store_test_config, MemoryStore},
+    test_utils::generate_test_namespace,
+};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-#[cfg(not(target_arch = "wasm32"))]
-use {
-    linera_storage_service::{
-        client::{service_config_from_endpoint, ServiceStoreClient},
-        common::storage_service_test_endpoint,
-    },
-    linera_views::test_utils::generate_test_namespace,
-};
 #[cfg(feature = "rocksdb")]
 use {
     linera_views::common::AdminKeyValueStore as _,
@@ -974,7 +974,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 pub struct ServiceStorageBuilder {
     endpoint: String,
     namespace: String,
@@ -983,7 +983,7 @@ pub struct ServiceStorageBuilder {
     clock: TestClock,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage`.
     pub async fn new() -> Self {
@@ -1005,7 +1005,7 @@ impl ServiceStorageBuilder {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 #[async_trait]
 impl StorageBuilder for ServiceStorageBuilder {
     type Storage = DbStorage<ServiceStoreClient, TestClock>;

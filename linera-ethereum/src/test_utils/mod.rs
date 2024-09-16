@@ -14,7 +14,7 @@ use linera_alloy::{
     sol,
     transports::http::reqwest::Client,
 };
-use linera_storage_service::child::get_free_port;
+use linera_base::port::get_free_port;
 use url::Url;
 
 use crate::{

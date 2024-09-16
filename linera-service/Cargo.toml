@@ -51,7 +51,7 @@ kubernetes = [
 ]
 remote-net = ["dep:k8s-openapi", "dep:kube"]
 metrics = ["prometheus", "linera-base/metrics", "linera-client/metrics"]
-storage-service = ["linera-client/storage-service"]
+storage-service = ["linera-client/storage-service", "linera-storage-service"]
 
 [dependencies]
 anyhow.workspace = true
@@ -85,7 +85,7 @@ linera-execution = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = ["server", "simple-network"] }
 linera-sdk = { workspace = true, optional = true }
 linera-storage.workspace = true
-linera-storage-service.workspace = true
+linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
 pathdiff = { workspace = true, optional = true }

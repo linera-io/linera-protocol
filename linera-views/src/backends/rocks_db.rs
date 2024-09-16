@@ -70,7 +70,7 @@ impl RocksDbStoreInternal {
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || character == '_')
         {
-            return Err(RocksDbStoreError::InvalidTableName);
+            return Err(RocksDbStoreError::InvalidNamespace);
         }
         Ok(())
     }
@@ -622,9 +622,9 @@ pub enum RocksDbStoreError {
     #[error("Missing database")]
     MissingDatabase(String),
 
-    /// Invalid table name
-    #[error("Invalid table name")]
-    InvalidTableName,
+    /// Invalid namespace
+    #[error("Invalid namespace")]
+    InvalidNamespace,
 
     /// Already existing database
     #[error("Already existing database")]
