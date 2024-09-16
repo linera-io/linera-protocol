@@ -93,11 +93,11 @@ impl StorageConfigProvider {
 
     pub fn database(&self) -> anyhow::Result<Database> {
         match self.storage_config_namespace.storage_config {
-            #[cfg(feature = "storage-service")]
-            StorageConfig::Service { .. } => Ok(Database::Service),
             StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { .. } => Ok(Database::RocksDb),
+            StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
+            #[cfg(feature = "storage-service")]
+            StorageConfig::Service { .. } => Ok(Database::Service),
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
             #[cfg(feature = "scylladb")]
