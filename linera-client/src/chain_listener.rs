@@ -176,25 +176,24 @@ where
                 Either::Left((Some(notification), _)) => notification,
                 Either::Left((None, _)) => break,
                 Either::Right(((), _)) => {
+                    timeout = Timestamp::from(u64::MAX);
                     if config.skip_process_inbox {
                         debug!("Not processing inbox due to listener configuration");
-                        timeout = Timestamp::from(u64::MAX);
                         continue;
                     }
                     debug!("Processing inbox");
                     match client.process_inbox_without_prepare().await {
-                        Err(ChainClientError::CannotFindKeyForChain(_)) => continue,
-                        Err(error) => {
-                            warn!(%error, "Failed to process inbox.");
-                            timeout = Timestamp::from(u64::MAX);
-                        }
+                        Err(ChainClientError::CannotFindKeyForChain(_)) => {}
+                        Err(error) => warn!(%error, "Failed to process inbox."),
                         Ok((certs, None)) => {
-                            info!("Done processing inbox ({} blocks created)", certs.len());
-                            timeout = Timestamp::from(u64::MAX);
+                            info!("Done processing inbox. {} blocks created.", certs.len());
                         }
                         Ok((certs, Some(new_timeout))) => {
-                            info!("Done processing inbox ({} blocks created)", certs.len());
-                            info!("I will try processing the inbox later based on the given round timeout: {:?}", new_timeout);
+                            info!(
+                                "{} blocks created. I will try processing the inbox later based \
+                                 on the given round timeout: {new_timeout:?}",
+                                certs.len(),
+                            );
                             timeout = new_timeout.timestamp;
                         }
                     }
