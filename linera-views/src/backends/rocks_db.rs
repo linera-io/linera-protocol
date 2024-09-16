@@ -21,7 +21,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::{LruCachingConfig, LruCachingStore},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
@@ -56,6 +56,15 @@ pub enum RocksDbSpawnMode {
     SpawnBlocking,
     /// This uses the `block_in_place` function of tokio.
     BlockInPlace,
+}
+
+/// The inner client
+#[derive(Clone)]
+pub struct RocksDbStoreInternal {
+    executor: RocksDbStoreExecutor,
+    _path_with_guard: PathWithGuard,
+    max_stream_queries: usize,
+    spawn_mode: RocksDbSpawnMode,
 }
 
 impl RocksDbSpawnMode {
@@ -245,15 +254,6 @@ impl RocksDbStoreExecutor {
         self.db.write(inner_batch)?;
         Ok(())
     }
-}
-
-/// The inner client
-#[derive(Clone)]
-pub struct RocksDbStoreInternal {
-    executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
-    max_stream_queries: usize,
-    spawn_mode: RocksDbSpawnMode,
 }
 
 /// The initial configuration of the system
@@ -593,18 +593,18 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
 /// The `RocksDbStore` composed type with metrics
 #[cfg(with_metrics)]
 pub type RocksDbStore = MeteredStore<
-    LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
+    CachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
 >;
 
 /// The `RocksDbStore` composed type
 #[cfg(not(with_metrics))]
-pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
+pub type RocksDbStore = CachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
 
 /// The composed error type for the `RocksDbStore`
 pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
 
 /// The composed config type for the `RocksDbStore`
-pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
+pub type RocksDbStoreConfig = CachingConfig<RocksDbStoreInternalConfig>;
 
 impl RocksDbStoreConfig {
     /// Creates a new `RocksDbStoreConfig` from the input.

@@ -34,7 +34,7 @@ use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingConfig, LruCachingStore},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
@@ -872,21 +872,16 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
-pub type ScyllaDbStore = MeteredStore<
-    LruCachingStore<
-        MeteredStore<
-            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
-        >,
-    >,
->;
+pub type ScyllaDbStore =
+    MeteredStore<CachingStore<MeteredStore<ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>>>;
 
 /// The `ScyllaDbStore` composed type
 #[cfg(not(with_metrics))]
 pub type ScyllaDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
+    CachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
 
 /// The `ScyllaDbStoreConfig` input type
-pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
+pub type ScyllaDbStoreConfig = CachingConfig<ScyllaDbStoreInternalConfig>;
 
 impl ScyllaDbStoreConfig {
     /// Creates a `ScyllaDbStoreConfig` from the inputs.

@@ -64,6 +64,32 @@ pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     values[..k].to_vec()
 }
 
+/// Builds random keys with key doubled and random length, possible bytes are limited to critical values
+pub fn get_random_key_values_doubled<R: Rng>(
+    rng: &mut R,
+    key_prefix: Vec<u8>,
+    len_range: usize,
+    len_value: usize,
+    num_entries: usize,
+) -> Vec<(Vec<u8>, Vec<u8>)> {
+    let mut key_values = BTreeMap::new();
+    let key_poss = [0_u8, 10_u8, 255_u8];
+    for _ in 0..num_entries {
+        let mut key = key_prefix.clone();
+        let len = rng.gen_range(0..len_range);
+        for _ in 0..len {
+            let pos = rng.gen_range(0..key_poss.len());
+            let val = key_poss[pos];
+            for _ in 0..2 {
+                key.push(val);
+            }
+        }
+        let value = get_random_byte_vector(rng, &Vec::new(), len_value);
+        key_values.insert(key, value);
+    }
+    key_values.into_iter().collect::<Vec<_>>()
+}
+
 /// Takes a random number generator, a key_prefix and generates
 /// pairs `(key, value)` with key obtained by appending 8 bytes at random to key_prefix
 /// and value obtained by appending 8 bytes to the trivial vector.
@@ -76,17 +102,17 @@ pub fn get_random_key_values_prefix<R: Rng>(
     num_entries: usize,
 ) -> Vec<(Vec<u8>, Vec<u8>)> {
     loop {
-        let mut v_ret = Vec::new();
-        let mut vector_set = HashSet::new();
+        let mut key_values = Vec::new();
+        let mut keys = HashSet::new();
         for _ in 0..num_entries {
-            let v1 = get_random_byte_vector(rng, &key_prefix, len_key);
-            let v2 = get_random_byte_vector(rng, &Vec::new(), len_value);
-            let v12 = (v1.clone(), v2);
-            vector_set.insert(v1);
-            v_ret.push(v12);
+            let key = get_random_byte_vector(rng, &key_prefix, len_key);
+            let value = get_random_byte_vector(rng, &Vec::new(), len_value);
+            let key_value = (key.clone(), value);
+            keys.insert(key);
+            key_values.push(key_value);
         }
-        if vector_set.len() == num_entries {
-            return v_ret;
+        if keys.len() == num_entries {
+            return key_values;
         }
     }
 }
@@ -386,6 +412,23 @@ async fn read_key_values_prefix<C: LocalRestrictedKeyValueStore>(
     key_values
 }
 
+async fn read_key_values<C: LocalRestrictedKeyValueStore>(
+    key_value_store: &C,
+    key_prefix: &[u8],
+) -> BTreeMap<Vec<u8>, Vec<u8>> {
+    let mut key_values = BTreeMap::new();
+    for key_value in key_value_store
+        .find_key_values_by_prefix(key_prefix)
+        .await
+        .unwrap()
+        .iterator()
+    {
+        let (key, value) = key_value.unwrap();
+        key_values.insert(key.to_vec(), value.to_vec());
+    }
+    key_values
+}
+
 /// Writes and then reads data under a prefix, and verifies the result.
 pub async fn run_test_batch_from_blank<C: LocalRestrictedKeyValueStore>(
     key_value_store: &C,
@@ -418,36 +461,133 @@ pub async fn run_writes_from_blank<C: LocalRestrictedKeyValueStore>(key_value_st
     }
 }
 
-/// Reading many keys at a time could trigger an error. This needs to be tested.
-pub async fn big_read_multi_values<C: LocalKeyValueStore>(
-    config: C::Config,
-    value_size: usize,
-    n_entries: usize,
-) {
-    let mut rng = make_deterministic_rng();
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    //
-    let store = C::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .unwrap();
-    let key_prefix = vec![42, 54];
-    let mut batch = Batch::new();
-    let mut keys = Vec::new();
-    let mut values = Vec::new();
-    for i in 0..n_entries {
-        let mut key = key_prefix.clone();
-        bcs::serialize_into(&mut key, &i).unwrap();
-        let value = get_random_byte_vector(&mut rng, &[], value_size);
-        batch.put_key_value_bytes(key.clone(), value.clone());
-        keys.push(key);
-        values.push(Some(value));
+#[allow(clippy::type_complexity)]
+fn get_possible_key_values_results(
+    key_values: &BTreeMap<Vec<u8>, Vec<u8>>,
+) -> Vec<(Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>)> {
+    let mut key_prefixes: BTreeSet<Vec<u8>> = BTreeSet::new();
+    for key in key_values.keys() {
+        for i in 1..key.len() {
+            let key_prefix = &key[..i];
+            key_prefixes.insert(key_prefix.to_vec());
+        }
     }
-    store.write_batch(batch).await.unwrap();
-    // We reconnect so that the read is not using the cache.
-    let store = C::connect(&config, &namespace, root_key).await.unwrap();
-    let values_read = store.read_multi_values_bytes(keys).await.unwrap();
-    assert_eq!(values, values_read);
+    let mut possibilities = Vec::new();
+    for key_prefix in key_prefixes {
+        let mut key_values_found: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+        for (key, value) in key_values {
+            if key.starts_with(&key_prefix) {
+                let key_red = &key[key_prefix.len()..];
+                key_values_found.insert(key_red.to_vec(), value.clone());
+            }
+        }
+        possibilities.push((key_prefix.to_vec(), key_values_found));
+    }
+    possibilities
+}
+
+/// The `update_entry` function in the LRU can have some potential errors.
+pub async fn run_lru_related_test1<S: LocalRestrictedKeyValueStore>(store: &S) {
+    let mut rng = make_deterministic_rng();
+    let key_prefix = vec![0];
+    let len_key = 4;
+    let len_value = 1;
+    let num_entries = 3;
+    let num_iter = 4;
+    for _ in 0..num_iter {
+        let key_values = get_random_key_values_prefix(
+            &mut rng,
+            key_prefix.clone(),
+            len_key,
+            len_value,
+            num_entries,
+        );
+        let mut batch_initial = Batch::new();
+        let mut map_state = BTreeMap::new();
+        for (key, value) in key_values {
+            map_state.insert(key.clone(), value.clone());
+            batch_initial.put_key_value_bytes(key, value);
+        }
+        store.write_batch(batch_initial).await.unwrap();
+        for _ in 0..num_entries {
+            let inside = rng.gen::<bool>();
+            let remove = rng.gen::<bool>();
+            let key = if inside {
+                let len = map_state.len();
+                let pos = rng.gen_range(0..len);
+                let iter = map_state.iter().nth(pos);
+                let (key, _) = iter.unwrap();
+                key.to_vec()
+            } else {
+                get_small_key_space(&mut rng, &key_prefix, 4)
+            };
+            let mut batch_atomic = Batch::new();
+            if remove {
+                batch_atomic.delete_key(key);
+            } else {
+                let value = get_small_key_space(&mut rng, &key_prefix, 4);
+                batch_atomic.put_key_value_bytes(key, value);
+            }
+            update_state_from_batch(&mut map_state, &batch_atomic);
+            // That operation changes the keys and the LRU has to update it.
+            store.write_batch(batch_atomic).await.unwrap();
+            // That operation loads the keys in the LRU cache
+            let key_values = read_key_values_prefix(store, &key_prefix).await;
+            assert_eq!(key_values, map_state);
+        }
+        let mut batch_clear = Batch::new();
+        batch_clear.delete_key_prefix(key_prefix.clone());
+        store.write_batch(batch_clear).await.unwrap();
+    }
+}
+
+/// The `start_pos / end_pos` indices can be tricky.
+pub async fn run_lru_related_test2<S: LocalRestrictedKeyValueStore>(store: &S) {
+    let mut rng = make_deterministic_rng();
+    let key_prefix = vec![0];
+    let len_range = 5;
+    let len_value = 1;
+    let num_entries = 10;
+    let num_iter = 4;
+    let num_removal = 5;
+    for _ in 0..num_iter {
+        let key_values = get_random_key_values_doubled(
+            &mut rng,
+            key_prefix.clone(),
+            len_range,
+            len_value,
+            num_entries,
+        );
+        let mut batch_initial = Batch::new();
+        let mut map_state = BTreeMap::new();
+        for (key, value) in key_values {
+            map_state.insert(key.clone(), value.clone());
+            batch_initial.put_key_value_bytes(key, value);
+        }
+        store.write_batch(batch_initial).await.unwrap();
+        for _ in 0..num_removal {
+            let possibilities = get_possible_key_values_results(&map_state);
+            for (key_prefix, result) in &possibilities {
+                let key_values_read = read_key_values(store, key_prefix).await;
+                assert_eq!(&key_values_read, result);
+            }
+            let n_possibilities = possibilities.len();
+            if n_possibilities > 0 {
+                let i_possibility = rng.gen_range(0..n_possibilities);
+                let key_prefix = possibilities[i_possibility].0.clone();
+                let mut batch_atomic = Batch::new();
+                batch_atomic.delete_key_prefix(key_prefix);
+                update_state_from_batch(&mut map_state, &batch_atomic);
+                // That operation changes the keys and the LRU has to update it.
+                store.write_batch(batch_atomic).await.unwrap();
+            }
+        }
+        let possibilities = get_possible_key_values_results(&map_state);
+        for (key_prefix, result) in &possibilities {
+            let key_values_read = read_key_values(store, key_prefix).await;
+            assert_eq!(&key_values_read, result);
+        }
+    }
 }
 
 /// That test is especially challenging for ScyllaDB.

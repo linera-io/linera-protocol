@@ -22,7 +22,7 @@ use linera_views::{
     context::{create_test_memory_context, Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
-    lru_caching::{LruCachingMemoryStore, LruCachingStore},
+    lru_caching::{CachingMemoryStore, CachingStore, DEFAULT_STORAGE_CACHE_POLICY},
     map_view::{ByteMapView, HashedMapView},
     memory::MemoryStore,
     queue_view::HashedQueueView,
@@ -120,20 +120,20 @@ impl StateStorage for KeyValueStoreTestStorage {
     }
 }
 
-pub struct LruMemoryStorage {
+pub struct CachedMemoryStorage {
     accessed_chains: BTreeSet<usize>,
-    store: LruCachingStore<MemoryStore>,
+    store: CachingStore<MemoryStore>,
 }
 
 #[async_trait]
-impl StateStorage for LruMemoryStorage {
-    type Context = ViewContext<usize, LruCachingMemoryStore>;
+impl StateStorage for CachedMemoryStorage {
+    type Context = ViewContext<usize, CachingMemoryStore>;
 
     async fn new() -> Self {
         let store = MemoryStore::new_test_store().await.unwrap();
-        let cache_size = 1000;
-        let store = LruCachingStore::new(store, cache_size);
-        LruMemoryStorage {
+        let storage_cache_policy = DEFAULT_STORAGE_CACHE_POLICY;
+        let store = CachingStore::new(store, storage_cache_policy);
+        CachedMemoryStorage {
             accessed_chains: BTreeSet::new(),
             store,
         }
@@ -653,18 +653,18 @@ async fn test_byte_map_view() -> Result<()> {
 }
 
 #[cfg(test)]
-async fn test_views_in_lru_memory_param(config: &TestConfig) -> Result<()> {
-    tracing::warn!("Testing config {:?} with lru memory", config);
-    let mut store = LruMemoryStorage::new().await;
+async fn test_views_in_cached_memory_param(config: &TestConfig) -> Result<()> {
+    tracing::warn!("Testing config {:?} with storage memory", config);
+    let mut store = CachedMemoryStorage::new().await;
     test_store(&mut store, config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
     Ok(())
 }
 
 #[tokio::test]
-async fn test_views_in_lru_memory() -> Result<()> {
+async fn test_views_in_cached_memory() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_lru_memory_param(&config).await?;
+        test_views_in_cached_memory_param(&config).await?;
     }
     Ok(())
 }

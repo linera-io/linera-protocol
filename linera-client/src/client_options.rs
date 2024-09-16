@@ -22,7 +22,7 @@ use linera_core::{client::BlanketMessagePolicy, DEFAULT_GRACE_PERIOD};
 use linera_execution::{
     committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
-use linera_views::store::CommonStoreConfig;
+use linera_views::{lru_caching::read_storage_cache_policy, store::CommonStoreConfig};
 
 #[cfg(feature = "fs")]
 use crate::config::GenesisConfig;
@@ -114,9 +114,9 @@ pub struct ClientOptions {
     #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
 
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    pub cache_size: usize,
+    /// The storage cache policy
+    #[arg(long)]
+    pub storage_cache_policy: Option<String>,
 
     /// Subcommand.
     #[command(subcommand)]
@@ -182,10 +182,11 @@ impl ClientOptions {
     }
 
     fn common_config(&self) -> CommonStoreConfig {
+        let storage_cache_policy = read_storage_cache_policy(self.storage_cache_policy.clone());
         CommonStoreConfig {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
-            cache_size: self.cache_size,
+            storage_cache_policy,
         }
     }
 

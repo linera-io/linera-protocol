@@ -9,8 +9,8 @@ use linera_views::{
     random::make_deterministic_rng,
     store::TestKeyValueStore as _,
     test_utils::{
-        big_read_multi_values, get_random_test_scenarios, run_big_write_read, run_reads,
-        run_writes_from_blank, run_writes_from_state,
+        get_random_test_scenarios, run_big_write_read, run_lru_related_test1,
+        run_lru_related_test2, run_reads, run_writes_from_blank, run_writes_from_state,
     },
     value_splitting::create_value_splitting_memory_store,
 };
@@ -92,6 +92,36 @@ async fn test_reads_scylla_db() {
             .unwrap();
         run_reads(store, scenario).await;
     }
+}
+
+#[tokio::test]
+async fn test_lru1_memory() {
+    let store = MemoryStore::new_test_store().await.unwrap();
+    run_lru_related_test1(&store).await;
+}
+
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_lru1_scylla_db() {
+    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
+        .await
+        .unwrap();
+    run_lru_related_test1(&store).await;
+}
+
+#[tokio::test]
+async fn test_lru2_memory() {
+    let store = MemoryStore::new_test_store().await.unwrap();
+    run_lru_related_test2(&store).await;
+}
+
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_lru2_scylla_db() {
+    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
+        .await
+        .unwrap();
+    run_lru_related_test2(&store).await;
 }
 
 #[cfg(with_indexeddb)]

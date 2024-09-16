@@ -5014,6 +5014,7 @@ dependencies = [
  "rocksdb",
  "scylla",
  "serde",
+ "serde_json",
  "sha3",
  "static_assertions",
  "tempfile",
