@@ -25,7 +25,7 @@ use linera_rpc::{
 use linera_service::prometheus_server;
 use linera_service::util;
 use linera_storage::Storage;
-use linera_views::store::CommonStoreConfig;
+use linera_views::{store::CommonStoreConfig, lru_caching::read_storage_cache_policy};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
@@ -68,9 +68,9 @@ pub struct ProxyOptions {
     #[arg(long, default_value = "10")]
     max_stream_queries: usize,
 
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    cache_size: usize,
+    /// The storage cache policy
+    #[arg(long)]
+    storage_cache_policy: Option<String>,
 
     /// Path to the file describing the initial user chains (aka genesis state)
     #[arg(long = "genesis")]
@@ -362,10 +362,11 @@ fn main() -> Result<()> {
 
 impl ProxyOptions {
     async fn run(&self) -> Result<()> {
+        let storage_cache_policy = read_storage_cache_policy(self.storage_cache_policy.clone());
         let common_config = CommonStoreConfig {
             max_concurrent_queries: self.max_concurrent_queries,
             max_stream_queries: self.max_stream_queries,
-            cache_size: self.cache_size,
+            storage_cache_policy,
         };
         let full_storage_config = self.storage_config.add_common_config(common_config).await?;
         let genesis_config: GenesisConfig = util::read_json(&self.genesis_config_path)?;

@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use linera_base::command::resolve_binary;
+#[cfg(with_testing)]
+use linera_views::lru_caching::DEFAULT_STORAGE_CACHE_POLICY;
 #[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
@@ -83,7 +85,7 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
     CommonStoreConfig {
         max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),
         max_stream_queries: TEST_SHARED_STORE_MAX_STREAM_QUERIES,
-        cache_size: usize::MAX,
+        storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
     }
 }
 

@@ -18,6 +18,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
+    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
@@ -37,7 +38,7 @@ impl MemoryStoreConfig {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         Self { common_config }
     }
@@ -280,7 +281,7 @@ impl MemoryStore {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = false;
@@ -297,7 +298,7 @@ impl MemoryStore {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = true;
@@ -325,7 +326,7 @@ impl AdminKeyValueStore for MemoryStore {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         let config = MemoryStoreConfig { common_config };
         let mut memory_stores = MEMORY_STORES
@@ -374,7 +375,7 @@ impl TestKeyValueStore for MemoryStore {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         Ok(MemoryStoreConfig { common_config })
     }

@@ -37,12 +37,12 @@ use {
 
 #[cfg(with_metrics)]
 use crate::metering::{
-    MeteredStore, DYNAMO_DB_METRICS, LRU_CACHING_METRICS, VALUE_SPLITTING_METRICS,
+    MeteredStore, CACHED_DYNAMO_DB_METRICS, DYNAMO_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::LruCachingStore,
+    lru_caching::{CachingStore, StorageCachePolicy},
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
@@ -50,7 +50,7 @@ use crate::{
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 #[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
+use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
@@ -340,7 +340,7 @@ pub struct DynamoDbStoreInternal {
     namespace: String,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
-    cache_size: usize,
+    storage_cache_policy: StorageCachePolicy,
     root_key: Vec<u8>,
 }
 
@@ -368,7 +368,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = config.common_config.storage_cache_policy.clone();
         let namespace = namespace.to_string();
         let root_key = root_key.to_vec();
         Ok(Self {
@@ -376,7 +376,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             namespace,
             semaphore,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             root_key,
         })
     }
@@ -386,14 +386,14 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         let namespace = self.namespace.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
+        let storage_cache_policy = self.storage_cache_policy.clone();
         let root_key = root_key.to_vec();
         Ok(Self {
             client,
             namespace,
             semaphore,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             root_key,
         })
     }
@@ -1164,20 +1164,20 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
     const BACKEND: &'static str = "dynamo_db";
 }
 
-/// A shared DB client for DynamoDb implementing LruCaching
+/// A shared DB client for DynamoDb implementing caching
 #[derive(Clone)]
 #[expect(clippy::type_complexity)]
 pub struct DynamoDbStore {
     #[cfg(with_metrics)]
     store: MeteredStore<
-        LruCachingStore<
+        CachingStore<
             MeteredStore<
                 ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
             >,
         >,
     >,
     #[cfg(not(with_metrics))]
-    store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
+    store: CachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
 }
 
 /// The combined error type for the `DynamoDbStore`.
@@ -1255,15 +1255,15 @@ impl AdminKeyValueStore for DynamoDbStore {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, DynamoDbStoreError> {
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = &config.common_config.storage_cache_policy;
         let simple_store = DynamoDbStoreInternal::connect(config, namespace, root_key).await?;
-        Ok(Self::from_inner(simple_store, cache_size))
+        Ok(Self::from_inner(simple_store, storage_cache_policy))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
-        let cache_size = self.inner().cache_size;
+        let storage_cache_policy = &self.inner().storage_cache_policy;
         let simple_store = self.inner().clone_with_root_key(root_key)?;
-        Ok(Self::from_inner(simple_store, cache_size))
+        Ok(Self::from_inner(simple_store, storage_cache_policy))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreError> {
@@ -1293,7 +1293,7 @@ impl TestKeyValueStore for DynamoDbStore {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-            cache_size: TEST_CACHE_SIZE,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         let use_localstack = true;
         let config = get_config_internal(use_localstack).await?;
@@ -1315,16 +1315,19 @@ impl DynamoDbStore {
         &self.store.store.store.store
     }
 
-    fn from_inner(simple_store: DynamoDbStoreInternal, cache_size: usize) -> DynamoDbStore {
+    fn from_inner(
+        simple_store: DynamoDbStoreInternal,
+        storage_cache_policy: &StorageCachePolicy,
+    ) -> DynamoDbStore {
         let store = JournalingKeyValueStore::new(simple_store);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
+        let store = CachingStore::new(store, storage_cache_policy.clone());
         #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        let store = MeteredStore::new(&CACHED_DYNAMO_DB_METRICS, store);
         Self { store }
     }
 }

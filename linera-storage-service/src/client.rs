@@ -9,7 +9,7 @@ use linera_base::ensure;
 use linera_views::metering::MeteredStore;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    lru_caching::LruCachingStore,
+    lru_caching::{CachingStore, StorageCachePolicy, DEFAULT_STORAGE_CACHE_POLICY},
     store::{
         AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
@@ -62,7 +62,7 @@ pub struct ServiceStoreClientInternal {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
-    cache_size: usize,
+    storage_cache_policy: StorageCachePolicy,
     namespace: Vec<u8>,
     root_key: Vec<u8>,
 }
@@ -394,14 +394,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = config.common_config.storage_cache_policy.clone();
         let namespace = Self::namespace_as_vec(namespace)?;
         let root_key = root_key.to_vec();
         Ok(Self {
             client,
             semaphore,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             namespace,
             root_key,
         })
@@ -411,14 +411,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let client = self.client.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
+        let storage_cache_policy = self.storage_cache_policy.clone();
         let namespace = self.namespace.clone();
         let root_key = root_key.to_vec();
         Ok(Self {
             client,
             semaphore,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             namespace,
             root_key,
         })
@@ -497,11 +497,11 @@ impl TestKeyValueStore for ServiceStoreClientInternal {
 /// Creates the `CommonStoreConfig` for the `ServiceStoreClientInternal`.
 pub fn create_service_store_common_config() -> CommonStoreConfig {
     let max_stream_queries = 100;
-    let cache_size = 10; // unused
+    let storage_cache_policy = DEFAULT_STORAGE_CACHE_POLICY;
     CommonStoreConfig {
         max_concurrent_queries: None,
         max_stream_queries,
-        cache_size,
+        storage_cache_policy,
     }
 }
 
@@ -546,9 +546,9 @@ pub async fn create_service_test_store() -> Result<ServiceStoreClientInternal, S
 #[derive(Clone)]
 pub struct ServiceStoreClient {
     #[cfg(with_metrics)]
-    store: MeteredStore<LruCachingStore<MeteredStore<ServiceStoreClientInternal>>>,
+    store: MeteredStore<CachingStore<MeteredStore<ServiceStoreClientInternal>>>,
     #[cfg(not(with_metrics))]
-    store: LruCachingStore<ServiceStoreClientInternal>,
+    store: CachingStore<ServiceStoreClientInternal>,
 }
 
 impl WithError for ServiceStoreClient {
@@ -618,15 +618,15 @@ impl AdminKeyValueStore for ServiceStoreClient {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, ServiceStoreError> {
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = config.common_config.storage_cache_policy.clone();
         let store = ServiceStoreClientInternal::connect(config, namespace, root_key).await?;
-        Ok(ServiceStoreClient::from_inner(store, cache_size))
+        Ok(ServiceStoreClient::from_inner(store, storage_cache_policy))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
         let store = self.inner().clone_with_root_key(root_key)?;
-        let cache_size = self.inner().cache_size;
-        Ok(ServiceStoreClient::from_inner(store, cache_size))
+        let storage_cache_policy = self.inner().storage_cache_policy.clone();
+        Ok(ServiceStoreClient::from_inner(store, storage_cache_policy))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
@@ -668,10 +668,13 @@ impl ServiceStoreClient {
         &self.store.store
     }
 
-    fn from_inner(store: ServiceStoreClientInternal, cache_size: usize) -> ServiceStoreClient {
+    fn from_inner(
+        store: ServiceStoreClientInternal,
+        storage_cache_policy: StorageCachePolicy,
+    ) -> ServiceStoreClient {
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
+        let store = CachingStore::new(store, storage_cache_policy);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&LRU_STORAGE_SERVICE_METRICS, store);
         Self { store }
