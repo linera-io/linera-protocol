@@ -602,10 +602,7 @@ async fn main() {
         pending_big_reads,
     };
     let endpoint = endpoint.parse().unwrap();
-    info!(
-        "Starting linera_storage_service on endpoint={}",
-        endpoint
-    );
+    info!("Starting linera_storage_service on endpoint={}", endpoint);
     Server::builder()
         .add_service(StoreProcessorServer::new(store))
         .serve(endpoint)
