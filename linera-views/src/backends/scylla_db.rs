@@ -32,12 +32,12 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
 use crate::{
     batch::UnorderedBatch,
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{CachingStore, CachingConfig, StorageCachePolicy},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
@@ -795,4 +795,4 @@ pub type ScyllaDbStore =
 pub type ScyllaDbStore = LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
 
 /// The `ScyllaDbStoreConfig` input type
-pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;
+pub type ScyllaDbStoreConfig = CachingConfig<ScyllaDbStoreInternalConfig>;

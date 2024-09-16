@@ -17,11 +17,14 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
+use crate::{
+    store::{TestKeyValueStore, TestKeyValueStore},
+    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
+};
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{CachingStore, StorageCachePolicy},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
@@ -56,6 +59,15 @@ pub enum RocksDbSpawnMode {
     SpawnBlocking,
     /// This uses the `block_in_place` function of tokio.
     BlockInPlace,
+}
+
+/// The inner client
+#[derive(Clone)]
+pub struct RocksDbStoreInternal {
+    executor: RocksDbStoreExecutor,
+    _path_with_guard: PathWithGuard,
+    max_stream_queries: usize,
+    spawn_mode: RocksDbSpawnMode,
 }
 
 impl RocksDbSpawnMode {
@@ -258,15 +270,6 @@ impl RocksDbStoreExecutor {
         self.db.write(inner_batch)?;
         Ok(())
     }
-}
-
-/// The inner client
-#[derive(Clone)]
-pub struct RocksDbStoreInternal {
-    executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
-    max_stream_queries: usize,
-    spawn_mode: RocksDbSpawnMode,
 }
 
 /// The initial configuration of the system
@@ -631,4 +634,4 @@ pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal
 pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
 
 /// The composed config type for the `RocksDbStore`
-pub type RocksDbStoreConfig = LruSplittingConfig<RocksDbStoreInternalConfig>;
+pub type RocksDbStoreConfig = CachingConfig<RocksDbStoreInternalConfig>;

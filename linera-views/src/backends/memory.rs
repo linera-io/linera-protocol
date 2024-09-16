@@ -18,6 +18,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
+    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,

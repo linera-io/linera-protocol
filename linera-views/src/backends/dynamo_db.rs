@@ -42,13 +42,16 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{LruCachingStore, LruSplittingConfig, StorageCachePolicy},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
+
+#[cfg(with_testing)]
+use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";

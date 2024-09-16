@@ -11,7 +11,7 @@ use linera_views::metering::MeteredStore;
 use linera_views::store::TestKeyValueStore;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    lru_caching::LruCachingStore,
+    lru_caching::{CachingStore, StorageCachePolicy, DEFAULT_STORAGE_CACHE_POLICY},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
@@ -60,6 +60,7 @@ pub struct ServiceStoreClientInternal {
     channel: Channel,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
+    storage_cache_policy: StorageCachePolicy,
     namespace: Vec<u8>,
     start_key: Vec<u8>,
 }
@@ -392,6 +393,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
+        let storage_cache_policy = config.common_config.storage_cache_policy.clone();
         let namespace = Self::namespace_as_vec(namespace)?;
         let mut start_key = namespace.clone();
         start_key.extend(root_key);
@@ -399,6 +401,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
             channel,
             semaphore,
             max_stream_queries,
+            storage_cache_policy,
             namespace,
             start_key,
         })
@@ -408,6 +411,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let channel = self.channel.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
+        let storage_cache_policy = self.storage_cache_policy.clone();
         let namespace = self.namespace.clone();
         let mut start_key = namespace.clone();
         start_key.extend(root_key);
@@ -415,6 +419,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
             channel,
             semaphore,
             max_stream_queries,
+            storage_cache_policy,
             namespace,
             start_key,
         })

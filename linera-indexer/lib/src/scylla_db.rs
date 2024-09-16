@@ -3,7 +3,8 @@
 
 use linera_views::{
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
-    store::{AdminKeyValueStore, CommonStoreInternalConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig, CommonStoreInternalConfig},
+    lru_caching::read_storage_cache_policy,
 };
 
 use crate::{
@@ -25,9 +26,9 @@ pub struct ScyllaDbConfig {
     /// The maximal number of simultaneous stream queries to the database
     #[arg(long, default_value = "10")]
     pub max_stream_queries: usize,
-    /// The maximal number of entries in the storage cache.
-    #[arg(long, default_value = "1000")]
-    cache_size: usize,
+    /// The storage cache policy
+    #[arg(long)]
+    storage_cache_policy: Option<String>,
 }
 
 pub type ScyllaDbRunner = Runner<ScyllaDbStore, ScyllaDbConfig>;
@@ -39,6 +40,8 @@ impl ScyllaDbRunner {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
         };
+        let storage_cache_policy =
+            read_storage_cache_policy(config.client.storage_cache_policy.clone());
         let namespace = config.client.table.clone();
         let root_key = &[];
         let inner_config = ScyllaDbStoreInternalConfig {

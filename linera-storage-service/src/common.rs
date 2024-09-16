@@ -4,6 +4,10 @@
 use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
+#[cfg(with_testing)]
+use linera_views::lru_caching::DEFAULT_STORAGE_CACHE_POLICY;
+#[cfg(with_metrics)]
+use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
     lru_caching::LruSplittingConfig,
     store::{CommonStoreInternalConfig, KeyValueStoreError},
