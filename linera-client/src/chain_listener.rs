@@ -191,7 +191,7 @@ where
                         }
                         Ok((certs, Some(new_timeout))) => {
                             info!(
-                                "{} blocks created. I will try processing the inbox later based \
+                                "{} blocks created. Will try processing the inbox later based \
                                  on the given round timeout: {new_timeout:?}",
                                 certs.len(),
                             );
