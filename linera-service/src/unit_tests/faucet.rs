@@ -74,7 +74,7 @@ async fn test_faucet_rate_limiting() {
         .unwrap();
     let chain_id = client.chain_id();
     let context = ClientContext::default();
-    let clients = ChainClients::from_context(&context).await;
+    let clients = ChainClients::from_clients(vec![client]).await;
     let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
         clients,

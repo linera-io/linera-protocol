@@ -71,15 +71,11 @@ where
         }
     }
 
-    pub async fn from_context(
-        context: &impl ClientContext<ValidatorNodeProvider = P, Storage = S>,
-    ) -> Self {
+    pub async fn from_clients(chains: impl IntoIterator<Item = ChainClient<P, S>>) -> Self {
         let chain_clients = Self(Default::default());
-        let chains = context.wallet().chain_ids();
-        for chain_id in chains {
+        for chain_client in chains.into_iter() {
             let mut map_guard = chain_clients.map_lock().await;
-            let client = context.make_chain_client(chain_id);
-            map_guard.insert(chain_id, client);
+            map_guard.insert(chain_client.chain_id(), chain_client);
         }
         chain_clients
     }

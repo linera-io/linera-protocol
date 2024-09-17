@@ -966,7 +966,7 @@ where
         context: C,
     ) -> Self {
         Self {
-            clients: ChainClients::from_context(&context).await,
+            clients: ChainClients::from_clients(context.clients()).await,
             config,
             port,
             default_chain,

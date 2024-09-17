@@ -154,6 +154,10 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
     async fn update_wallet(&mut self, _: &ChainClient<P, S>) -> Result<(), Error> {
         Ok(())
     }
+
+    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+        vec![]
+    }
 }
 
 #[tokio::main]

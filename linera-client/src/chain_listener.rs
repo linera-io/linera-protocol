@@ -81,6 +81,14 @@ pub trait ClientContext {
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
     ) -> Result<(), Error>;
+
+    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+        let mut clients = vec![];
+        for chain_id in &self.wallet().chain_ids() {
+            clients.push(self.make_chain_client(*chain_id));
+        }
+        clients
+    }
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts

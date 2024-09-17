@@ -251,7 +251,7 @@ where
         config: ChainListenerConfig,
         storage: S,
     ) -> anyhow::Result<Self> {
-        let clients = ChainClients::<P, S>::from_context(&context).await;
+        let clients = ChainClients::<P, S>::from_clients(context.clients()).await;
         let context = Arc::new(Mutex::new(context));
         let client = clients.try_client_lock(&chain_id).await?;
         let start_timestamp = client.storage_client().clock().current_time();
