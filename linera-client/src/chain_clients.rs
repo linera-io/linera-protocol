@@ -8,7 +8,10 @@ use linera_base::identifiers::ChainId;
 use linera_core::client::ChainClient;
 use linera_storage::Storage;
 
-use crate::error::{self, Error};
+use crate::{
+    chain_listener::ClientContext,
+    error::{self, Error},
+};
 
 pub type ClientMapInner<P, S> = BTreeMap<ChainId, ChainClient<P, S>>;
 pub struct ChainClients<P, S>(pub Arc<Mutex<ClientMapInner<P, S>>>)
@@ -24,18 +27,10 @@ where
     }
 }
 
-impl<P, S> Default for ChainClients<P, S>
-where
-    S: Storage,
-{
-    fn default() -> Self {
-        Self(Arc::new(Mutex::new(BTreeMap::new())))
-    }
-}
-
 impl<P, S> ChainClients<P, S>
 where
     S: Storage,
+    P: 'static,
 {
     async fn client(&self, chain_id: &ChainId) -> Option<ChainClient<P, S>> {
         Some(self.0.lock().await.get(chain_id)?.clone())
@@ -53,5 +48,39 @@ where
 
     pub async fn map_lock(&self) -> MutexGuard<ClientMapInner<P, S>> {
         self.0.lock().await
+    }
+
+    pub async fn add_client(&self, client: ChainClient<P, S>) {
+        self.0.lock().await.insert(client.chain_id(), client);
+    }
+
+    pub async fn request_client(
+        &self,
+        chain_id: ChainId,
+        context: Arc<Mutex<impl ClientContext<ValidatorNodeProvider = P, Storage = S>>>,
+    ) -> ChainClient<P, S> {
+        let mut guard = self.0.lock().await;
+        match guard.get(&chain_id) {
+            Some(client) => client.clone(),
+            None => {
+                let context = context.lock().await;
+                let client = context.make_chain_client(chain_id);
+                guard.insert(chain_id, client.clone());
+                client
+            }
+        }
+    }
+
+    pub async fn from_context(
+        context: &impl ClientContext<ValidatorNodeProvider = P, Storage = S>,
+    ) -> Self {
+        let chain_clients = Self(Default::default());
+        let chains = context.wallet().chain_ids();
+        for chain_id in chains {
+            let mut map_guard = chain_clients.map_lock().await;
+            let client = context.make_chain_client(chain_id);
+            map_guard.insert(chain_id, client);
+        }
+        chain_clients
     }
 }
