@@ -170,7 +170,7 @@ pub struct LocalNet {
     validator_names: BTreeMap<usize, String>,
     running_validators: BTreeMap<usize, Validator>,
     namespace: String,
-    set_init: HashSet<(usize, usize)>,
+    set_init: HashSet<usize>,
     storage_config: StorageConfig,
     path_provider: PathProvider,
 }
@@ -458,7 +458,7 @@ impl LocalNet {
     }
 
     async fn run_proxy(&mut self, validator: usize) -> Result<Child> {
-        let storage = self.initialize_storage(validator, 0).await?;
+        let storage = self.initialize_storage(validator).await?;
         let child = self
             .command_for_binary("linera-proxy")
             .await?
@@ -500,7 +500,7 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
+    async fn initialize_storage(&mut self, validator: usize) -> Result<String> {
         let namespace = format!("{}_server_{}_db", self.namespace, validator);
         let storage = StorageConfigNamespace {
             storage_config: self.storage_config.clone(),
@@ -508,9 +508,7 @@ impl LocalNet {
         }
         .to_string();
 
-        let key = (validator, shard);
-
-        if !self.set_init.contains(&key) {
+        if !self.set_init.contains(&validator) {
             let max_try = 4;
             let mut i_try = 0;
             loop {
@@ -538,14 +536,14 @@ impl LocalNet {
                 let one_second = linera_base::time::Duration::from_secs(1);
                 std::thread::sleep(one_second);
             }
-            self.set_init.insert(key);
+            self.set_init.insert(validator);
         }
 
         Ok(storage)
     }
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
-        let storage = self.initialize_storage(validator, shard).await?;
+        let storage = self.initialize_storage(validator).await?;
         let mut command = self.command_for_binary("linera-server").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());
