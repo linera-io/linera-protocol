@@ -791,7 +791,7 @@ impl Runnable for Job {
 
             Service { config, port } => {
                 let default_chain = context.wallet().default_chain();
-                let service = NodeService::new(config, port, default_chain, storage, context);
+                let service = NodeService::new(config, port, default_chain, storage, context).await;
                 service.run().await?;
             }
 
@@ -804,7 +804,6 @@ impl Runnable for Job {
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Starting faucet service using chain {}", chain_id);
-                let chain_client = context.make_chain_client(chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
                         let micros = u64::try_from(et.timestamp_micros())
@@ -815,7 +814,7 @@ impl Runnable for Job {
                 let genesis_config = Arc::new(context.wallet().genesis_config().clone());
                 let faucet = FaucetService::new(
                     port,
-                    chain_client,
+                    chain_id,
                     context,
                     amount,
                     end_timestamp,

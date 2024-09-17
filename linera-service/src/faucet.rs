@@ -19,7 +19,6 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::{
-    client::ChainClient,
     data_types::ClientOutcome,
     node::{ValidatorNode, ValidatorNodeProvider},
 };
@@ -41,7 +40,8 @@ where
     S: Storage,
 {
     genesis_config: Arc<GenesisConfig>,
-    client: Arc<Mutex<ChainClient<P, S>>>,
+    clients: ChainClients<P, S>,
+    chain_id: ChainId,
 }
 
 /// The root GraphQL mutation type.
@@ -49,7 +49,8 @@ pub struct MutationRoot<P, S, C>
 where
     S: Storage,
 {
-    client: Arc<Mutex<ChainClient<P, S>>>,
+    clients: ChainClients<P, S>,
+    chain_id: ChainId,
     context: Arc<Mutex<C>>,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -92,7 +93,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self.client.lock().await;
+        let client = self.clients.try_client_lock(&self.chain_id).await?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -127,7 +128,7 @@ where
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
-        let client = self.client.lock().await;
+        let client = self.clients.try_client_lock(&self.chain_id).await?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -157,7 +158,7 @@ where
         let result = client
             .open_chain(ownership, ApplicationPermissions::default(), self.amount)
             .await;
-        self.context.lock().await.update_wallet(&*client).await?;
+        self.context.lock().await.update_wallet(&client).await?;
         let (message_id, certificate) = match result? {
             ClientOutcome::Committed(result) => result,
             ClientOutcome::WaitForTimeout(timeout) => {
@@ -197,7 +198,8 @@ pub struct FaucetService<P, S, C>
 where
     S: Storage,
 {
-    client: Arc<Mutex<ChainClient<P, S>>>,
+    clients: ChainClients<P, S>,
+    chain_id: ChainId,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
@@ -215,7 +217,8 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            client: self.client.clone(),
+            clients: self.clients.clone(),
+            chain_id: self.chain_id,
             context: self.context.clone(),
             genesis_config: self.genesis_config.clone(),
             config: self.config.clone(),
@@ -240,7 +243,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         port: NonZeroU16,
-        client: ChainClient<P, S>,
+        chain_id: ChainId,
         context: C,
         amount: Amount,
         end_timestamp: Timestamp,
@@ -248,12 +251,16 @@ where
         config: ChainListenerConfig,
         storage: S,
     ) -> anyhow::Result<Self> {
+        let clients = ChainClients::<P, S>::from_context(&context).await;
+        let context = Arc::new(Mutex::new(context));
+        let client = clients.try_client_lock(&chain_id).await?;
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
-            client: Arc::new(Mutex::new(client)),
-            context: Arc::new(Mutex::new(context)),
+            clients,
+            chain_id,
+            context,
             genesis_config,
             config,
             storage,
@@ -267,7 +274,8 @@ where
 
     pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, EmptySubscription> {
         let mutation_root = MutationRoot {
-            client: self.client.clone(),
+            clients: self.clients.clone(),
+            chain_id: self.chain_id,
             context: self.context.clone(),
             amount: self.amount,
             end_timestamp: self.end_timestamp,
@@ -276,7 +284,8 @@ where
         };
         let query_root = QueryRoot {
             genesis_config: self.genesis_config.clone(),
-            client: self.client.clone(),
+            clients: self.clients.clone(),
+            chain_id: self.chain_id,
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
     }
@@ -295,7 +304,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config, ChainClients::default())
+        ChainListener::new(self.config.clone(), self.clients.clone())
             .run(self.context.clone(), self.storage.clone())
             .await;
 
