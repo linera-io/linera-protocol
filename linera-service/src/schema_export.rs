@@ -176,7 +176,8 @@ async fn main() -> std::io::Result<()> {
         None,
         storage,
         context,
-    );
+    )
+    .await;
     let schema = service.schema().sdl();
     print!("{}", schema);
     Ok(())
