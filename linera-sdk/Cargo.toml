@@ -60,7 +60,7 @@ linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["test", "metrics", "wasmer"] }
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
 linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
-linera-witty = { workspace = true, features = ["test"] }
+linera-witty.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wasmtime.workspace = true
