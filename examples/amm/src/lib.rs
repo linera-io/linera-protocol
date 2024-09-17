@@ -101,12 +101,14 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+Type each of these in the GraphiQL interface and substitute the env variables with their actual
+values that we've defined above.
 
 To properly setup the tokens in the proper chains, we need to do some transfer operations:
 
 - Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-  Navigate to `http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID` and enter:
+  Run `echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID"` to print the URL
+  of the GrahpiQL interface for the FUN1 app. Navigate to that URL and enter:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
     mutation {
@@ -137,7 +139,8 @@ To properly setup the tokens in the proper chains, we need to do some transfer o
 ```
 
 - Transfer 50 FUN2 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
-  Since this is the other token, we need to go to `http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID`:
+  Since this is the other token, FUN2, we need to go to its own GraphiQL interface:
+  `echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID"`.
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN2_APP_ID
     mutation {
