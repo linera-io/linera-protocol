@@ -3,10 +3,13 @@
 
 //! Generation of WIT files.
 
+mod stub_instance;
+
 use std::collections::BTreeMap;
 
 use genawaiter::{rc::gen, yield_};
 
+pub use self::stub_instance::StubInstance;
 pub use crate::type_traits::RegisterWitTypes;
 
 /// Generates WIT snippets for an interface.

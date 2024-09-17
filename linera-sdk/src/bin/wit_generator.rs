@@ -18,10 +18,7 @@ use linera_execution::{
     ContractEntrypoints, ContractSyncRuntimeHandle, ContractSystemApi, ServiceEntrypoints,
     ServiceSyncRuntimeHandle, ServiceSystemApi, SystemApiData, ViewSystemApi,
 };
-use linera_witty::{
-    wit_generation::{WitInterfaceWriter, WitWorldWriter},
-    MockInstance,
-};
+use linera_witty::wit_generation::{StubInstance, WitInterfaceWriter, WitWorldWriter};
 
 /// Command line parameters for the WIT generator.
 #[derive(Debug, clap::Parser)]
@@ -50,27 +47,27 @@ fn main() -> Result<()> {
 
 /// Runs the main `operation` on all the WIT files.
 fn run_operation(options: WitGeneratorOptions, mut operation: impl Operation) -> Result<()> {
-    let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<MockInstance<()>>>();
-    let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<MockInstance<()>>>();
+    let contract_entrypoints = WitInterfaceWriter::new::<ContractEntrypoints<StubInstance>>();
+    let service_entrypoints = WitInterfaceWriter::new::<ServiceEntrypoints<StubInstance>>();
 
     let contract_system_api = WitInterfaceWriter::new::<
-        ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
+        ContractSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
     >();
     let service_system_api = WitInterfaceWriter::new::<
-        ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntimeHandle>>>,
+        ServiceSystemApi<StubInstance<SystemApiData<ServiceSyncRuntimeHandle>>>,
     >();
     let view_system_api = WitInterfaceWriter::new::<
-        ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
+        ViewSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>,
     >();
 
     let contract_world = WitWorldWriter::new("linera:app", "contract")
-        .export::<ContractEntrypoints<MockInstance<()>>>()
-        .import::<ContractSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>>()
-        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
+        .export::<ContractEntrypoints<StubInstance>>()
+        .import::<ContractSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>>()
+        .import::<ViewSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
     let service_world = WitWorldWriter::new("linera:app", "service")
-        .export::<ServiceEntrypoints<MockInstance<()>>>()
-        .import::<ServiceSystemApi<MockInstance<SystemApiData<ServiceSyncRuntimeHandle>>>>()
-        .import::<ViewSystemApi<MockInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
+        .export::<ServiceEntrypoints<StubInstance>>()
+        .import::<ServiceSystemApi<StubInstance<SystemApiData<ServiceSyncRuntimeHandle>>>>()
+        .import::<ViewSystemApi<StubInstance<SystemApiData<ContractSyncRuntimeHandle>>>>();
 
     operation.run_for_file(
         &options.base_directory.join("contract-entrypoints.wit"),
