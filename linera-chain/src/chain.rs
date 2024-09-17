@@ -80,7 +80,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             1.0, 2.5, 5.0, 10.0, 25.0, 50.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -122,7 +122,7 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             100_000.0, 250_000.0, 500_000.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -133,7 +133,7 @@ static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         &[],
         Some(vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -160,7 +160,7 @@ static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             8_388_608.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -187,7 +187,7 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             8_388_608.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
