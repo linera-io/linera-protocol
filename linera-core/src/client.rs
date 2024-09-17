@@ -21,6 +21,8 @@ use futures::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::data_types::Bytecode;
+#[cfg(with_metrics)]
+use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -78,7 +80,81 @@ use crate::{
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
-/// A builder that creates `ChainClients` which share the cache and notifiers.
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util;
+    use prometheus::HistogramVec;
+
+    pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
+        LazyLock::new(|| {
+            prometheus_util::register_histogram_vec(
+                "process_inbox_latency",
+                "process_inbox latency",
+                &[],
+                Some(vec![
+                    0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                    25.0, 50.0, 100.0, 250.0, 500.0,
+                ]),
+            )
+            .expect("Counter creation should not fail")
+        });
+
+    pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "prepare_chain_latency",
+            "prepare_chain latency",
+            &[],
+            Some(vec![
+                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                25.0, 50.0, 100.0, 250.0, 500.0,
+            ]),
+        )
+        .expect("Counter creation should not fail")
+    });
+
+    pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "synchronize_chain_state_latency",
+            "synchronize_chain_state latency",
+            &[],
+            Some(vec![
+                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                25.0, 50.0, 100.0, 250.0, 500.0,
+            ]),
+        )
+        .expect("Counter creation should not fail")
+    });
+
+    pub static EXECUTE_BLOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "execute_block_latency",
+            "execute_block latency",
+            &[],
+            Some(vec![
+                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                25.0, 50.0, 100.0, 250.0, 500.0,
+            ]),
+        )
+        .expect("Counter creation should not fail")
+    });
+
+    pub static FIND_RECEIVED_CERTIFICATES_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "find_received_certificates_latency",
+            "find_received_certificates latency",
+            &[],
+            Some(vec![
+                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                25.0, 50.0, 100.0, 250.0, 500.0,
+            ]),
+        )
+        .expect("Counter creation should not fail")
+    });
+}
+
+/// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
@@ -831,6 +907,9 @@ where
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height.
     async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
+
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
@@ -1219,6 +1298,9 @@ where
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
+
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
@@ -1397,6 +1479,9 @@ where
         validators: &[(ValidatorName, impl LocalValidatorNode)],
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
+
         let mut futures = vec![];
 
         for (name, node) in validators {
@@ -1424,7 +1509,7 @@ where
     #[tracing::instrument(level = "trace", skip(self, name, node, chain_id))]
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
-    pub async fn try_synchronize_chain_state_from(
+    async fn try_synchronize_chain_state_from(
         &self,
         name: &ValidatorName,
         node: &impl LocalValidatorNode,
@@ -1539,7 +1624,7 @@ where
 
     /// Downloads the blobs from the specified validator and returns them, including blobs that
     /// are still pending the the validator's chain manager.
-    pub async fn find_missing_blobs_in_validator(
+    async fn find_missing_blobs_in_validator(
         &self,
         blob_ids: Vec<BlobId>,
         chain_id: ChainId,
@@ -1907,6 +1992,9 @@ where
         &self,
         operations: Vec<Operation>,
     ) -> Result<ExecuteBlockOutcome, ChainClientError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
+
         let block_mutex = Arc::clone(&self.state().preparing_block);
         let _block_guard = block_mutex.lock_owned().await;
         match self.process_pending_block_without_prepare().await? {
@@ -2724,6 +2812,9 @@ where
     pub async fn process_inbox_without_prepare(
         &self,
     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
+        #[cfg(with_metrics)]
+        let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
+
         let mut certificates = Vec::new();
         loop {
             let incoming_bundles = self.pending_message_bundles().await?;
