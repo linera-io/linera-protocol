@@ -5,12 +5,14 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, VecDeque},
+    fmt,
     sync::Arc,
 };
 
 use futures::future;
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
+    ensure,
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
@@ -29,7 +31,7 @@ use tracing::warn;
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{LocalValidatorNode, NodeError},
+    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
     value_cache::ValueCache,
     worker::{Notification, WorkerError, WorkerState},
 };
@@ -254,8 +256,7 @@ where
     #[tracing::instrument(level = "trace", skip_all)]
     pub async fn try_process_certificates(
         &self,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<impl LocalValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
         notifications: &mut impl Extend<Notification>,
@@ -274,7 +275,7 @@ where
 
             result = match &result {
                 Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
-                    let blobs = Self::try_download_blobs_from(blob_ids, name, node).await;
+                    let blobs = named_node.try_download_blobs(blob_ids).await;
                     if blobs.len() != blob_ids.len() {
                         result
                     } else {
@@ -363,7 +364,7 @@ where
     /// Downloads and processes all certificates up to (excluding) the specified height.
     pub async fn download_certificates(
         &self,
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
+        validators: &[NamedNode<impl LocalValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
         notifications: &mut impl Extend<Notification>,
@@ -371,14 +372,13 @@ where
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
         validators.shuffle(&mut rand::thread_rng());
-        for (name, node) in validators {
+        for named_node in validators {
             let info = self.local_chain_info(chain_id).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
             self.try_download_certificates_from(
-                name,
-                node,
+                named_node,
                 chain_id,
                 info.next_block_height,
                 target_next_block_height,
@@ -424,8 +424,7 @@ where
     /// given validator.
     async fn try_download_certificates_from(
         &self,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<impl LocalValidatorNode>,
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
@@ -438,13 +437,13 @@ where
                 .ok_or(ArithmeticError::Overflow)?
                 .min(1000);
             let Some(certificates) = self
-                .try_query_certificates_from(name, node, chain_id, start, limit)
+                .try_query_certificates_from(named_node, chain_id, start, limit)
                 .await?
             else {
                 break;
             };
             let Some(info) = self
-                .try_process_certificates(name, node, chain_id, certificates, notifications)
+                .try_process_certificates(named_node, chain_id, certificates, notifications)
                 .await
             else {
                 break;
@@ -458,31 +457,22 @@ where
     #[tracing::instrument(level = "trace", skip_all)]
     async fn try_query_certificates_from(
         &self,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<impl LocalValidatorNode>,
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
     ) -> Result<Option<Vec<Certificate>>, LocalNodeError> {
-        tracing::debug!(?name, ?chain_id, ?start, ?limit, "Querying certificates");
+        tracing::debug!(name = ?named_node.name, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
             limit: Some(limit),
         };
         let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range);
-        if let Ok(response) = node.handle_chain_info_query(query).await {
-            if response.check(name).is_err() {
-                return Ok(None);
-            }
-            let ChainInfo {
-                requested_sent_certificate_hashes,
-                ..
-            } = *response.info;
-
+        if let Ok(info) = named_node.handle_chain_info_query(query).await {
             let certificates = future::try_join_all(
-                requested_sent_certificate_hashes
+                info.requested_sent_certificate_hashes
                     .into_iter()
-                    .map(|hash| node.download_certificate(hash)),
+                    .map(|hash| named_node.node.download_certificate(hash)),
             )
             .await?;
             Ok(Some(certificates))
@@ -493,14 +483,14 @@ where
 
     #[tracing::instrument(level = "trace", skip(validators))]
     async fn download_blob(
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
+        validators: &[NamedNode<impl LocalValidatorNode>],
         blob_id: BlobId,
     ) -> Option<Blob> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
         validators.shuffle(&mut rand::thread_rng());
-        for (name, node) in validators {
-            if let Some(blob) = Self::try_download_blob_from(name, node, blob_id).await {
+        for named_node in validators {
+            if let Some(blob) = named_node.try_download_blob(blob_id).await {
                 return Some(blob);
             }
         }
@@ -510,7 +500,7 @@ where
     #[tracing::instrument(level = "trace", skip(nodes))]
     pub async fn download_blobs(
         blob_ids: &[BlobId],
-        nodes: &[(ValidatorName, impl LocalValidatorNode)],
+        nodes: &[NamedNode<impl LocalValidatorNode>],
     ) -> Vec<Blob> {
         future::join_all(
             blob_ids
@@ -521,46 +511,6 @@ where
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
-    }
-
-    #[tracing::instrument(level = "trace", skip(node))]
-    pub async fn try_download_blobs_from(
-        blob_ids: &[BlobId],
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
-    ) -> Vec<Blob> {
-        future::join_all(
-            blob_ids
-                .iter()
-                .map(|blob_id| Self::try_download_blob_from(name, node, *blob_id)),
-        )
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-    }
-
-    #[tracing::instrument(level = "trace", skip(name, node))]
-    async fn try_download_blob_from(
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
-        blob_id: BlobId,
-    ) -> Option<Blob> {
-        match node.download_blob_content(blob_id).await {
-            Ok(blob) => {
-                let blob = blob.with_blob_id_checked(blob_id);
-
-                if blob.is_none() {
-                    tracing::info!("Validator {name} sent an invalid blob {blob_id}.");
-                }
-
-                blob
-            }
-            Err(error) => {
-                tracing::debug!("Failed to fetch blob {blob_id} from validator {name}: {error}");
-                None
-            }
-        }
     }
 
     /// Handles any pending local cross-chain requests.
@@ -580,5 +530,130 @@ where
             requests.extend(new_actions.cross_chain_requests);
         }
         Ok(())
+    }
+}
+
+/// A validator node together with the validator's name.
+#[derive(Clone)]
+pub struct NamedNode<N> {
+    pub name: ValidatorName,
+    pub node: N,
+}
+
+impl<N> fmt::Debug for NamedNode<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NamedNode")
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
+#[allow(clippy::result_large_err)]
+impl<N: LocalValidatorNode> NamedNode<N> {
+    pub async fn handle_chain_info_query(
+        &self,
+        query: ChainInfoQuery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let response = self.node.handle_chain_info_query(query).await?;
+        self.check_and_return_info(response)
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub async fn handle_block_proposal(
+        &self,
+        proposal: BlockProposal,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let response = self.node.handle_block_proposal(proposal).await?;
+        self.check_and_return_info(response)
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub async fn handle_certificate(
+        &self,
+        certificate: Certificate,
+        blobs: Vec<Blob>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let response = self
+            .node
+            .handle_certificate(certificate, blobs, delivery)
+            .await?;
+        self.check_and_return_info(response)
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub async fn handle_lite_certificate(
+        &self,
+        certificate: LiteCertificate<'_>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let response = self
+            .node
+            .handle_lite_certificate(certificate, delivery)
+            .await?;
+        self.check_and_return_info(response)
+    }
+
+    fn check_and_return_info(
+        &self,
+        response: ChainInfoResponse,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        ensure!(
+            response.check(&self.name).is_ok(),
+            NodeError::InvalidChainInfoResponse
+        );
+        Ok(response.info)
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub async fn download_certificate_for_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<Certificate, NodeError> {
+        let last_used_hash = self.node.blob_last_used_by(blob_id).await?;
+        let certificate = self.node.download_certificate(last_used_hash).await?;
+        if !certificate.requires_blob(&blob_id) {
+            warn!(
+                "Got invalid last used by certificate for blob {} from validator {}",
+                blob_id, self.name
+            );
+            return Err(NodeError::InvalidCertificateForBlob(blob_id));
+        }
+        Ok(certificate)
+    }
+
+    #[tracing::instrument(level = "trace")]
+    pub async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Vec<Blob> {
+        future::join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| self.try_download_blob(*blob_id)),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+    }
+
+    #[tracing::instrument(level = "trace")]
+    async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
+        match self.node.download_blob_content(blob_id).await {
+            Ok(blob) => {
+                let blob = blob.with_blob_id_checked(blob_id);
+
+                if blob.is_none() {
+                    tracing::info!("Validator {} sent an invalid blob {blob_id}.", self.name);
+                }
+
+                blob
+            }
+            Err(error) => {
+                tracing::debug!(
+                    "Failed to fetch blob {blob_id} from validator {}: {error}",
+                    self.name
+                );
+                None
+            }
+        }
     }
 }

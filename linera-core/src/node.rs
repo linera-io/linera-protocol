@@ -215,6 +215,8 @@ pub enum NodeError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+    #[error("Node failed to provide a 'last used by' certificate for the blob")]
+    InvalidCertificateForBlob(BlobId),
 }
 
 impl From<tonic::Status> for NodeError {

@@ -66,7 +66,7 @@ use crate::{
     data_types::{
         BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
     },
-    local_node::{LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError, NamedNode},
     node::{
         CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
         NotificationStream,
@@ -293,7 +293,7 @@ where
 {
     async fn download_certificates(
         &self,
-        nodes: &[(ValidatorName, P::Node)],
+        nodes: &[NamedNode<P::Node>],
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
@@ -308,15 +308,14 @@ where
 
     async fn try_process_certificates(
         &self,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<P::Node>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Option<Box<ChainInfo>> {
         let mut notifications = Vec::<Notification>::new();
         let result = self
             .local_node
-            .try_process_certificates(name, node, chain_id, certificates, &mut notifications)
+            .try_process_certificates(named_node, chain_id, certificates, &mut notifications)
             .await;
         self.notifier.handle_notifications(&notifications);
         result
@@ -536,9 +535,6 @@ pub enum ChainClientError {
 
     #[error("Blob not found: {0}")]
     BlobNotFound(BlobId),
-
-    #[error("Got invalid last used by certificate for blob {0} from validator {1}")]
-    InvalidLastUsedByCertificate(BlobId, ValidatorName),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -834,14 +830,20 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
+    fn make_nodes(&self, committee: &Committee) -> Result<Vec<NamedNode<P::Node>>, NodeError> {
+        Ok(self
+            .client
+            .validator_node_provider
+            .make_nodes(committee)?
+            .map(|(name, node)| NamedNode { name, node })
+            .collect())
+    }
+
+    #[tracing::instrument(level = "trace")]
     /// Obtains the validators trusted by the local chain.
-    async fn validator_nodes(&self) -> Result<Vec<(ValidatorName, P::Node)>, ChainClientError> {
+    async fn validator_nodes(&self) -> Result<Vec<NamedNode<P::Node>>, ChainClientError> {
         match self.local_committee().await {
-            Ok(committee) => Ok(self
-                .client
-                .validator_node_provider
-                .make_nodes(&committee)?
-                .collect()),
+            Ok(committee) => Ok(self.make_nodes(&committee)?),
             Err(LocalNodeError::InactiveChain(_)) => Ok(Vec::new()),
             Err(LocalNodeError::WorkerError(WorkerError::ChainError(error)))
                 if matches!(*error, ChainError::InactiveChain(_)) =>
@@ -1004,19 +1006,14 @@ where
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), ChainClientError> {
         let local_node = self.client.local_node.clone();
-        let nodes: Vec<_> = self
-            .client
-            .validator_node_provider
-            .make_nodes(committee)?
-            .collect();
+        let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
             &nodes,
             committee,
             |_: &()| (),
-            |name, node| {
+            |named_node| {
                 let mut updater = ValidatorUpdater {
-                    name,
-                    node,
+                    named_node,
                     local_node: local_node.clone(),
                 };
                 Box::pin(async move {
@@ -1043,19 +1040,14 @@ where
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
         let local_node = self.client.local_node.clone();
-        let nodes: Vec<_> = self
-            .client
-            .validator_node_provider
-            .make_nodes(committee)?
-            .collect();
+        let nodes = self.make_nodes(committee)?;
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| (vote.value.value_hash, vote.round),
-            |name, node| {
+            |named_node| {
                 let mut updater = ValidatorUpdater {
-                    name,
-                    node,
+                    named_node,
                     local_node: local_node.clone(),
                 };
                 let action = action.clone();
@@ -1137,11 +1129,7 @@ where
         }
         // Recover history from the network. We assume that the committee that signed the
         // certificate is still active.
-        let nodes: Vec<_> = self
-            .client
-            .validator_node_provider
-            .make_nodes(remote_committee)?
-            .collect();
+        let nodes = self.make_nodes(remote_committee)?;
         self.client
             .download_certificates(&nodes, block.chain_id, block.height)
             .await?;
@@ -1165,19 +1153,18 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(node))]
+    #[tracing::instrument(level = "trace")]
     /// Downloads and processes all confirmed block certificates that sent any message to this
     /// chain, including their ancestors.
     async fn synchronize_received_certificates_from_validator(
         &self,
         chain_id: ChainId,
-        name: ValidatorName,
-        node: impl LocalValidatorNode,
+        named_node: &NamedNode<P::Node>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError> {
         let tracker = self
             .state()
             .received_certificate_trackers
-            .get(&name)
+            .get(&named_node.name)
             .copied()
             .unwrap_or(0);
         let (committees, max_epoch) = self
@@ -1186,12 +1173,10 @@ where
             .map_err(|_| NodeError::InvalidChainInfoResponse)?;
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_nth(tracker);
-        let response = node.handle_chain_info_query(query).await?;
-        // Responses are authenticated for accountability.
-        response.check(&name)?;
+        let info = named_node.handle_chain_info_query(query).await?;
         let mut certificates = Vec::new();
         let mut new_tracker = tracker;
-        for entry in response.info.requested_received_log {
+        for entry in info.requested_received_log {
             let query = ChainInfoQuery::new(entry.chain_id)
                 .with_sent_certificate_hashes_in_range(BlockHeightRange::single(entry.height));
             let local_response = self
@@ -1211,13 +1196,15 @@ where
                 continue;
             }
 
-            let mut response = node.handle_chain_info_query(query).await?;
-            let Some(certificate_hash) = response.info.requested_sent_certificate_hashes.pop()
-            else {
+            let mut info = named_node.handle_chain_info_query(query).await?;
+            let Some(certificate_hash) = info.requested_sent_certificate_hashes.pop() else {
                 break;
             };
 
-            let certificate = node.download_certificate(certificate_hash).await?;
+            let certificate = named_node
+                .node
+                .download_certificate(certificate_hash)
+                .await?;
             let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
             else {
                 return Err(NodeError::InvalidChainInfoResponse);
@@ -1256,7 +1243,7 @@ where
                 }
             }
         }
-        Ok((name, new_tracker, certificates))
+        Ok((named_node.name, new_tracker, certificates))
     }
 
     #[tracing::instrument(level = "trace", skip(tracker, certificates))]
@@ -1310,11 +1297,7 @@ where
         // Use network information from the local chain.
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
-        let nodes: Vec<_> = self
-            .client
-            .validator_node_provider
-            .make_nodes(&local_committee)?
-            .collect();
+        let nodes = self.make_nodes(&local_committee)?;
         // Synchronize the state of the admin chain from the network.
         self.synchronize_chain_state(&nodes, self.admin_id())
             .await?;
@@ -1324,11 +1307,11 @@ where
             &nodes,
             &local_committee,
             |_| (),
-            |name, node| {
+            |named_node| {
                 let client = client.clone();
                 Box::pin(async move {
                     client
-                        .synchronize_received_certificates_from_validator(chain_id, name, node)
+                        .synchronize_received_certificates_from_validator(chain_id, &named_node)
                         .await
                 })
             },
@@ -1482,7 +1465,7 @@ where
     /// Downloads and processes any certificates we are missing for the given chain.
     pub async fn synchronize_chain_state(
         &self,
-        validators: &[(ValidatorName, impl LocalValidatorNode)],
+        validators: &[NamedNode<P::Node>],
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
@@ -1490,11 +1473,11 @@ where
 
         let mut futures = vec![];
 
-        for (name, node) in validators {
+        for named_node in validators {
             let client = self.clone();
             futures.push(async move {
                 client
-                    .try_synchronize_chain_state_from(name, node, chain_id)
+                    .try_synchronize_chain_state_from(named_node, chain_id)
                     .await
             });
         }
@@ -1512,13 +1495,12 @@ where
             .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, name, node, chain_id))]
+    #[tracing::instrument(level = "trace", skip(self, named_node, chain_id))]
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
     async fn try_synchronize_chain_state_from(
         &self,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<P::Node>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
         let local_info = self.client.local_node.local_chain_info(chain_id).await?;
@@ -1529,15 +1511,10 @@ where
         let query = ChainInfoQuery::new(chain_id)
             .with_sent_certificate_hashes_in_range(range)
             .with_manager_values();
-        let info = match node.handle_chain_info_query(query).await {
-            Ok(response) if response.check(name).is_ok() => response.info,
-            Ok(_) => {
-                warn!("Ignoring invalid response from validator {}", name);
-                // Give up on this validator.
-                return Ok(());
-            }
+        let info = match named_node.handle_chain_info_query(query).await {
+            Ok(info) => info,
             Err(err) => {
-                warn!("Ignoring error from validator {}: {}", name, err);
+                warn!("Ignoring error from validator {}: {}", named_node.name, err);
                 return Ok(());
             }
         };
@@ -1545,14 +1522,14 @@ where
         let certificates = future::try_join_all(
             info.requested_sent_certificate_hashes
                 .into_iter()
-                .map(move |hash| async move { node.download_certificate(hash).await }),
+                .map(move |hash| async move { named_node.node.download_certificate(hash).await }),
         )
         .await?;
 
         if !certificates.is_empty()
             && self
                 .client
-                .try_process_certificates(name, node, chain_id, certificates)
+                .try_process_certificates(named_node, chain_id, certificates)
                 .await
                 .is_none()
         {
@@ -1562,7 +1539,7 @@ where
             if proposal.content.block.chain_id != chain_id {
                 warn!(
                     "Response from validator {} contains an invalid proposal",
-                    name
+                    named_node.name
                 );
                 return Ok(()); // Give up on this validator.
             }
@@ -1583,14 +1560,14 @@ where
                         _,
                     ) = &**chain_error
                     {
-                        self.update_local_node_with_blob_from(*blob_id, name, node)
+                        self.update_local_node_with_blob_from(*blob_id, named_node)
                             .await?;
                         continue; // We found the missing blob: retry.
                     }
                 }
                 warn!(
                     "Skipping proposal from {} and validator {}: {}",
-                    owner, name, original_err
+                    owner, named_node.name, original_err
                 );
                 break;
             }
@@ -1599,7 +1576,7 @@ where
             if !cert.value().is_validated() || cert.value().chain_id() != chain_id {
                 warn!(
                     "Response from validator {} contains an invalid locked block",
-                    name
+                    named_node.name
                 );
                 return Ok(()); // Give up on this validator.
             }
@@ -1611,7 +1588,7 @@ where
                     &original_err
                 {
                     blobs = self
-                        .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, name, node)
+                        .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, named_node)
                         .await?;
 
                     if blobs.len() == blob_ids.len() {
@@ -1620,7 +1597,7 @@ where
                 }
                 warn!(
                     "Skipping certificate {} from validator {}: {}",
-                    hash, name, original_err
+                    hash, named_node.name, original_err
                 );
                 break;
             }
@@ -1634,18 +1611,13 @@ where
         &self,
         blob_ids: Vec<BlobId>,
         chain_id: ChainId,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<P::Node>,
     ) -> Result<Vec<Blob>, NodeError> {
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let info = match node.handle_chain_info_query(query).await {
-            Ok(response) if response.check(name).is_ok() => Some(response.info),
-            Ok(_) => {
-                warn!("Got invalid response from validator {}", name);
-                return Ok(Vec::new());
-            }
+        let info = match named_node.handle_chain_info_query(query).await {
+            Ok(info) => Some(info),
             Err(err) => {
-                warn!("Got error from validator {}: {}", name, err);
+                warn!("Got error from validator {}: {}", named_node.name, err);
                 return Ok(Vec::new());
             }
         };
@@ -1663,9 +1635,7 @@ where
             Vec::new()
         };
 
-        found_blobs.extend(
-            LocalNodeClient::<S>::try_download_blobs_from(&missing_blobs, name, node).await,
-        );
+        found_blobs.extend(named_node.try_download_blobs(&missing_blobs).await);
 
         Ok(found_blobs)
     }
@@ -1675,19 +1645,9 @@ where
     async fn update_local_node_with_blob_from(
         &self,
         blob_id: BlobId,
-        name: &ValidatorName,
-        node: &impl LocalValidatorNode,
+        named_node: &NamedNode<P::Node>,
     ) -> Result<(), ChainClientError> {
-        let Ok(last_used_by_hash) = node.blob_last_used_by(blob_id).await else {
-            return Err(ChainClientError::BlobNotFound(blob_id));
-        };
-
-        let certificate = node.download_certificate(last_used_by_hash).await?;
-        ensure!(
-            certificate.requires_blob(&blob_id),
-            ChainClientError::InvalidLastUsedByCertificate(blob_id, *name)
-        );
-
+        let certificate = named_node.download_certificate_for_blob(blob_id).await?;
         // This will download all ancestors of the certificate and process all of them locally.
         self.receive_certificate(certificate).await?;
         Ok(())
@@ -1698,20 +1658,14 @@ where
     async fn receive_certificate_for_blob(&self, blob_id: BlobId) -> Result<(), ChainClientError> {
         let validators = self.validator_nodes().await?;
         let mut tasks = FuturesUnordered::new();
-        for (name, node) in validators {
-            let node = node.clone();
+        for named_node in validators {
+            let named_node = named_node.clone();
             tasks.push(async move {
-                let last_used_hash = node.blob_last_used_by(blob_id).await.ok()?;
-                let cert = node.download_certificate(last_used_hash).await.ok()?;
-                if cert.requires_blob(&blob_id) {
-                    self.receive_certificate(cert).await.ok()
-                } else {
-                    warn!(
-                        "Got invalid last used by certificate for blob {} from validator {}",
-                        blob_id, name
-                    );
-                    None
-                }
+                let cert = named_node
+                    .download_certificate_for_blob(blob_id)
+                    .await
+                    .ok()?;
+                self.receive_certificate(cert).await.ok()
             });
         }
 
@@ -2966,11 +2920,10 @@ where
         Some(info.next_block_height)
     }
 
-    #[tracing::instrument(level = "trace", skip(name, node, local_node, notification))]
+    #[tracing::instrument(level = "trace", skip(named_node, local_node, notification))]
     async fn process_notification(
         &self,
-        name: ValidatorName,
-        node: <P as LocalValidatorNodeProvider>::Node,
+        named_node: NamedNode<P::Node>,
         mut local_node: LocalNodeClient<S>,
         notification: Notification,
     ) {
@@ -2985,7 +2938,7 @@ where
                     return;
                 }
                 if let Err(error) = self
-                    .find_received_certificates_from_validator(name, node)
+                    .find_received_certificates_from_validator(named_node)
                     .await
                 {
                     error!("Fail to process notification: {error}");
@@ -3010,7 +2963,7 @@ where
                     return;
                 }
                 if let Err(error) = self
-                    .try_synchronize_chain_state_from(&name, &node, chain_id)
+                    .try_synchronize_chain_state_from(&named_node, chain_id)
                     .await
                 {
                     error!("Fail to process notification: {error}");
@@ -3032,7 +2985,7 @@ where
                     }
                 }
                 if let Err(error) = self
-                    .try_synchronize_chain_state_from(&name, &node, chain_id)
+                    .try_synchronize_chain_state_from(&named_node, chain_id)
                     .await
                 {
                     error!("Fail to process notification: {error}");
@@ -3159,9 +3112,10 @@ where
             };
             let this = self.clone();
             let local_node = local_node.clone();
+            let named_node = NamedNode { name, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
-                    this.process_notification(name, node.clone(), local_node.clone(), notification)
+                    this.process_notification(named_node.clone(), local_node.clone(), notification)
                         .await;
                 }
             });
@@ -3170,20 +3124,19 @@ where
         Ok(validator_tasks.collect())
     }
 
-    #[tracing::instrument(level = "trace", skip(node))]
+    #[tracing::instrument(level = "trace")]
     /// Attempts to download new received certificates from a particular validator.
     ///
     /// This is similar to `find_received_certificates` but for only one validator.
     /// We also don't try to synchronize the admin chain.
     pub async fn find_received_certificates_from_validator(
         &self,
-        name: ValidatorName,
-        node: <P as LocalValidatorNodeProvider>::Node,
+        named_node: NamedNode<P::Node>,
     ) -> Result<(), ChainClientError> {
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
         let (name, tracker, certificates) = self
-            .synchronize_received_certificates_from_validator(chain_id, name, node)
+            .synchronize_received_certificates_from_validator(chain_id, &named_node)
             .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
