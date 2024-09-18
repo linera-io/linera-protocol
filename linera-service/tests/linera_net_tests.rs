@@ -12,18 +12,26 @@
 
 mod common;
 
-use std::{env, time::Duration};
+use std::{
+    env,
+    time::{Duration, Instant},
+};
 
 use anyhow::Result;
 use async_graphql::InputType;
 use common::INTEGRATION_TEST_GUARD;
-use futures::{channel::mpsc, SinkExt, StreamExt};
+use futures::{
+    channel::mpsc,
+    future::{self, Either},
+    SinkExt, StreamExt,
+};
 use linera_base::{
     command::resolve_binary,
     data_types::{Amount, Blob},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
-use linera_sdk::DataBlobHash;
+use linera_core::worker::{Notification, Reason};
+use linera_sdk::{base::BlockHeight, DataBlobHash};
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
@@ -52,6 +60,22 @@ use linera_service::{
 };
 use serde_json::{json, Value};
 use test_case::test_case;
+
+/// The environment variable name to specify the number of iterations in the performance-related
+/// tests.
+const LINERA_TEST_ITERATIONS: &str = "LINERA_TEST_ITERATIONS";
+
+fn test_iterations() -> Option<usize> {
+    match env::var(LINERA_TEST_ITERATIONS) {
+        Ok(var) => Some(var.parse().unwrap_or_else(|error| {
+            panic!("{LINERA_TEST_ITERATIONS} is not a valid number: {error}")
+        })),
+        Err(env::VarError::NotPresent) => None,
+        Err(env::VarError::NotUnicode(_)) => {
+            panic!("{LINERA_TEST_ITERATIONS} must be valid Unicode")
+        }
+    }
+}
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
@@ -2823,14 +2847,14 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    const CHAIN_COUNT: usize = 1_000;
+    let chain_count = test_iterations().unwrap_or(1_000);
 
     let (mut net, faucet_client) = config.instantiate().await?;
 
     let faucet_chain = faucet_client.load_wallet()?.default_chain().unwrap();
 
     // Use the faucet directly to initialize many chains
-    for _ in 0..CHAIN_COUNT {
+    for _ in 0..chain_count {
         faucet_client
             .open_chain(faucet_chain, None, Amount::ZERO)
             .await?;
@@ -2973,6 +2997,81 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     let (result1, result2) = futures::join!(handle1, handle2);
     assert!(result1?.is_err());
     assert!(result2?.is_err());
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+/// Tests token transfers between two chains and measures the latency.
+///
+/// To use this as a benchmark, make sure to run it with `--nocapture`, e.g.:
+///
+/// ```bash
+/// RUST_LOG=info cargo test -p linera-service \
+///     --features storage-service
+///     test_end_to_end_repeated_transfers::storage_service_grpc \
+///     -- --nocapture
+/// ```
+///
+/// It will print the average end-to-end transfer latency, including creating the sending block,
+/// the receiving block, and the resulting `NewBlock` notification.
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let transfer_count = test_iterations().unwrap_or(100);
+
+    let (mut net, client1) = config.instantiate().await?;
+    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let client2 = net.make_client().await;
+    client2.wallet_init(&[], FaucetOption::None).await?;
+    let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let node_service2 = client2
+        .run_node_service(None, ProcessInbox::Automatic)
+        .await?;
+    let mut notifications2 = Box::pin(node_service2.notifications(chain2).await.unwrap());
+
+    let start_time = Instant::now();
+    for i in 0..transfer_count {
+        client1
+            .transfer(Amount::from_attos(1), chain1, chain2)
+            .await
+            .unwrap();
+        let timeout = Instant::now() + Duration::from_secs(1);
+        loop {
+            let sleep = Box::pin(tokio::time::sleep(timeout.duration_since(Instant::now())));
+            match future::select(notifications2.next(), sleep).await {
+                Either::Right(((), _)) | Either::Left((None, _)) => {
+                    panic!("Failed to receive notification about transfer #{i}.")
+                }
+                Either::Left((Some(Err(error)), _)) => {
+                    panic!("Error waiting for notification about transfer #{i}: {error}")
+                }
+                Either::Left((
+                    Some(Ok(Notification {
+                        reason: Reason::NewBlock { height, .. },
+                        chain_id,
+                    })),
+                    _,
+                )) if height == BlockHeight(i as u64 + 1) && chain_id == chain2 => {
+                    break;
+                }
+                Either::Left((Some(Ok(_)), _)) => {}
+            }
+        }
+    }
+    tracing::info!(
+        "{transfer_count} transfers completed. Average end-to-end latency: {} ms",
+        (start_time.elapsed() / (transfer_count as u32)).as_millis()
+    );
 
     net.ensure_is_running().await?;
     net.terminate().await?;
