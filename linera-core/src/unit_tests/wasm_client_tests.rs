@@ -914,3 +914,56 @@ where
 
     Ok(())
 }
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
+    // Set a fuel limit that is enough to instantiate the application and do one increment
+    // operation, but not ten.
+    let mut builder =
+        TestBuilder::new(storage_builder, 4, 1)
+            .await?
+            .with_policy(ResourceControlPolicy {
+                maximum_fuel_per_block: 30_000,
+                ..ResourceControlPolicy::default()
+            });
+    let publisher = builder
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
+        .await?;
+
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
+
+    let (bytecode_id, _cert) = publisher
+        .publish_bytecode(
+            Bytecode::load_from_file(contract_path).await?,
+            Bytecode::load_from_file(service_path).await?,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
+
+    let initial_value = 10_u64;
+    let (application_id, _) = publisher
+        .create_application(bytecode_id, &(), &initial_value, vec![])
+        .await
+        .unwrap()
+        .unwrap();
+
+    let increment = 5_u64;
+    publisher
+        .execute_operation(Operation::user(application_id, &increment)?)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(publisher
+        .execute_operations(vec![Operation::user(application_id, &increment)?; 10])
+        .await
+        .is_err());
+
+    Ok(())
+}

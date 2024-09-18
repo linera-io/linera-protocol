@@ -856,6 +856,10 @@ input ResourceControlPolicy {
 	"""
 	messageByte: Amount!
 	"""
+	The maximum amount of fuel a block can consume.
+	"""
+	maximumFuelPerBlock: Int!
+	"""
 	The maximum size of an executed block. This includes the block proposal itself as well as
 	the execution outcome.
 	"""

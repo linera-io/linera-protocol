@@ -534,6 +534,7 @@ impl Runnable for Job {
                                     operation_byte,
                                     message,
                                     message_byte,
+                                    maximum_fuel_per_block,
                                     maximum_executed_block_size,
                                     maximum_bytes_read_per_block,
                                     maximum_bytes_written_per_block,
@@ -571,6 +572,9 @@ impl Runnable for Job {
                                     if let Some(message_byte) = message_byte {
                                         policy.message_byte = message_byte;
                                     }
+                                    if let Some(maximum_fuel_per_block) = maximum_fuel_per_block {
+                                        policy.maximum_fuel_per_block = maximum_fuel_per_block;
+                                    }
                                     if let Some(maximum_executed_block_size) =
                                         maximum_executed_block_size
                                     {
@@ -591,20 +595,21 @@ impl Runnable for Job {
                                     }
                                     info!(
                                         "ResourceControlPolicy:\n\
-                            {:.2} base cost per block\n\
-                            {:.2} cost per fuel unit\n\
-                            {:.2} cost per read operation\n\
-                            {:.2} cost per write operation\n\
-                            {:.2} cost per byte read\n\
-                            {:.2} cost per byte written\n\
-                            {:.2} cost per byte stored\n\
-                            {:.2} per operation\n\
-                            {:.2} per byte in the argument of an operation\n\
-                            {:.2} per outgoing messages\n\
-                            {:.2} per byte in the argument of an outgoing messages\n\
-                            {:.2} maximum size of an executed block\n\
-                            {:.2} maximum number bytes read per block\n\
-                            {:.2} maximum number bytes written per block",
+                                        {:.2} base cost per block\n\
+                                        {:.2} cost per fuel unit\n\
+                                        {:.2} cost per read operation\n\
+                                        {:.2} cost per write operation\n\
+                                        {:.2} cost per byte read\n\
+                                        {:.2} cost per byte written\n\
+                                        {:.2} cost per byte stored\n\
+                                        {:.2} per operation\n\
+                                        {:.2} per byte in the argument of an operation\n\
+                                        {:.2} per outgoing messages\n\
+                                        {:.2} per byte in the argument of an outgoing messages\n\
+                                        {} maximum fuel per block\n\
+                                        {} maximum size of an executed block\n\
+                                        {} maximum number bytes read per block\n\
+                                        {} maximum number bytes written per block",
                                         policy.block,
                                         policy.fuel_unit,
                                         policy.read_operation,
@@ -616,6 +621,7 @@ impl Runnable for Job {
                                         policy.operation_byte,
                                         policy.message,
                                         policy.message_byte,
+                                        policy.maximum_fuel_per_block,
                                         policy.maximum_executed_block_size,
                                         policy.maximum_bytes_read_per_block,
                                         policy.maximum_bytes_written_per_block
@@ -631,6 +637,7 @@ impl Runnable for Job {
                                         && operation_byte.is_none()
                                         && message.is_none()
                                         && message_byte.is_none()
+                                        && maximum_fuel_per_block.is_none()
                                         && maximum_executed_block_size.is_none()
                                         && maximum_bytes_read_per_block.is_none()
                                         && maximum_bytes_written_per_block.is_none()
@@ -1356,6 +1363,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             operation_byte_price,
             message_price,
             message_byte_price,
+            maximum_fuel_per_block,
             maximum_executed_block_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
@@ -1364,6 +1372,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
         } => {
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
+            let maximum_fuel_per_block = maximum_fuel_per_block.unwrap_or(u64::MAX);
             let maximum_bytes_read_per_block = maximum_bytes_read_per_block.unwrap_or(u64::MAX);
             let maximum_bytes_written_per_block =
                 maximum_bytes_written_per_block.unwrap_or(u64::MAX);
@@ -1380,6 +1389,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 operation: *operation_price,
                 message_byte: *message_byte_price,
                 message: *message_price,
+                maximum_fuel_per_block,
                 maximum_executed_block_size,
                 maximum_bytes_read_per_block,
                 maximum_bytes_written_per_block,

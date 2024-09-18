@@ -73,7 +73,7 @@ pub trait BalanceHolder {
 impl<Account, Tracker> ResourceController<Account, Tracker>
 where
     Account: BalanceHolder,
-    Tracker: AsMut<ResourceTracker>,
+    Tracker: AsRef<ResourceTracker> + AsMut<ResourceTracker>,
 {
     /// Obtains the balance of the account. The only possible error is an arithmetic
     /// overflow, which should not happen in practice due to final token supply.
@@ -111,6 +111,11 @@ where
     pub(crate) fn remaining_fuel(&self) -> u64 {
         self.policy
             .remaining_fuel(self.balance().unwrap_or(Amount::MAX))
+            .min(
+                self.policy
+                    .maximum_fuel_per_block
+                    .saturating_sub(self.tracker.as_ref().fuel),
+            )
     }
 
     /// Tracks the allocation of a grant.
@@ -184,10 +189,14 @@ where
     pub(crate) fn track_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
         self.tracker.as_mut().fuel = self
             .tracker
-            .as_mut()
+            .as_ref()
             .fuel
             .checked_add(fuel)
             .ok_or(ArithmeticError::Overflow)?;
+        ensure!(
+            self.tracker.as_ref().fuel <= self.policy.maximum_fuel_per_block,
+            ExecutionError::MaximumFuelExceeded
+        );
         self.update_balance(self.policy.fuel_price(fuel)?)
     }
 
@@ -324,6 +333,12 @@ impl BalanceHolder for Amount {
 // See https://doc.rust-lang.org/std/convert/trait.AsMut.html#reflexivity for general context.
 impl AsMut<ResourceTracker> for ResourceTracker {
     fn as_mut(&mut self) -> &mut Self {
+        self
+    }
+}
+
+impl AsRef<ResourceTracker> for ResourceTracker {
+    fn as_ref(&self) -> &Self {
         self
     }
 }

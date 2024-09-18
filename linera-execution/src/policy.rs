@@ -36,6 +36,8 @@ pub struct ResourceControlPolicy {
 
     // TODO(#1538): Cap the number of transactions per block and the total size of their
     // arguments.
+    /// The maximum amount of fuel a block can consume.
+    pub maximum_fuel_per_block: u64,
     /// The maximum size of an executed block. This includes the block proposal itself as well as
     /// the execution outcome.
     pub maximum_executed_block_size: u64,
@@ -59,6 +61,7 @@ impl Default for ResourceControlPolicy {
             operation_byte: Amount::default(),
             message: Amount::default(),
             message_byte: Amount::default(),
+            maximum_fuel_per_block: u64::MAX,
             maximum_executed_block_size: u64::MAX,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
@@ -177,6 +180,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::from_nanos(10),
             operation: Amount::from_micros(10),
             message: Amount::from_micros(10),
+            maximum_fuel_per_block: 100_000_000,
             maximum_executed_block_size: 1_000_000,
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,

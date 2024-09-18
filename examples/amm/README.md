@@ -104,7 +104,7 @@ To properly setup the tokens in the proper chains, we need to do some transfer o
 
 - Transfer 50 FUN1 from `$OWNER_AMM` in `$CHAIN_AMM` to `$OWNER_1` in `$CHAIN_1`, so they're in the proper chain.
   Run `echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID"` to print the URL
-  of the GrahpiQL interface for the FUN1 app. Navigate to that URL and enter:
+  of the GraphiQL interface for the FUN1 app. Navigate to that URL and enter:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$FUN1_APP_ID
     mutation {
