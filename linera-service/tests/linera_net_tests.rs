@@ -61,6 +61,22 @@ use linera_service::{
 use serde_json::{json, Value};
 use test_case::test_case;
 
+/// The environment variable name to specify the number of iterations in the performance-related
+/// tests.
+const LINERA_TEST_ITERATIONS: &str = "LINERA_TEST_ITERATIONS";
+
+fn test_iterations() -> Option<usize> {
+    match env::var(LINERA_TEST_ITERATIONS) {
+        Ok(var) => Some(var.parse().unwrap_or_else(|error| {
+            panic!("{LINERA_TEST_ITERATIONS} is not a valid number: {error}")
+        })),
+        Err(env::VarError::NotPresent) => None,
+        Err(env::VarError::NotUnicode(_)) => {
+            panic!("{LINERA_TEST_ITERATIONS} must be valid Unicode")
+        }
+    }
+}
+
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
     AccountOwner::User(owner)
@@ -2832,14 +2848,14 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    const CHAIN_COUNT: usize = 1_000;
+    let chain_count = test_iterations().unwrap_or(1_000);
 
     let (mut net, faucet_client) = config.instantiate().await?;
 
     let faucet_chain = faucet_client.load_wallet()?.default_chain().unwrap();
 
     // Use the faucet directly to initialize many chains
-    for _ in 0..CHAIN_COUNT {
+    for _ in 0..chain_count {
         faucet_client
             .open_chain(faucet_chain, None, Amount::ZERO)
             .await?;
@@ -3012,7 +3028,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    const TRANSFER_COUNT: usize = 100;
+    let transfer_count = test_iterations().unwrap_or(100);
 
     let (mut net, client1) = config.instantiate().await?;
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
@@ -3025,7 +3041,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
     let mut notifications2 = Box::pin(node_service2.notifications(chain2).await.unwrap());
 
     let start_time = Instant::now();
-    for i in 0..TRANSFER_COUNT {
+    for i in 0..transfer_count {
         client1
             .transfer(Amount::from_attos(1), chain1, chain2)
             .await
@@ -3053,8 +3069,8 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         }
     }
     tracing::info!(
-        "Average end-to-end transfer latency: {} ms",
-        (start_time.elapsed() / (TRANSFER_COUNT as u32)).as_millis()
+        "{transfer_count} transfers completed. Average end-to-end latency: {} ms",
+        (start_time.elapsed() / (transfer_count as u32)).as_millis()
     );
 
     net.ensure_is_running().await?;
