@@ -3046,8 +3046,11 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             .transfer(Amount::from_attos(1), chain1, chain2)
             .await
             .unwrap();
+        let timeout = Instant::now() + Duration::from_secs(1);
         loop {
-            let sleep = Box::pin(linera_base::time::timer::sleep(Duration::from_secs(5)));
+            let sleep = Box::pin(linera_base::time::timer::sleep(
+                timeout.duration_since(Instant::now()),
+            ));
             match future::select(notifications2.next(), sleep).await {
                 Either::Right(((), _)) | Either::Left((None, _)) => {
                     panic!("Failed to receive notification about transfer #{i}.")
