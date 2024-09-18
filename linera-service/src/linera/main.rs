@@ -593,55 +593,8 @@ impl Runnable for Job {
                                         policy.maximum_bytes_written_per_block =
                                             maximum_bytes_written_per_block;
                                     }
-                                    info!(
-                                        "ResourceControlPolicy:\n\
-                                        {:.2} base cost per block\n\
-                                        {:.2} cost per fuel unit\n\
-                                        {:.2} cost per read operation\n\
-                                        {:.2} cost per write operation\n\
-                                        {:.2} cost per byte read\n\
-                                        {:.2} cost per byte written\n\
-                                        {:.2} cost per byte stored\n\
-                                        {:.2} per operation\n\
-                                        {:.2} per byte in the argument of an operation\n\
-                                        {:.2} per outgoing messages\n\
-                                        {:.2} per byte in the argument of an outgoing messages\n\
-                                        {} maximum fuel per block\n\
-                                        {} maximum size of an executed block\n\
-                                        {} maximum number bytes read per block\n\
-                                        {} maximum number bytes written per block",
-                                        policy.block,
-                                        policy.fuel_unit,
-                                        policy.read_operation,
-                                        policy.write_operation,
-                                        policy.byte_read,
-                                        policy.byte_written,
-                                        policy.byte_stored,
-                                        policy.operation,
-                                        policy.operation_byte,
-                                        policy.message,
-                                        policy.message_byte,
-                                        policy.maximum_fuel_per_block,
-                                        policy.maximum_executed_block_size,
-                                        policy.maximum_bytes_read_per_block,
-                                        policy.maximum_bytes_written_per_block
-                                    );
-                                    if block.is_none()
-                                        && fuel_unit.is_none()
-                                        && read_operation.is_none()
-                                        && write_operation.is_none()
-                                        && byte_read.is_none()
-                                        && byte_written.is_none()
-                                        && byte_stored.is_none()
-                                        && operation.is_none()
-                                        && operation_byte.is_none()
-                                        && message.is_none()
-                                        && message_byte.is_none()
-                                        && maximum_fuel_per_block.is_none()
-                                        && maximum_executed_block_size.is_none()
-                                        && maximum_bytes_read_per_block.is_none()
-                                        && maximum_bytes_written_per_block.is_none()
-                                    {
+                                    info!("{policy}");
+                                    if committee.policy() == &policy {
                                         return Ok(ClientOutcome::Committed(None));
                                     }
                                 }
