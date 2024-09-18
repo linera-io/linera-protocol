@@ -73,7 +73,7 @@ where
 
     pub async fn from_clients(chains: impl IntoIterator<Item = ChainClient<P, S>>) -> Self {
         let chain_clients = Self(Default::default());
-        for chain_client in chains.into_iter() {
+        for chain_client in chains {
             let mut map_guard = chain_clients.map_lock().await;
             map_guard.insert(chain_client.chain_id(), chain_client);
         }
