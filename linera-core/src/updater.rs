@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     hash::Hash,
     ops::Range,
 };
 
-use futures::{Future, StreamExt};
+use futures::{stream, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
-    identifiers::ChainId,
+    identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
@@ -39,6 +39,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 pub enum CommunicateAction {
     SubmitBlock {
         proposal: BlockProposal,
+        blob_ids: HashSet<BlobId>,
     },
     FinalizeBlock {
         certificate: Certificate,
@@ -55,7 +56,7 @@ impl CommunicateAction {
     /// The round to which this action pertains.
     pub fn round(&self) -> Round {
         match self {
-            CommunicateAction::SubmitBlock { proposal } => proposal.content.round,
+            CommunicateAction::SubmitBlock { proposal, .. } => proposal.content.round,
             CommunicateAction::FinalizeBlock { certificate, .. } => certificate.round,
             CommunicateAction::RequestTimeout { round, .. } => *round,
         }
@@ -253,6 +254,7 @@ where
     async fn send_block_proposal(
         &mut self,
         proposal: BlockProposal,
+        blob_ids: HashSet<BlobId>,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
         let response = match self.node.handle_block_proposal(proposal.clone()).await {
@@ -264,22 +266,36 @@ where
                 self.send_chain_information_for_senders(chain_id).await?;
                 self.node.handle_block_proposal(proposal.clone()).await?
             }
-            Err(NodeError::BlobNotFoundOnRead(blob_id)) => {
+            Err(NodeError::BlobNotFoundOnRead(_)) => {
                 // For `BlobNotFoundOnRead`, we assume that the local node should already be
                 // updated with the needed blobs, so sending the chain information about the
-                // certificate that last used the blob to the validator node should be enough.
+                // certificates that last used the blobs to the validator node should be enough.
+                let blob_ids = blob_ids
+                    .into_iter()
+                    .filter(|blob_id| !proposal.blobs.iter().any(|blob| blob.id() == *blob_id));
+                let missing_blob_ids = stream::iter(blob_ids)
+                    .filter(|blob_id| {
+                        let node = self.node.clone();
+                        let blob_id = *blob_id;
+                        async move { node.blob_last_used_by(blob_id).await.is_err() }
+                    })
+                    .collect::<Vec<_>>()
+                    .await;
                 let local_storage = self.local_node.storage_client();
-                let last_used_by_hash = local_storage.read_blob_state(blob_id).await?.last_used_by;
-                let certificate = local_storage.read_certificate(last_used_by_hash).await?;
+                for blob_id in missing_blob_ids {
+                    let last_used_by_hash =
+                        local_storage.read_blob_state(blob_id).await?.last_used_by;
+                    let certificate = local_storage.read_certificate(last_used_by_hash).await?;
 
-                let block_chain_id = certificate.value().chain_id();
-                let block_height = certificate.value().height();
-                self.send_chain_information(
-                    block_chain_id,
-                    block_height.try_add_one()?,
-                    CrossChainMessageDelivery::Blocking,
-                )
-                .await?;
+                    let block_chain_id = certificate.value().chain_id();
+                    let block_height = certificate.value().height();
+                    self.send_chain_information(
+                        block_chain_id,
+                        block_height.try_add_one()?,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
+                }
 
                 self.node.handle_block_proposal(proposal.clone()).await?
             }
@@ -368,7 +384,7 @@ where
         action: CommunicateAction,
     ) -> Result<LiteVote, NodeError> {
         let (target_block_height, chain_id) = match &action {
-            CommunicateAction::SubmitBlock { proposal } => {
+            CommunicateAction::SubmitBlock { proposal, .. } => {
                 let block = &proposal.content.block;
                 (block.height, block.chain_id)
             }
@@ -386,8 +402,8 @@ where
             .await?;
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
-            CommunicateAction::SubmitBlock { proposal } => {
-                let info = self.send_block_proposal(proposal.clone()).await?;
+            CommunicateAction::SubmitBlock { proposal, blob_ids } => {
+                let info = self.send_block_proposal(proposal, blob_ids).await?;
                 info.manager.pending
             }
             CommunicateAction::FinalizeBlock {

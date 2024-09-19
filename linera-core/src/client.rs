@@ -975,7 +975,13 @@ where
         proposal: BlockProposal,
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
-        let submit_action = CommunicateAction::SubmitBlock { proposal };
+        let blob_ids = value
+            .inner()
+            .executed_block()
+            .expect("The result of executing a proposal is always an executed block")
+            .outcome
+            .required_blob_ids();
+        let submit_action = CommunicateAction::SubmitBlock { proposal, blob_ids };
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
