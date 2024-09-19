@@ -562,10 +562,10 @@ impl<N: LocalValidatorNode> NamedNode<N> {
     #[tracing::instrument(level = "trace")]
     pub async fn handle_block_proposal(
         &self,
-        proposal: BlockProposal,
+        proposal: Box<BlockProposal>,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
-        let response = self.node.handle_block_proposal(proposal).await?;
+        let response = self.node.handle_block_proposal(*proposal).await?;
         self.check_and_return_info(response, chain_id)
     }
 

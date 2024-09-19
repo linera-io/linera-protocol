@@ -974,7 +974,7 @@ where
     async fn submit_block_proposal(
         &self,
         committee: &Committee,
-        proposal: BlockProposal,
+        proposal: Box<BlockProposal>,
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
         let blob_ids = value
@@ -1803,14 +1803,19 @@ where
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
         let proposal = if let Some(cert) = manager.requested_locked {
-            BlockProposal::new_retry(round, *cert, &key_pair, blobs)
+            Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
         } else {
-            BlockProposal::new_initial(round, block.clone(), &key_pair, blobs)
+            Box::new(BlockProposal::new_initial(
+                round,
+                block.clone(),
+                &key_pair,
+                blobs,
+            ))
         };
         // Check the final block proposal. This will be cheaper after #1401.
         self.client
             .local_node
-            .handle_block_proposal(proposal.clone())
+            .handle_block_proposal(*proposal.clone())
             .await?;
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut().pending_block = Some(block);

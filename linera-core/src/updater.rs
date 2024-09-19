@@ -39,7 +39,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 #[derive(Clone)]
 pub enum CommunicateAction {
     SubmitBlock {
-        proposal: BlockProposal,
+        proposal: Box<BlockProposal>,
         blob_ids: HashSet<BlobId>,
     },
     FinalizeBlock {
@@ -248,7 +248,7 @@ where
 
     async fn send_block_proposal(
         &mut self,
-        proposal: BlockProposal,
+        proposal: Box<BlockProposal>,
         mut blob_ids: HashSet<BlobId>,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
