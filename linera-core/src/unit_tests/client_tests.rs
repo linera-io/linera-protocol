@@ -2502,3 +2502,63 @@ where
 
     Ok(())
 }
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_propose_block_with_messages_and_blobs<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let description1 = ChainDescription::Root(1);
+    let description2 = ChainDescription::Root(2);
+    let description3 = ChainDescription::Root(3);
+    let chain_id3 = ChainId::from(description3);
+    let client1 = builder.add_initial_chain(description1, Amount::ONE).await?;
+    let client2 = builder.add_initial_chain(description2, Amount::ONE).await?;
+    let client3 = builder.add_initial_chain(description3, Amount::ONE).await?;
+
+    // Take one validator down
+    builder.set_fault_type([3], FaultType::Offline).await;
+
+    // Publish a blob on chain 1.
+    let blob = Blob::test_data_blob("blob");
+    let blob_id = blob.id();
+    client1
+        .publish_data_blob(blob.into_inner())
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Send a message from chain 2 to chain 3.
+    client2
+        .transfer(
+            None,
+            Amount::from_millis(1),
+            Recipient::chain(chain_id3),
+            Default::default(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    client3.synchronize_from_validators().await.unwrap();
+
+    builder.set_fault_type([2], FaultType::Offline).await;
+    builder.set_fault_type([3], FaultType::Honest).await;
+
+    // Client 3 should be able to update validator 3 about the blob and the message.
+    let certificate = client3
+        .execute_operation(SystemOperation::ReadBlob { blob_id }.into())
+        .await
+        .unwrap()
+        .unwrap();
+    let executed_block = certificate.value().executed_block().unwrap();
+    assert_eq!(executed_block.block.incoming_bundles.len(), 1);
+    assert_eq!(executed_block.required_blob_ids().len(), 1);
+
+    Ok(())
+}
