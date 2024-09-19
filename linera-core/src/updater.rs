@@ -264,13 +264,6 @@ where
                 self.send_chain_information_for_senders(chain_id).await?;
                 self.node.handle_block_proposal(proposal.clone()).await?
             }
-            Err(ref e @ NodeError::BlobsNotFound(ref blob_ids)) => {
-                if !blob_ids.is_empty() {
-                    return Err(e.clone());
-                }
-
-                self.node.handle_block_proposal(proposal.clone()).await?
-            }
             Err(NodeError::BlobNotFoundOnRead(blob_id)) => {
                 // For `BlobNotFoundOnRead`, we assume that the local node should already be
                 // updated with the needed blobs, so sending the chain information about the
