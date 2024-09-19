@@ -18,14 +18,14 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
-use linera_execution::committee::{Committee, ValidatorName};
+use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
 use tracing::{error, warn};
 
 use crate::{
-    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    local_node::LocalNodeClient,
+    data_types::{ChainInfo, ChainInfoQuery},
+    local_node::{LocalNodeClient, NamedNode},
     node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
 };
 
@@ -47,7 +47,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 #[derive(Clone)]
 pub enum CommunicateAction {
     SubmitBlock {
-        proposal: BlockProposal,
+        proposal: Box<BlockProposal>,
         blob_ids: HashSet<BlobId>,
     },
     FinalizeBlock {
@@ -76,8 +76,7 @@ pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
-    pub name: ValidatorName,
-    pub node: A,
+    pub named_node: NamedNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
 
@@ -104,14 +103,14 @@ pub enum CommunicationError<E: fmt::Debug> {
 /// are given this much additional time to contribute to the result, as a fraction of how long it
 /// took to reach the quorum.
 pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
-    validator_clients: &'a [(ValidatorName, A)],
+    validator_clients: &'a [NamedNode<A>],
     committee: &Committee,
     group_by: G,
     execute: F,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: LocalValidatorNode + Clone + 'static,
-    F: Clone + Fn(ValidatorName, A) -> R,
+    F: Clone + Fn(NamedNode<A>) -> R,
     R: Future<Output = Result<V, NodeError>> + 'a,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
@@ -119,16 +118,15 @@ where
 {
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
-        .filter_map(|(name, node)| {
-            let node = node.clone();
-            let execute = execute.clone();
-            if committee.weight(name) > 0 {
-                Some(async move { (*name, execute(*name, node).await) })
-            } else {
+        .filter_map(|named_node| {
+            if committee.weight(&named_node.name) == 0 {
                 // This should not happen but better prevent it because certificates
                 // are not allowed to include votes with weight 0.
-                None
+                return None;
             }
+            let execute = execute.clone();
+            let named_node = named_node.clone();
+            Some(async move { (named_node.name, execute(named_node).await) })
         })
         .collect();
 
@@ -209,17 +207,17 @@ where
         &mut self,
         certificate: &Certificate,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError> {
-        if certificate.is_signed_by(&self.name) {
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        if certificate.is_signed_by(&self.named_node.name) {
             let result = self
-                .node
+                .named_node
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
                 .await;
             match result {
                 Err(NodeError::MissingCertificateValue) => {
                     warn!(
                         "Validator {} forgot a certificate value that they signed before",
-                        self.name
+                        self.named_node.name
                     );
                 }
                 _ => {
@@ -227,7 +225,7 @@ where
                 }
             }
         }
-        self.node
+        self.named_node
             .handle_certificate(certificate.clone(), vec![], delivery)
             .await
     }
@@ -241,28 +239,24 @@ where
             .send_optimized_certificate(&certificate, delivery)
             .await;
 
-        let response = match &result {
+        match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 let blobs = self
                     .local_node
                     .find_missing_blobs(&certificate, blob_ids, certificate.value().chain_id())
                     .await?;
                 ensure!(blobs.len() == blob_ids.len(), original_err.clone());
-                self.node
+                self.named_node
                     .handle_certificate(certificate, blobs, delivery)
                     .await
             }
             _ => result,
-        }?;
-
-        response.check(&self.name)?;
-        // Succeed
-        Ok(response.info)
+        }
     }
 
     async fn send_block_proposal(
         &mut self,
-        proposal: BlockProposal,
+        proposal: Box<BlockProposal>,
         mut blob_ids: HashSet<BlobId>,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
@@ -271,11 +265,12 @@ where
             blob_ids.remove(&blob.id()); // Keep only blobs we may need to resend.
         }
         loop {
-            match self.node.handle_block_proposal(proposal.clone()).await {
-                Ok(response) => {
-                    response.check(&self.name)?;
-                    return Ok(response.info);
-                }
+            match self
+                .named_node
+                .handle_block_proposal(proposal.clone())
+                .await
+            {
+                Ok(info) => return Ok(info),
                 Err(NodeError::MissingCrossChainUpdate { .. })
                 | Err(NodeError::InactiveChain(_))
                     if !sent_cross_chain_updates =>
@@ -292,7 +287,7 @@ where
                     // certificates that last used the blobs to the validator node should be enough.
                     let missing_blob_ids = stream::iter(mem::take(&mut blob_ids))
                         .filter(|blob_id| {
-                            let node = self.node.clone();
+                            let node = self.named_node.node.clone();
                             let blob_id = *blob_id;
                             async move { node.blob_last_used_by(blob_id).await.is_err() }
                         })
@@ -327,14 +322,11 @@ where
     ) -> Result<(), NodeError> {
         // Figure out which certificates this validator is missing.
         let query = ChainInfoQuery::new(chain_id);
-        let initial_block_height = match self.node.handle_chain_info_query(query).await {
-            Ok(response) => {
-                response.check(&self.name)?;
-                response.info.next_block_height
-            }
+        let initial_block_height = match self.named_node.handle_chain_info_query(query).await {
+            Ok(info) => info.next_block_height,
             Err(error) => {
                 error!(
-                    name = ?self.name, ?chain_id, %error,
+                    name = ?self.named_node.name, ?chain_id, %error,
                     "Failed to query validator about missing blocks"
                 );
                 return Err(error);
@@ -426,12 +418,12 @@ where
             }
             CommunicateAction::RequestTimeout { .. } => {
                 let query = ChainInfoQuery::new(chain_id).with_timeout();
-                let info = self.node.handle_chain_info_query(query).await?.info;
+                let info = self.named_node.handle_chain_info_query(query).await?;
                 info.manager.timeout_vote
             }
         };
         match vote {
-            Some(vote) if vote.validator == self.name => {
+            Some(vote) if vote.validator == self.named_node.name => {
                 vote.check()?;
                 Ok(vote)
             }
