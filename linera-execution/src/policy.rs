@@ -3,6 +3,8 @@
 
 //! This module contains types related to fees and pricing.
 
+use std::fmt;
+
 use async_graphql::InputObject;
 use linera_base::data_types::{Amount, ArithmeticError, Resources};
 use serde::{Deserialize, Serialize};
@@ -36,6 +38,8 @@ pub struct ResourceControlPolicy {
 
     // TODO(#1538): Cap the number of transactions per block and the total size of their
     // arguments.
+    /// The maximum amount of fuel a block can consume.
+    pub maximum_fuel_per_block: u64,
     /// The maximum size of an executed block. This includes the block proposal itself as well as
     /// the execution outcome.
     pub maximum_executed_block_size: u64,
@@ -43,6 +47,47 @@ pub struct ResourceControlPolicy {
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
     pub maximum_bytes_written_per_block: u64,
+}
+
+impl fmt::Display for ResourceControlPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ResourceControlPolicy {
+            block,
+            fuel_unit,
+            read_operation,
+            write_operation,
+            byte_read,
+            byte_written,
+            byte_stored,
+            operation,
+            operation_byte,
+            message,
+            message_byte,
+            maximum_fuel_per_block,
+            maximum_executed_block_size,
+            maximum_bytes_read_per_block,
+            maximum_bytes_written_per_block,
+        } = self;
+        write!(
+            f,
+            "Resource control policy:\n\
+            {block:.2} base cost per block\n\
+            {fuel_unit:.2} cost per fuel unit\n\
+            {read_operation:.2} cost per read operation\n\
+            {write_operation:.2} cost per write operation\n\
+            {byte_read:.2} cost per byte read\n\
+            {byte_written:.2} cost per byte written\n\
+            {byte_stored:.2} cost per byte stored\n\
+            {operation:.2} per operation\n\
+            {operation_byte:.2} per byte in the argument of an operation\n\
+            {message:.2} per outgoing messages\n\
+            {message_byte:.2} per byte in the argument of an outgoing messages\n\
+            {maximum_fuel_per_block} maximum fuel per block\n\
+            {maximum_executed_block_size} maximum size of an executed block\n\
+            {maximum_bytes_read_per_block} maximum number bytes read per block\n\
+            {maximum_bytes_written_per_block} maximum number bytes written per block",
+        )
+    }
 }
 
 impl Default for ResourceControlPolicy {
@@ -59,6 +104,7 @@ impl Default for ResourceControlPolicy {
             operation_byte: Amount::default(),
             message: Amount::default(),
             message_byte: Amount::default(),
+            maximum_fuel_per_block: u64::MAX,
             maximum_executed_block_size: u64::MAX,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
@@ -177,6 +223,7 @@ impl ResourceControlPolicy {
             operation_byte: Amount::from_nanos(10),
             operation: Amount::from_micros(10),
             message: Amount::from_micros(10),
+            maximum_fuel_per_block: 100_000_000,
             maximum_executed_block_size: 1_000_000,
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,
