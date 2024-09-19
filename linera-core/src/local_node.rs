@@ -554,8 +554,9 @@ impl<N: LocalValidatorNode> NamedNode<N> {
         &self,
         query: ChainInfoQuery,
     ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = query.chain_id;
         let response = self.node.handle_chain_info_query(query).await?;
-        self.check_and_return_info(response)
+        self.check_and_return_info(response, chain_id)
     }
 
     #[tracing::instrument(level = "trace")]
@@ -563,8 +564,9 @@ impl<N: LocalValidatorNode> NamedNode<N> {
         &self,
         proposal: BlockProposal,
     ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = proposal.content.block.chain_id;
         let response = self.node.handle_block_proposal(proposal).await?;
-        self.check_and_return_info(response)
+        self.check_and_return_info(response, chain_id)
     }
 
     #[tracing::instrument(level = "trace")]
@@ -574,11 +576,12 @@ impl<N: LocalValidatorNode> NamedNode<N> {
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificate.value().chain_id();
         let response = self
             .node
             .handle_certificate(certificate, blobs, delivery)
             .await?;
-        self.check_and_return_info(response)
+        self.check_and_return_info(response, chain_id)
     }
 
     #[tracing::instrument(level = "trace")]
@@ -587,19 +590,27 @@ impl<N: LocalValidatorNode> NamedNode<N> {
         certificate: LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificate.value.chain_id;
         let response = self
             .node
             .handle_lite_certificate(certificate, delivery)
             .await?;
-        self.check_and_return_info(response)
+        self.check_and_return_info(response, chain_id)
     }
 
     fn check_and_return_info(
         &self,
         response: ChainInfoResponse,
+        chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, NodeError> {
+        let manager = &response.info.manager;
+        let proposed = manager.requested_proposed.as_ref();
+        let locked = manager.requested_locked.as_ref();
         ensure!(
-            response.check(&self.name).is_ok(),
+            proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
+                && locked.map_or(true, |cert| cert.value().is_validated()
+                    && cert.value().chain_id() == chain_id)
+                && response.check(&self.name).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
         Ok(response.info)
@@ -655,5 +666,39 @@ impl<N: LocalValidatorNode> NamedNode<N> {
                 None
             }
         }
+    }
+
+    /// Downloads the blobs from the specified validator and returns them, including blobs that
+    /// are still pending the the validator's chain manager.
+    pub async fn find_missing_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+        chain_id: ChainId,
+    ) -> Result<Vec<Blob>, NodeError> {
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let info = match self.handle_chain_info_query(query).await {
+            Ok(info) => Some(info),
+            Err(err) => {
+                warn!("Got error from validator {}: {}", self.name, err);
+                return Ok(Vec::new());
+            }
+        };
+
+        let mut missing_blobs = blob_ids;
+        let mut found_blobs = if let Some(info) = info {
+            let new_found_blobs = missing_blobs
+                .iter()
+                .filter_map(|blob_id| info.manager.pending_blobs.get(blob_id))
+                .map(|blob| (blob.id(), blob.clone()))
+                .collect::<HashMap<_, _>>();
+            missing_blobs.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
+            new_found_blobs.into_values().collect()
+        } else {
+            Vec::new()
+        };
+
+        found_blobs.extend(self.try_download_blobs(&missing_blobs).await);
+
+        Ok(found_blobs)
     }
 }

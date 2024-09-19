@@ -1511,13 +1511,7 @@ where
         let query = ChainInfoQuery::new(chain_id)
             .with_sent_certificate_hashes_in_range(range)
             .with_manager_values();
-        let info = match named_node.handle_chain_info_query(query).await {
-            Ok(info) => info,
-            Err(err) => {
-                warn!("Ignoring error from validator {}: {}", named_node.name, err);
-                return Ok(());
-            }
-        };
+        let info = named_node.handle_chain_info_query(query).await?;
 
         let certificates = future::try_join_all(
             info.requested_sent_certificate_hashes
@@ -1536,13 +1530,6 @@ where
             return Ok(());
         };
         if let Some(proposal) = info.manager.requested_proposed {
-            if proposal.content.block.chain_id != chain_id {
-                warn!(
-                    "Response from validator {} contains an invalid proposal",
-                    named_node.name
-                );
-                return Ok(()); // Give up on this validator.
-            }
             let owner = proposal.owner;
             while let Err(original_err) = self
                 .client
@@ -1573,13 +1560,6 @@ where
             }
         }
         if let Some(cert) = info.manager.requested_locked {
-            if !cert.value().is_validated() || cert.value().chain_id() != chain_id {
-                warn!(
-                    "Response from validator {} contains an invalid locked block",
-                    named_node.name
-                );
-                return Ok(()); // Give up on this validator.
-            }
             let hash = cert.hash();
             let mut blobs = vec![];
             while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
@@ -1587,8 +1567,8 @@ where
                 if let LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) =
                     &original_err
                 {
-                    blobs = self
-                        .find_missing_blobs_in_validator(blob_ids.clone(), chain_id, named_node)
+                    blobs = named_node
+                        .find_missing_blobs(blob_ids.clone(), chain_id)
                         .await?;
 
                     if blobs.len() == blob_ids.len() {
@@ -1603,41 +1583,6 @@ where
             }
         }
         Ok(())
-    }
-
-    /// Downloads the blobs from the specified validator and returns them, including blobs that
-    /// are still pending the the validator's chain manager.
-    async fn find_missing_blobs_in_validator(
-        &self,
-        blob_ids: Vec<BlobId>,
-        chain_id: ChainId,
-        named_node: &NamedNode<P::Node>,
-    ) -> Result<Vec<Blob>, NodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let info = match named_node.handle_chain_info_query(query).await {
-            Ok(info) => Some(info),
-            Err(err) => {
-                warn!("Got error from validator {}: {}", named_node.name, err);
-                return Ok(Vec::new());
-            }
-        };
-
-        let mut missing_blobs = blob_ids;
-        let mut found_blobs = if let Some(info) = info {
-            let new_found_blobs = missing_blobs
-                .iter()
-                .filter_map(|blob_id| info.manager.pending_blobs.get(blob_id))
-                .map(|blob| (blob.id(), blob.clone()))
-                .collect::<HashMap<_, _>>();
-            missing_blobs.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
-            new_found_blobs.into_values().collect()
-        } else {
-            Vec::new()
-        };
-
-        found_blobs.extend(named_node.try_download_blobs(&missing_blobs).await);
-
-        Ok(found_blobs)
     }
 
     /// Downloads and processes from the specified validator a confirmed block certificate that
