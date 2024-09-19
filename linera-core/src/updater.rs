@@ -6,6 +6,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
     hash::Hash,
+    mem,
     ops::Range,
 };
 
@@ -254,58 +255,63 @@ where
     async fn send_block_proposal(
         &mut self,
         proposal: BlockProposal,
-        blob_ids: HashSet<BlobId>,
+        mut blob_ids: HashSet<BlobId>,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
-        let response = match self.node.handle_block_proposal(proposal.clone()).await {
-            Ok(response) => response,
-            Err(NodeError::MissingCrossChainUpdate { .. }) | Err(NodeError::InactiveChain(_)) => {
-                // Some received certificates may be missing for this validator
-                // (e.g. to create the chain or make the balance sufficient) so we are going to
-                // synchronize them now and retry.
-                self.send_chain_information_for_senders(chain_id).await?;
-                self.node.handle_block_proposal(proposal.clone()).await?
-            }
-            Err(NodeError::BlobNotFoundOnRead(_)) => {
-                // For `BlobNotFoundOnRead`, we assume that the local node should already be
-                // updated with the needed blobs, so sending the chain information about the
-                // certificates that last used the blobs to the validator node should be enough.
-                let blob_ids = blob_ids
-                    .into_iter()
-                    .filter(|blob_id| !proposal.blobs.iter().any(|blob| blob.id() == *blob_id));
-                let missing_blob_ids = stream::iter(blob_ids)
-                    .filter(|blob_id| {
-                        let node = self.node.clone();
-                        let blob_id = *blob_id;
-                        async move { node.blob_last_used_by(blob_id).await.is_err() }
-                    })
-                    .collect::<Vec<_>>()
-                    .await;
-                let local_storage = self.local_node.storage_client();
-                for blob_id in missing_blob_ids {
-                    let last_used_by_hash =
-                        local_storage.read_blob_state(blob_id).await?.last_used_by;
-                    let certificate = local_storage.read_certificate(last_used_by_hash).await?;
-
-                    let block_chain_id = certificate.value().chain_id();
-                    let block_height = certificate.value().height();
-                    self.send_chain_information(
-                        block_chain_id,
-                        block_height.try_add_one()?,
-                        CrossChainMessageDelivery::NonBlocking,
-                    )
-                    .await?;
+        let mut sent_cross_chain_updates = false;
+        for blob in &proposal.blobs {
+            blob_ids.remove(&blob.id());
+        }
+        loop {
+            match self.node.handle_block_proposal(proposal.clone()).await {
+                Ok(response) => {
+                    response.check(&self.name)?;
+                    return Ok(response.info);
                 }
+                Err(NodeError::MissingCrossChainUpdate { .. })
+                | Err(NodeError::InactiveChain(_))
+                    if !sent_cross_chain_updates =>
+                {
+                    sent_cross_chain_updates = true;
+                    // Some received certificates may be missing for this validator
+                    // (e.g. to create the chain or make the balance sufficient) so we are going to
+                    // synchronize them now and retry.
+                    self.send_chain_information_for_senders(chain_id).await?;
+                }
+                Err(NodeError::BlobNotFoundOnRead(_)) if !blob_ids.is_empty() => {
+                    // For `BlobNotFoundOnRead`, we assume that the local node should already be
+                    // updated with the needed blobs, so sending the chain information about the
+                    // certificates that last used the blobs to the validator node should be enough.
+                    let missing_blob_ids = stream::iter(mem::take(&mut blob_ids))
+                        .filter(|blob_id| {
+                            let node = self.node.clone();
+                            let blob_id = *blob_id;
+                            async move { node.blob_last_used_by(blob_id).await.is_err() }
+                        })
+                        .collect::<Vec<_>>()
+                        .await;
+                    let local_storage = self.local_node.storage_client();
+                    for blob_id in missing_blob_ids {
+                        let last_used_by_hash =
+                            local_storage.read_blob_state(blob_id).await?.last_used_by;
+                        let certificate = local_storage.read_certificate(last_used_by_hash).await?;
 
-                self.node.handle_block_proposal(proposal.clone()).await?
+                        let block_chain_id = certificate.value().chain_id();
+                        let block_height = certificate.value().height();
+                        self.send_chain_information(
+                            block_chain_id,
+                            block_height.try_add_one()?,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                    }
+                }
+                Err(e) => {
+                    // Fail immediately on other errors.
+                    return Err(e);
+                }
             }
-            Err(e) => {
-                // Fail immediately on other errors.
-                return Err(e);
-            }
-        };
-        response.check(&self.name)?;
-        Ok(response.info)
+        }
     }
 
     pub async fn send_chain_information(
