@@ -170,7 +170,7 @@ pub struct LocalNet {
     validator_names: BTreeMap<usize, String>,
     running_validators: BTreeMap<usize, Validator>,
     namespace: String,
-    set_init: HashSet<usize>,
+    validators_with_initialized_storage: HashSet<usize>,
     storage_config: StorageConfig,
     path_provider: PathProvider,
 }
@@ -348,7 +348,7 @@ impl LocalNet {
             validator_names: BTreeMap::new(),
             running_validators: BTreeMap::new(),
             namespace,
-            set_init: HashSet::new(),
+            validators_with_initialized_storage: HashSet::new(),
             storage_config,
             path_provider,
         })
@@ -508,7 +508,10 @@ impl LocalNet {
         }
         .to_string();
 
-        if !self.set_init.contains(&validator) {
+        if !self
+            .validators_with_initialized_storage
+            .contains(&validator)
+        {
             let max_try = 4;
             let mut i_try = 0;
             loop {
@@ -536,7 +539,7 @@ impl LocalNet {
                 let one_second = linera_base::time::Duration::from_secs(1);
                 std::thread::sleep(one_second);
             }
-            self.set_init.insert(validator);
+            self.validators_with_initialized_storage.insert(validator);
         }
 
         Ok(storage)
