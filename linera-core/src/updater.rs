@@ -260,7 +260,7 @@ where
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
         for blob in &proposal.blobs {
-            blob_ids.remove(&blob.id());
+            blob_ids.remove(&blob.id()); // Keep only blobs we may need to resend.
         }
         loop {
             match self.node.handle_block_proposal(proposal.clone()).await {
@@ -295,7 +295,6 @@ where
                         let last_used_by_hash =
                             local_storage.read_blob_state(blob_id).await?.last_used_by;
                         let certificate = local_storage.read_certificate(last_used_by_hash).await?;
-
                         let block_chain_id = certificate.value().chain_id();
                         let block_height = certificate.value().height();
                         self.send_chain_information(
@@ -306,10 +305,8 @@ where
                         .await?;
                     }
                 }
-                Err(e) => {
-                    // Fail immediately on other errors.
-                    return Err(e);
-                }
+                // Fail immediately on other errors.
+                Err(e) => return Err(e),
             }
         }
     }
