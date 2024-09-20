@@ -1,26 +1,34 @@
 ## Motivation
 
-<!-- Short text indicating what this PR aims to accomplish. -->
+<!--
+Briefly describe the goal(s) of this PR.
+-->
 
 ## Proposal
 
-<!-- What are the proposed changes and why are they appropriate? -->
+<!--
+Summarize the proposed changes and how they address the goal(s) stated above.
+-->
 
 ## Test Plan
 
-<!-- How to test that the changes are correct. -->
+<!--
+Explain how you made sure that the changes are correct and that they perform as intended.
+
+Please describe testing protocols (CI, manual tests, benchmarks, etc) in a way that others
+can reproduce the results.
+-->
 
 ## Release Plan
 
 <!--
-How to safely release the changes.
+If this PR targets the `main` branch, indicate if your recommend the changes to be picked
+in release branches.
 
-Please only include the relevant items (if any) and create issues to track future release work.
+Note that this generally only concerns hot fixes.
 -->
-- Need to bump the major/minor version number in the next release of the crates.
-- Need to update the developer manual.
-- This PR is adding or removing Cargo features.
-- Release is blocked and/or tracked by other issues (see links below)
+- [ ] These changes should be backported to the latest `devnet` branch.
+- [ ] These changes should be backported to the latest `testnet` branch.
 
 ## Links
 
