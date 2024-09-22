@@ -1,13 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt::{Debug, Display},
-    future::Future,
-};
+use std::fmt::Debug;
 
 use async_trait::async_trait;
-use linera_base::time::{Duration, Instant};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -200,31 +196,6 @@ impl<E, S> ViewContext<E, S> {
     }
 }
 
-async fn time_async<F, O>(f: F) -> (O, Duration)
-where
-    F: Future<Output = O>,
-{
-    let start = Instant::now();
-    let out = f.await;
-    let duration = start.elapsed();
-    (out, duration)
-}
-
-async fn log_time_async<F, D, O>(f: F, name: D) -> O
-where
-    F: Future<Output = O>,
-    D: Display,
-{
-    if cfg!(feature = "store_timings") {
-        let (out, duration) = time_async(f).await;
-        let duration = duration.as_nanos();
-        println!("|{name}|={duration:?}");
-        out
-    } else {
-        f.await
-    }
-}
-
 #[async_trait]
 impl<E, S> Context for ViewContext<E, S>
 where
@@ -252,49 +223,37 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        log_time_async(self.store.read_value_bytes(key), "read_value_bytes").await
+        self.store.read_value_bytes(key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        log_time_async(self.store.contains_key(key), "contains_key").await
+        self.store.contains_key(key).await
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        log_time_async(self.store.contains_keys(keys), "contains_keys").await
+        self.store.contains_keys(keys).await
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        log_time_async(
-            self.store.read_multi_values_bytes(keys),
-            "read_multi_values_bytes",
-        )
-        .await
+        self.store.read_multi_values_bytes(keys).await
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        log_time_async(
-            self.store.find_keys_by_prefix(key_prefix),
-            "find_keys_by_prefix",
-        )
-        .await
+        self.store.find_keys_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        log_time_async(
-            self.store.find_key_values_by_prefix(key_prefix),
-            "find_key_values_by_prefix",
-        )
-        .await
+        self.store.find_key_values_by_prefix(key_prefix).await
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        log_time_async(self.store.write_batch(batch), "write_batch").await
+        self.store.write_batch(batch).await
     }
 
     fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
