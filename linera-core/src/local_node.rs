@@ -256,7 +256,7 @@ where
     #[tracing::instrument(level = "trace", skip_all)]
     pub async fn try_process_certificates(
         &self,
-        remote_node: &NamedNode<impl ValidatorNode>,
+        remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
         notifications: &mut impl Extend<Notification>,
@@ -364,7 +364,7 @@ where
     /// Downloads and processes all certificates up to (excluding) the specified height.
     pub async fn download_certificates(
         &self,
-        validators: &[NamedNode<impl ValidatorNode>],
+        validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
         notifications: &mut impl Extend<Notification>,
@@ -424,7 +424,7 @@ where
     /// given validator.
     async fn try_download_certificates_from(
         &self,
-        remote_node: &NamedNode<impl ValidatorNode>,
+        remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
@@ -457,7 +457,7 @@ where
     #[tracing::instrument(level = "trace", skip_all)]
     async fn try_query_certificates_from(
         &self,
-        remote_node: &NamedNode<impl ValidatorNode>,
+        remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
@@ -483,7 +483,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(validators))]
     async fn download_blob(
-        validators: &[NamedNode<impl ValidatorNode>],
+        validators: &[RemoteNode<impl ValidatorNode>],
         blob_id: BlobId,
     ) -> Option<Blob> {
         // Sequentially try each validator in random order.
@@ -500,7 +500,7 @@ where
     #[tracing::instrument(level = "trace", skip(nodes))]
     pub async fn download_blobs(
         blob_ids: &[BlobId],
-        nodes: &[NamedNode<impl ValidatorNode>],
+        nodes: &[RemoteNode<impl ValidatorNode>],
     ) -> Vec<Blob> {
         future::join_all(
             blob_ids
@@ -535,21 +535,21 @@ where
 
 /// A validator node together with the validator's name.
 #[derive(Clone)]
-pub struct NamedNode<N> {
+pub struct RemoteNode<N> {
     pub name: ValidatorName,
     pub node: N,
 }
 
-impl<N> fmt::Debug for NamedNode<N> {
+impl<N> fmt::Debug for RemoteNode<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NamedNode")
+        f.debug_struct("RemoteNode")
             .field("name", &self.name)
             .finish_non_exhaustive()
     }
 }
 
 #[allow(clippy::result_large_err)]
-impl<N: ValidatorNode> NamedNode<N> {
+impl<N: ValidatorNode> RemoteNode<N> {
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,

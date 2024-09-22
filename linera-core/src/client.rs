@@ -66,7 +66,7 @@ use crate::{
     data_types::{
         BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse, ClientOutcome, RoundTimeout,
     },
-    local_node::{LocalNodeClient, LocalNodeError, NamedNode},
+    local_node::{LocalNodeClient, LocalNodeError, RemoteNode},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
@@ -293,7 +293,7 @@ where
 {
     async fn download_certificates(
         &self,
-        nodes: &[NamedNode<P::Node>],
+        nodes: &[RemoteNode<P::Node>],
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
@@ -308,7 +308,7 @@ where
 
     async fn try_process_certificates(
         &self,
-        remote_node: &NamedNode<P::Node>,
+        remote_node: &RemoteNode<P::Node>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Option<Box<ChainInfo>> {
@@ -830,18 +830,18 @@ where
     }
 
     #[tracing::instrument(level = "trace")]
-    fn make_nodes(&self, committee: &Committee) -> Result<Vec<NamedNode<P::Node>>, NodeError> {
+    fn make_nodes(&self, committee: &Committee) -> Result<Vec<RemoteNode<P::Node>>, NodeError> {
         Ok(self
             .client
             .validator_node_provider
             .make_nodes(committee)?
-            .map(|(name, node)| NamedNode { name, node })
+            .map(|(name, node)| RemoteNode { name, node })
             .collect())
     }
 
     #[tracing::instrument(level = "trace")]
     /// Obtains the validators trusted by the local chain.
-    async fn validator_nodes(&self) -> Result<Vec<NamedNode<P::Node>>, ChainClientError> {
+    async fn validator_nodes(&self) -> Result<Vec<RemoteNode<P::Node>>, ChainClientError> {
         match self.local_committee().await {
             Ok(committee) => Ok(self.make_nodes(&committee)?),
             Err(LocalNodeError::InactiveChain(_)) => Ok(Vec::new()),
@@ -1159,7 +1159,7 @@ where
     async fn synchronize_received_certificates_from_validator(
         &self,
         chain_id: ChainId,
-        remote_node: &NamedNode<P::Node>,
+        remote_node: &RemoteNode<P::Node>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError> {
         let tracker = self
             .state()
@@ -1465,7 +1465,7 @@ where
     /// Downloads and processes any certificates we are missing for the given chain.
     pub async fn synchronize_chain_state(
         &self,
-        validators: &[NamedNode<P::Node>],
+        validators: &[RemoteNode<P::Node>],
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
@@ -1500,7 +1500,7 @@ where
     /// chain, and processes them.
     async fn try_synchronize_chain_state_from(
         &self,
-        remote_node: &NamedNode<P::Node>,
+        remote_node: &RemoteNode<P::Node>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
         let local_info = self.client.local_node.local_chain_info(chain_id).await?;
@@ -1590,7 +1590,7 @@ where
     async fn update_local_node_with_blob_from(
         &self,
         blob_id: BlobId,
-        remote_node: &NamedNode<P::Node>,
+        remote_node: &RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
         let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
         // This will download all ancestors of the certificate and process all of them locally.
@@ -2873,7 +2873,7 @@ where
     #[tracing::instrument(level = "trace", skip(remote_node, local_node, notification))]
     async fn process_notification(
         &self,
-        remote_node: NamedNode<P::Node>,
+        remote_node: RemoteNode<P::Node>,
         mut local_node: LocalNodeClient<S>,
         notification: Notification,
     ) {
@@ -3062,11 +3062,15 @@ where
             };
             let this = self.clone();
             let local_node = local_node.clone();
-            let remote_node = NamedNode { name, node };
+            let remote_node = RemoteNode { name, node };
             validator_tasks.push(async move {
                 while let Some(notification) = stream.next().await {
-                    this.process_notification(remote_node.clone(), local_node.clone(), notification)
-                        .await;
+                    this.process_notification(
+                        remote_node.clone(),
+                        local_node.clone(),
+                        notification,
+                    )
+                    .await;
                 }
             });
             entry.insert(abort);
@@ -3081,7 +3085,7 @@ where
     /// We also don't try to synchronize the admin chain.
     pub async fn find_received_certificates_from_validator(
         &self,
-        remote_node: NamedNode<P::Node>,
+        remote_node: RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.

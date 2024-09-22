@@ -25,7 +25,7 @@ use tracing::{error, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::{LocalNodeClient, NamedNode},
+    local_node::{LocalNodeClient, RemoteNode},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
 };
 
@@ -68,7 +68,7 @@ pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
-    pub remote_node: NamedNode<A>,
+    pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
 
@@ -95,14 +95,14 @@ pub enum CommunicationError<E: fmt::Debug> {
 /// are given this much additional time to contribute to the result, as a fraction of how long it
 /// took to reach the quorum.
 pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
-    validator_clients: &'a [NamedNode<A>],
+    validator_clients: &'a [RemoteNode<A>],
     committee: &Committee,
     group_by: G,
     execute: F,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
-    F: Clone + Fn(NamedNode<A>) -> R,
+    F: Clone + Fn(RemoteNode<A>) -> R,
     R: Future<Output = Result<V, NodeError>> + 'a,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
