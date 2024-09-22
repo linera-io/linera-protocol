@@ -12,7 +12,7 @@ use linera_views::{
     common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::MemoryStore,
 };
-#[cfg(feature = "rocksdb")]
+#[cfg(with_rocksdb)]
 use linera_views::{
     common::AdminKeyValueStore,
     rocks_db::{PathWithGuard, RocksDbStore, RocksDbStoreConfig},
@@ -41,7 +41,7 @@ pub mod key_value_store {
 enum ServiceStoreServerInternal {
     Memory(MemoryStore),
     /// The RocksDb key value store
-    #[cfg(feature = "rocksdb")]
+    #[cfg(with_rocksdb)]
     RocksDb(RocksDbStore),
 }
 
@@ -64,7 +64,7 @@ impl ServiceStoreServer {
                 .read_value_bytes(key)
                 .await
                 .map_err(|e| Status::unknown(format!("Memory error {:?} at read_value_bytes", e))),
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .read_value_bytes(key)
                 .await
@@ -78,7 +78,7 @@ impl ServiceStoreServer {
                 .contains_key(key)
                 .await
                 .map_err(|e| Status::unknown(format!("Memory error {:?} at contains_key", e))),
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .contains_key(key)
                 .await
@@ -92,7 +92,7 @@ impl ServiceStoreServer {
                 .contains_keys(keys)
                 .await
                 .map_err(|e| Status::unknown(format!("Memory error {:?} at contains_keys", e))),
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .contains_keys(keys)
                 .await
@@ -110,7 +110,7 @@ impl ServiceStoreServer {
                     Status::unknown(format!("Memory error {:?} at read_multi_values_bytes", e))
                 })
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => {
                 store.read_multi_values_bytes(keys).await.map_err(|e| {
                     Status::unknown(format!("RocksDB error {:?} at read_multi_values_bytes", e))
@@ -126,7 +126,7 @@ impl ServiceStoreServer {
                     Status::unknown(format!("Memory error {:?} at find_keys_by_prefix", e))
                 })
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => {
                 store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
                     Status::unknown(format!("RocksDB error {:?} at find_keys_by_prefix", e))
@@ -146,7 +146,7 @@ impl ServiceStoreServer {
                 .map_err(|e| {
                     Status::unknown(format!("Memory error {:?} at find_key_values_by_prefix", e))
                 }),
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .find_key_values_by_prefix(key_prefix)
                 .await
@@ -165,7 +165,7 @@ impl ServiceStoreServer {
                 .write_batch(batch)
                 .await
                 .map_err(|e| Status::unknown(format!("Memory error {:?} at write_batch", e))),
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             ServiceStoreServerInternal::RocksDb(store) => store
                 .write_batch(batch)
                 .await
@@ -239,7 +239,7 @@ enum ServiceStoreServerOptions {
         endpoint: String,
     },
 
-    #[cfg(feature = "rocksdb")]
+    #[cfg(with_rocksdb)]
     #[command(name = "rocksdb")]
     RocksDb {
         #[arg(long = "path")]
@@ -579,7 +579,7 @@ async fn main() {
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
-        #[cfg(feature = "rocksdb")]
+        #[cfg(with_rocksdb)]
         ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
