@@ -42,8 +42,9 @@ pub enum CrossChainMessageDelivery {
 }
 
 /// How to communicate with a validator node.
-#[trait_variant::make(ValidatorNode: Send)]
-pub trait LocalValidatorNode {
+#[allow(async_fn_in_trait)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait ValidatorNode {
     type NotificationStream: Stream<Item = Notification> + Unpin;
 
     /// Proposes a new block.
@@ -96,9 +97,13 @@ pub trait LocalValidatorNode {
 }
 
 /// Turn an address into a validator node.
+#[cfg_attr(not(web), trait_variant::make(Send))]
 #[expect(clippy::result_large_err)]
-pub trait LocalValidatorNodeProvider {
-    type Node: LocalValidatorNode + Clone + 'static;
+pub trait ValidatorNodeProvider {
+    #[cfg(not(web))]
+    type Node: ValidatorNode + Send + Sync + Clone + 'static;
+    #[cfg(web)]
+    type Node: ValidatorNode + Clone + 'static;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
@@ -126,19 +131,6 @@ pub trait LocalValidatorNodeProvider {
             .collect::<Result<Vec<_>, NodeError>>()?
             .into_iter())
     }
-}
-
-pub trait ValidatorNodeProvider:
-    LocalValidatorNodeProvider<Node = <Self as ValidatorNodeProvider>::Node>
-{
-    type Node: ValidatorNode + Send + Sync + Clone + 'static;
-}
-
-impl<T: LocalValidatorNodeProvider> ValidatorNodeProvider for T
-where
-    T::Node: ValidatorNode + Send + Sync + Clone + 'static,
-{
-    type Node = <T as LocalValidatorNodeProvider>::Node;
 }
 
 /// Error type for node queries.

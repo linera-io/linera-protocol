@@ -10,7 +10,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 // this test currently must be run manually, as it requires a Linera proxy to be running on 127.0.0.1:9000.
 async fn client() {
     use linera_base::time::Duration;
-    use linera_core::node::LocalValidatorNode as _;
+    use linera_core::node::ValidatorNode as _;
     use linera_rpc::config::*;
 
     let network_config = ValidatorPublicNetworkPreConfig {

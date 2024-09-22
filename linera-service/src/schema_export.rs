@@ -19,8 +19,8 @@ use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
     },
 };
 use linera_execution::committee::{Committee, ValidatorName};
@@ -100,7 +100,7 @@ impl ValidatorNode for DummyValidatorNode {
 
 struct DummyValidatorNodeProvider;
 
-impl LocalValidatorNodeProvider for DummyValidatorNodeProvider {
+impl ValidatorNodeProvider for DummyValidatorNodeProvider {
     type Node = DummyValidatorNode;
 
     fn make_node(&self, _address: &str) -> Result<Self::Node, NodeError> {
@@ -128,7 +128,7 @@ struct DummyContext<P, S> {
 }
 
 #[async_trait]
-impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
+impl<P: ValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
     for DummyContext<P, S>
 {
     type ValidatorNodeProvider = P;
