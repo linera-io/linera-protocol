@@ -31,7 +31,7 @@ use linera_client::{
 use linera_core::{
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::{LocalNodeClient, NamedNode},
-    node::LocalValidatorNodeProvider,
+    node::ValidatorNodeProvider,
     worker::{Reason, WorkerState},
     JoinSetExt as _,
 };

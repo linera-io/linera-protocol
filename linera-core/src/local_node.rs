@@ -31,7 +31,7 @@ use tracing::warn;
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     value_cache::ValueCache,
     worker::{Notification, WorkerError, WorkerState},
 };
@@ -256,7 +256,7 @@ where
     #[tracing::instrument(level = "trace", skip_all)]
     pub async fn try_process_certificates(
         &self,
-        named_node: &NamedNode<impl LocalValidatorNode>,
+        named_node: &NamedNode<impl ValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
         notifications: &mut impl Extend<Notification>,
@@ -364,7 +364,7 @@ where
     /// Downloads and processes all certificates up to (excluding) the specified height.
     pub async fn download_certificates(
         &self,
-        validators: &[NamedNode<impl LocalValidatorNode>],
+        validators: &[NamedNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
         notifications: &mut impl Extend<Notification>,
@@ -424,7 +424,7 @@ where
     /// given validator.
     async fn try_download_certificates_from(
         &self,
-        named_node: &NamedNode<impl LocalValidatorNode>,
+        named_node: &NamedNode<impl ValidatorNode>,
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
@@ -457,7 +457,7 @@ where
     #[tracing::instrument(level = "trace", skip_all)]
     async fn try_query_certificates_from(
         &self,
-        named_node: &NamedNode<impl LocalValidatorNode>,
+        named_node: &NamedNode<impl ValidatorNode>,
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
@@ -483,7 +483,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(validators))]
     async fn download_blob(
-        validators: &[NamedNode<impl LocalValidatorNode>],
+        validators: &[NamedNode<impl ValidatorNode>],
         blob_id: BlobId,
     ) -> Option<Blob> {
         // Sequentially try each validator in random order.
@@ -500,7 +500,7 @@ where
     #[tracing::instrument(level = "trace", skip(nodes))]
     pub async fn download_blobs(
         blob_ids: &[BlobId],
-        nodes: &[NamedNode<impl LocalValidatorNode>],
+        nodes: &[NamedNode<impl ValidatorNode>],
     ) -> Vec<Blob> {
         future::join_all(
             blob_ids
@@ -549,7 +549,7 @@ impl<N> fmt::Debug for NamedNode<N> {
 }
 
 #[allow(clippy::result_large_err)]
-impl<N: LocalValidatorNode> NamedNode<N> {
+impl<N: ValidatorNode> NamedNode<N> {
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,

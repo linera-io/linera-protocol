@@ -3,7 +3,7 @@
 
 use std::str::FromStr as _;
 
-use linera_core::node::{LocalValidatorNodeProvider, NodeError};
+use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::GrpcClient;
 use crate::{config::ValidatorPublicNetworkConfig, node_provider::NodeOptions};
@@ -17,7 +17,7 @@ impl GrpcNodeProvider {
     }
 }
 
-impl LocalValidatorNodeProvider for GrpcNodeProvider {
+impl ValidatorNodeProvider for GrpcNodeProvider {
     type Node = GrpcClient;
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {

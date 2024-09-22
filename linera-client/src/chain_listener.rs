@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ChainClient, ChainClientError},
-    node::{LocalValidatorNodeProvider, ValidatorNode, ValidatorNodeProvider},
+    node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
@@ -59,7 +59,7 @@ pub struct ChainListenerConfig {
 
 #[async_trait]
 pub trait ClientContext {
-    type ValidatorNodeProvider: LocalValidatorNodeProvider;
+    type ValidatorNodeProvider: ValidatorNodeProvider;
     type Storage: Storage;
 
     fn wallet(&self) -> &Wallet;

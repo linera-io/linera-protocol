@@ -68,8 +68,8 @@ use crate::{
     },
     local_node::{LocalNodeClient, LocalNodeError, NamedNode},
     node::{
-        CrossChainMessageDelivery, LocalValidatorNode, LocalValidatorNodeProvider, NodeError,
-        NotificationStream,
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
     },
     notifier::Notifier,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
@@ -299,7 +299,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
 
 impl<P, S> Client<P, S>
 where
-    P: LocalValidatorNodeProvider + Sync + 'static,
+    P: ValidatorNodeProvider + Sync + 'static,
     S: Storage + Sync + Send + Clone + 'static,
 {
     async fn download_certificates(
@@ -668,7 +668,7 @@ enum ReceiveCertificateMode {
 
 impl<P, S> ChainClient<P, S>
 where
-    P: LocalValidatorNodeProvider + Sync + 'static,
+    P: ValidatorNodeProvider + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "trace")]

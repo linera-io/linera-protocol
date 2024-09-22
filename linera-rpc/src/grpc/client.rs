@@ -10,12 +10,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
-#[cfg(web)]
-use linera_core::node::{
-    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
-};
 use linera_core::{
-    node::{CrossChainMessageDelivery, NodeError},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
 use linera_version::VersionInfo;
@@ -25,7 +21,6 @@ use tracing::{debug, error, info, instrument};
 use {
     super::GrpcProtoConversionError,
     crate::{mass_client, RpcMessage},
-    linera_core::node::{NotificationStream, ValidatorNode},
 };
 
 use super::{

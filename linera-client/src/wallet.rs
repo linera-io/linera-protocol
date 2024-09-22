@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::Block;
-use linera_core::{client::ChainClient, node::LocalValidatorNodeProvider};
+use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_storage::Storage;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
@@ -164,7 +164,7 @@ impl Wallet {
 
     pub async fn update_from_state<P, S>(&mut self, chain_client: &ChainClient<P, S>)
     where
-        P: LocalValidatorNodeProvider + Sync + 'static,
+        P: ValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
     {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();

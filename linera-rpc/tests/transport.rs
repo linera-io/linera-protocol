@@ -11,7 +11,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 async fn client() {
     use std::time::Duration;
 
-    use linera_core::node::LocalValidatorNode as _;
+    use linera_core::node::ValidatorNode as _;
     use linera_rpc::config::*;
 
     let network_config = ValidatorPublicNetworkPreConfig {

@@ -26,7 +26,7 @@ use tracing::{error, warn};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::{LocalNodeClient, NamedNode},
-    node::{CrossChainMessageDelivery, LocalValidatorNode, NodeError},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
 };
 
 cfg_if::cfg_if! {
@@ -109,7 +109,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     execute: F,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
-    A: LocalValidatorNode + Clone + 'static,
+    A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(NamedNode<A>) -> R,
     R: Future<Output = Result<V, NodeError>> + 'a,
     G: Fn(&V) -> K,
@@ -200,7 +200,7 @@ where
 
 impl<A, S> ValidatorUpdater<A, S>
 where
-    A: LocalValidatorNode + Clone + 'static,
+    A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
     async fn send_optimized_certificate(

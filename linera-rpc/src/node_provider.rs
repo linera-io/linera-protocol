@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use linera_core::node::{LocalValidatorNodeProvider, NodeError};
+use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 #[cfg(with_simple_network)]
 use crate::simple::SimpleNodeProvider;
@@ -28,7 +28,7 @@ impl NodeProvider {
     }
 }
 
-impl LocalValidatorNodeProvider for NodeProvider {
+impl ValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
