@@ -12,9 +12,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
 #[cfg(web)]
-use linera_core::node::{
-    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
-};
+use linera_core::node::{LocalValidatorNode as ValidatorNode, NotificationStream};
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError},
     worker::Notification,

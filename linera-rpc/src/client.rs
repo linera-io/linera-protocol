@@ -10,9 +10,7 @@ use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
 #[cfg(web)]
-use linera_core::node::{
-    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
-};
+use linera_core::node::{LocalValidatorNode as ValidatorNode, NotificationStream};
 #[cfg(not(web))]
 use linera_core::node::{NotificationStream, ValidatorNode};
 use linera_core::{

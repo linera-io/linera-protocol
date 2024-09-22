@@ -2,7 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::stream::{BoxStream, LocalBoxStream, Stream};
+#[cfg(not(web))]
+use futures::stream::BoxStream;
+#[cfg(web)]
+use futures::stream::LocalBoxStream as BoxStream;
+use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, Blob, BlobContent, BlockHeight},
@@ -28,8 +32,6 @@ use crate::{
 
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = BoxStream<'static, Notification>;
-/// A pinned [`Stream`] of Notifications, without the `Send` constraint.
-pub type LocalNotificationStream = LocalBoxStream<'static, Notification>;
 
 /// Whether to wait for the delivery of outgoing cross-chain messages.
 #[derive(Debug, Default, Clone, Copy)]
