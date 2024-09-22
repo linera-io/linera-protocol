@@ -54,8 +54,8 @@ use crate::{
     client::{ChainClient, Client},
     data_types::*,
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
     },
     notifier::Notifier,
     worker::{NetworkActions, Notification, WorkerState},
@@ -492,7 +492,7 @@ pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>
 where
     S: Storage;
 
-impl<S> LocalValidatorNodeProvider for NodeProvider<S>
+impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {

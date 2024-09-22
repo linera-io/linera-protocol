@@ -9,15 +9,9 @@ use linera_base::{
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
-#[cfg(web)]
-use linera_core::node::{
-    LocalNotificationStream as NotificationStream, LocalValidatorNode as ValidatorNode,
-};
-#[cfg(not(web))]
-use linera_core::node::{NotificationStream, ValidatorNode};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError},
+    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 
 use crate::grpc::GrpcClient;
