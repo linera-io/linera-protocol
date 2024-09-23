@@ -1,6 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use linera_base::time::Duration;
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
@@ -10,11 +15,12 @@ use crate::{client::Client, grpc::GrpcNodeProvider};
 
 /// A general node provider which delegates node provision to the underlying
 /// node provider according to the `ValidatorPublicNetworkConfig`.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct NodeProvider {
     grpc: GrpcNodeProvider,
     #[cfg(with_simple_network)]
     simple: SimpleNodeProvider,
+    client_pool: Arc<Mutex<HashMap<String, Client>>>,
 }
 
 impl NodeProvider {
@@ -23,6 +29,7 @@ impl NodeProvider {
             grpc: GrpcNodeProvider::new(options),
             #[cfg(with_simple_network)]
             simple: SimpleNodeProvider::new(options),
+            client_pool: Default::default(),
         }
     }
 }
@@ -32,14 +39,22 @@ impl ValidatorNodeProvider for NodeProvider {
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
         let address = address.to_lowercase();
+        let mut pool = self.client_pool.lock().unwrap();
+        if let Some(client) = pool.get(&address) {
+            return Ok(client.clone());
+        }
 
         #[cfg(with_simple_network)]
         if address.starts_with("tcp") || address.starts_with("udp") {
-            return Ok(Client::Simple(self.simple.make_node(&address)?));
+            let client = Client::Simple(self.simple.make_node(&address)?);
+            pool.insert(address, client.clone());
+            return Ok(client);
         }
 
         if address.starts_with("grpc") {
-            return Ok(Client::Grpc(self.grpc.make_node(&address)?));
+            let client = Client::Grpc(self.grpc.make_node(&address)?);
+            pool.insert(address, client.clone());
+            return Ok(client);
         }
 
         Err(NodeError::CannotResolveValidatorAddress { address })
