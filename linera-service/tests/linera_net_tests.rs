@@ -3040,8 +3040,12 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         .await?;
     let mut notifications2 = Box::pin(node_service2.notifications(chain2).await.unwrap());
 
-    let start_time = Instant::now();
-    for i in 0..transfer_count {
+    const WARMUP_ITERATIONS: usize = 2;
+
+    let mut block_duration = Duration::ZERO;
+    let mut message_duration = Duration::ZERO;
+    for i in 0..(WARMUP_ITERATIONS + transfer_count) {
+        let start_time = Instant::now();
         client1
             .transfer(Amount::from_attos(1), chain1, chain2)
             .await
@@ -3065,15 +3069,32 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                     })),
                     _,
                 )) if height == BlockHeight(i as u64 + 1) && chain_id == chain2 => {
+                    if i >= WARMUP_ITERATIONS {
+                        block_duration += start_time.elapsed();
+                    }
                     break;
+                }
+                Either::Left((
+                    Some(Ok(Notification {
+                        reason: Reason::NewIncomingBundle { height, .. },
+                        chain_id,
+                    })),
+                    _,
+                )) if height == BlockHeight(i as u64 + 1) && chain_id == chain2 => {
+                    if i >= WARMUP_ITERATIONS {
+                        message_duration += start_time.elapsed();
+                    }
                 }
                 Either::Left((Some(Ok(_)), _)) => {}
             }
         }
     }
     tracing::info!(
-        "{transfer_count} transfers completed. Average end-to-end latency: {} ms",
-        (start_time.elapsed() / (transfer_count as u32)).as_millis()
+        "{transfer_count} transfers completed. Average latency\n\
+         * incoming message: {} ms\n\
+         * receiving block: {} ms",
+        (message_duration / (transfer_count as u32)).as_millis(),
+        (block_duration / (transfer_count as u32)).as_millis(),
     );
 
     net.ensure_is_running().await?;
