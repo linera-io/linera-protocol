@@ -15,12 +15,13 @@ use linera_views::{
         AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
+    lru_caching::{LruCachingStore},
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(with_metrics)]
-use crate::common::STORAGE_SERVICE_METRICS;
+use crate::common::{STORAGE_SERVICE_METRICS, LRU_STORAGE_SERVICE_METRICS};
 use crate::{
     common::{
         storage_service_test_endpoint, KeyTag, ServiceStoreConfig, ServiceStoreError,
@@ -62,6 +63,7 @@ pub struct ServiceStoreClientInternal {
     client: Arc<RwLock<StoreProcessorClient<Channel>>>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
+    cache_size: usize,
     namespace: Vec<u8>,
     root_key: Vec<u8>,
 }
@@ -398,12 +400,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
+        let cache_size = config.common_config.cache_size;
         let namespace = Self::namespace_as_vec(namespace)?;
         let root_key = root_key.to_vec();
         Ok(Self {
             client,
             semaphore,
             max_stream_queries,
+            cache_size,
             namespace,
             root_key,
         })
@@ -413,12 +417,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let client = self.client.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
+        let cache_size = self.cache_size;
         let namespace = self.namespace.clone();
         let root_key = root_key.to_vec();
         Ok(Self {
             client,
             semaphore,
             max_stream_queries,
+            cache_size,
             namespace,
             root_key,
         })
@@ -538,9 +544,9 @@ pub async fn create_service_test_store() -> Result<ServiceStoreClientInternal, S
 #[derive(Clone)]
 pub struct ServiceStoreClient {
     #[cfg(with_metrics)]
-    store: MeteredStore<ServiceStoreClientInternal>,
+    store: MeteredStore<LruCachingStore<MeteredStore<ServiceStoreClientInternal>>>,
     #[cfg(not(with_metrics))]
-    store: ServiceStoreClientInternal,
+    store: LruCachingStore<ServiceStoreClientInternal>,
 }
 
 impl WithError for ServiceStoreClient {
@@ -614,17 +620,15 @@ impl AdminKeyValueStore for ServiceStoreClient {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, ServiceStoreError> {
+        let cache_size = config.common_config.cache_size;
         let store = ServiceStoreClientInternal::connect(config, namespace, root_key).await?;
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
-        Ok(Self { store })
+        Ok(ServiceStoreClient::from_inner(store, cache_size))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
-        let store = self.inner_clone_with_root_key(root_key)?;
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
-        Ok(Self { store })
+        let store = self.inner().clone_with_root_key(root_key)?;
+        let cache_size = self.inner().cache_size;
+        Ok(ServiceStoreClient::from_inner(store, cache_size))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
@@ -649,17 +653,22 @@ impl AdminKeyValueStore for ServiceStoreClient {
 }
 
 impl ServiceStoreClient {
-    fn inner_clone_with_root_key(
-        &self,
-        root_key: &[u8],
-    ) -> Result<ServiceStoreClientInternal, ServiceStoreError> {
+    #[cfg(with_metrics)]
+    fn inner(&self) -> &ServiceStoreClientInternal {
+        &self.store.store.store.store
+    }
+
+    #[cfg(not(with_metrics))]
+    fn inner(&self) -> &ServiceStoreClientInternal {
+        &self.store.store
+    }
+
+    fn from_inner(store: ServiceStoreClientInternal, cache_size: usize) -> ServiceStoreClient {
         #[cfg(with_metrics)]
-        {
-            self.store.store.clone_with_root_key(root_key)
-        }
-        #[cfg(not(with_metrics))]
-        {
-            self.store.clone_with_root_key(root_key)
-        }
+        let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
+        let store = LruCachingStore::new(store, cache_size);
+        #[cfg(with_metrics)]
+        let store = MeteredStore::new(&LRU_STORAGE_SERVICE_METRICS, store);
+        Self { store }
     }
 }
