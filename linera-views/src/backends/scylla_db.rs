@@ -913,10 +913,10 @@ impl ScyllaDbStore {
 
     fn from_inner(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> ScyllaDbStore {
         let store = JournalingKeyValueStore::new(simple_store);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
         let store = LruCachingStore::new(store, cache_size);
-        #[cfg(feature = "metrics")]
+        #[cfg(with_metrics)]
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
