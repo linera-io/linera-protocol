@@ -958,7 +958,7 @@ where
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(
+    pub async fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
         default_chain: Option<ChainId>,
@@ -966,7 +966,7 @@ where
         context: C,
     ) -> Self {
         Self {
-            clients: ChainClients::default(),
+            clients: ChainClients::from_clients(context.clients()).await,
             config,
             port,
             default_chain,

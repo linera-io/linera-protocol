@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::btree_map, sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{
@@ -81,6 +81,14 @@ pub trait ClientContext {
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
     ) -> Result<(), Error>;
+
+    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+        let mut clients = vec![];
+        for chain_id in &self.wallet().chain_ids() {
+            clients.push(self.make_chain_client(*chain_id));
+        }
+        clients
+    }
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -91,6 +99,7 @@ where
 {
     config: ChainListenerConfig,
     clients: ChainClients<P, S>,
+    listening: Arc<Mutex<HashSet<ChainId>>>,
 }
 
 impl<P, S> ChainListener<P, S>
@@ -101,7 +110,11 @@ where
 {
     /// Creates a new chain listener given client chains.
     pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
-        Self { config, clients }
+        Self {
+            config,
+            clients,
+            listening: Default::default(),
+        }
     }
 
     /// Runs the chain listener.
@@ -117,6 +130,7 @@ where
                 context.clone(),
                 storage.clone(),
                 self.config.clone(),
+                self.listening.clone(),
             );
         }
     }
@@ -128,13 +142,15 @@ where
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
+        listening: Arc<Mutex<HashSet<ChainId>>>,
     ) where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
         let _handle = linera_base::task::spawn(
             async move {
                 if let Err(err) =
-                    Self::run_client_stream(chain_id, clients, context, storage, config).await
+                    Self::run_client_stream(chain_id, clients, context, storage, config, listening)
+                        .await
                 {
                     error!("Stream for chain {} failed: {}", chain_id, err);
                 }
@@ -150,24 +166,23 @@ where
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
+        listening: Arc<Mutex<HashSet<ChainId>>>,
     ) -> Result<(), Error>
     where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
-        let client = {
-            let mut map_guard = clients.map_lock().await;
-            let context_guard = context.lock().await;
-            let btree_map::Entry::Vacant(entry) = map_guard.entry(chain_id) else {
-                // For every entry in the client map we are already listening to notifications, so
-                // there's nothing to do. This can happen if we download a child before the parent
-                // chain, and then process the OpenChain message in the parent.
-                return Ok(());
-            };
-            let client = context_guard.make_chain_client(chain_id);
-            entry.insert(client.clone());
-            client
-        };
+        let mut guard = listening.lock().await;
+        if guard.contains(&chain_id) {
+            // If we are already listening to notifications, there's nothing to do.
+            // This can happen if we download a child before the parent
+            // chain, and then process the OpenChain message in the parent.
+            return Ok(());
+        }
+        // If the client is not present, we can request it.
+        let client = clients.request_client(chain_id, context.clone()).await;
         let (listener, _listen_handle, mut local_stream) = client.listen().await?;
+        guard.insert(chain_id);
+        drop(guard);
         client.synchronize_from_validators().await?;
         drop(linera_base::task::spawn(listener.in_current_span()));
         let mut timeout = storage.clock().current_time();
@@ -268,6 +283,7 @@ where
                     context.clone(),
                     storage.clone(),
                     config.clone(),
+                    listening.clone(),
                 );
             }
         }

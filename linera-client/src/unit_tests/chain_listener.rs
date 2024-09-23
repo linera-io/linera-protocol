@@ -31,7 +31,7 @@ use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
 
 use crate::{
-    chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
+    chain_listener::{self, ChainClients, ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig},
     wallet::{UserChain, Wallet},
     Error,
@@ -169,8 +169,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     context
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
         .await?;
+    let chain_clients = ChainClients::from_clients(context.clients()).await;
     let context = Arc::new(Mutex::new(context));
-    let listener = ChainListener::new(config, Default::default());
+    let listener = ChainListener::new(config, chain_clients);
     listener.run(context, storage).await;
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will

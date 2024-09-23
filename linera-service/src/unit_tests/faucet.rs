@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
-use linera_client::{chain_listener, wallet::Wallet};
+use linera_client::{chain_clients::ChainClients, chain_listener, wallet::Wallet};
 use linera_core::{
     client::ChainClient,
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
@@ -72,10 +72,13 @@ async fn test_faucet_rate_limiting() {
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(6))
         .await
         .unwrap();
-    let client = Arc::new(Mutex::new(client));
-    let context = Arc::new(Mutex::new(ClientContext::default()));
+    let chain_id = client.chain_id();
+    let context = ClientContext::default();
+    let clients = ChainClients::from_clients(vec![client]).await;
+    let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
-        client,
+        clients,
+        chain_id,
         context: context.clone(),
         amount: Amount::from_tokens(1),
         end_timestamp: Timestamp::from(6000),
