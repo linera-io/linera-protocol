@@ -77,7 +77,7 @@ use crate::{
 };
 
 #[cfg(test)]
-#[path = "unit_tests/client_tests.rs"]
+#[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
 
 #[cfg(with_metrics)]
