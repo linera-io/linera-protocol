@@ -30,7 +30,7 @@ use linera_client::{
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ClientOutcome},
-    local_node::{LocalNodeClient, NamedNode},
+    local_node::{LocalNodeClient, RemoteNode},
     node::ValidatorNodeProvider,
     worker::{Reason, WorkerState},
     JoinSetExt as _,
@@ -1136,7 +1136,7 @@ impl Job {
             context
                 .make_node_provider()
                 .make_nodes_from_list(validators)?
-                .map(|(name, node)| NamedNode { name, node })
+                .map(|(name, node)| RemoteNode { name, node })
                 .collect()
         } else {
             let info = node_client.handle_chain_info_query(query).await?;
@@ -1146,7 +1146,7 @@ impl Job {
             context
                 .make_node_provider()
                 .make_nodes(committee)?
-                .map(|(name, node)| NamedNode { name, node })
+                .map(|(name, node)| RemoteNode { name, node })
                 .collect()
         };
 
