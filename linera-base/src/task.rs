@@ -46,7 +46,7 @@ mod implementation {
     /// The type of a future awaiting another thread.
     pub type BlockingFuture<R> = oneshot::Receiver<R>;
 
-    /// Spawns a new task, potentially on the current thread.
+    /// Spawns a new task on the current thread.
     pub fn spawn<F: Future + 'static>(future: F) -> NonblockingFuture<F::Output> {
         let (send, recv) = oneshot::channel();
         wasm_bindgen_futures::spawn_local(async {
@@ -55,12 +55,15 @@ mod implementation {
         recv
     }
 
-    /// Spawns a blocking task on the same thread (!).
-    /// TODO(#2399): replace this by a Web worker.
+    /// Spawns a blocking task on a new Web Worker.
     pub fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(
         task: F,
     ) -> BlockingFuture<R> {
-        spawn(async { task() })
+        let (send, recv) = oneshot::channel();
+        wasm_thread::spawn(move || {
+            let _ = send.send(task());
+        });
+        recv
     }
 }
 

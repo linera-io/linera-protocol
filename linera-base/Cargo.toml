@@ -23,6 +23,7 @@ web = [
     "tracing-web",
     "wasmtimer",
     "wasm-bindgen-futures",
+    "wasm_thread",
     "web-time",
 ]
 
@@ -57,6 +58,7 @@ tokio = { workspace = true, features = ["time"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
 wasm-bindgen-futures = { workspace = true, optional = true }
+wasm_thread = { workspace = true, optional = true }
 wasmtimer = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
