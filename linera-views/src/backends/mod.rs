@@ -12,6 +12,8 @@ pub mod memory;
 
 pub mod lru_caching;
 
+pub mod dual;
+
 #[cfg(with_scylladb)]
 pub mod scylla_db;
 
