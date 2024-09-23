@@ -77,6 +77,23 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let network = config.network;
     let (mut net, client) = config.instantiate().await?;
 
+    let faucet_client = net.make_client().await;
+    faucet_client.wallet_init(&[], FaucetOption::None).await?;
+
+    let faucet_chain = client
+        .open_and_assign(&faucet_client, Amount::from_tokens(1_000u128))
+        .await?;
+
+    let mut faucet_service = faucet_client
+        .run_faucet(None, faucet_chain, Amount::from_tokens(2))
+        .await?;
+
+    faucet_service.ensure_is_running()?;
+
+    let faucet = faucet_service.instance();
+
+    assert_eq!(faucet.current_validators().await?.len(), 4);
+
     let client_2 = net.make_client().await;
     client_2.wallet_init(&[], FaucetOption::None).await?;
     let chain_1 = ChainId::root(0);
@@ -125,17 +142,26 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
 
+    if matches!(network, Network::Grpc) {
+        assert_eq!(faucet.current_validators().await?.len(), 5);
+    }
+
     // Add 6th validator
     client
         .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
+    if matches!(network, Network::Grpc) {
+        assert_eq!(faucet.current_validators().await?.len(), 6);
+    }
 
     // Remove 5th validator
     client
         .remove_validator(net.validator_name(4).unwrap())
         .await?;
     net.remove_validator(4)?;
-
+    if matches!(network, Network::Grpc) {
+        assert_eq!(faucet.current_validators().await?.len(), 5);
+    }
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
     if let Some(service) = &node_service_2 {

@@ -144,6 +144,10 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
     fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
 
     async fn update_wallet(&mut self, _: &ChainClient<P, S>) {}
+
+    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+        vec![]
+    }
 }
 
 #[tokio::main]
@@ -166,7 +170,8 @@ async fn main() -> std::io::Result<()> {
         None,
         storage,
         context,
-    );
+    )
+    .await;
     let schema = service.schema().sdl();
     print!("{}", schema);
     Ok(())
