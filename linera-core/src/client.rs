@@ -2234,8 +2234,7 @@ where
     pub async fn process_pending_block(
         &self,
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
-        self.find_received_certificates().await?;
-        self.prepare_chain().await?;
+        self.synchronize_from_validators().await?;
         self.process_pending_block_without_prepare().await
     }
 
