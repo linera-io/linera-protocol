@@ -668,6 +668,10 @@ pub enum ClientCommand {
         /// no earlier than this.
         #[arg(long)]
         limit_rate_until: Option<DateTime<Utc>>,
+
+        /// Configuration for the faucet chain listener.
+        #[command(flatten)]
+        config: ChainListenerConfig,
     },
 
     /// Publish bytecode.
