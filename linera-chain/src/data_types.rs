@@ -210,7 +210,7 @@ pub struct Target {
 }
 
 /// A set of messages from a single block, for a single destination.
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct MessageBundle {
     /// The block height.
     pub height: BlockHeight,
@@ -1305,15 +1305,11 @@ impl BcsHashable for CertificateValue {}
 
 doc_scalar!(
     MessageAction,
-    "Whether an incoming message is accepted or rejected"
+    "Whether an incoming message is accepted or rejected."
 );
 doc_scalar!(
     ChannelFullName,
-    "A channel name together with its application ID"
-);
-doc_scalar!(
-    MessageBundle,
-    "A set of messages from a single block, for a single destination."
+    "A channel name together with its application ID."
 );
 doc_scalar!(
     Medium,

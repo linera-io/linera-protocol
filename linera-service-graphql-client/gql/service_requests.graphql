@@ -52,10 +52,36 @@ query ChainInbox($chainId: ChainId!, $origin: Origin!) {
             index
           }
           addedBundles {
-            entries
+            entries {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
           }
           removedBundles {
-            entries
+            entries {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
           }
         }
       }
@@ -113,8 +139,38 @@ query Chain(
             height
             index
           }
-          addedBundles { entries }
-          removedBundles { entries }
+          addedBundles {
+            entries {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
+          }
+          removedBundles {
+            entries {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
+          }
         }
       }
     }
@@ -170,7 +226,20 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           previousBlockHash
           incomingBundles {
             origin
-            bundle
+            bundle {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
             action
           }
           operations
@@ -215,7 +284,20 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
           previousBlockHash
           incomingBundles {
             origin
-            bundle
+            bundle {
+              height
+              timestamp
+              certificateHash
+              transactionIndex
+              messages {
+                authenticatedSigner
+                grant
+                refundGrantTo
+                kind
+                index
+                message
+              }
+            }
             action
           }
           operations

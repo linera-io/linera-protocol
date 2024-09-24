@@ -133,7 +133,7 @@ mod from {
     use linera_base::identifiers::StreamId;
     use linera_chain::data_types::{
         BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingBundle,
-        OutgoingMessage,
+        MessageBundle, OutgoingMessage, PostedMessage,
     };
 
     use super::*;
@@ -147,8 +147,51 @@ mod from {
             } = val;
             IncomingBundle {
                 origin,
-                bundle,
+                bundle: bundle.into(),
                 action,
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle> for MessageBundle {
+        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle {
+                height,
+                timestamp,
+                certificate_hash,
+                transaction_index,
+                messages,
+            } = val;
+            let messages = messages.into_iter().map(PostedMessage::from).collect();
+            MessageBundle {
+                height,
+                timestamp,
+                certificate_hash,
+                transaction_index: transaction_index as u32,
+                messages,
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages> for PostedMessage {
+        fn from(
+            val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages,
+        ) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages {
+                authenticated_signer,
+                grant,
+                refund_grant_to,
+                kind,
+                index,
+                message,
+            } = val;
+            PostedMessage {
+                authenticated_signer,
+                grant,
+                refund_grant_to,
+                kind,
+                index: index as u32,
+                message,
             }
         }
     }

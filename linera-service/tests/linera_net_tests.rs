@@ -30,6 +30,7 @@ use linera_base::{
     data_types::{Amount, Blob},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
 };
+use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{base::BlockHeight, DataBlobHash};
 #[cfg(any(
@@ -3029,51 +3030,129 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
     tracing::info!("Starting test {}", test_name!());
 
     let transfer_count = test_iterations().unwrap_or(100);
+    const WARMUP_ITERATIONS: usize = 2;
 
+    // Get a new chain, 1, from the faucet. Use it to open another chain: 2.
     let (mut net, client1) = config.instantiate().await?;
-    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let chain_id1 = client1.load_wallet()?.default_chain().unwrap();
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
-    let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let chain_id2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
     let node_service2 = client2
-        .run_node_service(None, ProcessInbox::Automatic)
+        .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
-    let mut notifications2 = Box::pin(node_service2.notifications(chain2).await.unwrap());
 
-    let start_time = Instant::now();
-    for i in 0..transfer_count {
-        client1
-            .transfer(Amount::from_attos(1), chain1, chain2)
+    // Make sure all incoming messages are processed, and get both chains' heights.
+    let mut next_height1 = {
+        let node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+        node_service1.process_inbox(&chain_id1).await.unwrap();
+        let mut chain = node_service1
+            .query_node(&format!(
+                "query {{ chain(chainId: \"{chain_id1}\") {{ tipState {{ nextBlockHeight }} }} }}"
+            ))
             .await
             .unwrap();
+        serde_json::from_value::<BlockHeight>(chain["chain"]["tipState"]["nextBlockHeight"].take())
+            .unwrap()
+    };
+    let mut next_height2 = {
+        node_service2.process_inbox(&chain_id2).await.unwrap();
+        let mut chain = node_service2
+            .query_node(&format!(
+                "query {{ chain(chainId: \"{chain_id2}\") {{ tipState {{ nextBlockHeight }} }} }}"
+            ))
+            .await
+            .unwrap();
+        serde_json::from_value::<BlockHeight>(chain["chain"]["tipState"]["nextBlockHeight"].take())
+            .unwrap()
+    };
+
+    let mut notifications2 = Box::pin(node_service2.notifications(chain_id2).await.unwrap());
+    let mut block_duration = Duration::ZERO;
+    let mut message_duration = Duration::ZERO;
+
+    for i in 0..(WARMUP_ITERATIONS + transfer_count) {
+        // Transfer a small amount from chain 1 to chain 2.
+        let start_time = Instant::now();
+        client1
+            .transfer(Amount::from_attos(1), chain_id1, chain_id2)
+            .await
+            .unwrap();
+        let mut got_message = false;
+
+        // Wait until chain 2 created a block receiving the tokens.
         let timeout = Instant::now() + Duration::from_secs(1);
-        loop {
-            let sleep = Box::pin(linera_base::time::timer::sleep(
-                timeout.duration_since(Instant::now()),
-            ));
-            match future::select(notifications2.next(), sleep).await {
+        let hash2 = loop {
+            let duration = timeout.duration_since(Instant::now());
+            let sleep = Box::pin(linera_base::time::timer::sleep(duration));
+            let reason = match future::select(notifications2.next(), sleep).await {
                 Either::Right(((), _)) | Either::Left((None, _)) => {
-                    panic!("Failed to receive notification about transfer #{i}.")
+                    panic!("Failed to receive notification about transfer #{i}.");
                 }
                 Either::Left((Some(Err(error)), _)) => {
-                    panic!("Error waiting for notification about transfer #{i}: {error}")
+                    panic!("Error waiting for notification about transfer #{i}: {error}");
                 }
-                Either::Left((
-                    Some(Ok(Notification {
-                        reason: Reason::NewBlock { height, .. },
-                        chain_id,
-                    })),
-                    _,
-                )) if height == BlockHeight(i as u64 + 1) && chain_id == chain2 => {
-                    break;
+                Either::Left((Some(Ok(Notification { reason, chain_id })), _))
+                    if chain_id == chain_id2 =>
+                {
+                    reason
                 }
-                Either::Left((Some(Ok(_)), _)) => {}
+                Either::Left((Some(Ok(_)), _)) => continue,
+            };
+            match reason {
+                Reason::NewIncomingBundle { height, origin } => {
+                    assert_eq!(height, next_height1);
+                    assert_eq!(origin.sender, chain_id1);
+                    assert_eq!(origin.medium, Medium::Direct);
+                    assert!(!got_message, "Duplicate message notification");
+                    got_message = true;
+                    next_height1.0 += 1;
+                    if i >= WARMUP_ITERATIONS {
+                        message_duration += start_time.elapsed();
+                    }
+                }
+                Reason::NewBlock { height, hash } => {
+                    assert_eq!(height, next_height2);
+                    assert!(got_message, "Missing message notification");
+                    next_height2.0 += 1;
+                    if i >= WARMUP_ITERATIONS {
+                        block_duration += start_time.elapsed();
+                    }
+                    break hash;
+                }
+                reason @ Reason::NewRound { .. } => panic!("Unexpected notification {reason:?}"),
             }
-        }
+        };
+
+        // Verify that the created block received the transfer message from chain 1.
+        let mut block2 = node_service2
+            .query_node(&format!(
+                "query {{ block(hash: \"{hash2}\", chainId: \"{chain_id2}\") {{ \
+                    value {{ executedBlock {{ block {{ incomingBundles {{ \
+                        origin bundle {{ height }} \
+                    }} }} }} }} \
+                }} }}"
+            ))
+            .await
+            .unwrap();
+        let mut bundle =
+            block2["block"]["value"]["executedBlock"]["block"]["incomingBundles"][0].take();
+        let origin = serde_json::from_value::<Origin>(bundle["origin"].take()).unwrap();
+        assert_eq!(origin.sender, chain_id1);
+        assert_eq!(origin.medium, Medium::Direct);
+        let sender_height =
+            serde_json::from_value::<BlockHeight>(bundle["bundle"]["height"].take()).unwrap();
+        assert_eq!(sender_height + BlockHeight(1), next_height1);
     }
+
     tracing::info!(
-        "{transfer_count} transfers completed. Average end-to-end latency: {} ms",
-        (start_time.elapsed() / (transfer_count as u32)).as_millis()
+        "{transfer_count} transfers completed. Average latency\n\
+         * incoming message: {} ms\n\
+         * receiving block: {} ms",
+        (message_duration / (transfer_count as u32)).as_millis(),
+        (block_duration / (transfer_count as u32)).as_millis(),
     );
 
     net.ensure_is_running().await?;
