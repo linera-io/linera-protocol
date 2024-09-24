@@ -674,8 +674,7 @@ where
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
     /// local chain.
     async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
-        if self.state().next_block_height() != BlockHeight::ZERO
-            && self.options.message_policy.is_ignore()
+        if self.next_block_height() != BlockHeight::ZERO && self.options.message_policy.is_ignore()
         {
             return Ok(Vec::new()); // OpenChain is already received, other are ignored.
         }
@@ -687,7 +686,7 @@ where
             .await?
             .info;
         ensure!(
-            info.next_block_height == self.state().next_block_height(),
+            info.next_block_height == self.next_block_height(),
             ChainClientError::WalletSynchronizationError
         );
         let mut requested_pending_message_bundles = info.requested_pending_message_bundles;
@@ -876,7 +875,7 @@ where
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
-        let next_block_height = self.state().next_block_height();
+        let next_block_height = self.next_block_height();
         let nodes = self.validator_nodes().await?;
         let mut info = self
             .client
@@ -885,7 +884,7 @@ where
         if info.next_block_height == next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
-                self.state().block_hash() == info.block_hash,
+                self.block_hash() == info.block_hash,
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
@@ -1654,7 +1653,7 @@ where
                 continue;
             }
 
-            let maybe_blob = self.state().pending_blobs().get(&blob_id).cloned();
+            let maybe_blob = self.pending_blobs().get(&blob_id).cloned();
             if let Some(blob) = maybe_blob {
                 self.client.local_node.cache_recent_blob(&blob).await;
                 blobs.push(blob);
@@ -1690,7 +1689,7 @@ where
             block_hash = state.block_hash();
             // In the fast round, we must never make any conflicting proposals.
             if round.is_fast() {
-                if let Some(pending) = &self.state().pending_block() {
+                if let Some(pending) = &state.pending_block() {
                     ensure!(
                         pending == &block,
                         ChainClientError::BlockProposalError(
@@ -1771,7 +1770,7 @@ where
             .submit_block_proposal(&committee, proposal, hashed_value)
             .await?;
         // Communicate the new certificate now.
-        let next_block_height = self.state().next_block_height();
+        let next_block_height = self.next_block_height();
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
@@ -1783,7 +1782,7 @@ where
             if new_committee != committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
-                let next_block_height = self.state().next_block_height();
+                let next_block_height = self.next_block_height();
                 self.communicate_chain_updates(
                     &new_committee,
                     self.chain_id,
@@ -1932,7 +1931,7 @@ where
             .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
-            .max(self.state().timestamp())
+            .max(self.timestamp())
     }
 
     #[tracing::instrument(level = "trace", skip(query))]
@@ -2031,8 +2030,8 @@ where
             chain_id: self.chain_id,
             incoming_bundles,
             operations: Vec::new(),
-            previous_block_hash: self.state().block_hash(),
-            height: self.state().next_block_height(),
+            previous_block_hash: self.block_hash(),
+            height: self.next_block_height(),
             authenticated_signer: owner,
             timestamp,
         };
@@ -2092,7 +2091,7 @@ where
         &self,
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
-        let next_block_height = self.state().next_block_height();
+        let next_block_height = self.next_block_height();
         ensure!(
             self.chain_info().await?.next_block_height == next_block_height,
             ChainClientError::WalletSynchronizationError
@@ -2114,7 +2113,7 @@ where
     /// Attempts to update all validators about the local chain.
     pub async fn update_validators(&self) -> Result<(), ChainClientError> {
         let committee = self.local_committee().await?;
-        let next_block_height = self.state().next_block_height();
+        let next_block_height = self.next_block_height();
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
@@ -2201,6 +2200,7 @@ where
                 info = self.chain_info_with_manager_values().await?;
             }
         }
+        self.state_mut().update_from_info(&info);
         let manager = *info.manager;
 
         // If there is a validated block in the current round, finalize it.
