@@ -146,7 +146,7 @@ macro_rules! indirect_results {
     };
 }
 
-repeat_macro!(indirect_results => A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
+repeat_macro!(indirect_results => A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
 /// Implements [`GuestInterface`] for the cases where the results are sent directly as the
 /// function's return value but the parameters are stored in memory instead.
@@ -191,18 +191,18 @@ indirect_parameters!(=> Z);
 
 /// Implements [`GuestInterface`] for the cases where the parameters and the results need to be
 /// stored in memory.
-impl<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, OtherParameters, Y, Z, OtherResults>
+impl<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, OtherParameters, Y, Z, OtherResults>
     GuestInterface
     for (
-        HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, ...OtherParameters],
+        HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, ...OtherParameters],
         HList![Y, Z, ...OtherResults],
     )
 where
-    HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, ...OtherParameters]: FlatLayout,
+    HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, ...OtherParameters]: FlatLayout,
     HList![Y, Z, ...OtherResults]: FlatLayout,
 {
     type FlatHostParameters =
-        HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, ...OtherParameters];
+        HList![A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, ...OtherParameters];
     type FlatGuestParameters = HList![i32, i32];
     type ResultStorage = GuestPointer;
 
