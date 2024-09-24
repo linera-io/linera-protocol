@@ -27,6 +27,7 @@ env:
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
+  RUST_LOG_FORMAT: plain
 
 permissions:
   contents: read
