@@ -2678,11 +2678,11 @@ where
     pub async fn subscribe_to_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::Subscribe {
+        let operation = SystemOperation::Subscribe {
             chain_id: self.state().admin_id(),
             channel: SystemChannel::Admin,
-        }))
-        .await
+        };
+        self.execute_operation(Operation::System(operation)).await
     }
 
     #[tracing::instrument(level = "trace")]
@@ -2691,11 +2691,11 @@ where
     pub async fn unsubscribe_from_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::Unsubscribe {
+        let operation = SystemOperation::Unsubscribe {
             chain_id: self.state().admin_id(),
             channel: SystemChannel::Admin,
-        }))
-        .await
+        };
+        self.execute_operation(Operation::System(operation)).await
     }
 
     #[tracing::instrument(level = "trace")]
