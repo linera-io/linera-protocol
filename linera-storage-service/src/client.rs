@@ -15,13 +15,13 @@ use linera_views::{
         AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
-    lru_caching::{LruCachingStore},
+    lru_caching::LruCachingStore,
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
 #[cfg(with_metrics)]
-use crate::common::{STORAGE_SERVICE_METRICS, LRU_STORAGE_SERVICE_METRICS};
+use crate::common::{LRU_STORAGE_SERVICE_METRICS, STORAGE_SERVICE_METRICS};
 use crate::{
     common::{
         storage_service_test_endpoint, KeyTag, ServiceStoreConfig, ServiceStoreError,
