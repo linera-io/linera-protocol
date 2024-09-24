@@ -23,12 +23,16 @@ test('Block mounting', () => {
                   sender: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65"
                 },
                 bundle: {
-                  certificate_hash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
+                  certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a",
                   height: 5,
                   messages: [{
-                    authenticated_signer: null,
-                    message: { System: { BytecodePublished: { operation_index: 0 } } }
+                    authenticatedSigner: null,
+                    message: { System: { BytecodePublished: { operation_index: 0 } } },
+                    grant: "0.01",
+                    index: 4,
+                    kind: "Tracked"
                   }],
+                  transactionIndex: 0,
                   timestamp: 1694097510206912
                 },
                 action: "Accept",
@@ -47,10 +51,10 @@ test('Block mounting', () => {
                       locations: [
                         [
                           "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65020000000000000000000000",
-                          { certificate_hash: "a4167c67ce9c94c301fd5cbbefeccf6c8e56d568a4c75ed85e93bfacee66bac5", operation_index: 0 }],
+                          { certificateHash: "a4167c67ce9c94c301fd5cbbefeccf6c8e56d568a4c75ed85e93bfacee66bac5", operation_index: 0 }],
                         [
                           "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65050000000000000000000000",
-                          { certificate_hash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a", operation_index: 0 }]]
+                          { certificateHash: "f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a", operation_index: 0 }]]
                     }
                   }
                 }

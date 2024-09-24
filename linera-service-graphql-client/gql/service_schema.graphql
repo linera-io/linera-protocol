@@ -266,7 +266,7 @@ type Chains {
 }
 
 """
-A channel name together with its application ID
+A channel name together with its application ID.
 """
 scalar ChannelFullName
 
@@ -542,14 +542,35 @@ An message to be sent and possibly executed in the receiver's block.
 scalar Message
 
 """
-Whether an incoming message is accepted or rejected
+Whether an incoming message is accepted or rejected.
 """
 scalar MessageAction
 
 """
 A set of messages from a single block, for a single destination.
 """
-scalar MessageBundle
+type MessageBundle {
+	"""
+	The block height.
+	"""
+	height: BlockHeight!
+	"""
+	The block's timestamp.
+	"""
+	timestamp: Timestamp!
+	"""
+	The confirmed block certificate hash.
+	"""
+	certificateHash: CryptoHash!
+	"""
+	The index of the transaction in the block that is sending this bundle.
+	"""
+	transactionIndex: Int!
+	"""
+	The relevant messages.
+	"""
+	messages: [PostedMessage!]!
+}
 
 """
 The kind of outgoing message being sent
@@ -754,6 +775,36 @@ type OutgoingMessage {
 The owner of a chain. This is currently the hash of the owner's public key used to verify signatures.
 """
 scalar Owner
+
+"""
+A message together with kind, authentication and grant information.
+"""
+type PostedMessage {
+	"""
+	The user authentication carried by the message, if any.
+	"""
+	authenticatedSigner: Owner
+	"""
+	A grant to pay for the message execution.
+	"""
+	grant: Amount!
+	"""
+	Where to send a refund for the unused part of the grant after execution, if any.
+	"""
+	refundGrantTo: Account
+	"""
+	The kind of message being sent.
+	"""
+	kind: MessageKind!
+	"""
+	The index of the message in the sending block.
+	"""
+	index: Int!
+	"""
+	The message itself.
+	"""
+	message: Message!
+}
 
 """
 A signature public key
