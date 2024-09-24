@@ -3562,9 +3562,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer"
-version = "4.3.6-linera.3"
+version = "4.3.6-linera.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97579716c7904acd5de10b50d584c71b7e53bb5b8b3009200407eddb7e5d66ff"
+checksum = "db3d1d8517352f5f12baac2b3cc42f9c6ceae29165f97fb42bb7bfdaadffa11a"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -3593,9 +3593,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler"
-version = "4.3.6-linera.3"
+version = "4.3.6-linera.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17e9a8733a40ebebdaef2fcd5da5546eafdcd0be0b67edbfb1718fc783d79c4e"
+checksum = "b5b0c7e1f3fe7a8afe5d84e8c8339fe74c1662160d0f2f1b812172c653f9c963"
 dependencies = [
  "backtrace",
  "bytes",
@@ -3622,9 +3622,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
-version = "4.3.6-linera.3"
+version = "4.3.6-linera.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "705fde265918cecb2de998de813c8a2b8e7a6920f481c76017ac629c2460d712"
+checksum = "779d57095f3f4e9b352a29f7b3af5d8b29f7cf3ebb444684dc2c62a850322e0d"
 dependencies = [
  "cranelift-codegen 0.91.1",
  "cranelift-entity 0.91.1",
@@ -3641,9 +3641,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
-version = "4.3.6-linera.3"
+version = "4.3.6-linera.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "497da581bd428fdaab3afd86686dd2fe0252e0465ee5a826b07718af8a9cb9c6"
+checksum = "ca3e3a4642537dfef3fb790673d68edb861777f8f8286907880609ec366f6b53"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -3660,9 +3660,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-vm"
-version = "4.3.6-linera.3"
+version = "4.3.6-linera.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c73723f738cfc11615738ac891334f26b6aa0d92dce16b80677c108537550e6a"
+checksum = "aea000cd72fa5d5bb4bba611b9d3c6177fa12941cb7748cd8323289ea6e560e4"
 dependencies = [
  "backtrace",
  "cc",
@@ -6351,9 +6351,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.216.0"
+version = "0.217.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04c23aebea22c8a75833ae08ed31ccc020835b12a41999e58c31464271b94a88"
+checksum = "7b88b0814c9a2b323a9b46c687e726996c255ac8b64aa237dd11c81ed4854760"
 dependencies = [
  "leb128",
 ]
@@ -6753,22 +6753,22 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "216.0.0"
+version = "217.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7eb1f2eecd913fdde0dc6c3439d0f24530a98ac6db6cb3d14d92a5328554a08"
+checksum = "79004ecebded92d3c710d4841383368c7f04b63d0992ddd6b0c7d5029b7629b7"
 dependencies = [
  "bumpalo",
  "leb128",
  "memchr",
  "unicode-width",
- "wasm-encoder 0.216.0",
+ "wasm-encoder 0.217.0",
 ]
 
 [[package]]
 name = "wat"
-version = "1.216.0"
+version = "1.217.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac0409090fb5154f95fb5ba3235675fd9e579e731524d63b6a2f653e1280c82a"
+checksum = "c126271c3d92ca0f7c63e4e462e40c69cca52fd4245fcda730d1cf558fb55088"
 dependencies = [
  "wast",
 ]
