@@ -40,6 +40,104 @@ static KEY_VALUE_STORE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new
     .expect("Histogram can be created")
 });
 
+#[cfg(with_metrics)]
+/// The runtime of get
+static KEY_VALUE_STORE_VIEW_GET_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_get_runtime",
+        "KeyValueStoreView get runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
+#[cfg(with_metrics)]
+/// The runtime of multi get
+static KEY_VALUE_STORE_VIEW_MULTI_GET_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_multi_get_runtime",
+        "KeyValueStoreView multi get runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
+#[cfg(with_metrics)]
+/// The runtime of contains key
+static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_contains_key_runtime",
+        "KeyValueStoreView contains key runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
+#[cfg(with_metrics)]
+/// The runtime of contains keys
+static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_contains_keys_runtime",
+        "KeyValueStoreView contains keys runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
+#[cfg(with_metrics)]
+/// The runtime of find keys by prefix
+static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_find_keys_by_prefix_runtime",
+        "KeyValueStoreView find keys by prefix runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
+#[cfg(with_metrics)]
+/// The runtime of find key values by prefix
+static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_find_key_values_by_prefix_runtime",
+        "KeyValueStoreView find key values by prefix runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
+#[cfg(with_metrics)]
+/// The runtime of write batch
+static KEY_VALUE_STORE_VIEW_WRITE_BATCH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "key_value_store_view_write_batch_runtime",
+        "KeyValueStoreView write batch runtime",
+        &[],
+        Some(vec![
+            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+        ]),
+    )
+    .expect("Histogram can be created")
+});
+
 #[cfg(with_testing)]
 use {
     crate::common::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
@@ -765,6 +863,8 @@ where
     /// # })
     /// ```
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_WRITE_BATCH_RUNTIME.measure_latency();
         *self.hash.get_mut().unwrap() = None;
         let max_key_size = self.max_key_size();
         for operation in batch.operations {
@@ -901,6 +1001,8 @@ where
     /// # })
     /// ```
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_RUNTIME.measure_latency();
         ensure!(
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
@@ -975,6 +1077,8 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_RUNTIME.measure_latency();
         ensure!(
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
