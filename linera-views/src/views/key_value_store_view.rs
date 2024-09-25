@@ -98,31 +98,33 @@ static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_RUNTIME: LazyLock<HistogramVec> = Lazy
 
 #[cfg(with_metrics)]
 /// The runtime of find keys by prefix
-static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
-        "key_value_store_view_find_keys_by_prefix_runtime",
-        "KeyValueStoreView find keys by prefix runtime",
-        &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
-    )
-    .expect("Histogram can be created")
-});
+static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_RUNTIME: LazyLock<HistogramVec> =
+    LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "key_value_store_view_find_keys_by_prefix_runtime",
+            "KeyValueStoreView find keys by prefix runtime",
+            &[],
+            Some(vec![
+                0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+            ]),
+        )
+        .expect("Histogram can be created")
+    });
 
 #[cfg(with_metrics)]
 /// The runtime of find key values by prefix
-static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
-        "key_value_store_view_find_key_values_by_prefix_runtime",
-        "KeyValueStoreView find key values by prefix runtime",
-        &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
-    )
-    .expect("Histogram can be created")
-});
+static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_RUNTIME: LazyLock<HistogramVec> =
+    LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "key_value_store_view_find_key_values_by_prefix_runtime",
+            "KeyValueStoreView find key values by prefix runtime",
+            &[],
+            Some(vec![
+                0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
+            ]),
+        )
+        .expect("Histogram can be created")
+    });
 
 #[cfg(with_metrics)]
 /// The runtime of write batch
