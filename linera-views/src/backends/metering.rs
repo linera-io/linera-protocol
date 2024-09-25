@@ -13,7 +13,10 @@ use prometheus::{HistogramVec, IntCounterVec};
 
 use crate::{
     batch::Batch,
-    common::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    common::{
+        KeyIterable as _, KeyValueIterable as _, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -35,8 +38,12 @@ pub struct KeyValueStoreMetrics {
     contains_keys_num_entries: HistogramVec,
     contains_keys_key_sizes: HistogramVec,
     contains_key_key_size: HistogramVec,
-    find_keys_by_prefix_size: HistogramVec,
-    find_key_values_by_prefix_size: HistogramVec,
+    find_keys_by_prefix_prefix_size: HistogramVec,
+    find_keys_by_prefix_num_keys: HistogramVec,
+    find_keys_by_prefix_keys_size: HistogramVec,
+    find_key_values_by_prefix_prefix_size: HistogramVec,
+    find_key_values_by_prefix_num_keys: HistogramVec,
+    find_key_values_by_prefix_key_values_size: HistogramVec,
     write_batch_size: HistogramVec,
 }
 
@@ -179,23 +186,70 @@ impl KeyValueStoreMetrics {
             register_histogram_vec(&contains_key_key_size1, &contains_key_key_size2, &[], None)
                 .expect("Counter creation should not fail");
 
-        let find_keys_by_prefix_size1 = format!("{}_find_keys_by_prefix_size", var_name);
-        let find_keys_by_prefix_size2 = format!("{} find keys by prefix size", title_name);
-        let find_keys_by_prefix_size = register_histogram_vec(
-            &find_keys_by_prefix_size1,
-            &find_keys_by_prefix_size2,
+        let find_keys_by_prefix_prefix_size1 =
+            format!("{}_find_keys_by_prefix_prefix_size", var_name);
+        let find_keys_by_prefix_prefix_size2 =
+            format!("{} find keys by prefix prefix size", title_name);
+        let find_keys_by_prefix_prefix_size = register_histogram_vec(
+            &find_keys_by_prefix_prefix_size1,
+            &find_keys_by_prefix_prefix_size2,
             &[],
             None,
         )
         .expect("Counter creation should not fail");
 
-        let find_key_values_by_prefix_size1 =
-            format!("{}_find_key_values_by_prefix_size", var_name);
-        let find_key_values_by_prefix_size2 =
-            format!("{} find key values by prefix size", title_name);
-        let find_key_values_by_prefix_size = register_histogram_vec(
-            &find_key_values_by_prefix_size1,
-            &find_key_values_by_prefix_size2,
+        let find_keys_by_prefix_num_keys1 = format!("{}_find_keys_by_prefix_num_keys", var_name);
+        let find_keys_by_prefix_num_keys2 = format!("{} find keys by prefix num keys", title_name);
+        let find_keys_by_prefix_num_keys = register_histogram_vec(
+            &find_keys_by_prefix_num_keys1,
+            &find_keys_by_prefix_num_keys2,
+            &[],
+            None,
+        )
+        .expect("Counter creation should not fail");
+
+        let find_keys_by_prefix_keys_size1 = format!("{}_find_keys_by_prefix_keys_size", var_name);
+        let find_keys_by_prefix_keys_size2 =
+            format!("{} find keys by prefix keys size", title_name);
+        let find_keys_by_prefix_keys_size = register_histogram_vec(
+            &find_keys_by_prefix_keys_size1,
+            &find_keys_by_prefix_keys_size2,
+            &[],
+            None,
+        )
+        .expect("Counter creation should not fail");
+
+        let find_key_values_by_prefix_prefix_size1 =
+            format!("{}_find_key_values_by_prefix_prefix_size", var_name);
+        let find_key_values_by_prefix_prefix_size2 =
+            format!("{} find key values by prefix prefix size", title_name);
+        let find_key_values_by_prefix_prefix_size = register_histogram_vec(
+            &find_key_values_by_prefix_prefix_size1,
+            &find_key_values_by_prefix_prefix_size2,
+            &[],
+            None,
+        )
+        .expect("Counter creation should not fail");
+
+        let find_key_values_by_prefix_num_keys1 =
+            format!("{}_find_key_values_by_prefix_num_keys", var_name);
+        let find_key_values_by_prefix_num_keys2 =
+            format!("{} find key values by prefix num keys", title_name);
+        let find_key_values_by_prefix_num_keys = register_histogram_vec(
+            &find_key_values_by_prefix_num_keys1,
+            &find_key_values_by_prefix_num_keys2,
+            &[],
+            None,
+        )
+        .expect("Counter creation should not fail");
+
+        let find_key_values_by_prefix_key_values_size1 =
+            format!("{}_find_key_values_by_prefix_key_values_size", var_name);
+        let find_key_values_by_prefix_key_values_size2 =
+            format!("{} find key values by prefix key values size", title_name);
+        let find_key_values_by_prefix_key_values_size = register_histogram_vec(
+            &find_key_values_by_prefix_key_values_size1,
+            &find_key_values_by_prefix_key_values_size2,
             &[],
             None,
         )
@@ -224,8 +278,12 @@ impl KeyValueStoreMetrics {
             contains_keys_num_entries,
             contains_keys_key_sizes,
             contains_key_key_size,
-            find_keys_by_prefix_size,
-            find_key_values_by_prefix_size,
+            find_keys_by_prefix_prefix_size,
+            find_keys_by_prefix_num_keys,
+            find_keys_by_prefix_keys_size,
+            find_key_values_by_prefix_prefix_size,
+            find_key_values_by_prefix_num_keys,
+            find_key_values_by_prefix_key_values_size,
             write_batch_size,
         }
     }
@@ -324,10 +382,25 @@ where
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
         let _latency = self.counter.find_keys_by_prefix.measure_latency();
         self.counter
-            .find_keys_by_prefix_size
+            .find_keys_by_prefix_prefix_size
             .with_label_values(&[])
             .observe(key_prefix.len() as f64);
-        self.store.find_keys_by_prefix(key_prefix).await
+        let result = self.store.find_keys_by_prefix(key_prefix).await?;
+        let mut num_keys = 0;
+        let mut keys_size = 0;
+        for key in result.iterator() {
+            num_keys += 1;
+            keys_size += key?.len();
+        }
+        self.counter
+            .find_keys_by_prefix_num_keys
+            .with_label_values(&[])
+            .observe(num_keys as f64);
+        self.counter
+            .find_keys_by_prefix_keys_size
+            .with_label_values(&[])
+            .observe(keys_size as f64);
+        Ok(result)
     }
 
     async fn find_key_values_by_prefix(
@@ -336,10 +409,26 @@ where
     ) -> Result<Self::KeyValues, Self::Error> {
         let _latency = self.counter.find_key_values_by_prefix.measure_latency();
         self.counter
-            .find_key_values_by_prefix_size
+            .find_key_values_by_prefix_prefix_size
             .with_label_values(&[])
             .observe(key_prefix.len() as f64);
-        self.store.find_key_values_by_prefix(key_prefix).await
+        let result = self.store.find_key_values_by_prefix(key_prefix).await?;
+        let mut num_keys = 0;
+        let mut key_values_size = 0;
+        for key_value in result.iterator() {
+            let (key, value) = key_value?;
+            num_keys += 1;
+            key_values_size += key.len() + value.len();
+        }
+        self.counter
+            .find_key_values_by_prefix_num_keys
+            .with_label_values(&[])
+            .observe(num_keys as f64);
+        self.counter
+            .find_key_values_by_prefix_key_values_size
+            .with_label_values(&[])
+            .observe(key_values_size as f64);
+        Ok(result)
     }
 }
 
