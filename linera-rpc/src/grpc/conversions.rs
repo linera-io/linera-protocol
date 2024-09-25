@@ -380,8 +380,8 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
             request_sent_certificate_hashes_in_range,
-            request_received_log_excluding_first_nth: chain_info_query
-                .request_received_log_excluding_first_nth,
+            request_received_log_excluding_first_n: chain_info_query
+                .request_received_log_excluding_first_n,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
@@ -406,8 +406,8 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificate_hashes_in_range,
-            request_received_log_excluding_first_nth: chain_info_query
-                .request_received_log_excluding_first_nth,
+            request_received_log_excluding_first_n: chain_info_query
+                .request_received_log_excluding_first_n,
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
@@ -736,7 +736,7 @@ pub mod tests {
                     limit: Some(5),
                 },
             ),
-            request_received_log_excluding_first_nth: None,
+            request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: false,
             request_fallback: true,

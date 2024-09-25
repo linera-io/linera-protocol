@@ -1132,7 +1132,7 @@ where
             .await
             .map_err(|_| NodeError::InvalidChainInfoResponse)?;
         // Retrieve newly received certificates from this validator.
-        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_nth(tracker);
+        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
         let mut certificates = Vec::new();
         let mut new_tracker = tracker;
