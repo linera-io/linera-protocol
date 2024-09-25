@@ -185,8 +185,8 @@ where
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
-    #[tracing::instrument(level = "trace", skip_all)]
     /// Creates a new `Client` with a new cache and notifiers.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(
         validator_node_provider: P,
         storage: S,
@@ -221,20 +221,20 @@ impl<P, S: Storage + Clone> Client<P, S> {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Returns the storage client used by this client's local node.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn storage_client(&self) -> &S {
         &self.storage
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Returns a reference to the [`LocalNodeClient`] of the client.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn local_node(&self) -> &LocalNodeClient<S> {
         &self.local_node
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Adds a chain to the set of chains tracked by the local node.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn track_chain(&self, chain_id: ChainId) {
         self.tracked_chains
             .write()
@@ -242,8 +242,8 @@ impl<P, S: Storage + Clone> Client<P, S> {
             .insert(chain_id);
     }
 
-    #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     /// Creates a new `ChainClient`.
+    #[tracing::instrument(level = "trace", skip_all, fields(chain_id, next_block_height))]
     #[expect(clippy::too_many_arguments)]
     pub fn create_chain_client(
         self: &Arc<Self>,
@@ -544,8 +544,8 @@ pub type ChainGuardMut<'a, T> = Unsend<DashMapRefMut<'a, ChainId, T>>;
 pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainState, T>>;
 
 impl<P: 'static, S: Storage> ChainClient<P, S> {
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a shared reference to the chain's state.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn state(&self) -> ChainGuard<ChainState> {
         Unsend::new(
             self.client
@@ -555,9 +555,9 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         )
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a mutable reference to the state.
     /// Beware: this will block any other reference to any chain's state!
+    #[tracing::instrument(level = "trace", skip(self))]
     fn state_mut(&self) -> ChainGuardMut<ChainState> {
         Unsend::new(
             self.client
@@ -567,44 +567,44 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         )
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets the per-`ChainClient` options.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn options_mut(&mut self) -> &mut ChainClientOptions {
         &mut self.options
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets the ID of the associated chain.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn chain_id(&self) -> ChainId {
         self.chain_id
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets the hash of the latest known block.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn block_hash(&self) -> Option<CryptoHash> {
         self.state().block_hash()
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets the earliest possible timestamp for the next block.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn timestamp(&self) -> Timestamp {
         self.state().timestamp()
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets the next block height.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn next_block_height(&self) -> BlockHeight {
         self.state().next_block_height()
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a guarded reference to the next pending block.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn pending_block(&self) -> ChainGuardMapped<Option<Block>> {
         Unsend::new(self.state().inner.map(|state| state.pending_block()))
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Gets a guarded reference to the set of pending blobs.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, Blob>> {
         Unsend::new(self.state().inner.map(|state| state.pending_blobs()))
     }
@@ -620,8 +620,8 @@ where
     P: ValidatorNodeProvider + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[tracing::instrument(level = "trace")]
     /// Obtains a `ChainStateView` for a given `ChainId`.
+    #[tracing::instrument(level = "trace")]
     pub async fn chain_state_view(
         &self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
@@ -632,22 +632,22 @@ where
             .await?)
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Subscribes to notifications from this client's chain.
+    #[tracing::instrument(level = "trace")]
     pub async fn subscribe(&self) -> Result<NotificationStream, LocalNodeError> {
         Ok(Box::pin(UnboundedReceiverStream::new(
             self.client.notifier.subscribe(vec![self.chain_id]),
         )))
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Returns the storage client used by this client's local node.
+    #[tracing::instrument(level = "trace")]
     pub fn storage_client(&self) -> S {
         self.client.storage_client().clone()
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the basic `ChainInfo` data for the local chain.
+    #[tracing::instrument(level = "trace")]
     pub async fn chain_info(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id);
         let response = self
@@ -658,8 +658,8 @@ where
         Ok(response.info)
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
+    #[tracing::instrument(level = "trace")]
     pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
         let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
@@ -670,9 +670,9 @@ where
         Ok(response.info)
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
     /// local chain.
+    #[tracing::instrument(level = "trace")]
     async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
         if self.next_block_height() != BlockHeight::ZERO && self.options.message_policy.is_ignore()
         {
@@ -735,8 +735,8 @@ where
         Ok(pending_message_bundles)
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
+    #[tracing::instrument(level = "trace")]
     pub async fn epoch_and_committees(
         &self,
         chain_id: ChainId,
@@ -755,15 +755,15 @@ where
         Ok((epoch, committees))
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the epochs of the committees trusted by the local chain.
+    #[tracing::instrument(level = "trace")]
     pub async fn epochs(&self) -> Result<Vec<Epoch>, LocalNodeError> {
         let (_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         Ok(committees.into_keys().collect())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the committee for the current epoch of the local chain.
+    #[tracing::instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Committee, LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
         committees
@@ -775,9 +775,9 @@ where
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains all the committees trusted by either the local chain or its admin chain. Also
     /// return the latest trusted epoch.
+    #[tracing::instrument(level = "trace")]
     async fn known_committees(
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
@@ -799,8 +799,8 @@ where
             .collect())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the validators trusted by the local chain.
+    #[tracing::instrument(level = "trace")]
     async fn validator_nodes(&self) -> Result<Vec<RemoteNode<P::Node>>, ChainClientError> {
         match self.local_committee().await {
             Ok(committee) => Ok(self.make_nodes(&committee)?),
@@ -814,8 +814,8 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the current epoch of the local chain.
+    #[tracing::instrument(level = "trace")]
     async fn epoch(&self) -> Result<Epoch, LocalNodeError> {
         self.chain_info()
             .await?
@@ -823,9 +823,9 @@ where
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the identity of the current owner of the chain. Returns an error if we have the
     /// private key for more than one identity.
+    #[tracing::instrument(level = "trace")]
     pub async fn identity(&self) -> Result<Owner, ChainClientError> {
         let manager = self.chain_info().await?.manager;
         ensure!(
@@ -847,8 +847,8 @@ where
         Ok(*identity)
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the key pair associated to the current identity.
+    #[tracing::instrument(level = "trace")]
     pub async fn key_pair(&self) -> Result<KeyPair, ChainClientError> {
         let id = self.identity().await?;
         Ok(self
@@ -859,15 +859,15 @@ where
             .copy())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the public key associated to the current identity.
+    #[tracing::instrument(level = "trace")]
     pub async fn public_key(&self) -> Result<PublicKey, ChainClientError> {
         Ok(self.key_pair().await?.public())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height.
+    #[tracing::instrument(level = "trace")]
     async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
@@ -901,8 +901,8 @@ where
         Ok(info)
     }
 
-    #[tracing::instrument(level = "trace", skip(committee, certificate))]
     /// Submits a validated block for finalization and returns the confirmed block certificate.
+    #[tracing::instrument(level = "trace", skip(committee, certificate))]
     async fn finalize_block(
         &self,
         committee: &Committee,
@@ -928,9 +928,9 @@ where
         Ok(certificate)
     }
 
-    #[tracing::instrument(level = "trace", skip(committee, proposal, value))]
     /// Submits a block proposal to the validators. If it is a slow round, also submits the
     /// validated block for finalization. Returns the confirmed block certificate.
+    #[tracing::instrument(level = "trace", skip(committee, proposal, value))]
     async fn submit_block_proposal(
         &self,
         committee: &Committee,
@@ -956,8 +956,8 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(committee, delivery))]
     /// Broadcasts certified blocks to validators.
+    #[tracing::instrument(level = "trace", skip(committee, delivery))]
     async fn communicate_chain_updates(
         &self,
         committee: &Committee,
@@ -987,12 +987,12 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(committee, action, value))]
     /// Broadcasts certified blocks and optionally a block proposal, certificate or
     /// leader timeout request.
     ///
     /// In that case, it verifies that the validator votes are for the provided value,
     /// and returns a certificate.
+    #[tracing::instrument(level = "trace", skip(committee, action, value))]
     async fn communicate_chain_action(
         &self,
         committee: &Committee,
@@ -1034,9 +1034,9 @@ where
         Ok(certificate)
     }
 
-    #[tracing::instrument(level = "trace", skip(certificate, mode))]
     /// Processes the confirmed block certificate and its ancestors in the local node, then
     /// updates the validators up to that certificate.
+    #[tracing::instrument(level = "trace", skip(certificate, mode))]
     async fn receive_certificate_and_update_validators_internal(
         &self,
         certificate: Certificate,
@@ -1060,9 +1060,9 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(certificate, mode))]
     /// Processes the confirmed block certificate in the local node. Also downloads and processes
     /// all ancestors that are still missing.
+    #[tracing::instrument(level = "trace", skip(certificate, mode))]
     async fn receive_certificate_internal(
         &self,
         certificate: Certificate,
@@ -1113,9 +1113,9 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Downloads and processes all confirmed block certificates that sent any message to this
     /// chain, including their ancestors.
+    #[tracing::instrument(level = "trace")]
     async fn synchronize_received_certificates_from_validator(
         &self,
         chain_id: ChainId,
@@ -1206,9 +1206,9 @@ where
         Ok((remote_node.name, new_tracker, certificates))
     }
 
-    #[tracing::instrument(level = "trace", skip(tracker, certificates))]
     /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
     /// the tracker for this validator.
+    #[tracing::instrument(level = "trace", skip(tracker, certificates))]
     async fn receive_certificates_from_validator(
         &self,
         name: ValidatorName,
@@ -1232,7 +1232,6 @@ where
             .update_received_certificate_tracker(name, tracker);
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Attempts to download new received certificates.
     ///
     /// This is a best effort: it will only find certificates that have been confirmed
@@ -1241,6 +1240,7 @@ where
     ///
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
+    #[tracing::instrument(level = "trace")]
     async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
@@ -1287,8 +1287,8 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(user_data))]
     /// Sends money.
+    #[tracing::instrument(level = "trace", skip(user_data))]
     pub async fn transfer(
         &self,
         owner: Option<Owner>,
@@ -1306,9 +1306,9 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(hash))]
     /// Verify if a data blob is readable from storage.
     // TODO(#2490): Consider removing or renaming this.
+    #[tracing::instrument(level = "trace", skip(hash))]
     pub async fn read_data_blob(
         &self,
         hash: CryptoHash,
@@ -1321,8 +1321,8 @@ where
             .await
     }
 
-    #[tracing::instrument(level = "trace", skip(user_data))]
     /// Claims money in a remote chain.
+    #[tracing::instrument(level = "trace", skip(user_data))]
     pub async fn claim(
         &self,
         owner: Owner,
@@ -1341,8 +1341,8 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(certificate))]
     /// Handles the certificate in the local node and the resulting notifications.
+    #[tracing::instrument(level = "trace", skip(certificate))]
     async fn process_certificate(
         &self,
         certificate: Certificate,
@@ -1357,17 +1357,17 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(info))]
     /// Updates the latest block and next block height and round information from the chain info.
+    #[tracing::instrument(level = "trace", skip(info))]
     fn update_from_info(&self, info: &ChainInfo) {
         if info.chain_id == self.chain_id {
             self.state_mut().update_from_info(info);
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
     /// certificate and sends it to all validators, to make them enter the next round.
+    #[tracing::instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<Certificate, ChainClientError> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
@@ -1407,8 +1407,8 @@ where
         Ok(certificate)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
     /// Downloads and processes any certificates we are missing for the given chain.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state(
         &self,
         validators: &[RemoteNode<P::Node>],
@@ -1441,9 +1441,9 @@ where
             .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, remote_node, chain_id))]
     /// Downloads any certificates from the specified validator that we are missing for the given
     /// chain, and processes them.
+    #[tracing::instrument(level = "trace", skip(self, remote_node, chain_id))]
     async fn try_synchronize_chain_state_from(
         &self,
         remote_node: &RemoteNode<P::Node>,
@@ -1569,10 +1569,10 @@ where
         Err(ChainClientError::BlobNotFound(blob_id))
     }
 
-    #[tracing::instrument(level = "trace", skip(block))]
     /// Attempts to execute the block locally. If any incoming message execution fails, that
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
+    #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: Block,
@@ -1611,9 +1611,9 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(block))]
     /// Attempts to execute the block locally. If any attempt to read a blob fails, the blob is
     /// downloaded and execution is retried.
+    #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution(
         &self,
         block: Block,
@@ -1639,9 +1639,9 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(blob_ids))]
     /// Tries to read blobs from either the pending blobs or the local node's cache, or
     /// storage
+    #[tracing::instrument(level = "trace", skip(blob_ids))]
     async fn read_local_blobs(
         &self,
         blob_ids: impl IntoIterator<Item = BlobId>,
@@ -1673,8 +1673,8 @@ where
         Ok(blobs)
     }
 
-    #[tracing::instrument(level = "trace", skip(block, round, manager))]
     /// Executes (or retries) a regular block proposal. Updates local balance.
+    #[tracing::instrument(level = "trace", skip(block, round, manager))]
     async fn propose_block(
         &self,
         block: Block,
@@ -1795,8 +1795,8 @@ where
         Ok(certificate)
     }
 
-    #[tracing::instrument(level = "trace", skip(operations))]
     /// Executes a list of operations.
+    #[tracing::instrument(level = "trace", skip(operations))]
     pub async fn execute_operations(
         &self,
         operations: Vec<Operation>,
@@ -1805,8 +1805,8 @@ where
         self.execute_without_prepare(operations).await
     }
 
-    #[tracing::instrument(level = "trace", skip(operations))]
     /// Executes a list of operations, without calling `prepare_chain`.
+    #[tracing::instrument(level = "trace", skip(operations))]
     pub async fn execute_without_prepare(
         &self,
         operations: Vec<Operation>,
@@ -1830,8 +1830,8 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(operation))]
     /// Executes an operation.
+    #[tracing::instrument(level = "trace", skip(operation))]
     pub async fn execute_operation(
         &self,
         operation: Operation,
@@ -1839,10 +1839,10 @@ where
         self.execute_operations(vec![operation]).await
     }
 
-    #[tracing::instrument(level = "trace", skip(operations))]
     /// Executes a new block.
     ///
     /// This must be preceded by a call to `prepare_chain()`.
+    #[tracing::instrument(level = "trace", skip(operations))]
     async fn execute_block(
         &self,
         operations: Vec<Operation>,
@@ -1882,9 +1882,9 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(incoming_bundles, operations))]
     /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
     /// called, it will be proposed to the validators.
+    #[tracing::instrument(level = "trace", skip(incoming_bundles, operations))]
     async fn set_pending_block(
         &self,
         incoming_bundles: Vec<IncomingBundle>,
@@ -1919,11 +1919,11 @@ where
         Ok(HashedCertificateValue::new_confirmed(executed_block))
     }
 
-    #[tracing::instrument(level = "trace", skip(incoming_bundles))]
     /// Returns a suitable timestamp for the next block.
     ///
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
+    #[tracing::instrument(level = "trace", skip(incoming_bundles))]
     async fn next_timestamp(&self, incoming_bundles: &[IncomingBundle]) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
         incoming_bundles
@@ -1934,8 +1934,8 @@ where
             .max(self.timestamp())
     }
 
-    #[tracing::instrument(level = "trace", skip(query))]
     /// Queries an application.
+    #[tracing::instrument(level = "trace", skip(query))]
     pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
         let response = self
             .client
@@ -1945,8 +1945,8 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(query))]
     /// Queries a system application.
+    #[tracing::instrument(level = "trace", skip(query))]
     pub async fn query_system_application(
         &self,
         query: SystemQuery,
@@ -1964,8 +1964,8 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(application_id, query))]
     /// Queries a user application.
+    #[tracing::instrument(level = "trace", skip(application_id, query))]
     pub async fn query_user_application<A: Abi>(
         &self,
         application_id: UserApplicationId<A>,
@@ -1985,25 +1985,25 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Obtains the local balance of the chain account after staging the execution of
     /// incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
+    #[tracing::instrument(level = "trace")]
     pub async fn query_balance(&self) -> Result<Amount, ChainClientError> {
         let (balance, _) = self.query_balances_with_owner(None).await?;
         Ok(balance)
     }
 
-    #[tracing::instrument(level = "trace", skip(owner))]
     /// Obtains the local balance of a user account after staging the execution of
     /// incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
+    #[tracing::instrument(level = "trace", skip(owner))]
     pub async fn query_owner_balance(&self, owner: Owner) -> Result<Amount, ChainClientError> {
         Ok(self
             .query_balances_with_owner(Some(owner))
@@ -2012,13 +2012,13 @@ where
             .unwrap_or(Amount::ZERO))
     }
 
-    #[tracing::instrument(level = "trace", skip(owner))]
     /// Obtains the local balance of the chain account and optionally another user after
     /// staging the execution of incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
+    #[tracing::instrument(level = "trace", skip(owner))]
     async fn query_balances_with_owner(
         &self,
         owner: Option<Owner>,
@@ -2062,19 +2062,19 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Reads the local balance of the chain account.
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
+    #[tracing::instrument(level = "trace")]
     pub async fn local_balance(&self) -> Result<Amount, ChainClientError> {
         let (balance, _) = self.local_balances_with_owner(None).await?;
         Ok(balance)
     }
 
-    #[tracing::instrument(level = "trace", skip(owner))]
     /// Reads the local balance of a user account.
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
+    #[tracing::instrument(level = "trace", skip(owner))]
     pub async fn local_owner_balance(&self, owner: Owner) -> Result<Amount, ChainClientError> {
         Ok(self
             .local_balances_with_owner(Some(owner))
@@ -2083,10 +2083,10 @@ where
             .unwrap_or(Amount::ZERO))
     }
 
-    #[tracing::instrument(level = "trace", skip(owner))]
     /// Reads the local balance of the chain account and optionally another user.
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
+    #[tracing::instrument(level = "trace", skip(owner))]
     async fn local_balances_with_owner(
         &self,
         owner: Option<Owner>,
@@ -2109,8 +2109,8 @@ where
         ))
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Attempts to update all validators about the local chain.
+    #[tracing::instrument(level = "trace")]
     pub async fn update_validators(&self) -> Result<(), ChainClientError> {
         let committee = self.local_committee().await?;
         let next_block_height = self.next_block_height();
@@ -2124,9 +2124,9 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Requests a `RegisterApplications` message from another chain so the application can be used
     /// on this one.
+    #[tracing::instrument(level = "trace")]
     pub async fn request_application(
         &self,
         application_id: UserApplicationId,
@@ -2140,8 +2140,8 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(user_data))]
     /// Sends tokens to a chain.
+    #[tracing::instrument(level = "trace", skip(user_data))]
     pub async fn transfer_to_account(
         &self,
         owner: Option<Owner>,
@@ -2153,8 +2153,8 @@ where
             .await
     }
 
-    #[tracing::instrument(level = "trace", skip(user_data))]
     /// Burns tokens.
+    #[tracing::instrument(level = "trace", skip(user_data))]
     pub async fn burn(
         &self,
         owner: Option<Owner>,
@@ -2165,19 +2165,19 @@ where
             .await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Attempts to synchronize chains that have sent us messages and populate our local
     /// inbox.
     ///
     /// To create a block that actually executes the messages in the inbox,
     /// `process_inbox` must be called separately.
+    #[tracing::instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         self.find_received_certificates().await?;
         self.prepare_chain().await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Processes the last pending block
+    #[tracing::instrument(level = "trace")]
     pub async fn process_pending_block(
         &self,
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
@@ -2185,8 +2185,8 @@ where
         self.process_pending_block_without_prepare().await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Processes the last pending block. Assumes that the local chain is up to date.
+    #[tracing::instrument(level = "trace")]
     async fn process_pending_block_without_prepare(
         &self,
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
@@ -2282,18 +2282,18 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Clears the information on any operation that previously failed.
+    #[tracing::instrument(level = "trace")]
     pub fn clear_pending_block(&self) {
         self.state_mut().clear_pending_block();
     }
 
+    /// Processes a confirmed block for which this chain is a recipient and updates validators.
     #[tracing::instrument(
         level = "trace",
         skip(certificate),
         fields(certificate_hash = ?certificate.hash()),
     )]
-    /// Processes a confirmed block for which this chain is a recipient and updates validators.
     pub async fn receive_certificate_and_update_validators(
         &self,
         certificate: Certificate,
@@ -2305,12 +2305,12 @@ where
         .await
     }
 
+    /// Processes confirmed operation for which this chain is a recipient.
     #[tracing::instrument(
         level = "trace",
         skip(certificate),
         fields(certificate_hash = ?certificate.hash()),
     )]
-    /// Processes confirmed operation for which this chain is a recipient.
     pub async fn receive_certificate(
         &self,
         certificate: Certificate,
@@ -2319,8 +2319,8 @@ where
             .await
     }
 
-    #[tracing::instrument(level = "trace", skip(key_pair))]
     /// Rotates the key of the chain.
+    #[tracing::instrument(level = "trace", skip(key_pair))]
     pub async fn rotate_key_pair(
         &self,
         key_pair: KeyPair,
@@ -2329,8 +2329,8 @@ where
         self.transfer_ownership(new_public_key).await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Transfers ownership of the chain to a single super owner.
+    #[tracing::instrument(level = "trace")]
     pub async fn transfer_ownership(
         &self,
         new_public_key: PublicKey,
@@ -2344,8 +2344,8 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Adds another owner to the chain, and turns existing super owners into regular owners.
+    #[tracing::instrument(level = "trace")]
     pub async fn share_ownership(
         &self,
         new_public_key: PublicKey,
@@ -2389,9 +2389,9 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Changes the ownership of this chain. Fails if it would remove existing owners, unless
     /// `remove_owners` is `true`.
+    #[tracing::instrument(level = "trace")]
     pub async fn change_ownership(
         &self,
         ownership: ChainOwnership,
@@ -2405,8 +2405,8 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "trace", skip(application_permissions))]
     /// Changes the application permissions configuration on this chain.
+    #[tracing::instrument(level = "trace", skip(application_permissions))]
     pub async fn change_application_permissions(
         &self,
         application_permissions: ApplicationPermissions,
@@ -2415,8 +2415,8 @@ where
         self.execute_operation(operation.into()).await
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Opens a new chain with a derived UID.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn open_chain(
         &self,
         ownership: ChainOwnership,
@@ -2461,16 +2461,16 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Closes the chain (and loses everything in it!!).
+    #[tracing::instrument(level = "trace")]
     pub async fn close_chain(&self) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CloseChain))
             .await
     }
 
+    /// Publishes some bytecode.
     #[cfg(not(target_arch = "wasm32"))]
     #[tracing::instrument(level = "trace", skip(contract, service))]
-    /// Publishes some bytecode.
     pub async fn publish_bytecode(
         &self,
         contract: Bytecode,
@@ -2492,8 +2492,8 @@ where
         .try_map(|certificate| Ok((bytecode_id, certificate)))
     }
 
-    #[tracing::instrument(level = "trace", skip(blob_contents))]
     /// Publishes some data blobs.
+    #[tracing::instrument(level = "trace", skip(blob_contents))]
     pub async fn publish_data_blobs(
         &self,
         blob_contents: Vec<BlobContent>,
@@ -2513,8 +2513,8 @@ where
         self.execute_operations(publish_blob_operations).await
     }
 
-    #[tracing::instrument(level = "trace", skip(blob_content))]
     /// Publishes some data blob.
+    #[tracing::instrument(level = "trace", skip(blob_content))]
     pub async fn publish_data_blob(
         &self,
         blob_content: BlobContent,
@@ -2530,11 +2530,11 @@ where
         }
     }
 
+    /// Creates an application by instantiating some bytecode.
     #[tracing::instrument(
         level = "trace",
         skip(self, parameters, instantiation_argument, required_application_ids)
     )]
-    /// Creates an application by instantiating some bytecode.
     pub async fn create_application<
         A: Abi,
         Parameters: Serialize,
@@ -2559,6 +2559,7 @@ where
             .map(|(app_id, cert)| (app_id.with_abi(), cert)))
     }
 
+    /// Creates an application by instantiating some bytecode.
     #[tracing::instrument(
         level = "trace",
         skip(
@@ -2569,7 +2570,6 @@ where
             required_application_ids
         )
     )]
-    /// Creates an application by instantiating some bytecode.
     pub async fn create_application_untyped(
         &self,
         bytecode_id: BytecodeId,
@@ -2601,8 +2601,8 @@ where
         })
     }
 
-    #[tracing::instrument(level = "trace", skip(committee))]
     /// Creates a new committee and starts using it (admin chains only).
+    #[tracing::instrument(level = "trace", skip(committee))]
     pub async fn stage_new_committee(
         &self,
         committee: Committee,
@@ -2630,12 +2630,12 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Synchronizes the chain with the validators and creates blocks without any operations to
     /// process all incoming messages. This may require several blocks.
     ///
     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
     /// is returned, too.
+    #[tracing::instrument(level = "trace")]
     pub async fn process_inbox(
         &self,
     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
@@ -2643,12 +2643,12 @@ where
         self.process_inbox_without_prepare().await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Creates blocks without any operations to process all incoming messages. This may require
     /// several blocks.
     ///
     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
     /// is returned, too.
+    #[tracing::instrument(level = "trace")]
     pub async fn process_inbox_without_prepare(
         &self,
     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
@@ -2672,9 +2672,9 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Starts listening to the admin chain for new committees. (This is only useful for
     /// other genesis chains or for testing.)
+    #[tracing::instrument(level = "trace")]
     pub async fn subscribe_to_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
@@ -2685,9 +2685,9 @@ where
         self.execute_operation(Operation::System(operation)).await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Stops listening to the admin chain for new committees. (This is only useful for
     /// testing.)
+    #[tracing::instrument(level = "trace")]
     pub async fn unsubscribe_from_new_committees(
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
@@ -2698,11 +2698,11 @@ where
         self.execute_operation(Operation::System(operation)).await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Deprecates all the configurations of voting rights but the last one (admin chains
     /// only). Currently, each individual chain is still entitled to wait before accepting
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
+    #[tracing::instrument(level = "trace")]
     pub async fn finalize_committee(&self) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
@@ -2722,10 +2722,10 @@ where
         self.execute_without_prepare(operations).await
     }
 
-    #[tracing::instrument(level = "trace", skip(user_data))]
     /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
+    #[tracing::instrument(level = "trace", skip(user_data))]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
         owner: Option<Owner>,
@@ -2753,8 +2753,8 @@ where
             .await
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Handles any cross-chain requests for any pending outgoing messages.
+    #[tracing::instrument(level = "trace")]
     pub async fn retry_pending_outgoing_messages(&self) -> Result<(), ChainClientError> {
         self.client
             .local_node
@@ -2882,9 +2882,9 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", fields(chain_id = ?self.chain_id))]
     /// Spawns a task that listens to notifications about the current chain from all validators,
     /// and synchronizes the local state accordingly.
+    #[tracing::instrument(level = "trace", fields(chain_id = ?self.chain_id))]
     pub async fn listen(
         &self,
     ) -> Result<(impl Future<Output = ()>, AbortOnDrop, NotificationStream), ChainClientError> {
@@ -3008,11 +3008,11 @@ where
         Ok(validator_tasks.collect())
     }
 
-    #[tracing::instrument(level = "trace")]
     /// Attempts to download new received certificates from a particular validator.
     ///
     /// This is similar to `find_received_certificates` but for only one validator.
     /// We also don't try to synchronize the admin chain.
+    #[tracing::instrument(level = "trace")]
     pub async fn find_received_certificates_from_validator(
         &self,
         remote_node: RemoteNode<P::Node>,
