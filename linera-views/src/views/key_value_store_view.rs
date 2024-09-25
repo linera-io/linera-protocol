@@ -712,6 +712,8 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_GET_RUNTIME.measure_latency();
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let value = match update {
@@ -741,6 +743,8 @@ where
     /// # })
     /// ```
     pub async fn contains_key(&self, index: &[u8]) -> Result<bool, ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_CONTAINS_KEY_RUNTIME.measure_latency();
         ensure!(index.len() <= self.max_key_size(), ViewError::KeyTooLong);
         if let Some(update) = self.updates.get(index) {
             let test = match update {
@@ -771,6 +775,8 @@ where
     /// # })
     /// ```
     pub async fn contains_keys(&self, indices: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_RUNTIME.measure_latency();
         let mut results = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
@@ -817,6 +823,8 @@ where
         &self,
         indices: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+        #[cfg(with_metrics)]
+        let _latency = KEY_VALUE_STORE_VIEW_MULTI_GET_RUNTIME.measure_latency();
         let mut result = Vec::with_capacity(indices.len());
         let mut missed_indices = Vec::new();
         let mut vector_query = Vec::new();
