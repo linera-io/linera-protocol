@@ -1175,7 +1175,7 @@ where
             let block = &executed_block.block;
             // Check that certificates are valid w.r.t one of our trusted committees.
             if block.epoch > max_epoch {
-                // Synchronize the state of the admin chain from the network.
+                // Synchronize the state of the admin chain from the validator.
                 self.try_synchronize_chain_state_from(remote_node, admin_id)
                     .await
                     .map_err(|_| NodeError::InvalidChainInfoResponse)?;
@@ -1183,8 +1183,8 @@ where
                     .known_committees()
                     .await
                     .map_err(|_| NodeError::InvalidChainInfoResponse)?;
-                committees = new_committees;
-                max_epoch = new_max_epoch;
+                committees.extend(new_committees);
+                max_epoch = max_epoch.max(new_max_epoch);
             }
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
