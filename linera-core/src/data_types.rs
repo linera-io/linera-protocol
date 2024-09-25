@@ -59,7 +59,7 @@ pub struct ChainInfoQuery {
     /// Query a range of certificate hashes sent from the chain.
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
-    pub request_received_log_excluding_first_nth: Option<u64>,
+    pub request_received_log_excluding_first_n: Option<u64>,
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
     /// Include a timeout vote for the current round, if appropriate.
@@ -77,7 +77,7 @@ impl ChainInfoQuery {
             request_owner_balance: None,
             request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
-            request_received_log_excluding_first_nth: None,
+            request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: false,
             request_fallback: false,
@@ -109,8 +109,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_received_log_excluding_first_nth(mut self, n: u64) -> Self {
-        self.request_received_log_excluding_first_nth = Some(n);
+    pub fn with_received_log_excluding_first_n(mut self, n: u64) -> Self {
+        self.request_received_log_excluding_first_n = Some(n);
         self
     }
 
@@ -159,9 +159,9 @@ pub struct ChainInfo {
     pub requested_pending_message_bundles: Vec<IncomingBundle>,
     /// The response to `request_sent_certificate_hashes_in_range`
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
-    /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
+    /// The current number of received certificates (useful for `request_received_log_excluding_first_n`)
     pub count_received_log: usize,
-    /// The response to `request_received_certificates_excluding_first_nth`
+    /// The response to `request_received_certificates_excluding_first_n`
     pub requested_received_log: Vec<ChainAndHeight>,
 }
 

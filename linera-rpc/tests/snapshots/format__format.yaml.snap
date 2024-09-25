@@ -241,7 +241,7 @@ ChainInfoQuery:
     - request_sent_certificate_hashes_in_range:
         OPTION:
           TYPENAME: BlockHeightRange
-    - request_received_log_excluding_first_nth:
+    - request_received_log_excluding_first_n:
         OPTION: U64
     - request_manager_values: BOOL
     - request_leader_timeout: BOOL

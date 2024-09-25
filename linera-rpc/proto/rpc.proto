@@ -146,7 +146,7 @@ message ChainInfoQuery {
   optional bytes request_sent_certificate_hashes_in_range = 5;
 
   // Query new certificate removed from the chain.
-  optional uint64 request_received_log_excluding_first_nth = 6;
+  optional uint64 request_received_log_excluding_first_n = 6;
 
   // Query values from the chain manager, not just votes.
   bool request_manager_values = 7;
