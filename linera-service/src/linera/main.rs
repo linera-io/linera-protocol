@@ -875,7 +875,6 @@ impl Runnable for Job {
                 let argument = read_json(json_argument, json_argument_path)?;
 
                 info!("Synchronizing");
-                chain_client.synchronize_from_validators().await?;
                 let chain_client = chain_client;
                 context.process_inbox(&chain_client).await?;
 

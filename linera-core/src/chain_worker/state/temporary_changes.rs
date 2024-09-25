@@ -324,7 +324,7 @@ where
             let keys = chain.confirmed_log.read(start..end).await?;
             info.requested_sent_certificate_hashes = keys;
         }
-        if let Some(start) = query.request_received_log_excluding_first_nth {
+        if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = chain.received_log.read(start..).await?;
         }

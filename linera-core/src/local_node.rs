@@ -299,12 +299,12 @@ where
         info
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
     /// The returned view holds a lock on the chain state, which prevents the local node from
     /// changing the state of that chain.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
@@ -360,8 +360,8 @@ where
         self.node.state.cache_recent_blob(Cow::Borrowed(blob)).await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
     /// Downloads and processes all certificates up to (excluding) the specified height.
+    #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
     pub async fn download_certificates(
         &self,
         validators: &[RemoteNode<impl ValidatorNode>],
@@ -397,8 +397,8 @@ where
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     /// Obtains the certificate containing the specified message.
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn certificate_for(
         &self,
         message_id: &MessageId,
@@ -419,9 +419,9 @@ where
         Ok(certificate)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
     /// Downloads and processes all certificates up to (excluding) the specified height from the
     /// given validator.
+    #[tracing::instrument(level = "trace", skip_all)]
     async fn try_download_certificates_from(
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
