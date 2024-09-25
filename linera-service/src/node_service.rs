@@ -247,7 +247,7 @@ where
         loop {
             let client = self.clients.try_client_lock(&chain_id).await?;
             client.synchronize_from_validators().await?;
-            let result = client.process_inbox().await;
+            let result = client.process_inbox_without_prepare().await;
             self.context.lock().await.update_wallet(&client).await?;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
