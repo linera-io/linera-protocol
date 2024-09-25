@@ -1129,10 +1129,11 @@ where
             .get(&remote_node.name)
             .copied()
             .unwrap_or(0);
-        let (committees, max_epoch) = self
+        let (mut committees, mut max_epoch) = self
             .known_committees()
             .await
             .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+        let admin_id = self.state().admin_id();
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
@@ -1173,6 +1174,18 @@ where
             };
             let block = &executed_block.block;
             // Check that certificates are valid w.r.t one of our trusted committees.
+            if block.epoch > max_epoch {
+                // Synchronize the state of the admin chain from the network.
+                self.try_synchronize_chain_state_from(remote_node, admin_id)
+                    .await
+                    .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+                let (new_committees, new_max_epoch) = self
+                    .known_committees()
+                    .await
+                    .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+                committees = new_committees;
+                max_epoch = new_max_epoch;
+            }
             if block.epoch > max_epoch {
                 // We don't accept a certificate from a committee in the future.
                 warn!(
@@ -1251,9 +1264,6 @@ where
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
         let nodes = self.make_nodes(&local_committee)?;
-        // Synchronize the state of the admin chain from the network.
-        let admin_id = self.state().admin_id();
-        self.synchronize_chain_state(&nodes, admin_id).await?;
         let client = self.clone();
         // Proceed to downloading received certificates.
         let result = communicate_with_quorum(
