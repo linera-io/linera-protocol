@@ -18,7 +18,9 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
-    identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
@@ -601,12 +603,14 @@ where
                 outcome.messages.push(message);
             }
             PublishBytecode { bytecode_id } => {
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(
-                    BlobId::new_contract_bytecode_from_hash(bytecode_id.contract_blob_hash),
-                ))?;
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(
-                    BlobId::new_service_bytecode_from_hash(bytecode_id.service_blob_hash),
-                ))?;
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    bytecode_id.contract_blob_hash,
+                    BlobType::ContractBytecode,
+                )))?;
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    bytecode_id.service_blob_hash,
+                    BlobType::ServiceBytecode,
+                )))?;
             }
             CreateApplication {
                 bytecode_id,
@@ -654,9 +658,10 @@ where
                 outcome.messages.push(message);
             }
             PublishDataBlob { blob_hash } => {
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(
-                    BlobId::new_data_from_hash(blob_hash),
-                ))?;
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    blob_hash,
+                    BlobType::Data,
+                )))?;
             }
             ReadBlob { blob_id } => {
                 txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
@@ -1005,7 +1010,7 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), SystemExecutionError> {
         let contract_bytecode_blob_id =
-            BlobId::new_contract_bytecode_from_hash(bytecode_id.contract_blob_hash);
+            BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
         ensure!(
             self.context()
                 .extra()
@@ -1015,7 +1020,7 @@ where
         );
         txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
         let service_bytecode_blob_id =
-            BlobId::new_service_bytecode_from_hash(bytecode_id.service_blob_hash);
+            BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
         ensure!(
             self.context()
                 .extra()

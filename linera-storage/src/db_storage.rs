@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlobContent, TimeDelta, Timestamp},
+    data_types::{Blob, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
@@ -466,12 +466,12 @@ where
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_content = self.store.read_value::<BlobContent>(&blob_key).await?;
+        let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_content =
-            maybe_blob_content.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
-        Ok(blob_content.with_blob_id_unchecked(blob_id))
+        let blob_bytes =
+            maybe_blob_bytes.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
+        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -479,10 +479,7 @@ where
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
-        let maybe_blob_contents = self
-            .store
-            .read_multi_values::<BlobContent>(blob_keys)
-            .await?;
+        let maybe_blob_bytes = self.store.read_multi_values::<Vec<u8>>(blob_keys).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER
             .with_label_values(&[])
@@ -490,9 +487,9 @@ where
 
         Ok(blob_ids
             .iter()
-            .zip(maybe_blob_contents)
-            .map(|(blob_id, maybe_blob_content)| {
-                maybe_blob_content.map(|blob_content| blob_content.with_blob_id_unchecked(*blob_id))
+            .zip(maybe_blob_bytes)
+            .map(|(blob_id, maybe_blob_bytes)| {
+                maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
             })
             .collect())
     }
@@ -684,7 +681,7 @@ where
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
-        batch.put_key_value(blob_key.to_vec(), blob.content())?;
+        batch.put_key_value(blob_key.to_vec(), &blob.inner_bytes())?;
         Ok(())
     }
 

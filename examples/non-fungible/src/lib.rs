@@ -97,11 +97,13 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
     mutation {
         publishDataBlob(
           chainId: "$CHAIN_1",
-          blobContent: {
-            bytes: [1, 2, 3, 4]
-          }
+          bytes: [1, 2, 3, 4]
         )
     }
+```
+
+```bash
+BLOB_HASH=$(echo "$QUERY_RESULT" | jq -r '.publishDataBlob')
 ```
 
 - Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
@@ -112,7 +114,7 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
         mint(
             minter: "User:$OWNER_1",
             name: "nft1",
-            blobHash: "34a20da0fdd7e24ddbff60cb7f952b053b3f0e196e622d47c3a368f690f01326",
+            blobHash: "$BLOB_HASH",
         )
     }
 ```

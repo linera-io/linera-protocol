@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    data_types::{OracleResponse, Round},
+    data_types::{BlobContent, OracleResponse, Round},
     identifiers::{BlobType, ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
@@ -51,6 +51,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<NodeError>(&samples)?;
     tracer.trace_type::<RpcMessage>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
+    tracer.trace_type::<BlobContent>(&samples)?;
     tracer.registry()
 }
 

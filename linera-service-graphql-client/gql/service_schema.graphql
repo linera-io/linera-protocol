@@ -41,11 +41,6 @@ input ApplicationPermissions {
 }
 
 """
-A blob of binary data.
-"""
-scalar BlobContent
-
-"""
 A block containing operations to apply on a given chain, as well as the
 acknowledgment of a number of incoming messages from other chains.
 * Incoming messages must be selected in the order they were
@@ -688,7 +683,7 @@ type MutationRoot {
 	"""
 	Publishes a new data blob.
 	"""
-	publishDataBlob(chainId: ChainId!, blobContent: BlobContent!): CryptoHash!
+	publishDataBlob(chainId: ChainId!, bytes: [Int!]!): CryptoHash!
 	"""
 	Creates a new application.
 	"""

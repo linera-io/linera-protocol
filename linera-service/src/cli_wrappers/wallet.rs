@@ -19,7 +19,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlobContent, Bytecode},
+    data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
@@ -957,12 +957,12 @@ impl NodeService {
     pub async fn publish_data_blob(
         &self,
         chain_id: &ChainId,
-        blob_content: &BlobContent,
+        bytes: Vec<u8>,
     ) -> Result<CryptoHash> {
         let query = format!(
-            "mutation {{ publishDataBlob(chainId: {}, blobContent: {}) }}",
+            "mutation {{ publishDataBlob(chainId: {}, bytes: {}) }}",
             chain_id.to_value(),
-            blob_content.to_value(),
+            bytes.to_value(),
         );
         let data = self.query_node(query).await?;
         serde_json::from_value(data["publishDataBlob"].clone())

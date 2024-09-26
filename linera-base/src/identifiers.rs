@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
-    data_types::{BlobContent, BlockHeight, CompressedBytecode},
+    data_types::{BlobBytes, BlobContent, BlockHeight},
     doc_scalar,
 };
 
@@ -145,6 +145,7 @@ impl ChainDescription {
 pub struct ChainId(pub CryptoHash);
 
 /// The type of the blob.
+/// Should be a 1:1 mapping of the types in `Blob`.
 #[derive(
     Eq,
     PartialEq,
@@ -189,6 +190,16 @@ impl FromStr for BlobType {
     }
 }
 
+impl From<&BlobContent> for BlobType {
+    fn from(content: &BlobContent) -> Self {
+        match content {
+            BlobContent::Data(_) => BlobType::Data,
+            BlobContent::ContractBytecode(_) => BlobType::ContractBytecode,
+            BlobContent::ServiceBytecode(_) => BlobType::ServiceBytecode,
+        }
+    }
+}
+
 /// A content-addressed blob ID i.e. the hash of the `BlobContent`.
 #[derive(
     Eq,
@@ -214,43 +225,17 @@ pub struct BlobId {
 }
 
 impl BlobId {
-    /// Creates a new data `BlobId` from a `BlobContent`
-    pub fn new_data(blob_content: &BlobContent) -> Self {
-        Self::new_data_from_hash(CryptoHash::new(blob_content))
-    }
-
-    /// Creates a data new `BlobId` from a hash
-    pub fn new_data_from_hash(hash: CryptoHash) -> Self {
-        BlobId {
-            hash,
-            blob_type: BlobType::Data,
+    /// Creates a new `BlobId` from a `BlobContent`
+    pub fn from_content(content: &BlobContent) -> Self {
+        Self {
+            hash: CryptoHash::new(&BlobBytes(content.inner_bytes())),
+            blob_type: content.into(),
         }
     }
 
-    /// Creates a new contract bytecode `BlobId` from a `CompressedBytecode`
-    pub fn new_contract_bytecode(bytecode: &CompressedBytecode) -> Self {
-        Self::new_contract_bytecode_from_hash(CryptoHash::new(bytecode))
-    }
-
-    /// Creates a new service bytecode `BlobId` from a `CompressedBytecode`
-    pub fn new_service_bytecode(bytecode: &CompressedBytecode) -> Self {
-        Self::new_service_bytecode_from_hash(CryptoHash::new(bytecode))
-    }
-
-    /// Creates a new contract bytecode `BlobId` from a hash
-    pub fn new_contract_bytecode_from_hash(hash: CryptoHash) -> Self {
-        BlobId {
-            hash,
-            blob_type: BlobType::ContractBytecode,
-        }
-    }
-
-    /// Creates a new service bytecode `BlobId` from a hash
-    pub fn new_service_bytecode_from_hash(hash: CryptoHash) -> Self {
-        BlobId {
-            hash,
-            blob_type: BlobType::ServiceBytecode,
-        }
+    /// Creates a new `BlobId` from a `CryptoHash`. This must be a hash of the blob's bytes!
+    pub fn new(hash: CryptoHash, blob_type: BlobType) -> Self {
+        Self { hash, blob_type }
     }
 }
 

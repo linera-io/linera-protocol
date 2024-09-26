@@ -43,8 +43,8 @@ const MINT_NFT = gql`
 `;
 
 const PUBLISH_DATA_BLOB = gql`
-  mutation PublishDataBlob($chainId: ChainId!, $blobContent: BlobContent!) {
-    publishDataBlob(chainId: $chainId, blobContent: $blobContent)
+  mutation PublishDataBlob($chainId: ChainId!, $bytes: [Int!]!) {
+    publishDataBlob(chainId: $chainId, bytes: $bytes)
   }
 `;
 
@@ -186,9 +186,7 @@ function App({ chainId, owner }) {
     publishDataBlob({
       variables: {
         chainId: chainId,
-        blobContent: {
-          bytes: Array.from(byteArrayFile),
-        },
+        bytes: Array.from(byteArrayFile),
       },
     }).then((r) => {
       if ('errors' in r) {
@@ -197,7 +195,7 @@ function App({ chainId, owner }) {
         );
       } else {
         console.log('Data Blob published: ' + JSON.stringify(r, null, 2));
-        const blobHash = r['data']['publishDataBlob']['hash'];
+        const blobHash = r['data']['publishDataBlob'];
         mintNft({
           variables: {
             minter: `User:${owner}`,
@@ -380,21 +378,21 @@ function App({ chainId, owner }) {
             dataSource={
               ownedNftsData
                 ? Object.entries(ownedNftsData.ownedNfts).map(
-                    ([token_id, nft]) => {
-                      const decoder = new TextDecoder();
-                      const deserializedImage = decoder.decode(
-                        new Uint8Array(nft.payload)
-                      );
+                  ([token_id, nft]) => {
+                    const decoder = new TextDecoder();
+                    const deserializedImage = decoder.decode(
+                      new Uint8Array(nft.payload)
+                    );
 
-                      return {
-                        key: token_id,
-                        token_id: token_id,
-                        name: nft.name,
-                        minter: nft.minter,
-                        payload: deserializedImage,
-                      };
-                    }
-                  )
+                    return {
+                      key: token_id,
+                      token_id: token_id,
+                      name: nft.name,
+                      minter: nft.minter,
+                      payload: deserializedImage,
+                    };
+                  }
+                )
                 : []
             }
           />

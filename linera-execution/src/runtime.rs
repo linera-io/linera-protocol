@@ -17,7 +17,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, MessageId, Owner, StreamName,
+        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId, Owner,
+        StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -1001,18 +1002,18 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
-        let blob_id = BlobId::new_data_from_hash(*hash);
+        let blob_id = BlobId::new(*hash, BlobType::Data);
         self.transaction_tracker
             .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         let blob_content = self
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
-        Ok(blob_content.bytes)
+        Ok(blob_content.inner_bytes())
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
-        let blob_id = BlobId::new_data_from_hash(*hash);
+        let blob_id = BlobId::new(*hash, BlobType::Data);
         self.transaction_tracker
             .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         self.execution_state_sender

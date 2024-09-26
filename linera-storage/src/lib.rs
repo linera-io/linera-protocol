@@ -28,11 +28,14 @@ use linera_execution::{
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
 };
-#[cfg(with_wasm_runtime)]
-use linera_execution::{WasmContractModule, WasmServiceModule};
 use linera_views::{
     context::Context,
     views::{CryptoHashView, RootView, ViewError},
+};
+#[cfg(with_wasm_runtime)]
+use {
+    linera_base::{data_types::CompressedBytecode, identifiers::BlobType},
+    linera_execution::{WasmContractModule, WasmServiceModule},
 };
 
 #[cfg(with_testing)]
@@ -287,13 +290,14 @@ pub trait Storage: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let contract_bytecode_blob_id = BlobId::new_contract_bytecode_from_hash(
+        let contract_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.contract_blob_hash,
+            BlobType::ContractBytecode,
         );
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
-        let compressed_contract_bytecode = contract_blob
-            .into_inner_contract_bytecode()
-            .expect("Contract Bytecode Blob is of the wrong Blob type!");
+        let compressed_contract_bytecode = CompressedBytecode {
+            compressed_bytes: contract_blob.inner_bytes(),
+        };
         let contract_bytecode =
             linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
                 .await??;
@@ -325,13 +329,14 @@ pub trait Storage: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let service_bytecode_blob_id = BlobId::new_service_bytecode_from_hash(
+        let service_bytecode_blob_id = BlobId::new(
             application_description.bytecode_id.service_blob_hash,
+            BlobType::ServiceBytecode,
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
-        let compressed_service_bytecode = service_blob
-            .into_inner_service_bytecode()
-            .expect("Service Bytecode Blob is of the wrong Blob type!");
+        let compressed_service_bytecode = CompressedBytecode {
+            compressed_bytes: service_blob.inner_bytes(),
+        };
         let service_bytecode =
             linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
                 .await??;
