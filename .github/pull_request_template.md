@@ -22,7 +22,7 @@ can reproduce the results.
 ## Release Plan
 
 <!--
-If this PR targets the `main` branch, **keep the applicable lines** to indicate if your
+If this PR targets the `main` branch, **keep the applicable lines** to indicate if you
 recommend the changes to be picked in release branches, SDKs, and hotfixes.
 
 This generally concerns only bug fixes.
