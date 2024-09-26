@@ -911,10 +911,10 @@ impl NodeService {
         self.child.ensure_is_running()
     }
 
-    pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<()> {
+    pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<Vec<CryptoHash>> {
         let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
-        self.query_node(query).await?;
-        Ok(())
+        let mut data = self.query_node(query).await?;
+        Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
     pub async fn make_application<A: ContractAbi>(
