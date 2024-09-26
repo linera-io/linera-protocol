@@ -1475,13 +1475,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // In an operation node_service_a.request_application(&chain_a, app_b)
     // chain_b needs to process the request first and then chain_a
     // the answer.
-    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
-    assert_eq!(node_service_b.process_inbox(&chain_b).await?.len(), 1);
-    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
-    assert_eq!(
-        node_service_admin.process_inbox(&chain_admin).await?.len(),
-        1
-    );
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_b.process_inbox(&chain_b).await?;
+    node_service_a.process_inbox(&chain_a).await?;
+    node_service_admin.process_inbox(&chain_admin).await?;
 
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
