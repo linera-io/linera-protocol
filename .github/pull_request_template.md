@@ -22,13 +22,23 @@ can reproduce the results.
 ## Release Plan
 
 <!--
-If this PR targets the `main` branch, indicate if your recommend the changes to be picked
-in release branches.
+If this PR targets the `main` branch, **keep the applicable lines** to indicate if you
+recommend the changes to be picked in release branches, SDKs, and hotfixes.
 
-Note that this generally only concerns hot fixes.
+This generally concerns only bug fixes.
+
+Note that altering the public protocol (e.g. transaction format, WASM syscalls) or storage
+formats requires a new deployment.
 -->
-- [ ] These changes should be backported to the latest `devnet` branch.
-- [ ] These changes should be backported to the latest `testnet` branch.
+- Nothing to do / These changes follow the usual release cycle.
+- These changes should be backported to the latest `devnet` branch, then
+    - be released in a new SDK,
+    - be released in a validator hotfix.
+- These changes should be backported to the latest `testnet` branch, then
+    - be released in a new SDK,
+    - be released in a validator hotfix.
+- Backporting is not possible but we may want to deploy a new `devnet` and release a new
+      SDK soon.
 
 ## Links
 
