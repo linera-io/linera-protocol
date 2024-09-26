@@ -231,11 +231,11 @@ where
             self.stored_data.clear();
             self.stored_position = 0;
         } else if let Some((i_block, position)) = self.cursor.position {
-            for block in 0..i_block {
-                let index = self.stored_data[block].0;
+            for _ in 0..i_block {
+                let block = self.stored_data.pop_front().unwrap();
+                let index = block.0;
                 let key = self.get_index_key(index)?;
                 batch.delete_key(key);
-                self.stored_data.pop_front();
             }
             self.cursor = Cursor {
                 position: Some((0, position)),
