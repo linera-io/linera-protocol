@@ -101,7 +101,7 @@ pub(crate) static STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
 
 #[cfg(with_metrics)]
 pub(crate) static LRU_STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
+    LazyLock::new(|| KeyValueStoreMetrics::new("storage service lru caching".to_string()));
 
 #[derive(Debug, Clone)]
 pub struct ServiceStoreConfig {
