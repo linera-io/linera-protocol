@@ -99,6 +99,10 @@ pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
 pub(crate) static STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
     LazyLock::new(|| KeyValueStoreMetrics::new("storage service".to_string()));
 
+#[cfg(with_metrics)]
+pub(crate) static LRU_STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("storage service lru caching".to_string()));
+
 #[derive(Debug, Clone)]
 pub struct ServiceStoreConfig {
     /// The endpoint used by the shared store
