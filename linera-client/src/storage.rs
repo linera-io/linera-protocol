@@ -5,7 +5,7 @@ use std::{fmt, str::FromStr};
 
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
-use linera_storage::{DbStorage, Storage};
+use linera_storage::{DbStorage, Storage, DEFAULT_NAMESPACE, DEFAULT_ROOT_KEY};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
 #[cfg(feature = "dynamodb")]
@@ -18,6 +18,12 @@ use linera_views::{
     views::ViewError,
 };
 use tracing::error;
+#[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+use {
+    linera_storage::ChainStatesFirstAssignment,
+    linera_views::backends::dual::{DualStore, DualStoreConfig, DualStoreError},
+    std::path::Path,
+};
 #[cfg(feature = "rocksdb")]
 use {
     linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
@@ -31,8 +37,6 @@ use {
 };
 
 use crate::{config::GenesisConfig, util};
-
-const DEFAULT_NAMESPACE: &str = "table_linera";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -55,6 +59,8 @@ util::impl_from_dynamic!(Error:Backend, linera_views::rocks_db::RocksDbStoreErro
 util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreError);
 #[cfg(feature = "scylladb")]
 util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
+#[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+util::impl_from_dynamic!(Error:Backend, DualStoreError<linera_views::rocks_db::RocksDbStoreError, linera_views::scylla_db::ScyllaDbStoreError>);
 
 /// The configuration of the key value store in use.
 pub enum StoreConfig {
@@ -72,6 +78,11 @@ pub enum StoreConfig {
     /// The ScyllaDb key value store
     #[cfg(feature = "scylladb")]
     ScyllaDb(ScyllaDbStoreConfig, String),
+    #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+    DualRocksDbScyllaDb(
+        DualStoreConfig<RocksDbStoreConfig, ScyllaDbStoreConfig>,
+        String,
+    ),
 }
 
 /// The description of a storage implementation.
@@ -106,15 +117,49 @@ pub enum StorageConfig {
         /// The URI for accessing the database
         uri: String,
     },
+    #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+    DualRocksDbScyllaDb {
+        /// The path used with a guard if relevant.
+        path_with_guard: PathWithGuard,
+        /// The URI for accessing the database
+        uri: String,
+    },
 }
 
-/// The `root_key` used at startup before the `clone_with_root_key`.
-const ROOT_KEY: &[u8] = &[0];
-
 impl StorageConfig {
-    #[cfg(feature = "rocksdb")]
-    pub fn is_rocks_db(&self) -> bool {
-        matches!(self, StorageConfig::RocksDb { .. })
+    pub fn get_main_storage(&self) -> Self {
+        match self {
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb {
+                path_with_guard: _,
+                uri,
+            } => {
+                let uri = uri.clone();
+                StorageConfig::ScyllaDb { uri }
+            }
+            x => x.clone(),
+        }
+    }
+
+    pub fn are_chains_shared(&self) -> bool {
+        match self {
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb { .. } => false,
+            _ => true,
+        }
+    }
+
+    pub fn append_shard_str(&mut self, _shard_str: &str) {
+        match self {
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb {
+                path_with_guard,
+                uri: _,
+            } => {
+                path_with_guard.path_buf.push(_shard_str);
+            }
+            _ => panic!("append_shard_str is not available for this storage"),
+        }
     }
 }
 
@@ -138,6 +183,8 @@ const ROCKS_DB: &str = "rocksdb:";
 const DYNAMO_DB: &str = "dynamodb:";
 #[cfg(feature = "scylladb")]
 const SCYLLA_DB: &str = "scylladb:";
+#[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+const DUAL_ROCKS_DB_SCYLLA_DB: &str = "dualrocksdbscylladb:";
 
 impl FromStr for StorageConfigNamespace {
     type Err = Error;
@@ -311,6 +358,41 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 namespace,
             });
         }
+        #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+        if let Some(s) = input.strip_prefix(DUAL_ROCKS_DB_SCYLLA_DB) {
+            let parts = s.split(':').collect::<Vec<_>>();
+            if parts.len() != 4 && parts.len() != 5 {
+                return Err(Error::Format(
+                    "For DualRocksDbScyllaDb, the formatting has to be dualrocksdbscylladb:directory:tcp:hostname:port:namespace".into(),
+                ));
+            }
+            let path = Path::new(parts[0]);
+            let path_buf = path.to_path_buf();
+            let path_with_guard = PathWithGuard::new(path_buf);
+            let protocol = parts[1];
+            if protocol != "tcp" {
+                return Err(Error::Format("The only alowed protocol is tcp".into()));
+            }
+            let address = parts[2];
+            let port_str = parts[3];
+            let port = NonZeroU16::from_str(port_str).map_err(|_| {
+                Error::Format(format!("Failed to find parse port {port_str} for {s}",))
+            })?;
+            let uri = format!("{}:{}", &address, port);
+            let storage_config = StorageConfig::DualRocksDbScyllaDb {
+                path_with_guard,
+                uri,
+            };
+            let namespace = if parts.len() == 4 {
+                DEFAULT_NAMESPACE.to_string()
+            } else {
+                parts[4].to_string()
+            };
+            return Ok(StorageConfigNamespace {
+                storage_config,
+                namespace,
+            });
+        }
         error!("available storage: memory");
         #[cfg(feature = "storage-service")]
         error!("Also available is linera-storage-service");
@@ -320,6 +402,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         error!("Also available is DynamoDB");
         #[cfg(feature = "scylladb")]
         error!("Also available is ScyllaDB");
+        #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+        error!("Also available is DualRocksDbScyllaDb");
         Err(Error::Format(format!("The input has not matched: {input}")))
     }
 }
@@ -373,6 +457,27 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::ScyllaDb(config, namespace))
             }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb {
+                path_with_guard,
+                uri,
+            } => {
+                let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
+                let first_config = RocksDbStoreConfig {
+                    path_with_guard: path_with_guard.clone(),
+                    spawn_mode,
+                    common_config: common_config.clone(),
+                };
+                let second_config = ScyllaDbStoreConfig {
+                    uri: uri.to_string(),
+                    common_config,
+                };
+                let config = DualStoreConfig {
+                    first_config,
+                    second_config,
+                };
+                Ok(StoreConfig::DualRocksDbScyllaDb(config, namespace))
+            }
         }
     }
 }
@@ -404,6 +509,19 @@ impl fmt::Display for StorageConfigNamespace {
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
                 write!(f, "scylladb:tcp:{}:{}", uri, namespace)
+            }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb {
+                path_with_guard,
+                uri,
+            } => {
+                write!(
+                    f,
+                    "dualrocksdbscylladb:{}:tcp:{}:{}",
+                    path_with_guard.path_buf.display(),
+                    uri,
+                    namespace
+                )
             }
         }
     }
@@ -437,6 +555,14 @@ impl StoreConfig {
                 ScyllaDbStore::delete_all(&config).await?;
                 Ok(())
             }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, _namespace) => {
+                DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::delete_all(
+                    &config,
+                )
+                .await?;
+                Ok(())
+            }
         }
     }
 
@@ -467,6 +593,14 @@ impl StoreConfig {
                 ScyllaDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+                DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::delete(
+                    &config, &namespace,
+                )
+                .await?;
+                Ok(())
+            }
         }
     }
 
@@ -493,6 +627,15 @@ impl StoreConfig {
             StoreConfig::ScyllaDb(config, namespace) => {
                 Ok(ScyllaDbStore::exists(&config, &namespace).await?)
             }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+                Ok(
+                    DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::exists(
+                        &config, &namespace,
+                    )
+                    .await?,
+                )
+            }
         }
     }
 
@@ -505,22 +648,31 @@ impl StoreConfig {
             }),
             #[cfg(feature = "storage-service")]
             StoreConfig::Service(config, namespace) => {
-                ServiceStoreClient::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                ServiceStoreClient::maybe_create_and_connect(&config, &namespace, DEFAULT_ROOT_KEY)
+                    .await?;
                 Ok(())
             }
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb(config, namespace) => {
-                RocksDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                RocksDbStore::maybe_create_and_connect(&config, &namespace, DEFAULT_ROOT_KEY)
+                    .await?;
                 Ok(())
             }
             #[cfg(feature = "dynamodb")]
             StoreConfig::DynamoDb(config, namespace) => {
-                DynamoDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                DynamoDbStore::maybe_create_and_connect(&config, &namespace, DEFAULT_ROOT_KEY)
+                    .await?;
                 Ok(())
             }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb(config, namespace) => {
-                ScyllaDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
+                ScyllaDbStore::maybe_create_and_connect(&config, &namespace, DEFAULT_ROOT_KEY)
+                    .await?;
+                Ok(())
+            }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+                DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::maybe_create_and_connect(&config, &namespace, DEFAULT_ROOT_KEY).await?;
                 Ok(())
             }
         }
@@ -553,6 +705,15 @@ impl StoreConfig {
                 let tables = ScyllaDbStore::list_all(&config).await?;
                 Ok(tables)
             }
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StoreConfig::DualRocksDbScyllaDb(config, _namespace) => {
+                let tables =
+                    DualStore::<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>::list_all(
+                        &config,
+                    )
+                    .await?;
+                Ok(tables)
+            }
         }
     }
 }
@@ -583,38 +744,67 @@ where
     match config {
         StoreConfig::Memory(config, namespace) => {
             let store_config = MemoryStoreConfig::new(config.common_config.max_stream_queries);
-            let mut storage =
-                DbStorage::<MemoryStore, _>::new(store_config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let mut storage = DbStorage::<MemoryStore, _>::new(
+                store_config,
+                &namespace,
+                DEFAULT_ROOT_KEY,
+                wasm_runtime,
+            )
+            .await?;
             genesis_config.initialize_storage(&mut storage).await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "storage-service")]
         StoreConfig::Service(config, namespace) => {
-            let storage =
-                DbStorage::<ServiceStoreClient, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<ServiceStoreClient, _>::new(
+                config,
+                &namespace,
+                DEFAULT_ROOT_KEY,
+                wasm_runtime,
+            )
+            .await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "rocksdb")]
         StoreConfig::RocksDb(config, namespace) => {
-            let storage =
-                DbStorage::<RocksDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<RocksDbStore, _>::new(
+                config,
+                &namespace,
+                DEFAULT_ROOT_KEY,
+                wasm_runtime,
+            )
+            .await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "dynamodb")]
         StoreConfig::DynamoDb(config, namespace) => {
-            let storage =
-                DbStorage::<DynamoDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<DynamoDbStore, _>::new(
+                config,
+                &namespace,
+                DEFAULT_ROOT_KEY,
+                wasm_runtime,
+            )
+            .await?;
             Ok(job.run(storage).await)
         }
         #[cfg(feature = "scylladb")]
         StoreConfig::ScyllaDb(config, namespace) => {
-            let storage =
-                DbStorage::<ScyllaDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
-                    .await?;
+            let storage = DbStorage::<ScyllaDbStore, _>::new(
+                config,
+                &namespace,
+                DEFAULT_ROOT_KEY,
+                wasm_runtime,
+            )
+            .await?;
+            Ok(job.run(storage).await)
+        }
+        #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+        StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+            let storage = DbStorage::<
+                DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
+                _,
+            >::new(config, &namespace, DEFAULT_ROOT_KEY, wasm_runtime)
+            .await?;
             Ok(job.run(storage).await)
         }
     }
@@ -635,7 +825,7 @@ pub async fn full_initialize_storage(
             let mut storage = DbStorage::<ServiceStoreClient, _>::initialize(
                 config,
                 &namespace,
-                ROOT_KEY,
+                DEFAULT_ROOT_KEY,
                 wasm_runtime,
             )
             .await?;
@@ -647,7 +837,7 @@ pub async fn full_initialize_storage(
             let mut storage = DbStorage::<RocksDbStore, _>::initialize(
                 config,
                 &namespace,
-                ROOT_KEY,
+                DEFAULT_ROOT_KEY,
                 wasm_runtime,
             )
             .await?;
@@ -659,7 +849,7 @@ pub async fn full_initialize_storage(
             let mut storage = DbStorage::<DynamoDbStore, _>::initialize(
                 config,
                 &namespace,
-                ROOT_KEY,
+                DEFAULT_ROOT_KEY,
                 wasm_runtime,
             )
             .await?;
@@ -671,8 +861,20 @@ pub async fn full_initialize_storage(
             let mut storage = DbStorage::<ScyllaDbStore, _>::initialize(
                 config,
                 &namespace,
-                ROOT_KEY,
+                DEFAULT_ROOT_KEY,
                 wasm_runtime,
+            )
+            .await?;
+            Ok(genesis_config.initialize_storage(&mut storage).await?)
+        }
+        #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+        StoreConfig::DualRocksDbScyllaDb(config, namespace) => {
+            let wasm_runtime = None;
+            let mut storage = DbStorage::<
+                DualStore<RocksDbStore, ScyllaDbStore, ChainStatesFirstAssignment>,
+                _,
+            >::initialize(
+                config, &namespace, DEFAULT_ROOT_KEY, wasm_runtime
             )
             .await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)

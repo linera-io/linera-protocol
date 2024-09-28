@@ -46,6 +46,12 @@ pub use crate::db_storage::{
     WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
 
+/// The default namespace to be used when none is specified
+pub const DEFAULT_NAMESPACE: &str = "table_linera";
+
+/// The `root_key` used at startup before the `clone_with_root_key`.
+pub const DEFAULT_ROOT_KEY: &[u8] = &[0];
+
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Storage: Sized {
