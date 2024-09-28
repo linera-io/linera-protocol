@@ -26,6 +26,8 @@ use linera_client::{
 use linera_core::node::ValidatorNodeProvider;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
+#[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
+use linera_views::rocks_db::{RocksDbSpawnMode, RocksDbStore};
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
@@ -82,7 +84,7 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
                 Ok(StorageConfig::DynamoDb { use_localstack })
             }
             #[cfg(not(feature = "dynamodb"))]
-            panic!("Database::DynamoDb is selected without the feature aws");
+            panic!("Database::DynamoDb is selected without the feature dynamodb");
         }
         Database::ScyllaDb => {
             #[cfg(feature = "scylladb")]
@@ -94,6 +96,21 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             }
             #[cfg(not(feature = "scylladb"))]
             panic!("Database::ScyllaDb is selected without the feature scylladb");
+        }
+        Database::DualRocksDbScyllaDb => {
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            {
+                let rocksdb_config = RocksDbStore::new_test_config().await?;
+                let scylla_config = ScyllaDbStore::new_test_config().await?;
+                let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                Ok(StorageConfig::DualRocksDbScyllaDb {
+                    path_with_guard: rocksdb_config.inner_config.path_with_guard,
+                    spawn_mode,
+                    uri: scylla_config.inner_config.uri,
+                })
+            }
+            #[cfg(not(all(feature = "rocksdb", feature = "scylladb")))]
+            panic!("Database::DualRocksDbScyllaDb is selected without the features rocksdb and scylladb");
         }
     }
 }
@@ -193,6 +210,7 @@ pub enum Database {
     Service,
     DynamoDb,
     ScyllaDb,
+    DualRocksDbScyllaDb,
 }
 
 /// The processes of a running validator.
@@ -291,7 +309,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.num_initial_validators > 0,
             "There should be at least one initial validator"
         );
-        net.generate_initial_validator_config().await.unwrap();
+        net.generate_initial_validator_config().await?;
         client
             .create_genesis_config(
                 self.num_other_initial_chains,
@@ -299,9 +317,8 @@ impl LineraNetConfig for LocalNetConfig {
                 self.policy_config,
                 Some(vec!["localhost".to_owned()]),
             )
-            .await
-            .unwrap();
-        net.run().await.unwrap();
+            .await?;
+        net.run().await?;
         Ok((net, client))
     }
 }
@@ -489,7 +506,7 @@ impl LocalNet {
     }
 
     async fn run_proxy(&mut self, validator: usize) -> Result<Child> {
-        let storage = self.initialize_storage(validator).await?;
+        let storage = self.get_storage_proxy(validator);
         let child = self
             .command_for_binary("linera-proxy")
             .await?
@@ -551,53 +568,82 @@ impl LocalNet {
         bail!("Failed to start {nickname}");
     }
 
-    async fn initialize_storage(&mut self, validator: usize) -> Result<String> {
+    fn get_storage_proxy(&mut self, validator: usize) -> String {
         let namespace = format!("{}_server_{}_db", self.namespace, validator);
-        let storage = StorageConfigNamespace {
-            storage_config: self.storage_config.clone(),
+        let storage_config = self.storage_config.get_main_storage();
+        StorageConfigNamespace {
+            storage_config,
             namespace,
         }
-        .to_string();
+        .to_string()
+    }
 
-        if !self
-            .validators_with_initialized_storage
-            .contains(&validator)
-        {
-            let max_try = 4;
-            let mut i_try = 0;
-            loop {
-                let mut command = self.command_for_binary("linera-server").await?;
-                if let Ok(var) = env::var(SERVER_ENV) {
-                    command.args(var.split_whitespace());
-                }
-                command.arg("initialize");
-                let result = command
-                    .args(["--storage", &storage])
-                    .args(["--genesis", "genesis.json"])
-                    .spawn_and_wait_for_stdout()
-                    .await;
-                if result.is_ok() {
-                    break;
-                }
-                warn!(
-                    "Failed to initialize storage={} using linera-server, i_try={}, error={:?}",
-                    storage, i_try, result
-                );
-                i_try += 1;
-                if i_try == max_try {
-                    bail!("Failed to initialize after {} attempts", max_try);
-                }
-                let one_second = linera_base::time::Duration::from_secs(1);
-                std::thread::sleep(one_second);
+    async fn initialize_storage_internal(&mut self, storage: &str, genesis: &str) -> Result<()> {
+        let max_try = 4;
+        let mut i_try = 0;
+        loop {
+            let mut command = self.command_for_binary("linera-server").await?;
+            if let Ok(var) = env::var(SERVER_ENV) {
+                command.args(var.split_whitespace());
             }
-            self.validators_with_initialized_storage.insert(validator);
+            command.arg("initialize");
+            let result = command
+                .args(["--storage", storage])
+                .args(["--genesis", genesis])
+                .spawn_and_wait_for_stdout()
+                .await;
+            if result.is_ok() {
+                return Ok(());
+            }
+            warn!(
+                "Failed to initialize storage={} using linera-server, i_try={}, error={:?}",
+                storage, i_try, result
+            );
+            i_try += 1;
+            if i_try == max_try {
+                bail!("Failed to initialize after {} attempts", max_try);
+            }
+            let one_second = linera_base::time::Duration::from_secs(1);
+            std::thread::sleep(one_second);
         }
+    }
 
-        Ok(storage)
+    async fn initialize_storage(&mut self, validator: usize, shard: usize) -> Result<String> {
+        let namespace = format!("{}_server_{}_db", self.namespace, validator);
+        let mut storage_config = self.storage_config.clone();
+
+        if storage_config.are_chains_shared() {
+            let storage = StorageConfigNamespace {
+                storage_config,
+                namespace,
+            }
+            .to_string();
+            if !self
+                .validators_with_initialized_storage
+                .contains(&validator)
+            {
+                self.initialize_storage_internal(&storage, "genesis.json")
+                    .await?;
+                self.validators_with_initialized_storage.insert(validator);
+            }
+            Ok(storage)
+        } else {
+            let shard_str = format!("shard_{}", shard);
+            storage_config.append_shard_str(&shard_str);
+            let storage = StorageConfigNamespace {
+                storage_config,
+                namespace,
+            }
+            .to_string();
+
+            self.initialize_storage_internal(&storage, "genesis.json")
+                .await?;
+            Ok(storage)
+        }
     }
 
     async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
-        let storage = self.initialize_storage(validator).await?;
+        let storage = self.initialize_storage(validator, shard).await?;
         let mut command = self.command_for_binary("linera-server").await?;
         if let Ok(var) = env::var(SERVER_ENV) {
             command.args(var.split_whitespace());

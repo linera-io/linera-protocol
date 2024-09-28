@@ -34,6 +34,10 @@ pub enum KeyPrefix {
 
 #[derive(Debug, Error)]
 pub enum ServiceStoreError {
+    /// Store already exists during a create operation
+    #[error("Store already exists during a create operation")]
+    AlreadyExist,
+
     /// Not matching entry
     #[error("Not matching entry")]
     NotMatchingEntry,

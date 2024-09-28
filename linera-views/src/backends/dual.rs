@@ -321,12 +321,25 @@ where
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
-        S1::create(&config.first_config, namespace)
+        let test1 = S1::exists(&config.first_config, namespace)
             .await
             .map_err(DualStoreError::First)?;
-        S2::create(&config.second_config, namespace)
+        let test2 = S2::exists(&config.second_config, namespace)
             .await
             .map_err(DualStoreError::Second)?;
+        if test1 && test2 {
+            return Err(DualStoreError::AlreadyExist);
+        }
+        if !test1 {
+            S1::create(&config.first_config, namespace)
+                .await
+                .map_err(DualStoreError::First)?;
+        }
+        if !test2 {
+            S2::create(&config.second_config, namespace)
+                .await
+                .map_err(DualStoreError::Second)?;
+        }
         Ok(())
     }
 
@@ -363,6 +376,10 @@ where
 /// The error type for [`DualStore`].
 #[derive(Error, Debug)]
 pub enum DualStoreError<E1, E2> {
+    /// Store already exists during a create operation
+    #[error("Store already exists during a create operation")]
+    AlreadyExist,
+
     /// Serialization error with BCS.
     #[error(transparent)]
     BcsError(#[from] bcs::Error),

@@ -5,6 +5,8 @@
 
 use std::{
     ffi::OsString,
+    fmt::Display,
+    ops::{Bound, Bound::Excluded},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -92,6 +94,15 @@ impl RocksDbSpawnMode {
                 tokio::task::spawn_blocking(move || f(input)).await??
             }
         })
+    }
+}
+
+impl Display for RocksDbSpawnMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            RocksDbSpawnMode::SpawnBlocking => write!(f, "spawn_blocking"),
+            RocksDbSpawnMode::BlockInPlace => write!(f, "block_in_place"),
+        }
     }
 }
 
@@ -505,6 +516,9 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Self::check_namespace(namespace)?;
         let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
+        if std::path::Path::exists(&path_buf) {
+            return Err(RocksDbStoreInternalError::AlreadyExist);
+        }
         std::fs::create_dir_all(path_buf)?;
         Ok(())
     }
@@ -603,6 +617,13 @@ impl PathWithGuard {
         PathWithGuard { path_buf, _dir }
     }
 }
+
+impl PartialEq for PathWithGuard {
+    fn eq(&self, other: &Self) -> bool {
+        self.path_buf == other.path_buf
+    }
+}
+impl Eq for PathWithGuard {}
 
 impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";
