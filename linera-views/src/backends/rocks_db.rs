@@ -54,6 +54,7 @@ struct RocksDbStoreInternal {
     root_key: Vec<u8>,
     max_stream_queries: usize,
     cache_size: usize,
+    spawn_blocking: bool,
 }
 
 /// The initial configuration of the system
@@ -90,12 +91,15 @@ impl RocksDbStoreInternal {
         options.create_if_missing(true);
         let db = DB::open(&options, path)?;
         let root_key = root_key.to_vec();
+        let metrics = Handle::current().metrics();
+        let spawn_blocking = metrics.num_workers() == 1;
         Ok(RocksDbStoreInternal {
             db: Arc::new(db),
             _path_with_guard: path_with_guard,
             root_key,
             max_stream_queries,
             cache_size,
+            spawn_blocking,
         })
     }
 
@@ -270,14 +274,11 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
-        let metrics = Handle::current().metrics();
-        if metrics.num_workers() == 1 {
-            println!("read_value spawn_blocking");
+        if self.spawn_blocking {
             Ok(tokio::task::spawn_blocking(move || {
                 client.db.get(&full_key)
             }).await??)
         } else {
-            println!("read_value block_in_place");
             Ok(tokio::task::block_in_place(move || {
                 client.db.get(&full_key)
             })?)
@@ -289,24 +290,18 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
-        let metrics = Handle::current().metrics();
-        if metrics.num_workers() == 1 {
-            println!("contains_key, spawn_blocking");
+        if self.spawn_blocking {
             tokio::task::spawn_blocking(move || client.inner_contains_key(full_key)).await?
         } else {
-            println!("contains_key, block_in_place");
             tokio::task::block_in_place(move || client.inner_contains_key(full_key))
         }
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let client = self.clone();
-        let metrics = Handle::current().metrics();
-        if metrics.num_workers() == 1 {
-            println!("contains_keys, spawn_blocking");
+        if self.spawn_blocking {
             tokio::task::spawn_blocking(move || client.inner_contains_keys(keys)).await?
         } else {
-            println!("contains_keys, block_in_place");
             tokio::task::block_in_place(move || client.inner_contains_keys(keys))
         }
     }
@@ -316,12 +311,9 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
         let client = self.clone();
-        let metrics = Handle::current().metrics();
-        if metrics.num_workers() == 1 {
-            println!("read_multi_values_bytes, spawn_blocking");
+        if self.spawn_blocking {
             tokio::task::spawn_blocking(move || client.inner_read_multi_values_bytes(keys)).await?
         } else {
-            println!("read_multi_values_bytes, block_in_place");
             tokio::task::block_in_place(move || client.inner_read_multi_values_bytes(keys))
         }
     }
@@ -331,13 +323,10 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbStoreError> {
         let client = self.clone();
-        let metrics = Handle::current().metrics();
         let key_prefix = key_prefix.to_vec();
-        if metrics.num_workers() == 1 {
-            println!("find_keys_by_prefix, spawn_blocking");
+        if self.spawn_blocking {
             tokio::task::spawn_blocking(move || client.inner_find_keys_by_prefix(key_prefix)).await?
         } else {
-            println!("find_keys_by_prefix, block_in_place");
             tokio::task::block_in_place(move || client.inner_find_keys_by_prefix(key_prefix))
         }
 
@@ -348,13 +337,10 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbStoreError> {
         let client = self.clone();
-        let metrics = Handle::current().metrics();
         let key_prefix = key_prefix.to_vec();
-        if metrics.num_workers() == 1 {
-            println!("find_key_values_by_prefix, spawn_blocking");
+        if self.spawn_blocking {
             tokio::task::spawn_blocking(move || client.inner_find_key_values_by_prefix(key_prefix)).await?
         } else {
-            println!("find_key_values_by_prefix, block_in_place");
             tokio::task::block_in_place(move || client.inner_find_key_values_by_prefix(key_prefix))
         }
     }
@@ -365,12 +351,9 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
         let client = self.clone();
-        let metrics = Handle::current().metrics();
-        if metrics.num_workers() == 1 {
-            println!("write_batch, spawn_blocking");
+        if self.spawn_blocking {
             tokio::task::spawn_blocking(move || client.inner_write_batch(batch)).await?
         } else {
-            println!("write_batch, block_in_place");
             tokio::task::block_in_place(move || client.inner_write_batch(batch))
         }
     }
