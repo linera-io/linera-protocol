@@ -10,10 +10,11 @@ use std::{
     sync::Arc,
 };
 
-use futures::future::join_all;
 use linera_base::ensure;
 use tempfile::TempDir;
 use thiserror::Error;
+use tokio::runtime::Handle;
+
 
 #[cfg(with_metrics)]
 use crate::metering::{
@@ -97,6 +98,158 @@ impl RocksDbStoreInternal {
             cache_size,
         })
     }
+
+    fn inner_contains_key(&self, full_key: Vec<u8>) -> Result<bool, RocksDbStoreError> {
+        let key_may_exist = self.db.key_may_exist(&full_key);
+        if !key_may_exist {
+            return Ok::<bool, RocksDbStoreError>(false);
+        }
+        Ok(self.db.get(&full_key)?.is_some())
+    }
+
+    fn inner_contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+        let size = keys.len();
+        let mut results = vec![false; size];
+        let mut indices = Vec::new();
+        let mut keys_red = Vec::new();
+        for (i, key) in keys.into_iter().enumerate() {
+            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
+            let mut full_key = self.root_key.to_vec();
+            full_key.extend(key);
+            let key_may_exist = self.db.key_may_exist(&full_key);
+            if key_may_exist {
+                indices.push(i);
+                keys_red.push(full_key);
+            }
+        }
+        let values_red = self.db.multi_get(keys_red);
+        for (index, value) in indices.into_iter().zip(values_red) {
+            results[index] = value?.is_some();
+        }
+        Ok(results)
+    }
+
+    fn inner_read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
+        for key in &keys {
+            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
+        }
+        let full_keys = keys
+            .into_iter()
+            .map(|key| {
+                let mut full_key = self.root_key.to_vec();
+                full_key.extend(key);
+                full_key
+            })
+            .collect::<Vec<_>>();
+        let entries = self.db.multi_get(&full_keys);
+        Ok(entries.into_iter().collect::<Result<_, _>>()?)
+    }
+
+    fn inner_find_keys_by_prefix(&self, key_prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, RocksDbStoreError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            RocksDbStoreError::KeyTooLong
+        );
+        let mut prefix = self.root_key.clone();
+        prefix.extend(key_prefix);
+        let len = prefix.len();
+        let mut iter = self.db.raw_iterator();
+        let mut keys = Vec::new();
+        iter.seek(&prefix);
+        let mut next_key = iter.key();
+        while let Some(key) = next_key {
+            if !key.starts_with(&prefix) {
+                break;
+            }
+            keys.push(key[len..].to_vec());
+            iter.next();
+            next_key = iter.key();
+        }
+        Ok(keys)
+    }
+
+    fn inner_find_key_values_by_prefix(&self, key_prefix: Vec<u8>) -> Result<Vec<(Vec<u8>,Vec<u8>)>, RocksDbStoreError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            RocksDbStoreError::KeyTooLong
+        );
+        let mut prefix = self.root_key.clone();
+        prefix.extend(key_prefix);
+        let len = prefix.len();
+        let mut iter = self.db.raw_iterator();
+        let mut key_values = Vec::new();
+        iter.seek(&prefix);
+        let mut next_key = iter.key();
+        while let Some(key) = next_key {
+            if !key.starts_with(&prefix) {
+                break;
+            }
+            if let Some(value) = iter.value() {
+                let key_value = (key[len..].to_vec(), value.to_vec());
+                key_values.push(key_value);
+            }
+            iter.next();
+            next_key = iter.key();
+        }
+        Ok(key_values)
+    }
+
+    fn inner_write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
+        // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
+        // Thus in order to have the system working, we need to handle the unlikely case of having to
+        // delete a key starting with [255, ...., 255]
+        let len = batch.operations.len();
+        let mut keys = Vec::new();
+        for i in 0..len {
+            let op = batch.operations.get(i).unwrap();
+            if let WriteOperation::DeletePrefix { key_prefix } = op {
+                if get_upper_bound(key_prefix) == Bound::Unbounded {
+                    for short_key in self.inner_find_keys_by_prefix(key_prefix.to_vec())? {
+                        let mut full_key = self.root_key.clone();
+                        full_key.extend(key_prefix);
+                        full_key.extend(short_key);
+                        keys.push(full_key);
+                    }
+                }
+            }
+        }
+        for key in keys {
+            batch.operations.push(WriteOperation::Delete { key });
+        }
+        let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
+        for operation in batch.operations {
+            match operation {
+                WriteOperation::Delete { key } => {
+                    ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
+                    let mut full_key = self.root_key.to_vec();
+                    full_key.extend(key);
+                    inner_batch.delete(&full_key)
+                }
+                WriteOperation::Put { key, value } => {
+                    ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
+                    let mut full_key = self.root_key.to_vec();
+                    full_key.extend(key);
+                    inner_batch.put(&full_key, value)
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    ensure!(
+                        key_prefix.len() <= MAX_KEY_SIZE,
+                        RocksDbStoreError::KeyTooLong
+                    );
+                    if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
+                        let mut full_key1 = self.root_key.to_vec();
+                        full_key1.extend(key_prefix);
+                        let mut full_key2 = self.root_key.to_vec();
+                        full_key2.extend(upper_bound);
+                        inner_batch.delete_range(&full_key1, &full_key2);
+                    }
+                }
+            }
+        }
+        self.db.write(inner_batch)?;
+        Ok(())
+    }
+
 }
 
 impl WithError for RocksDbStoreInternal {
@@ -117,7 +270,18 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
-        Ok(tokio::task::spawn_blocking(move || client.db.get(&full_key)).await??)
+        let metrics = Handle::current().metrics();
+        if metrics.num_workers() == 1 {
+            println!("read_value spawn_blocking");
+            Ok(tokio::task::spawn_blocking(move || {
+                client.db.get(&full_key)
+            }).await??)
+        } else {
+            println!("read_value block_in_place");
+            Ok(tokio::task::block_in_place(move || {
+                client.db.get(&full_key)
+            })?)
+        }
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreError> {
@@ -125,194 +289,90 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
-        let key_may_exist =
-            tokio::task::spawn_blocking(move || client.db.key_may_exist(full_key)).await?;
-        if !key_may_exist {
-            return Ok(false);
+        let metrics = Handle::current().metrics();
+        if metrics.num_workers() == 1 {
+            println!("contains_key, spawn_blocking");
+            tokio::task::spawn_blocking(move || client.inner_contains_key(full_key)).await?
+        } else {
+            println!("contains_key, block_in_place");
+            tokio::task::block_in_place(move || client.inner_contains_key(full_key))
         }
-        Ok(self.read_value_bytes(key).await?.is_some())
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
-        let size = keys.len();
-        let mut results = vec![false; size];
-        let mut handles = Vec::new();
-        for key in &keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
-            let mut full_key = self.root_key.to_vec();
-            full_key.extend(key);
-            let client = self.clone();
-            let handle = tokio::task::spawn_blocking(move || client.db.key_may_exist(full_key));
-            handles.push(handle);
+        let client = self.clone();
+        let metrics = Handle::current().metrics();
+        if metrics.num_workers() == 1 {
+            println!("contains_keys, spawn_blocking");
+            tokio::task::spawn_blocking(move || client.inner_contains_keys(keys)).await?
+        } else {
+            println!("contains_keys, block_in_place");
+            tokio::task::block_in_place(move || client.inner_contains_keys(keys))
         }
-        let may_results: Vec<_> = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()?;
-        let mut indices = Vec::new();
-        let mut keys_red = Vec::new();
-        for (i, key) in keys.into_iter().enumerate() {
-            if may_results[i] {
-                indices.push(i);
-                keys_red.push(key);
-            }
-        }
-        let values_red = self.read_multi_values_bytes(keys_red).await?;
-        for (index, value) in indices.into_iter().zip(values_red) {
-            results[index] = value.is_some();
-        }
-        Ok(results)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
-        for key in &keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
-        }
         let client = self.clone();
-        let full_keys = keys
-            .into_iter()
-            .map(|key| {
-                let mut full_key = self.root_key.to_vec();
-                full_key.extend(key);
-                full_key
-            })
-            .collect::<Vec<_>>();
-        let entries = tokio::task::spawn_blocking(move || client.db.multi_get(&full_keys)).await?;
-        Ok(entries.into_iter().collect::<Result<_, _>>()?)
+        let metrics = Handle::current().metrics();
+        if metrics.num_workers() == 1 {
+            println!("read_multi_values_bytes, spawn_blocking");
+            tokio::task::spawn_blocking(move || client.inner_read_multi_values_bytes(keys)).await?
+        } else {
+            println!("read_multi_values_bytes, block_in_place");
+            tokio::task::block_in_place(move || client.inner_read_multi_values_bytes(keys))
+        }
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbStoreError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            RocksDbStoreError::KeyTooLong
-        );
         let client = self.clone();
-        let mut prefix = self.root_key.clone();
-        prefix.extend(key_prefix);
-        let len = prefix.len();
-        let keys = tokio::task::spawn_blocking(move || {
-            let mut iter = client.db.raw_iterator();
-            let mut keys = Vec::new();
-            iter.seek(&prefix);
-            let mut next_key = iter.key();
-            while let Some(key) = next_key {
-                if !key.starts_with(&prefix) {
-                    break;
-                }
-                keys.push(key[len..].to_vec());
-                iter.next();
-                next_key = iter.key();
-            }
-            keys
-        })
-        .await?;
-        Ok(keys)
+        let metrics = Handle::current().metrics();
+        let key_prefix = key_prefix.to_vec();
+        if metrics.num_workers() == 1 {
+            println!("find_keys_by_prefix, spawn_blocking");
+            tokio::task::spawn_blocking(move || client.inner_find_keys_by_prefix(key_prefix)).await?
+        } else {
+            println!("find_keys_by_prefix, block_in_place");
+            tokio::task::block_in_place(move || client.inner_find_keys_by_prefix(key_prefix))
+        }
+
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbStoreError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            RocksDbStoreError::KeyTooLong
-        );
         let client = self.clone();
-        let mut prefix = self.root_key.clone();
-        prefix.extend(key_prefix);
-        let len = prefix.len();
-        let key_values = tokio::task::spawn_blocking(move || {
-            let mut iter = client.db.raw_iterator();
-            let mut key_values = Vec::new();
-            iter.seek(&prefix);
-            let mut next_key = iter.key();
-            while let Some(key) = next_key {
-                if !key.starts_with(&prefix) {
-                    break;
-                }
-                if let Some(value) = iter.value() {
-                    let key_value = (key[len..].to_vec(), value.to_vec());
-                    key_values.push(key_value);
-                }
-                iter.next();
-                next_key = iter.key();
-            }
-            key_values
-        })
-        .await?;
-        Ok(key_values)
+        let metrics = Handle::current().metrics();
+        let key_prefix = key_prefix.to_vec();
+        if metrics.num_workers() == 1 {
+            println!("find_key_values_by_prefix, spawn_blocking");
+            tokio::task::spawn_blocking(move || client.inner_find_key_values_by_prefix(key_prefix)).await?
+        } else {
+            println!("find_key_values_by_prefix, block_in_place");
+            tokio::task::block_in_place(move || client.inner_find_key_values_by_prefix(key_prefix))
+        }
     }
 }
 
 impl WritableKeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
         let client = self.clone();
-        // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
-        // Thus in order to have the system working, we need to handle the unlikely case of having to
-        // delete a key starting with [255, ...., 255]
-        let len = batch.operations.len();
-        let mut keys = Vec::new();
-        for i in 0..len {
-            let op = batch.operations.get(i).unwrap();
-            if let WriteOperation::DeletePrefix { key_prefix } = op {
-                if get_upper_bound(key_prefix) == Bound::Unbounded {
-                    for short_key in self.find_keys_by_prefix(key_prefix).await? {
-                        let mut full_key = self.root_key.clone();
-                        full_key.extend(key_prefix);
-                        full_key.extend(short_key);
-                        keys.push(full_key);
-                    }
-                }
-            }
+        let metrics = Handle::current().metrics();
+        if metrics.num_workers() == 1 {
+            println!("write_batch, spawn_blocking");
+            tokio::task::spawn_blocking(move || client.inner_write_batch(batch)).await?
+        } else {
+            println!("write_batch, block_in_place");
+            tokio::task::block_in_place(move || client.inner_write_batch(batch))
         }
-        for key in keys {
-            batch.operations.push(WriteOperation::Delete { key });
-        }
-        let root_key = self.root_key.to_vec();
-        tokio::task::spawn_blocking(move || -> Result<(), RocksDbStoreError> {
-            let mut inner_batch = rocksdb::WriteBatchWithTransaction::default();
-            for operation in batch.operations {
-                match operation {
-                    WriteOperation::Delete { key } => {
-                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
-                        let mut full_key = root_key.clone();
-                        full_key.extend(key);
-                        inner_batch.delete(&full_key)
-                    }
-                    WriteOperation::Put { key, value } => {
-                        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
-                        let mut full_key = root_key.clone();
-                        full_key.extend(key);
-                        inner_batch.put(&full_key, value)
-                    }
-                    WriteOperation::DeletePrefix { key_prefix } => {
-                        ensure!(
-                            key_prefix.len() <= MAX_KEY_SIZE,
-                            RocksDbStoreError::KeyTooLong
-                        );
-                        if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
-                            let mut full_key1 = root_key.clone();
-                            full_key1.extend(key_prefix);
-                            let mut full_key2 = root_key.clone();
-                            full_key2.extend(upper_bound);
-                            inner_batch.delete_range(&full_key1, &full_key2);
-                        }
-                    }
-                }
-            }
-            client.db.write(inner_batch)?;
-            Ok(())
-        })
-        .await??;
-        Ok(())
     }
 
     async fn clear_journal(&self) -> Result<(), RocksDbStoreError> {
