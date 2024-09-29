@@ -15,7 +15,6 @@ use tempfile::TempDir;
 use thiserror::Error;
 use tokio::runtime::Handle;
 
-
 #[cfg(with_metrics)]
 use crate::metering::{
     MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
@@ -133,7 +132,10 @@ impl RocksDbStoreInternal {
         Ok(results)
     }
 
-    fn inner_read_multi_values_bytes(&self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
+    fn inner_read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
         for key in &keys {
             ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
         }
@@ -149,7 +151,10 @@ impl RocksDbStoreInternal {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
-    fn inner_find_keys_by_prefix(&self, key_prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, RocksDbStoreError> {
+    fn inner_find_keys_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, RocksDbStoreError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             RocksDbStoreError::KeyTooLong
@@ -172,7 +177,11 @@ impl RocksDbStoreInternal {
         Ok(keys)
     }
 
-    fn inner_find_key_values_by_prefix(&self, key_prefix: Vec<u8>) -> Result<Vec<(Vec<u8>,Vec<u8>)>, RocksDbStoreError> {
+    #[allow(clippy::type_complexity)]
+    fn inner_find_key_values_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreError> {
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
             RocksDbStoreError::KeyTooLong
@@ -253,7 +262,6 @@ impl RocksDbStoreInternal {
         self.db.write(inner_batch)?;
         Ok(())
     }
-
 }
 
 impl WithError for RocksDbStoreInternal {
@@ -275,9 +283,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
         if self.spawn_blocking {
-            Ok(tokio::task::spawn_blocking(move || {
-                client.db.get(&full_key)
-            }).await??)
+            Ok(tokio::task::spawn_blocking(move || client.db.get(&full_key)).await??)
         } else {
             Ok(tokio::task::block_in_place(move || {
                 client.db.get(&full_key)
@@ -325,11 +331,11 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let key_prefix = key_prefix.to_vec();
         if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_find_keys_by_prefix(key_prefix)).await?
+            tokio::task::spawn_blocking(move || client.inner_find_keys_by_prefix(key_prefix))
+                .await?
         } else {
             tokio::task::block_in_place(move || client.inner_find_keys_by_prefix(key_prefix))
         }
-
     }
 
     async fn find_key_values_by_prefix(
@@ -339,7 +345,8 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let key_prefix = key_prefix.to_vec();
         if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_find_key_values_by_prefix(key_prefix)).await?
+            tokio::task::spawn_blocking(move || client.inner_find_key_values_by_prefix(key_prefix))
+                .await?
         } else {
             tokio::task::block_in_place(move || client.inner_find_key_values_by_prefix(key_prefix))
         }
