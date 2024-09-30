@@ -91,6 +91,8 @@ pub enum StorageConfig {
     RocksDb {
         /// The path used
         path: PathBuf,
+        /// Whether to use `block_in_place`
+        block_in_place: bool,
     },
     /// The DynamoDB description
     #[cfg(feature = "dynamodb")]
@@ -193,29 +195,39 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
             if s.is_empty() {
                 return Err(Error::Format(
-                    "For RocksDB, the formatting has to be rocksdb:directory:namespace".into(),
+                    "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:block_in_place:namespace".into(),
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() == 1 {
                 let path = parts[0].to_string().into();
                 let namespace = DEFAULT_NAMESPACE.to_string();
-                let storage_config = StorageConfig::RocksDb { path };
+                let block_in_place = false;
+                let storage_config = StorageConfig::RocksDb {
+                    path,
+                    block_in_place,
+                };
                 return Ok(StorageConfigNamespace {
                     storage_config,
                     namespace,
                 });
             }
-            if parts.len() == 2 {
+            if parts.len() == 3 {
                 let path = parts[0].to_string().into();
-                let namespace = parts[1].to_string();
-                let storage_config = StorageConfig::RocksDb { path };
+                let block_in_place = parts[1].parse().map_err(|_| {
+                    Error::Format(format!("Failed to parse {} as a boolean", parts[1]))
+                })?;
+                let namespace = parts[2].to_string();
+                let storage_config = StorageConfig::RocksDb {
+                    path,
+                    block_in_place,
+                };
                 return Ok(StorageConfigNamespace {
                     storage_config,
                     namespace,
                 });
             }
-            return Err(Error::Format("We should have one or two parts".into()));
+            return Err(Error::Format("We should have one or three parts".into()));
         }
         #[cfg(feature = "dynamodb")]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
@@ -332,11 +344,15 @@ impl StorageConfigNamespace {
                 Ok(StoreConfig::Memory(config, namespace))
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { path } => {
+            StorageConfig::RocksDb {
+                path,
+                block_in_place,
+            } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
                 let config = RocksDbStoreConfig {
                     path_with_guard,
+                    block_in_place: *block_in_place,
                     common_config,
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))
@@ -374,8 +390,17 @@ impl fmt::Display for StorageConfigNamespace {
                 write!(f, "memory:{}", namespace)
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb { path } => {
-                write!(f, "rocksdb:{}:{}", path.display(), namespace)
+            StorageConfig::RocksDb {
+                path,
+                block_in_place,
+            } => {
+                write!(
+                    f,
+                    "rocksdb:{}:{}:{}",
+                    path.display(),
+                    block_in_place,
+                    namespace
+                )
             }
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => match use_localstack {
@@ -706,10 +731,11 @@ fn test_shared_store_config_from_str() {
 #[test]
 fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("rocksdb:foo.db:chosen_namespace").unwrap(),
+        StorageConfigNamespace::from_str("rocksdb:foo.db:true:chosen_namespace").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::RocksDb {
-                path: "foo.db".into()
+                path: "foo.db".into(),
+                block_in_place: true,
             },
             namespace: "chosen_namespace".into()
         }
@@ -719,7 +745,8 @@ fn test_rocks_db_storage_config_from_str() {
         StorageConfigNamespace::from_str("rocksdb:foo.db").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::RocksDb {
-                path: "foo.db".into()
+                path: "foo.db".into(),
+                block_in_place: false,
             },
             namespace: DEFAULT_NAMESPACE.to_string()
         }

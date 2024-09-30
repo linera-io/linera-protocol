@@ -583,8 +583,11 @@ async fn main() {
         ServiceStoreServerOptions::RocksDb { path, endpoint } => {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
+            // The server is run in multi-threaded mode so we can use the block_in_place.
+            let block_in_place = true;
             let config = RocksDbStoreConfig {
                 path_with_guard,
+                block_in_place,
                 common_config,
             };
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)

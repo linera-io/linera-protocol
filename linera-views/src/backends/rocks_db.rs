@@ -13,7 +13,6 @@ use std::{
 use linera_base::ensure;
 use tempfile::TempDir;
 use thiserror::Error;
-use tokio::runtime::Handle;
 
 #[cfg(with_metrics)]
 use crate::metering::{
@@ -53,7 +52,7 @@ struct RocksDbStoreInternal {
     root_key: Vec<u8>,
     max_stream_queries: usize,
     cache_size: usize,
-    spawn_blocking: bool,
+    block_in_place: bool,
 }
 
 /// The initial configuration of the system
@@ -61,6 +60,10 @@ struct RocksDbStoreInternal {
 pub struct RocksDbStoreConfig {
     /// The path to the storage containing the namespaces..
     pub path_with_guard: PathWithGuard,
+    /// The use of the block_in_place function. One way to set it up is via:
+    /// let block_in_place = (tokio::runtime::Handle::current().metrics().num_workers() > 1);
+    /// The block_in_place is documented in https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html
+    pub block_in_place: bool,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
 }
@@ -78,6 +81,7 @@ impl RocksDbStoreInternal {
 
     fn build(
         path_with_guard: PathWithGuard,
+        block_in_place: bool,
         max_stream_queries: usize,
         cache_size: usize,
         root_key: &[u8],
@@ -90,27 +94,25 @@ impl RocksDbStoreInternal {
         options.create_if_missing(true);
         let db = DB::open(&options, path)?;
         let root_key = root_key.to_vec();
-        let metrics = Handle::current().metrics();
-        let spawn_blocking = metrics.num_workers() == 1;
         Ok(RocksDbStoreInternal {
             db: Arc::new(db),
             _path_with_guard: path_with_guard,
             root_key,
             max_stream_queries,
             cache_size,
-            spawn_blocking,
+            block_in_place,
         })
     }
 
-    fn inner_contains_key(&self, full_key: Vec<u8>) -> Result<bool, RocksDbStoreError> {
+    fn contains_key_internal(&self, full_key: Vec<u8>) -> Result<bool, RocksDbStoreError> {
         let key_may_exist = self.db.key_may_exist(&full_key);
         if !key_may_exist {
-            return Ok::<bool, RocksDbStoreError>(false);
+            return Ok(false);
         }
         Ok(self.db.get(&full_key)?.is_some())
     }
 
-    fn inner_contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+    fn contains_keys_internal(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let size = keys.len();
         let mut results = vec![false; size];
         let mut indices = Vec::new();
@@ -132,7 +134,7 @@ impl RocksDbStoreInternal {
         Ok(results)
     }
 
-    fn inner_read_multi_values_bytes(
+    fn read_multi_values_bytes_internal(
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
@@ -151,7 +153,7 @@ impl RocksDbStoreInternal {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
-    fn inner_find_keys_by_prefix(
+    fn find_keys_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, RocksDbStoreError> {
@@ -178,7 +180,7 @@ impl RocksDbStoreInternal {
     }
 
     #[allow(clippy::type_complexity)]
-    fn inner_find_key_values_by_prefix(
+    fn find_key_values_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreError> {
@@ -207,7 +209,7 @@ impl RocksDbStoreInternal {
         Ok(key_values)
     }
 
-    fn inner_write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
+    fn write_batch_internal(&self, mut batch: Batch) -> Result<(), RocksDbStoreError> {
         // NOTE: The delete_range functionality of RocksDB needs to have an upper bound in order to work.
         // Thus in order to have the system working, we need to handle the unlikely case of having to
         // delete a key starting with [255, ...., 255]
@@ -217,7 +219,7 @@ impl RocksDbStoreInternal {
             let op = batch.operations.get(i).unwrap();
             if let WriteOperation::DeletePrefix { key_prefix } = op {
                 if get_upper_bound(key_prefix) == Bound::Unbounded {
-                    for short_key in self.inner_find_keys_by_prefix(key_prefix.to_vec())? {
+                    for short_key in self.find_keys_by_prefix_internal(key_prefix.to_vec())? {
                         let mut full_key = self.root_key.clone();
                         full_key.extend(key_prefix);
                         full_key.extend(short_key);
@@ -282,12 +284,12 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
-        if self.spawn_blocking {
-            Ok(tokio::task::spawn_blocking(move || client.db.get(&full_key)).await??)
-        } else {
+        if self.block_in_place {
             Ok(tokio::task::block_in_place(move || {
                 client.db.get(&full_key)
             })?)
+        } else {
+            Ok(tokio::task::spawn_blocking(move || client.db.get(&full_key)).await??)
         }
     }
 
@@ -296,19 +298,19 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let client = self.clone();
         let mut full_key = self.root_key.to_vec();
         full_key.extend(key);
-        if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_contains_key(full_key)).await?
+        if self.block_in_place {
+            tokio::task::block_in_place(move || client.contains_key_internal(full_key))
         } else {
-            tokio::task::block_in_place(move || client.inner_contains_key(full_key))
+            tokio::task::spawn_blocking(move || client.contains_key_internal(full_key)).await?
         }
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let client = self.clone();
-        if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_contains_keys(keys)).await?
+        if self.block_in_place {
+            tokio::task::block_in_place(move || client.contains_keys_internal(keys))
         } else {
-            tokio::task::block_in_place(move || client.inner_contains_keys(keys))
+            tokio::task::spawn_blocking(move || client.contains_keys_internal(keys)).await?
         }
     }
 
@@ -317,10 +319,11 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
         let client = self.clone();
-        if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_read_multi_values_bytes(keys)).await?
+        if self.block_in_place {
+            tokio::task::block_in_place(move || client.read_multi_values_bytes_internal(keys))
         } else {
-            tokio::task::block_in_place(move || client.inner_read_multi_values_bytes(keys))
+            tokio::task::spawn_blocking(move || client.read_multi_values_bytes_internal(keys))
+                .await?
         }
     }
 
@@ -330,11 +333,11 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Self::Keys, RocksDbStoreError> {
         let client = self.clone();
         let key_prefix = key_prefix.to_vec();
-        if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_find_keys_by_prefix(key_prefix))
-                .await?
+        if self.block_in_place {
+            tokio::task::block_in_place(move || client.find_keys_by_prefix_internal(key_prefix))
         } else {
-            tokio::task::block_in_place(move || client.inner_find_keys_by_prefix(key_prefix))
+            tokio::task::spawn_blocking(move || client.find_keys_by_prefix_internal(key_prefix))
+                .await?
         }
     }
 
@@ -344,11 +347,15 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Self::KeyValues, RocksDbStoreError> {
         let client = self.clone();
         let key_prefix = key_prefix.to_vec();
-        if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_find_key_values_by_prefix(key_prefix))
-                .await?
+        if self.block_in_place {
+            tokio::task::block_in_place(move || {
+                client.find_key_values_by_prefix_internal(key_prefix)
+            })
         } else {
-            tokio::task::block_in_place(move || client.inner_find_key_values_by_prefix(key_prefix))
+            tokio::task::spawn_blocking(move || {
+                client.find_key_values_by_prefix_internal(key_prefix)
+            })
+            .await?
         }
     }
 }
@@ -358,10 +365,10 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
         let client = self.clone();
-        if self.spawn_blocking {
-            tokio::task::spawn_blocking(move || client.inner_write_batch(batch)).await?
+        if self.block_in_place {
+            tokio::task::block_in_place(move || client.write_batch_internal(batch))
         } else {
-            tokio::task::block_in_place(move || client.inner_write_batch(batch))
+            tokio::task::spawn_blocking(move || client.write_batch_internal(batch)).await?
         }
     }
 
@@ -376,8 +383,10 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
         let path_with_guard = create_rocks_db_test_path();
         let common_config = create_rocks_db_common_config();
+        let block_in_place = false;
         Ok(RocksDbStoreConfig {
             path_with_guard,
+            block_in_place,
             common_config,
         })
     }
@@ -390,11 +399,18 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Self::check_namespace(namespace)?;
         let mut path_buf = config.path_with_guard.path_buf.clone();
         let mut path_with_guard = config.path_with_guard.clone();
+        let block_in_place = config.block_in_place;
         path_buf.push(namespace);
         path_with_guard.path_buf = path_buf;
         let max_stream_queries = config.common_config.max_stream_queries;
         let cache_size = config.common_config.cache_size;
-        RocksDbStoreInternal::build(path_with_guard, max_stream_queries, cache_size, root_key)
+        RocksDbStoreInternal::build(
+            path_with_guard,
+            block_in_place,
+            max_stream_queries,
+            cache_size,
+            root_key,
+        )
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
@@ -511,6 +527,20 @@ pub fn create_rocks_db_test_path() -> PathWithGuard {
 #[cfg(with_testing)]
 pub async fn create_rocks_db_test_store() -> RocksDbStore {
     let config = RocksDbStore::new_test_config().await.expect("config");
+    let namespace = generate_test_namespace();
+    let root_key = &[];
+    RocksDbStore::recreate_and_connect(&config, &namespace, root_key)
+        .await
+        .expect("store")
+}
+
+/// Creates a RocksDB database client to be used for benchmarks.
+/// The temporary directory has to be carried because if it goes
+/// out of scope then the RocksDB client can become unstable.
+#[cfg(with_testing)]
+pub async fn create_rocks_db_benchmark_store() -> RocksDbStore {
+    let mut config = RocksDbStore::new_test_config().await.expect("config");
+    config.block_in_place = true;
     let namespace = generate_test_namespace();
     let root_key = &[];
     RocksDbStore::recreate_and_connect(&config, &namespace, root_key)

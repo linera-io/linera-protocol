@@ -45,8 +45,11 @@ impl RocksDbRunner {
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);
+        // The tests are run in single threaded mode
+        let block_in_place = false;
         let store_config = RocksDbStoreConfig {
             path_with_guard,
+            block_in_place,
             common_config,
         };
         let namespace = config.client.namespace.clone();
