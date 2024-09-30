@@ -161,7 +161,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             delivery,
             false,
             [chain_id0],
-            "Client node",
+            format!("Client node for {:.8}", chain_id0),
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
