@@ -62,7 +62,7 @@ pub struct RocksDbStoreConfig {
     pub path_with_guard: PathWithGuard,
     /// The use of the block_in_place function. One way to set it up is via:
     /// let block_in_place = (tokio::runtime::Handle::current().metrics().num_workers() > 1);
-    /// The block_in_place is documented in https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html
+    /// The block_in_place is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
     pub block_in_place: bool,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
