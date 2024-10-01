@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ChainClient, Client, MessagePolicy},
+    client::{ChainClient, Client, ClientMode, MessagePolicy},
     data_types::ClientOutcome,
     join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
@@ -215,6 +215,7 @@ where
             chain.next_block_height,
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
+            ClientMode::Optimistic,
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
             self.options.blanket_message_policy,

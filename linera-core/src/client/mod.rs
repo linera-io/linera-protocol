@@ -254,6 +254,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, Blob>,
+        mode: ClientMode,
     ) -> ChainClient<P, S> {
         let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) else {
             panic!("Inserting already-existing chain {chain_id}");
@@ -276,6 +277,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
             },
+            mode,
         }
     }
 }
@@ -417,6 +419,14 @@ where
     chain_id: ChainId,
     /// The client options.
     options: ChainClientOptions,
+    /// The client's mode. Optmistic or pessimistic.
+    mode: ClientMode,
+}
+
+#[derive(Clone)]
+pub enum ClientMode {
+    Optimistic,
+    Pessimistic,
 }
 
 impl<P, S> Clone for ChainClient<P, S>
@@ -428,6 +438,7 @@ where
             client: self.client.clone(),
             chain_id: self.chain_id,
             options: self.options.clone(),
+            mode: self.mode.clone(),
         }
     }
 }
@@ -606,6 +617,15 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, Blob>> {
         Unsend::new(self.state().inner.map(|state| state.pending_blobs()))
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    /// Returns if the client is optimistic.
+    pub fn is_optimistic(&self) -> bool {
+        match self.mode {
+            ClientMode::Optimistic => true,
+            ClientMode::Pessimistic => false,
+        }
     }
 }
 
@@ -1800,7 +1820,9 @@ where
         &self,
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.prepare_chain().await?;
+        if !self.is_optimistic() {
+            self.prepare_chain().await?;
+        }
         self.execute_without_prepare(operations).await
     }
 

@@ -14,7 +14,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, Client, ClientMode},
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
@@ -75,6 +75,7 @@ impl chain_listener::ClientContext for ClientContext {
             chain.next_block_height,
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
+            ClientMode::Optimistic,
         )
     }
 
