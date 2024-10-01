@@ -203,7 +203,8 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let txn_tracker_moved = mem::take(txn_tracker);
-        let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
+        let (code, description) = self.load_contract(application_id).await?;
+        let contract_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
                 chain_id,
@@ -214,13 +215,21 @@ where
                 txn_tracker_moved,
             );
 
-            runtime.run_action(application_id, chain_id, action)
-        });
+            async move {
+                let code = codes.next().await.expect("we send this immediately below");
+                runtime.preload_contract(application_id, code, description)?;
+                runtime.run_action(application_id, chain_id, action)
+            }
+        })
+        .await;
+
+        contract_runtime_task.send(code)?;
+
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
 
-        let (controller, txn_tracker_moved) = execution_outcomes_future.await??;
+        let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
         *txn_tracker = txn_tracker_moved;
         resource_controller
             .with_state_and_grant(self, grant)
@@ -504,16 +513,26 @@ where
     ) -> Result<Vec<u8>, ExecutionError> {
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
+        let (code, description) = self.load_service(application_id).await?;
+
+        let service_runtime_task = linera_base::task::Blocking::spawn(move |mut codes| {
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
-            runtime.run_query(application_id, query)
-        });
+
+            async move {
+                let code = codes.next().await.expect("we send this immediately below");
+                runtime.preload_service(application_id, code, description)?;
+                runtime.run_query(application_id, query)
+            }
+        })
+        .await;
+
+        service_runtime_task.send(code)?;
+
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
 
-        let response = execution_outcomes_future.await??;
-        Ok(response)
+        service_runtime_task.join().await
     }
 
     async fn query_user_application_with_long_lived_service(

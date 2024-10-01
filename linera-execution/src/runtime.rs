@@ -32,8 +32,8 @@ use crate::{
     util::{ReceiverExt, UnboundedSenderExt},
     BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
     OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
-    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
-    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserContractInstance,
+    UserServiceCode, UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -268,7 +268,7 @@ impl<UserInstance> Drop for SyncRuntime<UserInstance> {
     fn drop(&mut self) {
         // Ensure the `loaded_applications` are cleared to prevent circular references in
         // the runtime
-        if let Some(mut handle) = self.0.take() {
+        if let Some(handle) = self.0.take() {
             handle.inner().loaded_applications.clear();
         }
     }
@@ -375,17 +375,19 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Loads a contract instance, initializing it with this runtime if needed.
     fn load_contract_instance(
         &mut self,
-        this: Arc<Mutex<Self>>,
+        this: SyncRuntimeHandle<UserContractInstance>,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
             hash_map::Entry::Vacant(entry) => {
+                assert!(!cfg!(web), "dynamically loading contracts is not currently supported on the Web");
+
                 let (code, description) = self
                     .execution_state_sender
                     .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntimeHandle(this))?;
+                let instance = code.instantiate(this)?;
 
                 self.applications_to_finalize.push(id);
                 Ok(entry
@@ -399,7 +401,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Configures the runtime for executing a call to a different contract.
     fn prepare_for_call(
         &mut self,
-        this: Arc<Mutex<Self>>,
+        this: ContractSyncRuntimeHandle,
         authenticated: bool,
         callee_id: UserApplicationId,
     ) -> Result<(Arc<Mutex<UserContractInstance>>, OperationContext), ExecutionError> {
@@ -487,7 +489,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     /// Initializes a service instance with this runtime.
     fn load_service_instance(
         &mut self,
-        this: Arc<Mutex<Self>>,
+        this: ServiceSyncRuntimeHandle,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
@@ -497,7 +499,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                     .send_request(|callback| ExecutionRequest::LoadService { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntimeHandle(this))?;
+                let instance = code.instantiate(this)?;
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -526,7 +528,7 @@ impl<UserInstance> From<SyncRuntimeInternal<UserInstance>> for SyncRuntimeHandle
 }
 
 impl<UserInstance> SyncRuntimeHandle<UserInstance> {
-    fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
+    fn inner(&self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
@@ -1058,8 +1060,34 @@ impl ContractSyncRuntime {
         )))
     }
 
+    // TODO: deduplicate `Contract`/`Service` traits and types
+    pub(crate) fn preload_contract(
+        &self,
+        id: UserApplicationId,
+        code: UserContractCode,
+        description: UserApplicationDescription,
+    ) -> Result<(), ExecutionError> {
+        let this = self
+            .0
+            .as_ref()
+            .expect("contracts shouldn't be preloaded while the runtime is being dropped");
+        let runtime_handle = this.clone();
+        let mut this_guard = this.inner();
+
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            this_guard.loaded_applications.entry(id)
+        {
+            e.insert(LoadedApplication::new(
+                code.instantiate(runtime_handle)?,
+                description,
+            ));
+            this_guard.applications_to_finalize.push(id);
+        }
+
+        Ok(())
+    }
+
     /// Main entry point to start executing a user action.
-    #[expect(clippy::too_many_arguments)]
     pub(crate) fn run_action(
         mut self,
         application_id: UserApplicationId,
@@ -1111,11 +1139,8 @@ impl ContractSyncRuntime {
         closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecutionError> {
         let contract = {
-            let cloned_runtime = self.0.clone().expect(
-                "`SyncRuntime` should not be used after its `inner` contents have been moved out",
-            );
             let mut runtime = self.inner();
-            let application = runtime.load_contract_instance(cloned_runtime.0, application_id)?;
+            let application = runtime.load_contract_instance(self.clone(), application_id)?;
 
             let status = ApplicationStatus {
                 caller_id: None,
@@ -1266,10 +1291,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         callee_id: UserApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let cloned_self = self.clone().0;
         let (contract, context) =
             self.inner()
-                .prepare_for_call(cloned_self, authenticated, callee_id)?;
+                .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
         let value = contract
             .try_lock()
@@ -1390,6 +1414,33 @@ impl ServiceSyncRuntime {
         }
     }
 
+    pub(crate) fn preload_service(
+        &self,
+        id: UserApplicationId,
+        code: UserServiceCode,
+        description: UserApplicationDescription,
+    ) -> Result<(), ExecutionError> {
+        let this = self
+            .runtime
+            .0
+            .as_ref()
+            .expect("services shouldn't be preloaded while the runtime is being dropped");
+        let runtime_handle = this.clone();
+        let mut this_guard = this.inner();
+
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            this_guard.loaded_applications.entry(id)
+        {
+            e.insert(LoadedApplication::new(
+                code.instantiate(runtime_handle)?,
+                description,
+            ));
+            this_guard.applications_to_finalize.push(id);
+        }
+
+        Ok(())
+    }
+
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
     pub fn run(&mut self, incoming_requests: std::sync::mpsc::Receiver<ServiceRuntimeRequest>) {
         while let Ok(request) = incoming_requests.recv() {
@@ -1447,11 +1498,10 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (query_context, service) = {
-            let cloned_self = self.clone().0;
             let mut this = self.inner();
 
             // Load the application.
-            let application = this.load_service_instance(cloned_self, queried_id)?;
+            let application = this.load_service_instance(self.clone(), queried_id)?;
             // Make the call to user code.
             let query_context = QueryContext {
                 chain_id: this.chain_id,
