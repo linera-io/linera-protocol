@@ -24,10 +24,11 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{CustomSerialize, HasherOutput, KeyIterable, Update, MIN_VIEW_TAG},
+    common::{CustomSerialize, HasherOutput, Update},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    store::KeyIterable,
+    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]

@@ -9,13 +9,13 @@ use async_lock::RwLock;
 use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
-    common::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
     memory::MemoryStore,
+    store::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    common::AdminKeyValueStore,
     rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    store::AdminKeyValueStore as _,
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};

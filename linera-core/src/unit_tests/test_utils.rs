@@ -45,8 +45,8 @@ use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::common::AdminKeyValueStore as _,
     linera_views::rocks_db::RocksDbStore,
+    linera_views::store::AdminKeyValueStore as _,
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 

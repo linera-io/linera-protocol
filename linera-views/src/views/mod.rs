@@ -47,6 +47,9 @@ pub mod key_value_store_view;
 /// Wrapping a view to compute a hash.
 pub mod hashable_wrapper;
 
+/// The minimum value for the view tags. Values in 0..MIN_VIEW_TAG are used for other purposes.
+pub const MIN_VIEW_TAG: u8 = 1;
+
 /// A view gives exclusive access to read and write the data stored at an underlying
 /// address in storage.
 #[async_trait]

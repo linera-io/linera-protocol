@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig},
     rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
 use crate::{

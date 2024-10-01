@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implements [`crate::common::KeyValueStore`] for the IndexedDB Web database.
+//! Implements [`crate::store::KeyValueStore`] for the IndexedDB Web database.
 
 use std::{fmt::Debug, rc::Rc};
 
@@ -11,11 +11,11 @@ use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{
-        get_upper_bound_option, CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore,
-        LocalReadableKeyValueStore, LocalWritableKeyValueStore, WithError,
+    common::get_upper_bound_option,
+    store::{
+        CommonStoreConfig, KeyValueStoreError, LocalAdminKeyValueStore, LocalReadableKeyValueStore,
+        LocalWritableKeyValueStore, WithError,
     },
-    value_splitting::DatabaseConsistencyError,
 };
 
 /// The initial configuration of the system
@@ -347,10 +347,6 @@ pub enum IndexedDbStoreError {
     /// The value is too large for the IndexedDbStore
     #[error("The value is too large for the IndexedDbStore")]
     TooLargeValue,
-
-    /// The database is not consistent
-    #[error(transparent)]
-    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// A DOM exception occurred in the IndexedDB operations
     #[error("DOM exception: {0:?}")]

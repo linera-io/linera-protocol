@@ -11,11 +11,11 @@ use linera_views::metering::MeteredStore;
 use linera_views::test_utils::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    common::{
+    lru_caching::LruCachingStore,
+    store::{
         AdminKeyValueStore, CommonStoreConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
-    lru_caching::LruCachingStore,
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};

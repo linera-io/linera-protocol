@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implements [`crate::common::KeyValueStore`] in memory.
+//! Implements [`crate::store::KeyValueStore`] in memory.
 
 use std::{
     collections::BTreeMap,
@@ -15,11 +15,11 @@ use thiserror::Error;
 use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{
-        get_interval, AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    common::get_interval,
+    store::{
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
-    value_splitting::DatabaseConsistencyError,
 };
 
 /// The initial configuration of the system
@@ -408,10 +408,6 @@ pub enum MemoryStoreError {
     /// The namespace does not exist
     #[error("The namespace does not exist")]
     NamespaceNotFound,
-
-    /// The database is not consistent
-    #[error(transparent)]
-    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
 impl KeyValueStoreError for MemoryStoreError {

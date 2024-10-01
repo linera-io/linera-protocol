@@ -24,7 +24,7 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             RegisterView::<
                 custom::GenericContext<T>,
@@ -33,7 +33,7 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         );
         let index = 1;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             CollectionView::<
                 custom::GenericContext<T>,
@@ -53,7 +53,7 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
         let pos_next = pos
             + RegisterView::<custom::GenericContext<T>, usize>::NUM_INIT_KEYS;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let register = RegisterView::<
             custom::GenericContext<T>,
             usize,
@@ -67,7 +67,7 @@ impl linera_views::views::View<custom::GenericContext<T>> for TestView {
                 RegisterView<custom::GenericContext<T>, usize>,
             >::NUM_INIT_KEYS;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let collection = CollectionView::<
             custom::GenericContext<T>,
             usize,

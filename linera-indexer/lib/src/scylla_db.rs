@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig},
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
 use crate::{

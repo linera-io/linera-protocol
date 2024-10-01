@@ -13,7 +13,7 @@ use prometheus::{HistogramVec, IntCounterVec};
 
 use crate::{
     batch::Batch,
-    common::{
+    store::{
         KeyIterable as _, KeyValueIterable as _, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },

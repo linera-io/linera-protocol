@@ -28,7 +28,7 @@ where
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             RegisterView::<
                 custom::path::to::ContextType,
@@ -37,7 +37,7 @@ where
         );
         let index = 1;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             CollectionView::<
                 custom::path::to::ContextType,
@@ -57,7 +57,7 @@ where
         let pos_next = pos
             + RegisterView::<custom::path::to::ContextType, usize>::NUM_INIT_KEYS;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let register = RegisterView::<
             custom::path::to::ContextType,
             usize,
@@ -71,7 +71,7 @@ where
                 RegisterView<custom::path::to::ContextType, usize>,
             >::NUM_INIT_KEYS;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let collection = CollectionView::<
             custom::path::to::ContextType,
             usize,

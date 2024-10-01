@@ -16,7 +16,7 @@ use crate::{
         Batch, WriteOperation,
         WriteOperation::{Delete, Put},
     },
-    common::{KeyIterable, KeyValueIterable, LocalKeyValueStore, LocalRestrictedKeyValueStore},
+    store::{KeyIterable, KeyValueIterable, LocalKeyValueStore, LocalRestrictedKeyValueStore},
 };
 
 // The following seed is chosen to have equal numbers of 1s and 0s, as advised by

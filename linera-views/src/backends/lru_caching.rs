@@ -21,10 +21,8 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::memory::MemoryStore;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{
-        get_interval, ReadableKeyValueStore, RestrictedKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    common::get_interval,
+    store::{ReadableKeyValueStore, RestrictedKeyValueStore, WithError, WritableKeyValueStore},
 };
 
 #[cfg(with_metrics)]

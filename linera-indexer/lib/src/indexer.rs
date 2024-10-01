@@ -11,12 +11,11 @@ use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
-    common::KeyValueStore,
     context::{Context, ViewContext},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
-    value_splitting::DatabaseConsistencyError,
+    store::KeyValueStore,
     views::{RootView, View},
 };
 use tokio::sync::Mutex;
@@ -60,12 +59,7 @@ enum LatestBlock {
 impl<S> Indexer<S>
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: From<bcs::Error>
-        + From<DatabaseConsistencyError>
-        + Send
-        + Sync
-        + std::error::Error
-        + 'static,
+    S::Error: Send + Sync + std::error::Error + 'static,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(store: S) -> Result<Self, IndexerError> {

@@ -19,7 +19,7 @@ use linera_base::{
 use linera_chain::data_types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
-use linera_views::{common::KeyValueStore, value_splitting::DatabaseConsistencyError};
+use linera_views::store::KeyValueStore;
 use tokio::runtime::Handle;
 use tracing::error;
 
@@ -130,12 +130,7 @@ impl Listener {
     ) -> Result<ChainId, IndexerError>
     where
         S: KeyValueStore + Clone + Send + Sync + 'static,
-        S::Error: From<bcs::Error>
-            + From<DatabaseConsistencyError>
-            + Send
-            + Sync
-            + std::error::Error
-            + 'static,
+        S::Error: Send + Sync + std::error::Error + 'static,
     {
         let mut request = self.service.websocket().into_client_request()?;
         request.headers_mut().insert(

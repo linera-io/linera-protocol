@@ -53,11 +53,12 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{
-        from_bytes_option, get_interval, CustomSerialize, DeletionSet, HasherOutput, KeyIterable,
-        KeyValueIterable, SuffixClosedSetIterator, Update,
+        from_bytes_option, get_interval, CustomSerialize, DeletionSet, HasherOutput,
+        SuffixClosedSetIterator, Update,
     },
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::{KeyIterable, KeyValueIterable},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 

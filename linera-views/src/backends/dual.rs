@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implements [`crate::common::KeyValueStore`] by combining two existing stores.
+//! Implements [`crate::store::KeyValueStore`] by combining two existing stores.
 
 use thiserror::Error;
 
 use crate::{
     batch::Batch,
-    common::{
+    store::{
         AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },

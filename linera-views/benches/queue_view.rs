@@ -16,9 +16,9 @@ use linera_views::scylla_db::create_scylla_db_test_store;
 use linera_views::{
     backends::memory::create_test_memory_store,
     bucket_queue_view::BucketQueueView,
-    common::KeyValueStore,
     context::ViewContext,
     queue_view::QueueView,
+    store::KeyValueStore,
     test_utils::{make_deterministic_rng, DeterministicRng},
     views::{CryptoHashRootView, RootView, View},
 };

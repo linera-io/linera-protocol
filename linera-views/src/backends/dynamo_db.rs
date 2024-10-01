@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implements [`crate::common::KeyValueStore`] for the DynamoDB database.
+//! Implements [`crate::store::KeyValueStore`] for the DynamoDB database.
 
 use std::{collections::HashMap, env, sync::Arc};
 
@@ -42,13 +42,13 @@ use crate::metering::{
 };
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
-    common::{
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
+    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
+    store::{
         AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
-    value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
+    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 
 /// Name of the environment variable with the address to a LocalStack instance.
@@ -58,7 +58,7 @@ const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 pub type Config = aws_sdk_dynamodb::Config;
 
 /// Gets the AWS configuration from the environment
-pub async fn get_base_config() -> Result<Config, DynamoDbStoreError> {
+pub async fn get_base_config() -> Result<Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -74,7 +74,7 @@ fn get_endpoint_address() -> Option<String> {
 }
 
 /// Gets the localstack config
-pub async fn get_localstack_config() -> Result<Config, DynamoDbStoreError> {
+pub async fn get_localstack_config() -> Result<Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -86,7 +86,9 @@ pub async fn get_localstack_config() -> Result<Config, DynamoDbStoreError> {
 }
 
 /// Getting a configuration for the system
-pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {
+pub async fn get_config_internal(
+    use_localstack: bool,
+) -> Result<Config, DynamoDbStoreInternalError> {
     if use_localstack {
         get_localstack_config().await
     } else {
@@ -233,41 +235,41 @@ fn build_key_value(
 fn extract_key(
     prefix_len: usize,
     attributes: &HashMap<String, AttributeValue>,
-) -> Result<&[u8], DynamoDbStoreError> {
+) -> Result<&[u8], DynamoDbStoreInternalError> {
     let key = attributes
         .get(KEY_ATTRIBUTE)
-        .ok_or(DynamoDbStoreError::MissingKey)?;
+        .ok_or(DynamoDbStoreInternalError::MissingKey)?;
     match key {
         AttributeValue::B(blob) => Ok(&blob.as_ref()[prefix_len..]),
-        key => Err(DynamoDbStoreError::wrong_key_type(key)),
+        key => Err(DynamoDbStoreInternalError::wrong_key_type(key)),
     }
 }
 
 /// Extracts the value attribute from an item.
 fn extract_value(
     attributes: &HashMap<String, AttributeValue>,
-) -> Result<&[u8], DynamoDbStoreError> {
+) -> Result<&[u8], DynamoDbStoreInternalError> {
     // According to the official AWS DynamoDB documentation:
     // "Binary must have a length greater than zero if the attribute is used as a key attribute for a table or index"
     let value = attributes
         .get(VALUE_ATTRIBUTE)
-        .ok_or(DynamoDbStoreError::MissingValue)?;
+        .ok_or(DynamoDbStoreInternalError::MissingValue)?;
     match value {
         AttributeValue::B(blob) => Ok(blob.as_ref()),
-        value => Err(DynamoDbStoreError::wrong_value_type(value)),
+        value => Err(DynamoDbStoreInternalError::wrong_value_type(value)),
     }
 }
 
 /// Extracts the value attribute from an item (returned by value).
 fn extract_value_owned(
     attributes: &mut HashMap<String, AttributeValue>,
-) -> Result<Vec<u8>, DynamoDbStoreError> {
+) -> Result<Vec<u8>, DynamoDbStoreInternalError> {
     let value = attributes
         .remove(VALUE_ATTRIBUTE)
-        .ok_or(DynamoDbStoreError::MissingValue)?;
+        .ok_or(DynamoDbStoreInternalError::MissingValue)?;
     match value {
         AttributeValue::B(blob) => Ok(blob.into_inner()),
-        value => Err(DynamoDbStoreError::wrong_value_type(&value)),
+        value => Err(DynamoDbStoreInternalError::wrong_value_type(&value)),
     }
 }
 
@@ -275,7 +277,7 @@ fn extract_value_owned(
 fn extract_key_value(
     prefix_len: usize,
     attributes: &HashMap<String, AttributeValue>,
-) -> Result<(&[u8], &[u8]), DynamoDbStoreError> {
+) -> Result<(&[u8], &[u8]), DynamoDbStoreInternalError> {
     let key = extract_key(prefix_len, attributes)?;
     let value = extract_value(attributes)?;
     Ok((key, value))
@@ -285,7 +287,7 @@ fn extract_key_value(
 fn extract_key_value_owned(
     prefix_len: usize,
     attributes: &mut HashMap<String, AttributeValue>,
-) -> Result<(Vec<u8>, Vec<u8>), DynamoDbStoreError> {
+) -> Result<(Vec<u8>, Vec<u8>), DynamoDbStoreInternalError> {
     let key = extract_key(prefix_len, attributes)?.to_vec();
     let value = extract_value_owned(attributes)?;
     Ok((key, value))
@@ -310,7 +312,7 @@ impl TransactionBuilder {
         &mut self,
         key: Vec<u8>,
         store: &DynamoDbStoreInternal,
-    ) -> Result<(), DynamoDbStoreError> {
+    ) -> Result<(), DynamoDbStoreInternalError> {
         let transact = store.build_delete_transact(&self.root_key, key)?;
         self.transacts.push(transact);
         Ok(())
@@ -321,7 +323,7 @@ impl TransactionBuilder {
         key: Vec<u8>,
         value: Vec<u8>,
         store: &DynamoDbStoreInternal,
-    ) -> Result<(), DynamoDbStoreError> {
+    ) -> Result<(), DynamoDbStoreInternalError> {
         let transact = store.build_put_transact(&self.root_key, key, value)?;
         self.transacts.push(transact);
         Ok(())
@@ -351,10 +353,10 @@ pub struct DynamoDbStoreConfig {
 impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
 
-    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
+    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreInternalError> {
         let common_config = create_dynamo_db_common_config();
         let use_localstack = true;
-        let config = get_config(use_localstack).await?;
+        let config = get_config_internal(use_localstack).await?;
         Ok(DynamoDbStoreConfig {
             config,
             common_config,
@@ -365,7 +367,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> Result<Self, DynamoDbStoreError> {
+    ) -> Result<Self, DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let semaphore = config
@@ -386,7 +388,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, DynamoDbStoreInternalError> {
         let client = self.client.clone();
         let namespace = self.namespace.clone();
         let semaphore = self.semaphore.clone();
@@ -403,7 +405,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreInternalError> {
         let client = Client::from_conf(config.config.clone());
         let mut namespaces = Vec::new();
         let mut start_table = None;
@@ -426,7 +428,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(namespaces)
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbStoreError> {
+    async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbStoreInternalError> {
         let client = Client::from_conf(config.config.clone());
         let tables = Self::list_all(config).await?;
         for table in tables {
@@ -440,7 +442,10 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<bool, DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let key_db = build_key(EMPTY_ROOT_KEY, DB_KEY.to_vec());
@@ -471,7 +476,10 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let _result = client
@@ -513,7 +521,10 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), DynamoDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         client
@@ -552,9 +563,12 @@ impl DynamoDbStoreInternal {
         &self,
         root_key: &[u8],
         key: Vec<u8>,
-    ) -> Result<TransactWriteItem, DynamoDbStoreError> {
-        ensure!(!key.is_empty(), DynamoDbStoreError::ZeroLengthKey);
-        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
+    ) -> Result<TransactWriteItem, DynamoDbStoreInternalError> {
+        ensure!(!key.is_empty(), DynamoDbStoreInternalError::ZeroLengthKey);
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            DynamoDbStoreInternalError::KeyTooLong
+        );
         let request = Delete::builder()
             .table_name(&self.namespace)
             .set_key(Some(build_key(root_key, key)))
@@ -567,12 +581,15 @@ impl DynamoDbStoreInternal {
         root_key: &[u8],
         key: Vec<u8>,
         value: Vec<u8>,
-    ) -> Result<TransactWriteItem, DynamoDbStoreError> {
-        ensure!(!key.is_empty(), DynamoDbStoreError::ZeroLengthKey);
-        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
+    ) -> Result<TransactWriteItem, DynamoDbStoreInternalError> {
+        ensure!(!key.is_empty(), DynamoDbStoreInternalError::ZeroLengthKey);
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            DynamoDbStoreInternalError::KeyTooLong
+        );
         ensure!(
             value.len() <= RAW_MAX_VALUE_SIZE,
-            DynamoDbStoreError::ValueLengthTooLarge
+            DynamoDbStoreInternalError::ValueLengthTooLarge
         );
         let request = Put::builder()
             .table_name(&self.namespace)
@@ -595,7 +612,7 @@ impl DynamoDbStoreInternal {
         root_key: &[u8],
         key_prefix: &[u8],
         start_key_map: Option<HashMap<String, AttributeValue>>,
-    ) -> Result<QueryOutput, DynamoDbStoreError> {
+    ) -> Result<QueryOutput, DynamoDbStoreInternalError> {
         let _guard = self.acquire().await;
         let big_root = extend_root_key(root_key);
         let response = self
@@ -618,7 +635,7 @@ impl DynamoDbStoreInternal {
     async fn read_value_bytes_general(
         &self,
         key_db: HashMap<String, AttributeValue>,
-    ) -> Result<Option<Vec<u8>>, DynamoDbStoreError> {
+    ) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
         let _guard = self.acquire().await;
         let response = self
             .client
@@ -641,7 +658,7 @@ impl DynamoDbStoreInternal {
     async fn contains_key_general(
         &self,
         key_db: HashMap<String, AttributeValue>,
-    ) -> Result<bool, DynamoDbStoreError> {
+    ) -> Result<bool, DynamoDbStoreInternalError> {
         let _guard = self.acquire().await;
         let response = self
             .client
@@ -661,14 +678,14 @@ impl DynamoDbStoreInternal {
         attribute: &str,
         root_key: &[u8],
         key_prefix: &[u8],
-    ) -> Result<QueryResponses, DynamoDbStoreError> {
+    ) -> Result<QueryResponses, DynamoDbStoreInternalError> {
         ensure!(
             !key_prefix.is_empty(),
-            DynamoDbStoreError::ZeroLengthKeyPrefix
+            DynamoDbStoreInternalError::ZeroLengthKeyPrefix
         );
         ensure!(
             key_prefix.len() <= MAX_KEY_SIZE,
-            DynamoDbStoreError::KeyPrefixTooLong
+            DynamoDbStoreInternalError::KeyPrefixTooLong
         );
         let mut responses = Vec::new();
         let mut start_key = None;
@@ -713,7 +730,7 @@ pub struct DynamoDbKeyBlockIterator<'a> {
 }
 
 impl<'a> Iterator for DynamoDbKeyBlockIterator<'a> {
-    type Item = Result<&'a [u8], DynamoDbStoreError>;
+    type Item = Result<&'a [u8], DynamoDbStoreInternalError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let result = self.iters[self.pos].next();
@@ -737,7 +754,7 @@ pub struct DynamoDbKeys {
     result_queries: QueryResponses,
 }
 
-impl KeyIterable<DynamoDbStoreError> for DynamoDbKeys {
+impl KeyIterable<DynamoDbStoreInternalError> for DynamoDbKeys {
     type Iterator<'a> = DynamoDbKeyBlockIterator<'a> where Self: 'a;
 
     fn iterator(&self) -> Self::Iterator<'_> {
@@ -773,7 +790,7 @@ pub struct DynamoDbKeyValueIterator<'a> {
 }
 
 impl<'a> Iterator for DynamoDbKeyValueIterator<'a> {
-    type Item = Result<(&'a [u8], &'a [u8]), DynamoDbStoreError>;
+    type Item = Result<(&'a [u8], &'a [u8]), DynamoDbStoreInternalError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let result = self.iters[self.pos].next();
@@ -805,7 +822,7 @@ pub struct DynamoDbKeyValueIteratorOwned {
 }
 
 impl Iterator for DynamoDbKeyValueIteratorOwned {
-    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbStoreError>;
+    type Item = Result<(Vec<u8>, Vec<u8>), DynamoDbStoreInternalError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let result = self.iters[self.pos].next();
@@ -824,7 +841,7 @@ impl Iterator for DynamoDbKeyValueIteratorOwned {
     }
 }
 
-impl KeyValueIterable<DynamoDbStoreError> for DynamoDbKeyValues {
+impl KeyValueIterable<DynamoDbStoreInternalError> for DynamoDbKeyValues {
     type Iterator<'a> = DynamoDbKeyValueIterator<'a> where Self: 'a;
     type IteratorOwned = DynamoDbKeyValueIteratorOwned;
 
@@ -858,7 +875,7 @@ impl KeyValueIterable<DynamoDbStoreError> for DynamoDbKeyValues {
 }
 
 impl WithError for DynamoDbStoreInternal {
-    type Error = DynamoDbStoreError;
+    type Error = DynamoDbStoreInternalError;
 }
 
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
@@ -870,22 +887,37 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DynamoDbStoreError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            DynamoDbStoreInternalError::KeyTooLong
+        );
         let key_db = build_key(&self.root_key, key.to_vec());
         self.read_value_bytes_general(key_db).await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbStoreError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbStoreInternalError> {
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            DynamoDbStoreInternalError::KeyTooLong
+        );
         let key_db = build_key(&self.root_key, key.to_vec());
         self.contains_key_general(key_db).await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, DynamoDbStoreError> {
+    async fn contains_keys(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<bool>, DynamoDbStoreInternalError> {
         let mut handles = Vec::new();
         for key in keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                DynamoDbStoreInternalError::KeyTooLong
+            );
             let key_db = build_key(&self.root_key, key);
             let handle = self.contains_key_general(key_db);
             handles.push(handle);
@@ -899,10 +931,13 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
         let mut handles = Vec::new();
         for key in keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                DynamoDbStoreInternalError::KeyTooLong
+            );
             let key_db = build_key(&self.root_key, key);
             let handle = self.read_value_bytes_general(key_db);
             handles.push(handle);
@@ -916,7 +951,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<DynamoDbKeys, DynamoDbStoreError> {
+    ) -> Result<DynamoDbKeys, DynamoDbStoreInternalError> {
         let result_queries = self
             .get_list_responses(KEY_ATTRIBUTE, &self.root_key, key_prefix)
             .await?;
@@ -926,7 +961,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<DynamoDbKeyValues, DynamoDbStoreError> {
+    ) -> Result<DynamoDbKeyValues, DynamoDbStoreInternalError> {
         let result_queries = self
             .get_list_responses(KEY_VALUE_ATTRIBUTE, &self.root_key, key_prefix)
             .await?;
@@ -943,7 +978,7 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     // DynamoDB does not support the `DeletePrefix` operation.
     type Batch = SimpleUnorderedBatch;
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbStoreError> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbStoreInternalError> {
         let mut builder = TransactionBuilder::new(&self.root_key);
         for key in batch.deletions {
             builder.insert_delete_request(key, self)?;
@@ -964,6 +999,178 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
+/// Error when validating a table name.
+#[derive(Debug, Error)]
+pub enum InvalidTableName {
+    /// The table name should be at least 3 characters.
+    #[error("Table name must have at least 3 characters")]
+    TooShort,
+
+    /// The table name should be at most 63 characters.
+    #[error("Table name must be at most 63 characters")]
+    TooLong,
+
+    /// allowed characters are lowercase letters, numbers, periods and hyphens
+    #[error("Table name must only contain lowercase letters, numbers, periods and hyphens")]
+    InvalidCharacter,
+}
+
+/// Errors that occur when using [`DynamoDbStoreInternal`].
+#[derive(Debug, Error)]
+pub enum DynamoDbStoreInternalError {
+    /// An error occurred while getting the item.
+    #[error(transparent)]
+    Get(#[from] Box<SdkError<GetItemError>>),
+
+    /// An error occurred while writing a batch of items.
+    #[error(transparent)]
+    BatchWriteItem(#[from] Box<SdkError<BatchWriteItemError>>),
+
+    /// An error occurred while writing a transaction of items.
+    #[error(transparent)]
+    TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
+
+    /// An error occurred while doing a Query.
+    #[error(transparent)]
+    Query(#[from] Box<SdkError<QueryError>>),
+
+    /// An error occurred while deleting a table
+    #[error(transparent)]
+    DeleteTable(#[from] Box<SdkError<DeleteTableError>>),
+
+    /// An error occurred while listing tables
+    #[error(transparent)]
+    ListTables(#[from] Box<SdkError<ListTablesError>>),
+
+    /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE.
+    #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
+    TransactUpperLimitSize,
+
+    /// Keys have to be of non-zero length.
+    #[error("The key must be of strictly positive length")]
+    ZeroLengthKey,
+
+    /// The key must have at most 1024 bytes
+    #[error("The key must have at most 1024 bytes")]
+    KeyTooLong,
+
+    /// The key prefix must have at most 1024 bytes
+    #[error("The key prefix must have at most 1024 bytes")]
+    KeyPrefixTooLong,
+
+    /// Key prefixes have to be of non-zero length.
+    #[error("The key_prefix must be of strictly positive length")]
+    ZeroLengthKeyPrefix,
+
+    /// The recovery failed.
+    #[error("The DynamoDB database recovery failed")]
+    DatabaseRecoveryFailed,
+
+    /// The journal is not coherent
+    #[error(transparent)]
+    JournalConsistencyError(#[from] JournalConsistencyError),
+
+    /// Missing database
+    #[error("Missing database")]
+    MissingDatabase(String),
+
+    /// Already existing database
+    #[error("Already existing database")]
+    AlreadyExistingDatabase,
+
+    /// The length of the value should be at most 400KB.
+    #[error("The DynamoDB value should be less than 400KB")]
+    ValueLengthTooLarge,
+
+    /// The stored key is missing.
+    #[error("The stored key attribute is missing")]
+    MissingKey,
+
+    /// The type of the keys was not correct (It should have been a binary blob).
+    #[error("Key was stored as {0}, but it was expected to be stored as a binary blob")]
+    WrongKeyType(String),
+
+    /// The value attribute is missing.
+    #[error("The stored value attribute is missing")]
+    MissingValue,
+
+    /// The value was stored as the wrong type (it should be a binary blob).
+    #[error("Value was stored as {0}, but it was expected to be stored as a binary blob")]
+    WrongValueType(String),
+
+    /// A BCS error occurred.
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
+    /// A wrong table name error occurred
+    #[error(transparent)]
+    InvalidTableName(#[from] InvalidTableName),
+
+    /// An error occurred while creating the table.
+    #[error(transparent)]
+    CreateTable(#[from] SdkError<CreateTableError>),
+
+    /// An error occurred while building an object
+    #[error(transparent)]
+    Build(#[from] Box<BuildError>),
+}
+
+impl<InnerError> From<SdkError<InnerError>> for DynamoDbStoreInternalError
+where
+    DynamoDbStoreInternalError: From<Box<SdkError<InnerError>>>,
+{
+    fn from(error: SdkError<InnerError>) -> Self {
+        Box::new(error).into()
+    }
+}
+
+impl From<BuildError> for DynamoDbStoreInternalError {
+    fn from(error: BuildError) -> Self {
+        Box::new(error).into()
+    }
+}
+
+impl DynamoDbStoreInternalError {
+    /// Creates a [`DynamoDbStoreInternalError::WrongKeyType`] instance based on the returned value type.
+    ///
+    /// # Panics
+    ///
+    /// If the value type is in the correct type, a binary blob.
+    pub fn wrong_key_type(value: &AttributeValue) -> Self {
+        DynamoDbStoreInternalError::WrongKeyType(Self::type_description_of(value))
+    }
+
+    /// Creates a [`DynamoDbStoreInternalError::WrongValueType`] instance based on the returned value type.
+    ///
+    /// # Panics
+    ///
+    /// If the value type is in the correct type, a binary blob.
+    pub fn wrong_value_type(value: &AttributeValue) -> Self {
+        DynamoDbStoreInternalError::WrongValueType(Self::type_description_of(value))
+    }
+
+    fn type_description_of(value: &AttributeValue) -> String {
+        match value {
+            AttributeValue::B(_) => unreachable!("creating an error type for the correct type"),
+            AttributeValue::Bool(_) => "a boolean",
+            AttributeValue::Bs(_) => "a list of binary blobs",
+            AttributeValue::L(_) => "a list",
+            AttributeValue::M(_) => "a map",
+            AttributeValue::N(_) => "a number",
+            AttributeValue::Ns(_) => "a list of numbers",
+            AttributeValue::Null(_) => "a null value",
+            AttributeValue::S(_) => "a string",
+            AttributeValue::Ss(_) => "a list of strings",
+            _ => "an unknown type",
+        }
+        .to_owned()
+    }
+}
+
+impl KeyValueStoreError for DynamoDbStoreInternalError {
+    const BACKEND: &'static str = "dynamo_db";
+}
+
 /// A shared DB client for DynamoDb implementing LruCaching
 #[derive(Clone)]
 #[expect(clippy::type_complexity)]
@@ -978,6 +1185,14 @@ pub struct DynamoDbStore {
     >,
     #[cfg(not(with_metrics))]
     store: LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
+}
+
+/// The combined error type for the `DynamoDbStore`.
+pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
+
+/// Getting a configuration for the system
+pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {
+    Ok(get_config_internal(use_localstack).await?)
 }
 
 impl WithError for DynamoDbStore {
@@ -1043,7 +1258,7 @@ impl AdminKeyValueStore for DynamoDbStore {
     type Config = DynamoDbStoreConfig;
 
     async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
-        DynamoDbStoreInternal::new_test_config().await
+        Ok(DynamoDbStoreInternal::new_test_config().await?)
     }
 
     async fn connect(
@@ -1063,23 +1278,23 @@ impl AdminKeyValueStore for DynamoDbStore {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreError> {
-        DynamoDbStoreInternal::list_all(config).await
+        Ok(DynamoDbStoreInternal::list_all(config).await?)
     }
 
     async fn delete_all(config: &Self::Config) -> Result<(), DynamoDbStoreError> {
-        DynamoDbStoreInternal::delete_all(config).await
+        Ok(DynamoDbStoreInternal::delete_all(config).await?)
     }
 
     async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbStoreError> {
-        DynamoDbStoreInternal::exists(config, namespace).await
+        Ok(DynamoDbStoreInternal::exists(config, namespace).await?)
     }
 
     async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
-        DynamoDbStoreInternal::create(config, namespace).await
+        Ok(DynamoDbStoreInternal::create(config, namespace).await?)
     }
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
-        DynamoDbStoreInternal::delete(config, namespace).await
+        Ok(DynamoDbStoreInternal::delete(config, namespace).await?)
     }
 }
 
@@ -1106,182 +1321,6 @@ impl DynamoDbStore {
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
-}
-
-/// Error when validating a table name.
-#[derive(Debug, Error)]
-pub enum InvalidTableName {
-    /// The table name should be at least 3 characters.
-    #[error("Table name must have at least 3 characters")]
-    TooShort,
-
-    /// The table name should be at most 63 characters.
-    #[error("Table name must be at most 63 characters")]
-    TooLong,
-
-    /// allowed characters are lowercase letters, numbers, periods and hyphens
-    #[error("Table name must only contain lowercase letters, numbers, periods and hyphens")]
-    InvalidCharacter,
-}
-
-/// Errors that occur when using [`DynamoDbStore`].
-#[derive(Debug, Error)]
-pub enum DynamoDbStoreError {
-    /// An error occurred while getting the item.
-    #[error(transparent)]
-    Get(#[from] Box<SdkError<GetItemError>>),
-
-    /// An error occurred while writing a batch of items.
-    #[error(transparent)]
-    BatchWriteItem(#[from] Box<SdkError<BatchWriteItemError>>),
-
-    /// An error occurred while writing a transaction of items.
-    #[error(transparent)]
-    TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
-
-    /// An error occurred while doing a Query.
-    #[error(transparent)]
-    Query(#[from] Box<SdkError<QueryError>>),
-
-    /// An error occurred while deleting a table
-    #[error(transparent)]
-    DeleteTable(#[from] Box<SdkError<DeleteTableError>>),
-
-    /// An error occurred while listing tables
-    #[error(transparent)]
-    ListTables(#[from] Box<SdkError<ListTablesError>>),
-
-    /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE.
-    #[error("The transact must have length at most MAX_TRANSACT_WRITE_ITEM_SIZE")]
-    TransactUpperLimitSize,
-
-    /// Keys have to be of non-zero length.
-    #[error("The key must be of strictly positive length")]
-    ZeroLengthKey,
-
-    /// The key must have at most 1024 bytes
-    #[error("The key must have at most 1024 bytes")]
-    KeyTooLong,
-
-    /// The key prefix must have at most 1024 bytes
-    #[error("The key prefix must have at most 1024 bytes")]
-    KeyPrefixTooLong,
-
-    /// Key prefixes have to be of non-zero length.
-    #[error("The key_prefix must be of strictly positive length")]
-    ZeroLengthKeyPrefix,
-
-    /// The recovery failed.
-    #[error("The DynamoDB database recovery failed")]
-    DatabaseRecoveryFailed,
-
-    /// The database is not coherent
-    #[error(transparent)]
-    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
-
-    /// The journal is not coherent
-    #[error(transparent)]
-    JournalConsistencyError(#[from] JournalConsistencyError),
-
-    /// Missing database
-    #[error("Missing database")]
-    MissingDatabase(String),
-
-    /// Already existing database
-    #[error("Already existing database")]
-    AlreadyExistingDatabase,
-
-    /// The length of the value should be at most 400KB.
-    #[error("The DynamoDB value should be less than 400KB")]
-    ValueLengthTooLarge,
-
-    /// The stored key is missing.
-    #[error("The stored key attribute is missing")]
-    MissingKey,
-
-    /// The type of the keys was not correct (It should have been a binary blob).
-    #[error("Key was stored as {0}, but it was expected to be stored as a binary blob")]
-    WrongKeyType(String),
-
-    /// The value attribute is missing.
-    #[error("The stored value attribute is missing")]
-    MissingValue,
-
-    /// The value was stored as the wrong type (it should be a binary blob).
-    #[error("Value was stored as {0}, but it was expected to be stored as a binary blob")]
-    WrongValueType(String),
-
-    /// A BCS error occurred.
-    #[error(transparent)]
-    BcsError(#[from] bcs::Error),
-
-    /// A wrong table name error occurred
-    #[error(transparent)]
-    InvalidTableName(#[from] InvalidTableName),
-
-    /// An error occurred while creating the table.
-    #[error(transparent)]
-    CreateTable(#[from] SdkError<CreateTableError>),
-
-    /// An error occurred while building an object
-    #[error(transparent)]
-    Build(#[from] Box<BuildError>),
-}
-
-impl<InnerError> From<SdkError<InnerError>> for DynamoDbStoreError
-where
-    DynamoDbStoreError: From<Box<SdkError<InnerError>>>,
-{
-    fn from(error: SdkError<InnerError>) -> Self {
-        Box::new(error).into()
-    }
-}
-
-impl From<BuildError> for DynamoDbStoreError {
-    fn from(error: BuildError) -> Self {
-        Box::new(error).into()
-    }
-}
-
-impl DynamoDbStoreError {
-    /// Creates a [`DynamoDbStoreError::WrongKeyType`] instance based on the returned value type.
-    ///
-    /// # Panics
-    ///
-    /// If the value type is in the correct type, a binary blob.
-    pub fn wrong_key_type(value: &AttributeValue) -> Self {
-        DynamoDbStoreError::WrongKeyType(Self::type_description_of(value))
-    }
-
-    /// Creates a [`DynamoDbStoreError::WrongValueType`] instance based on the returned value type.
-    ///
-    /// # Panics
-    ///
-    /// If the value type is in the correct type, a binary blob.
-    pub fn wrong_value_type(value: &AttributeValue) -> Self {
-        DynamoDbStoreError::WrongValueType(Self::type_description_of(value))
-    }
-
-    fn type_description_of(value: &AttributeValue) -> String {
-        match value {
-            AttributeValue::B(_) => unreachable!("creating an error type for the correct type"),
-            AttributeValue::Bool(_) => "a boolean",
-            AttributeValue::Bs(_) => "a list of binary blobs",
-            AttributeValue::L(_) => "a list",
-            AttributeValue::M(_) => "a map",
-            AttributeValue::N(_) => "a number",
-            AttributeValue::Ns(_) => "a list of numbers",
-            AttributeValue::Null(_) => "a null value",
-            AttributeValue::S(_) => "a string",
-            AttributeValue::Ss(_) => "a list of strings",
-            _ => "an unknown type",
-        }
-        .to_owned()
-    }
-}
-
-impl KeyValueStoreError for DynamoDbStoreError {
-    const BACKEND: &'static str = "dynamo_db";
 }
 
 /// A static lock to prevent multiple tests from using the same LocalStack instance at the same

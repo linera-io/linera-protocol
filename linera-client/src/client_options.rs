@@ -16,7 +16,7 @@ use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
     committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
-use linera_views::common::CommonStoreConfig;
+use linera_views::store::CommonStoreConfig;
 
 #[cfg(feature = "fs")]
 use crate::config::GenesisConfig;

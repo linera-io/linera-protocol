@@ -15,8 +15,8 @@ use linera_views::rocks_db::create_rocks_db_benchmark_store;
 use linera_views::scylla_db::create_scylla_db_test_store;
 use linera_views::{
     batch::Batch,
-    common::LocalKeyValueStore,
     memory::create_test_memory_store,
+    store::LocalKeyValueStore,
     test_utils::{add_prefix, get_random_key_values2},
 };
 use tokio::runtime::Runtime;

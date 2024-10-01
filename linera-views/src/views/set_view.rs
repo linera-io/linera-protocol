@@ -15,9 +15,10 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{CustomSerialize, HasherOutput, KeyIterable, Update},
+    common::{CustomSerialize, HasherOutput, Update},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
+    store::KeyIterable,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 

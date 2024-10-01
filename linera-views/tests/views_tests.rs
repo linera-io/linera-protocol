@@ -5,12 +5,12 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use async_trait::async_trait;
-#[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
-use linera_views::common::AdminKeyValueStore as _;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore};
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore};
+#[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
+use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{
     batch::{
         Batch, WriteOperation,
