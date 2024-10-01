@@ -204,16 +204,17 @@ where
             futures::channel::mpsc::unbounded();
         let txn_tracker_moved = mem::take(txn_tracker);
         let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
-            ContractSyncRuntime::run_action(
+            let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
-                application_id,
                 chain_id,
                 local_time,
                 refund_grant_to,
                 controller,
-                action,
+                &action,
                 txn_tracker_moved,
-            )
+            );
+
+            runtime.run_action(application_id, chain_id, action)
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;

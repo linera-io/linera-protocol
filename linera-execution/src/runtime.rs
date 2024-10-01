@@ -1030,51 +1030,56 @@ impl<UserInstance> Clone for SyncRuntimeHandle<UserInstance> {
 }
 
 impl ContractSyncRuntime {
-    /// Main entry point to start executing a user action.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn run_action(
+    pub(crate) fn new(
         execution_state_sender: ExecutionStateSender,
-        application_id: UserApplicationId,
         chain_id: ChainId,
         local_time: Timestamp,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
-        action: UserAction,
+        action: &UserAction,
         txn_tracker: TransactionTracker,
-    ) -> Result<(ResourceController, TransactionTracker), ExecutionError> {
-        let executing_message = match &action {
-            UserAction::Message(context, _) => Some(context.into()),
-            _ => None,
-        };
-        let signer = action.signer();
-        let height = action.height();
-        let mut runtime = SyncRuntime(Some(ContractSyncRuntimeHandle::from(
+    ) -> Self {
+        SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
-                height,
+                action.height(),
                 local_time,
-                signer,
-                executing_message,
+                action.signer(),
+                if let UserAction::Message(context, _) = action {
+                    Some(context.into())
+                } else {
+                    None
+                },
                 execution_state_sender,
                 refund_grant_to,
                 resource_controller,
                 txn_tracker,
             ),
-        )));
+        )))
+    }
+
+    /// Main entry point to start executing a user action.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn run_action(
+        mut self,
+        application_id: UserApplicationId,
+        chain_id: ChainId,
+        action: UserAction,
+    ) -> Result<(ResourceController, TransactionTracker), ExecutionError> {
         let finalize_context = FinalizeContext {
-            authenticated_signer: signer,
+            authenticated_signer: action.signer(),
             chain_id,
-            height,
+            height: action.height(),
         };
-        runtime.execute(application_id, signer, move |code| match action {
+        self.execute(application_id, action.signer(), move |code| match action {
             UserAction::Instantiate(context, argument) => code.instantiate(context, argument),
             UserAction::Operation(context, operation) => {
                 code.execute_operation(context, operation).map(|_| ())
             }
             UserAction::Message(context, message) => code.execute_message(context, message),
         })?;
-        runtime.finalize(finalize_context)?;
-        let runtime = runtime
+        self.finalize(finalize_context)?;
+        let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
         Ok((runtime.resource_controller, runtime.transaction_tracker))
