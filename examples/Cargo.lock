@@ -3345,6 +3345,7 @@ dependencies = [
  "test-strategy",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "zstd",

@@ -90,7 +90,6 @@ where
         Ok((code, description))
     }
 
-
     // TODO(#1416): Support concurrent I/O.
     pub(crate) async fn handle_request(
         &mut self,

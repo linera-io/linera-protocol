@@ -33,7 +33,7 @@ use crate::{
     BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
     OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
-    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN, UserContractCode,
 };
 
 #[cfg(test)]
@@ -268,7 +268,7 @@ impl<UserInstance> Drop for SyncRuntime<UserInstance> {
     fn drop(&mut self) {
         // Ensure the `loaded_applications` are cleared to prevent circular references in
         // the runtime
-        if let Some(mut handle) = self.0.take() {
+        if let Some(handle) = self.0.take() {
             handle.inner().loaded_applications.clear();
         }
     }
@@ -380,6 +380,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
             hash_map::Entry::Vacant(entry) => {
+                assert!(!cfg!(web), "dynamically loading contracts is not currently supported on the Web");
+
                 let (code, description) = self
                     .execution_state_sender
                     .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
@@ -526,7 +528,7 @@ impl<UserInstance> From<SyncRuntimeInternal<UserInstance>> for SyncRuntimeHandle
 }
 
 impl<UserInstance> SyncRuntimeHandle<UserInstance> {
-    fn inner(&mut self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
+    fn inner(&self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
@@ -1058,8 +1060,25 @@ impl ContractSyncRuntime {
         )))
     }
 
+    pub(crate) fn preload_contract(&self, id: UserApplicationId, code: UserContractCode, description: UserApplicationDescription) -> Result<(), ExecutionError> {
+        let this = self.0.as_ref().expect("contracts shouldn't be preloaded while the runtime is being dropped");
+        let runtime_handle = this.clone();
+        let mut this_guard = this.inner();
+
+        if let std::collections::hash_map::Entry::Vacant(e) = this_guard.loaded_applications.entry(id) {
+            e.insert(
+                LoadedApplication::new(
+                    code.instantiate(runtime_handle)?,
+                    description,
+                ),
+            );
+            this_guard.applications_to_finalize.push(id);
+        }
+
+        Ok(())
+    }
+
     /// Main entry point to start executing a user action.
-    #[expect(clippy::too_many_arguments)]
     pub(crate) fn run_action(
         mut self,
         application_id: UserApplicationId,

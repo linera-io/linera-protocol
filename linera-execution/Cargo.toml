@@ -45,6 +45,7 @@ dashmap.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 dyn-clone.workspace = true
 futures.workspace = true
+js-sys = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-views.workspace = true
 linera-views-derive.workspace = true
@@ -58,7 +59,6 @@ serde_bytes.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
-js-sys = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, optional = true }
 wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
 wasmparser = { workspace = true, optional = true }

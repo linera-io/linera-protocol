@@ -196,6 +196,7 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let txn_tracker_moved = mem::take(txn_tracker);
+        let (code, description) = self.load_contract(application_id).await?;
         let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
             let runtime = ContractSyncRuntime::new(
                 execution_state_sender,
@@ -206,6 +207,8 @@ where
                 &action,
                 txn_tracker_moved,
             );
+
+            runtime.preload_contract(application_id, code, description)?;
 
             runtime.run_action(application_id, chain_id, action)
         });
