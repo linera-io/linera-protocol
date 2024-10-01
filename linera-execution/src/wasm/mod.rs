@@ -21,14 +21,14 @@ mod wasmer;
 mod wasmtime;
 
 use std::sync::Arc;
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 
 use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::{self, MeasureLatency};
-#[cfg(with_metrics)]
-use prometheus::HistogramVec;
+use {
+    std::sync::LazyLock,
+    linera_base::prometheus_util::{self, MeasureLatency},
+    prometheus::HistogramVec,
+};
 use thiserror::Error;
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
@@ -214,6 +214,36 @@ impl UserServiceModule for WasmServiceModule {
         Ok(instance)
     }
 }
+
+#[cfg(web)]
+const _: () = {
+    use {
+        js_sys::wasm_bindgen::{JsValue, JsCast as _},
+    };
+
+    impl TryFrom<JsValue> for WasmServiceModule {
+        type Error = JsValue;
+
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            // XXX: currently `Wasmer` is the only backend enabled on the Web.
+            #[cfg(with_wasmer)] {
+                Ok(Self::Wasmer { module: Arc::new(value.dyn_into::<js_sys::WebAssembly::Module>()?.into()) })
+            }
+
+            #[cfg(not(with_wasmer))]
+            Err(value)
+        }
+    }
+
+    impl From<WasmServiceModule> for JsValue {
+        fn from(module: WasmServiceModule) -> JsValue {
+            match module {
+                #[cfg(with_wasmer)]
+                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&*module).clone().into(),
+            }
+        }
+    }
+};
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
 #[cfg(any(with_wasmer, with_wasmtime))]

@@ -55,6 +55,7 @@ mod implementation {
     use futures::{channel::oneshot, future, stream, StreamExt as _};
     use wasm_bindgen::prelude::*;
     use web_sys::js_sys;
+    use std::rc::Rc;
 
     use super::*;
 

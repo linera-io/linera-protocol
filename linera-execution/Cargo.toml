@@ -30,7 +30,7 @@ wasmtime = [
     "wasm-encoder",
     "wasmparser",
 ]
-web = ["linera-base/web", "linera-views/web"]
+web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
 anyhow.workspace = true
@@ -58,6 +58,7 @@ serde_bytes.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
+js-sys = { workspace = true, optional = true }
 wasm-encoder = { workspace = true, optional = true }
 wasm-instrument = { workspace = true, optional = true, features = ["sign_ext"] }
 wasmparser = { workspace = true, optional = true }

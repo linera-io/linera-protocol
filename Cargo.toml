@@ -168,6 +168,7 @@ wasmtime = "25.0.0"
 wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"
+js-sys = "0.3.70"
 web-time = "1.1.0"
 wit-bindgen = "0.24.0"
 zstd = "0.13.2"
@@ -232,3 +233,8 @@ opt-level = 3
 version = "0.4.1"
 git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
+
+
+[patch.crates-io.wasm_thread]
+path = "../wasm_thread"
+
