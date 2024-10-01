@@ -5,7 +5,7 @@
 Abstractions over tasks that can be used natively or on the Web.
  */
 
-use std::{future::Future, rc::Rc};
+use std::future::Future;
 use tokio::sync::mpsc;
 
 #[cfg(not(web))]
@@ -18,6 +18,10 @@ mod implementation {
     pub type NonBlockingFuture<R> = tokio::task::JoinHandle<R>;
     /// The type of a future awaiting another thread.
     pub type BlockingFuture<R> = tokio::task::JoinHandle<R>;
+    /// A channel that can be used to send messages to the spawned task.
+    pub type InputSender<T> = mpsc::UnboundedSender<T>;
+    /// The stream of inputs available to the spawned task.
+    pub type InputReceiver<T> = mpsc::UnboundedReceiver<T>;
 
     /// Spawns a new task, potentially on the current thread.
     pub fn spawn<F: Future<Output: Send> + Send + 'static>(
@@ -31,6 +35,17 @@ mod implementation {
         future: F,
     ) -> BlockingFuture<R> {
         tokio::task::spawn_blocking(future)
+    }
+
+    /// Spawns a blocking task on a new Web Worker with a stream of input messages.
+    pub fn spawn_blocking_with_input<T: Send + 'static, F: Future<Output: Send + 'static>>(
+        task: impl FnOnce(InputReceiver<T>) -> F + Send + 'static,
+    ) -> (InputSender<T>, BlockingFuture<F::Output>) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        (
+            sender,
+            tokio::task::spawn_blocking(|| futures::executor::block_on(task(receiver))),
+        )
     }
 }
 
