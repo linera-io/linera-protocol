@@ -377,6 +377,7 @@ where
     pub async fn send_chain_update(
         &mut self,
         action: CommunicateAction,
+        optimistic_client: bool,
     ) -> Result<LiteVote, NodeError> {
         let (target_block_height, chain_id) = match &action {
             CommunicateAction::SubmitBlock { proposal, .. } => {
@@ -391,10 +392,12 @@ where
                 height, chain_id, ..
             } => (*height, *chain_id),
         };
-        // Update the validator with missing information, if needed.
-        let delivery = CrossChainMessageDelivery::NonBlocking;
-        self.send_chain_information(chain_id, target_block_height, delivery)
-            .await?;
+        if !optimistic_client {
+            // Update the validator with missing information, if needed.
+            let delivery = CrossChainMessageDelivery::NonBlocking;
+            self.send_chain_information(chain_id, target_block_height, delivery)
+                .await?;
+        }
         // Send the block proposal, certificate or timeout request and return a vote.
         let vote = match action {
             CommunicateAction::SubmitBlock { proposal, blob_ids } => {

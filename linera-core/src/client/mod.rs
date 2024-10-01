@@ -1030,7 +1030,8 @@ where
                     local_node: local_node.clone(),
                 };
                 let action = action.clone();
-                Box::pin(async move { updater.send_chain_update(action).await })
+                let is_optimistic = self.is_optimistic();
+                Box::pin(async move { updater.send_chain_update(action, is_optimistic).await })
             },
         )
         .await?;
