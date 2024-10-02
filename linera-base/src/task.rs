@@ -21,7 +21,9 @@ mod implementation {
     /// A channel that can be used to send messages to the spawned task.
     pub type InputSender<T> = mpsc::UnboundedSender<T>;
     /// The stream of inputs available to the spawned task.
-    pub type InputReceiver<T> = mpsc::UnboundedReceiver<T>;
+    pub type InputReceiver<T> = tokio_stream::wrappers::UnboundedReceiverStream<T>;
+    /// The type of errors that can result from sending a message to the spawned task.
+    pub use mpsc::error::SendError;
 
     /// Spawns a new task, potentially on the current thread.
     pub fn spawn<F: Future<Output: Send> + Send + 'static>(
@@ -44,7 +46,7 @@ mod implementation {
         let (sender, receiver) = mpsc::unbounded_channel();
         (
             sender,
-            tokio::task::spawn_blocking(|| futures::executor::block_on(task(receiver))),
+            tokio::task::spawn_blocking(|| futures::executor::block_on(task(receiver.into()))),
         )
     }
 }
@@ -76,7 +78,7 @@ mod implementation {
     }
 
     /// The type of errors that can result from sending a message to the spawned task.
-    pub type SendError = JsValue;
+    pub type SendError<T> = JsValue;
 
     /// A channel that can be used to send messages to the spawned task.
     pub struct InputSender<T> {
@@ -96,7 +98,7 @@ mod implementation {
     impl<T: Into<JsValue>> InputSender<T> {
         /// Send a message to the task using
         /// [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage).
-        pub fn send(&self, message: T) -> Result<(), SendError> {
+        pub fn send(&self, message: T) -> Result<(), SendError<T>> {
             self.worker.post_message(&message.into())
         }
     }

@@ -205,6 +205,10 @@ pub enum ExecutionError {
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]
     UnstableOracle,
+    #[error("Failed to send contract code to worker thread: {0}")]
+    ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
+    #[error("Failed to send service code to worker thread: {0}")]
+    ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
 }
 
 /// The public entry points provided by the contract part of an application.
