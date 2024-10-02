@@ -68,7 +68,7 @@ jobs:
     - name: Run end-to-end tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
+        cargo test --features storage-service,unstable-oracles -- storage_service
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
