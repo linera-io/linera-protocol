@@ -50,12 +50,21 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// One way to select that is to select BlockInPlace when
 /// tokio::runtime::Handle::current().metrics().num_workers() > 1
 /// The BlockInPlace is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RocksDbSpawnMode {
     /// This uses the `span_blocking` function of tokio.
     SpawnBlocking,
     /// This uses the `block_in_place` function of tokio.
     BlockInPlace,
+}
+
+/// Obtains the spawning mode from runtime
+pub fn get_spawn_mode_from_runtime() -> RocksDbSpawnMode {
+    if tokio::runtime::Handle::current().metrics().num_workers() > 1 {
+        RocksDbSpawnMode::BlockInPlace
+    } else {
+        RocksDbSpawnMode::SpawnBlocking
+    }
 }
 
 #[derive(Clone)]
@@ -65,7 +74,10 @@ struct RocksDbStoreExecutor {
 }
 
 impl RocksDbStoreExecutor {
-    pub fn contains_keys_internal(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+    pub fn contains_keys_internal(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<bool>, RocksDbStoreError> {
         let size = keys.len();
         let mut results = vec![false; size];
         let mut indices = Vec::new();
@@ -219,7 +231,6 @@ impl RocksDbStoreExecutor {
     }
 }
 
-
 /// The inner client
 #[derive(Clone)]
 struct RocksDbStoreInternal {
@@ -267,7 +278,10 @@ impl RocksDbStoreInternal {
         options.create_if_missing(true);
         let db = DB::open(&options, path)?;
         let root_key = root_key.to_vec();
-        let executor = RocksDbStoreExecutor { db: Arc::new(db), root_key };
+        let executor = RocksDbStoreExecutor {
+            db: Arc::new(db),
+            root_key,
+        };
         Ok(RocksDbStoreInternal {
             executor,
             _path_with_guard: path_with_guard,
@@ -299,10 +313,10 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         Ok(match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
                 tokio::task::spawn_blocking(move || db.get(&full_key)).await?
-            },
+            }
             RocksDbSpawnMode::BlockInPlace => {
                 tokio::task::block_in_place(move || db.get(&full_key))
-            },
+            }
         }?)
     }
 
@@ -319,17 +333,16 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                         return Ok(false);
                     }
                     Ok(db.get(&full_key)?.is_some())
-                }).await?
-            },
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || {
-                    let key_may_exist = db.key_may_exist(&full_key);
-                    if !key_may_exist {
-                        return Ok(false);
-                    }
-                    Ok(db.get(&full_key)?.is_some())
                 })
-            },
+                .await?
+            }
+            RocksDbSpawnMode::BlockInPlace => tokio::task::block_in_place(move || {
+                let key_may_exist = db.key_may_exist(&full_key);
+                if !key_may_exist {
+                    return Ok(false);
+                }
+                Ok(db.get(&full_key)?.is_some())
+            }),
         }
     }
 
@@ -338,10 +351,10 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
                 tokio::task::spawn_blocking(move || executor.contains_keys_internal(keys)).await?
-            },
+            }
             RocksDbSpawnMode::BlockInPlace => {
                 tokio::task::block_in_place(move || executor.contains_keys_internal(keys))
-            },
+            }
         }
     }
 
@@ -354,10 +367,10 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             RocksDbSpawnMode::SpawnBlocking => {
                 tokio::task::spawn_blocking(move || executor.read_multi_values_bytes_internal(keys))
                     .await?
-            },
+            }
             RocksDbSpawnMode::BlockInPlace => {
                 tokio::task::block_in_place(move || executor.read_multi_values_bytes_internal(keys))
-            },
+            }
         }
     }
 
@@ -369,12 +382,14 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let key_prefix = key_prefix.to_vec();
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || executor.find_keys_by_prefix_internal(key_prefix))
-                    .await?
-            },
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || executor.find_keys_by_prefix_internal(key_prefix))
-            },
+                tokio::task::spawn_blocking(move || {
+                    executor.find_keys_by_prefix_internal(key_prefix)
+                })
+                .await?
+            }
+            RocksDbSpawnMode::BlockInPlace => tokio::task::block_in_place(move || {
+                executor.find_keys_by_prefix_internal(key_prefix)
+            }),
         }
     }
 
@@ -388,13 +403,12 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             RocksDbSpawnMode::SpawnBlocking => {
                 tokio::task::spawn_blocking(move || {
                     executor.find_key_values_by_prefix_internal(key_prefix)
-                }).await?
-            },
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || {
-                    executor.find_key_values_by_prefix_internal(key_prefix)
                 })
-            },
+                .await?
+            }
+            RocksDbSpawnMode::BlockInPlace => tokio::task::block_in_place(move || {
+                executor.find_key_values_by_prefix_internal(key_prefix)
+            }),
         }
     }
 }
@@ -407,10 +421,10 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
                 tokio::task::spawn_blocking(move || executor.write_batch_internal(batch)).await?
-            },
+            }
             RocksDbSpawnMode::BlockInPlace => {
                 tokio::task::block_in_place(move || executor.write_batch_internal(batch))
-            },
+            }
         }
     }
 

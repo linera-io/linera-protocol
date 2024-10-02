@@ -20,7 +20,7 @@ use linera_views::{
 use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::rocks_db::{PathWithGuard, RocksDbStore, RocksDbStoreConfig},
+    linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
 #[cfg(feature = "scylladb")]
@@ -91,8 +91,8 @@ pub enum StorageConfig {
     RocksDb {
         /// The path used
         path: PathBuf,
-        /// Whether to use `block_in_place`
-        block_in_place: bool,
+        /// Whether to use `block_in_place` or `span_blocking`.
+        spawn_mode: RocksDbSpawnMode,
     },
     /// The DynamoDB description
     #[cfg(feature = "dynamodb")]
@@ -195,18 +195,15 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
             if s.is_empty() {
                 return Err(Error::Format(
-                    "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:block_in_place:namespace".into(),
+                    "For RocksDB, the formatting has to be rocksdb:directory or rocksdb:directory:spawn_mode:namespace".into(),
                 ));
             }
             let parts = s.split(':').collect::<Vec<_>>();
             if parts.len() == 1 {
                 let path = parts[0].to_string().into();
                 let namespace = DEFAULT_NAMESPACE.to_string();
-                let block_in_place = false;
-                let storage_config = StorageConfig::RocksDb {
-                    path,
-                    block_in_place,
-                };
+                let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
+                let storage_config = StorageConfig::RocksDb { path, spawn_mode };
                 return Ok(StorageConfigNamespace {
                     storage_config,
                     namespace,
@@ -214,14 +211,16 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             if parts.len() == 3 {
                 let path = parts[0].to_string().into();
-                let block_in_place = parts[1].parse().map_err(|_| {
-                    Error::Format(format!("Failed to parse {} as a boolean", parts[1]))
-                })?;
+                let spawn_mode = match parts[1] {
+                    "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
+                    "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
+                    _ => Err(Error::Format(format!(
+                        "Failed to parse {} as a spawn_mode",
+                        parts[1]
+                    ))),
+                }?;
                 let namespace = parts[2].to_string();
-                let storage_config = StorageConfig::RocksDb {
-                    path,
-                    block_in_place,
-                };
+                let storage_config = StorageConfig::RocksDb { path, spawn_mode };
                 return Ok(StorageConfigNamespace {
                     storage_config,
                     namespace,
@@ -344,15 +343,12 @@ impl StorageConfigNamespace {
                 Ok(StoreConfig::Memory(config, namespace))
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb {
-                path,
-                block_in_place,
-            } => {
+            StorageConfig::RocksDb { path, spawn_mode } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
                 let config = RocksDbStoreConfig {
                     path_with_guard,
-                    block_in_place: *block_in_place,
+                    spawn_mode: *spawn_mode,
                     common_config,
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))
@@ -390,17 +386,12 @@ impl fmt::Display for StorageConfigNamespace {
                 write!(f, "memory:{}", namespace)
             }
             #[cfg(feature = "rocksdb")]
-            StorageConfig::RocksDb {
-                path,
-                block_in_place,
-            } => {
-                write!(
-                    f,
-                    "rocksdb:{}:{}:{}",
-                    path.display(),
-                    block_in_place,
-                    namespace
-                )
+            StorageConfig::RocksDb { path, spawn_mode } => {
+                let spawn_mode = match spawn_mode {
+                    RocksDbSpawnMode::SpawnBlocking => "spawn_blocking".to_string(),
+                    RocksDbSpawnMode::BlockInPlace => "block_in_place".to_string(),
+                };
+                write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
             }
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => match use_localstack {
@@ -731,11 +722,11 @@ fn test_shared_store_config_from_str() {
 #[test]
 fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
-        StorageConfigNamespace::from_str("rocksdb:foo.db:true:chosen_namespace").unwrap(),
+        StorageConfigNamespace::from_str("rocksdb:foo.db:block_in_place:chosen_namespace").unwrap(),
         StorageConfigNamespace {
             storage_config: StorageConfig::RocksDb {
                 path: "foo.db".into(),
-                block_in_place: true,
+                spawn_mode: RocksDbSpawnMode::BlockInPlace,
             },
             namespace: "chosen_namespace".into()
         }
@@ -746,7 +737,7 @@ fn test_rocks_db_storage_config_from_str() {
         StorageConfigNamespace {
             storage_config: StorageConfig::RocksDb {
                 path: "foo.db".into(),
-                block_in_place: false,
+                spawn_mode: RocksDbSpawnMode::SpawnBlocking,
             },
             namespace: DEFAULT_NAMESPACE.to_string()
         }
