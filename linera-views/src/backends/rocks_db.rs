@@ -52,7 +52,7 @@ pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 /// The BlockInPlace is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RocksDbSpawnMode {
-    /// This uses the `span_blocking` function of tokio.
+    /// This uses the `spawn_blocking` function of tokio.
     SpawnBlocking,
     /// This uses the `block_in_place` function of tokio.
     BlockInPlace,

@@ -91,7 +91,7 @@ pub enum StorageConfig {
     RocksDb {
         /// The path used
         path: PathBuf,
-        /// Whether to use `block_in_place` or `span_blocking`.
+        /// Whether to use `block_in_place` or `spawn_blocking`.
         spawn_mode: RocksDbSpawnMode,
     },
     /// The DynamoDB description
