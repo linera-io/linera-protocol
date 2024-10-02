@@ -44,9 +44,9 @@ pub struct ChainState {
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pending_blobs: BTreeMap<BlobId, Blob>,
 
-    /// A mutex that is held whilst we are preparing the next block, to ensure that no
-    /// other client can begin preparing a block.
-    preparing_block: Arc<Mutex<()>>,
+    /// A mutex that is held whilst we are performing operations that should not be
+    /// attempted by multiple clients at the same time.
+    client_mutex: Arc<Mutex<()>>,
 }
 
 impl ChainState {
@@ -72,7 +72,7 @@ impl ChainState {
             pending_block: None,
             pending_blobs,
             received_certificate_trackers: HashMap::new(),
-            preparing_block: Arc::default(),
+            client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
             state.set_pending_block(block);
@@ -161,7 +161,7 @@ impl ChainState {
         self.pending_blobs.clear();
     }
 
-    pub fn preparing_block(&self) -> Arc<Mutex<()>> {
-        self.preparing_block.clone()
+    pub fn client_mutex(&self) -> Arc<Mutex<()>> {
+        self.client_mutex.clone()
     }
 }
