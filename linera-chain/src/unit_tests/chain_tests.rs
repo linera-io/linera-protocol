@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, iter, sync::Arc};
+use std::{collections::BTreeMap, iter};
 
 use assert_matches::assert_matches;
 use linera_base::{
@@ -184,11 +184,11 @@ async fn test_application_permissions() {
     // Create a mock application.
     let app_description = make_app_description();
     let application_id = ApplicationId::from(&app_description);
-    let application = Arc::new(MockApplication::default());
+    let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra
         .user_contracts()
-        .insert(application_id, application.clone());
+        .insert(application_id, application.clone().into());
     let contract_blob = Blob::new_contract_bytecode(Bytecode::new(b"contract".into()).compress());
     extra.add_blob(contract_blob);
     let service_blob = Blob::new_service_bytecode(Bytecode::new(b"service".into()).compress());

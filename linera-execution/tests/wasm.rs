@@ -53,14 +53,14 @@ async fn test_fuel_for_counter_wasm_application(
     view.context()
         .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(contract));
+        .insert(app_id, contract.into());
 
     let service =
         WasmServiceModule::from_file("tests/fixtures/counter_service.wasm", wasm_runtime).await?;
     view.context()
         .extra()
         .user_services()
-        .insert(app_id, Arc::new(service));
+        .insert(app_id, service.into());
 
     let app_id = app_id.with_abi::<CounterAbi>();
 

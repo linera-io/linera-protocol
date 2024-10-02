@@ -10,7 +10,7 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use linera_base::{
     crypto::KeyPair,
@@ -125,7 +125,7 @@ where
     let service_blob_hash = service_blob_id.hash;
 
     let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
-    let contract = Arc::new(WasmContractModule::new(contract_bytecode, wasm_runtime).await?);
+    let contract = WasmContractModule::new(contract_bytecode, wasm_runtime).await?;
 
     // Publish some bytecode.
     let publish_operation = SystemOperation::PublishBytecode { bytecode_id };
@@ -211,7 +211,7 @@ where
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
         .simulate_instantiation(
-            contract,
+            contract.into(),
             Timestamp::from(2),
             application_description,
             initial_value_bytes.clone(),

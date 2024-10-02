@@ -75,10 +75,10 @@ where
     for (id, mock_application) in &mock_applications {
         extra
             .user_contracts()
-            .insert(*id, Arc::new(mock_application.clone()));
+            .insert(*id, mock_application.clone().into());
         extra
             .user_services()
-            .insert(*id, Arc::new(mock_application.clone()));
+            .insert(*id, mock_application.clone().into());
     }
 
     Ok(mock_applications.into_iter())
