@@ -35,7 +35,7 @@ use {
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
-        system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
+        system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
     },
     linera_rpc::{
