@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
-    system::{OpenChainConfig, Recipient, UserData},
+    system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
     Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
@@ -153,7 +153,6 @@ async fn test_block_size_limit() {
             owner: None,
             recipient: Recipient::root(0),
             amount: Amount::ONE,
-            user_data: UserData::default(),
         });
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(

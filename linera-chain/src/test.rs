@@ -89,7 +89,6 @@ impl BlockTestExt for Block {
             owner,
             recipient,
             amount,
-            user_data: Default::default(),
         })
     }
 

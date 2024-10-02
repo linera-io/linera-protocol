@@ -9,11 +9,9 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId, MessageId},
 };
 use linera_execution::{
-    system::{Recipient, UserData},
-    test_utils::SystemExecutionState,
-    ExecutionOutcome, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, ResourceController, Response, SystemMessage, SystemOperation, SystemQuery,
-    SystemResponse, TransactionTracker,
+    system::Recipient, test_utils::SystemExecutionState, ExecutionOutcome, Message, MessageContext,
+    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, ResourceController,
+    Response, SystemMessage, SystemOperation, SystemQuery, SystemResponse, TransactionTracker,
 };
 
 #[tokio::test]
@@ -26,7 +24,6 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         owner: None,
         amount: Amount::from_tokens(4),
         recipient: Recipient::Burn,
-        user_data: UserData::default(),
     };
     let context = OperationContext {
         chain_id: ChainId::root(0),

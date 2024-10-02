@@ -48,7 +48,7 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{
-        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation, UserData,
+        AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
@@ -1287,20 +1287,18 @@ where
     }
 
     /// Sends money.
-    #[tracing::instrument(level = "trace", skip(user_data))]
+    #[tracing::instrument(level = "trace")]
     pub async fn transfer(
         &self,
         owner: Option<Owner>,
         amount: Amount,
         recipient: Recipient,
-        user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
             recipient,
             amount,
-            user_data,
         }))
         .await
     }
@@ -1321,21 +1319,19 @@ where
     }
 
     /// Claims money in a remote chain.
-    #[tracing::instrument(level = "trace", skip(user_data))]
+    #[tracing::instrument(level = "trace")]
     pub async fn claim(
         &self,
         owner: Owner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Claim {
             owner,
             target_id,
             recipient,
             amount,
-            user_data,
         }))
         .await
     }
@@ -2140,28 +2136,25 @@ where
     }
 
     /// Sends tokens to a chain.
-    #[tracing::instrument(level = "trace", skip(user_data))]
+    #[tracing::instrument(level = "trace")]
     pub async fn transfer_to_account(
         &self,
         owner: Option<Owner>,
         amount: Amount,
         account: Account,
-        user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.transfer(owner, amount, Recipient::Account(account), user_data)
+        self.transfer(owner, amount, Recipient::Account(account))
             .await
     }
 
     /// Burns tokens.
-    #[tracing::instrument(level = "trace", skip(user_data))]
+    #[tracing::instrument(level = "trace")]
     pub async fn burn(
         &self,
         owner: Option<Owner>,
         amount: Amount,
-        user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.transfer(owner, amount, Recipient::Burn, user_data)
-            .await
+        self.transfer(owner, amount, Recipient::Burn).await
     }
 
     /// Attempts to synchronize chains that have sent us messages and populate our local
@@ -2722,19 +2715,17 @@ where
     /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
-    #[tracing::instrument(level = "trace", skip(user_data))]
+    #[tracing::instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
         owner: Option<Owner>,
         amount: Amount,
         account: Account,
-        user_data: UserData,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
             recipient: Recipient::Account(account),
             amount,
-            user_data,
         }))
         .await
     }

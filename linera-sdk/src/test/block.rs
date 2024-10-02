@@ -16,7 +16,7 @@ use linera_chain::data_types::{
     MessageAction, Origin, SignatureAggregator,
 };
 use linera_execution::{
-    system::{Recipient, SystemChannel, SystemOperation, UserData},
+    system::{Recipient, SystemChannel, SystemOperation},
     Operation,
 };
 
@@ -91,7 +91,6 @@ impl BlockBuilder {
             owner: sender,
             recipient,
             amount,
-            user_data: UserData(None),
         })
     }
 

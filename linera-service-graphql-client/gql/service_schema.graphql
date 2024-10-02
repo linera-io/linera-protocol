@@ -585,13 +585,13 @@ type MutationRoot {
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the unattributed account.
 	"""
-	transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+	transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
 	process the message.
 	"""
-	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Test if a data blob is readable from a transaction in the current chain.
 	"""
@@ -997,11 +997,6 @@ type TimestampedBundleInInbox {
 Description of the necessary information to run a user application
 """
 scalar UserApplicationDescription
-
-"""
-Optional user message attached to a transfer
-"""
-scalar UserData
 
 """
 The version info of a build of Linera.

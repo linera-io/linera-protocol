@@ -117,7 +117,6 @@ pub enum SystemOperation {
         owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     },
     /// Claims `amount` units of value from the given owner's account in the remote
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
@@ -127,7 +126,6 @@ pub enum SystemOperation {
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     },
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
@@ -214,7 +212,6 @@ pub enum SystemMessage {
         owner: Owner,
         amount: Amount,
         recipient: Recipient,
-        user_data: UserData,
     },
     /// Creates (or activates) a new chain.
     OpenChain(OpenChainConfig),
@@ -495,7 +492,6 @@ where
                 target_id,
                 recipient,
                 amount,
-                user_data,
             } => {
                 let message = self
                     .claim(
@@ -504,7 +500,6 @@ where
                         target_id,
                         recipient,
                         amount,
-                        user_data,
                     )
                     .await?;
 
@@ -724,7 +719,6 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
         ensure!(
             authenticated_signer.as_ref() == Some(&owner),
@@ -743,7 +737,6 @@ where
             message: SystemMessage::Withdraw {
                 amount,
                 owner,
-                user_data,
                 recipient,
             },
         })
@@ -779,7 +772,6 @@ where
             Withdraw {
                 amount,
                 owner,
-                user_data: _,
                 recipient,
             } => {
                 ensure!(

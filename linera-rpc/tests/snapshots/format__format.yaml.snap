@@ -872,8 +872,6 @@ SystemMessage:
               TYPENAME: Amount
           - recipient:
               TYPENAME: Recipient
-          - user_data:
-              TYPENAME: UserData
     2:
       OpenChain:
         NEWTYPE:
@@ -928,8 +926,6 @@ SystemOperation:
               TYPENAME: Recipient
           - amount:
               TYPENAME: Amount
-          - user_data:
-              TYPENAME: UserData
     1:
       Claim:
         STRUCT:
@@ -941,8 +937,6 @@ SystemOperation:
               TYPENAME: Recipient
           - amount:
               TYPENAME: Amount
-          - user_data:
-              TYPENAME: UserData
     2:
       OpenChain:
         NEWTYPE:
@@ -1042,12 +1036,6 @@ UserApplicationDescription:
     - required_application_ids:
         SEQ:
           TYPENAME: ApplicationId
-UserData:
-  NEWTYPESTRUCT:
-    OPTION:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
 ValidatorName:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey
