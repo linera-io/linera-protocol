@@ -33,7 +33,7 @@ use crate::{
     BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
     OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
     UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
-    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN, UserContractCode,
+    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN, UserContractCode, UserServiceCode,
 };
 
 #[cfg(test)]
@@ -1060,6 +1060,7 @@ impl ContractSyncRuntime {
         )))
     }
 
+    // TODO: deduplicate `Contract`/`Service` traits and types
     pub(crate) fn preload_contract(&self, id: UserApplicationId, code: UserContractCode, description: UserApplicationDescription) -> Result<(), ExecutionError> {
         let this = self.0.as_ref().expect("contracts shouldn't be preloaded while the runtime is being dropped");
         let runtime_handle = this.clone();
@@ -1407,6 +1408,24 @@ impl ServiceSyncRuntime {
             runtime,
             current_context: context,
         }
+    }
+
+    pub(crate) fn preload_service(&self, id: UserApplicationId, code: UserServiceCode, description: UserApplicationDescription) -> Result<(), ExecutionError> {
+        let this = self.runtime.0.as_ref().expect("services shouldn't be preloaded while the runtime is being dropped");
+        let runtime_handle = this.clone();
+        let mut this_guard = this.inner();
+
+        if let std::collections::hash_map::Entry::Vacant(e) = this_guard.loaded_applications.entry(id) {
+            e.insert(
+                LoadedApplication::new(
+                    code.instantiate(runtime_handle)?,
+                    description,
+                ),
+            );
+            this_guard.applications_to_finalize.push(id);
+        }
+
+        Ok(())
     }
 
     /// Runs the service runtime actor, waiting for `incoming_requests` to respond to.
