@@ -78,74 +78,14 @@ impl RocksDbSpawnMode
     }
 }
 
-
-/// The inner client
 #[derive(Clone)]
-struct RocksDbStoreInternal {
+struct RocksDbStoreExecutor {
     db: Arc<DB>,
-    _path_with_guard: PathWithGuard,
     root_key: Vec<u8>,
-    max_stream_queries: usize,
-    cache_size: usize,
-    spawn_mode: RocksDbSpawnMode,
 }
 
-/// The initial configuration of the system
-#[derive(Clone, Debug)]
-pub struct RocksDbStoreConfig {
-    /// The path to the storage containing the namespaces..
-    pub path_with_guard: PathWithGuard,
-    /// The spawn_mode that is chosen
-    pub spawn_mode: RocksDbSpawnMode,
-    /// The common configuration of the key value store
-    pub common_config: CommonStoreConfig,
-}
-
-impl RocksDbStoreInternal {
-    fn check_namespace(namespace: &str) -> Result<(), RocksDbStoreError> {
-        if !namespace
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        {
-            return Err(RocksDbStoreError::InvalidNamespace);
-        }
-        Ok(())
-    }
-
-    fn build(
-        path_with_guard: PathWithGuard,
-        spawn_mode: RocksDbSpawnMode,
-        max_stream_queries: usize,
-        cache_size: usize,
-        root_key: &[u8],
-    ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
-        let path = path_with_guard.path_buf.clone();
-        if !std::path::Path::exists(&path) {
-            std::fs::create_dir(path.clone())?;
-        }
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, path)?;
-        let root_key = root_key.to_vec();
-        Ok(RocksDbStoreInternal {
-            db: Arc::new(db),
-            _path_with_guard: path_with_guard,
-            root_key,
-            max_stream_queries,
-            cache_size,
-            spawn_mode,
-        })
-    }
-
-    fn contains_key_internal(&self, full_key: Vec<u8>) -> Result<bool, RocksDbStoreError> {
-        let key_may_exist = self.db.key_may_exist(&full_key);
-        if !key_may_exist {
-            return Ok(false);
-        }
-        Ok(self.db.get(&full_key)?.is_some())
-    }
-
-    fn contains_keys_internal(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
+impl RocksDbStoreExecutor {
+    pub fn contains_keys_internal(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let size = keys.len();
         let mut results = vec![false; size];
         let mut indices = Vec::new();
@@ -299,6 +239,73 @@ impl RocksDbStoreInternal {
     }
 }
 
+
+/// The inner client
+#[derive(Clone)]
+struct RocksDbStoreInternal {
+    executor: RocksDbStoreExecutor,
+    _path_with_guard: PathWithGuard,
+    max_stream_queries: usize,
+    cache_size: usize,
+    spawn_mode: RocksDbSpawnMode,
+}
+
+/// The initial configuration of the system
+#[derive(Clone, Debug)]
+pub struct RocksDbStoreConfig {
+    /// The path to the storage containing the namespaces..
+    pub path_with_guard: PathWithGuard,
+    /// The spawn_mode that is chosen
+    pub spawn_mode: RocksDbSpawnMode,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreConfig,
+}
+
+impl RocksDbStoreInternal {
+    fn check_namespace(namespace: &str) -> Result<(), RocksDbStoreError> {
+        if !namespace
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(RocksDbStoreError::InvalidNamespace);
+        }
+        Ok(())
+    }
+
+    fn build(
+        path_with_guard: PathWithGuard,
+        spawn_mode: RocksDbSpawnMode,
+        max_stream_queries: usize,
+        cache_size: usize,
+        root_key: &[u8],
+    ) -> Result<RocksDbStoreInternal, RocksDbStoreError> {
+        let path = path_with_guard.path_buf.clone();
+        if !std::path::Path::exists(&path) {
+            std::fs::create_dir(path.clone())?;
+        }
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path)?;
+        let root_key = root_key.to_vec();
+        let executor = RocksDbStoreExecutor { db: Arc::new(db), root_key };
+        Ok(RocksDbStoreInternal {
+            executor,
+            _path_with_guard: path_with_guard,
+            max_stream_queries,
+            cache_size,
+            spawn_mode,
+        })
+    }
+
+    fn contains_key_internal(&self, full_key: Vec<u8>) -> Result<bool, RocksDbStoreError> {
+        let key_may_exist = self.executor.db.key_may_exist(&full_key);
+        if !key_may_exist {
+            return Ok(false);
+        }
+        Ok(self.executor.db.get(&full_key)?.is_some())
+    }
+}
+
 impl WithError for RocksDbStoreInternal {
     type Error = RocksDbStoreError;
 }
@@ -315,15 +322,15 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbStoreError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
         let client = self.clone();
-        let mut full_key = self.root_key.to_vec();
+        let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
         Ok(match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.db.get(&full_key)).await?
+                tokio::task::spawn_blocking(move || client.executor.db.get(&full_key)).await?
             },
             RocksDbSpawnMode::BlockInPlace => {
                 tokio::task::block_in_place(move || {
-                    client.db.get(&full_key)
+                    client.executor.db.get(&full_key)
                 })
             },
         }?)
@@ -332,7 +339,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
         let client = self.clone();
-        let mut full_key = self.root_key.to_vec();
+        let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
@@ -345,13 +352,13 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
-        let client = self.clone();
+        let executor = self.executor.clone();
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.contains_keys_internal(keys)).await?
+                tokio::task::spawn_blocking(move || executor.contains_keys_internal(keys)).await?
             },
             RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || client.contains_keys_internal(keys))
+                tokio::task::block_in_place(move || executor.contains_keys_internal(keys))
             },
         }
     }
@@ -360,14 +367,14 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
-        let client = self.clone();
+        let executor = self.executor.clone();
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.read_multi_values_bytes_internal(keys))
+                tokio::task::spawn_blocking(move || executor.read_multi_values_bytes_internal(keys))
                     .await?
             },
             RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || client.read_multi_values_bytes_internal(keys))
+                tokio::task::block_in_place(move || executor.read_multi_values_bytes_internal(keys))
             },
         }
     }
@@ -376,15 +383,15 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::Keys, RocksDbStoreError> {
-        let client = self.clone();
+        let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.find_keys_by_prefix_internal(key_prefix))
+                tokio::task::spawn_blocking(move || executor.find_keys_by_prefix_internal(key_prefix))
                     .await?
             },
             RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || client.find_keys_by_prefix_internal(key_prefix))
+                tokio::task::block_in_place(move || executor.find_keys_by_prefix_internal(key_prefix))
             },
         }
     }
@@ -393,17 +400,17 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, RocksDbStoreError> {
-        let client = self.clone();
+        let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
                 tokio::task::spawn_blocking(move || {
-                    client.find_key_values_by_prefix_internal(key_prefix)
+                    executor.find_key_values_by_prefix_internal(key_prefix)
                 }).await?
             },
             RocksDbSpawnMode::BlockInPlace => {
                 tokio::task::block_in_place(move || {
-                    client.find_key_values_by_prefix_internal(key_prefix)
+                    executor.find_key_values_by_prefix_internal(key_prefix)
                 })
             },
         }
@@ -414,13 +421,13 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
-        let client = self.clone();
+        let executor = self.executor.clone();
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.write_batch_internal(batch)).await?
+                tokio::task::spawn_blocking(move || executor.write_batch_internal(batch)).await?
             },
             RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || client.write_batch_internal(batch))
+                tokio::task::block_in_place(move || executor.write_batch_internal(batch))
             },
         }
     }
@@ -468,7 +475,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
         let mut store = self.clone();
-        store.root_key = root_key.to_vec();
+        store.executor.root_key = root_key.to_vec();
         Ok(store)
     }
 
