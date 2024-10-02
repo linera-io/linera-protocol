@@ -334,14 +334,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
-        Ok(match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || db.get(&full_key)).await?
-            }
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || db.get(&full_key))
-            }
-        }?)
+        self.spawn_mode.spawn(move |x| Ok(db.get(&x)?), full_key).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreError> {
