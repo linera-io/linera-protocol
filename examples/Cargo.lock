@@ -3438,6 +3438,7 @@ dependencies = [
  "custom_debug_derive",
  "dashmap 5.5.3",
  "derive_more 1.0.0",
+ "dyn-clone",
  "futures",
  "linera-base",
  "linera-views",

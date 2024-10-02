@@ -81,32 +81,48 @@ const MAX_EVENT_KEY_LEN: usize = 64;
 const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
-pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
+pub type UserContractCode = Box<dyn UserContractModule + Send + Sync>;
 
 /// An implementation of [`UserServiceModule`].
-pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
+pub type UserServiceCode = Box<dyn UserServiceModule + Send + Sync>;
 
 /// An implementation of [`UserContract`].
-pub type UserContractInstance = Box<dyn UserContract + 'static>;
+pub type UserContractInstance = Box<dyn UserContract>;
 
 /// An implementation of [`UserService`].
-pub type UserServiceInstance = Box<dyn UserService + 'static>;
+pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule {
+pub trait UserContractModule: dyn_clone::DynClone {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError>;
 }
 
+impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode {
+    fn from(module: T) -> Self {
+        Box::new(module)
+    }
+}
+
+dyn_clone::clone_trait_object!(UserContractModule);
+
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule {
+pub trait UserServiceModule: dyn_clone::DynClone {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError>;
 }
+
+impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
+    fn from(module: T) -> Self {
+        Box::new(module)
+    }
+}
+
+dyn_clone::clone_trait_object!(UserServiceModule);
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
