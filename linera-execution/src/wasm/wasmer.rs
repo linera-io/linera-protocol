@@ -5,7 +5,6 @@
 
 use std::{marker::Unpin, sync::LazyLock};
 
-use bytes::Bytes;
 use linera_base::data_types::Bytecode;
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
@@ -13,7 +12,7 @@ use linera_witty::{
 };
 use tokio::sync::Mutex;
 use wasm_instrument::{gas_metering, parity_wasm};
-use wasmer::{Engine, Module, Store};
+use wasmer::{Engine, Module};
 
 use super::{
     module_cache::ModuleCache,
@@ -197,9 +196,9 @@ impl From<wasmer::RuntimeError> for ExecutionError {
 }
 
 /// Serialized bytes of a compiled contract bytecode.
-pub struct CachedContractModule {
-    compiled_bytecode: Bytes,
-}
+// Cloning `Module`s is cheap.
+#[derive(Clone)]
+pub struct CachedContractModule(Module);
 
 pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
     struct WasmtimeRules;
@@ -250,8 +249,7 @@ impl CachedContractModule {
             &Self::create_compilation_engine(),
             add_metering(contract_bytecode)?,
         )?;
-        let compiled_bytecode = module.serialize()?;
-        Ok(CachedContractModule { compiled_bytecode })
+        Ok(CachedContractModule(module))
     }
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
@@ -270,9 +268,6 @@ impl CachedContractModule {
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
     pub fn create_execution_instance(&self) -> Result<(Engine, Module), anyhow::Error> {
-        let engine = Engine::default();
-        let store = Store::new(engine.clone());
-        let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }?;
-        Ok((engine, module))
+        Ok((Engine::default(), self.0.clone()))
     }
 }
