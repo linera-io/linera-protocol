@@ -58,14 +58,38 @@ pub enum RocksDbSpawnMode {
     BlockInPlace,
 }
 
-/// Obtains the spawning mode from runtime
-pub fn get_spawn_mode_from_runtime() -> RocksDbSpawnMode {
-    if tokio::runtime::Handle::current().metrics().num_workers() > 1 {
-        RocksDbSpawnMode::BlockInPlace
-    } else {
-        RocksDbSpawnMode::SpawnBlocking
+impl RocksDbSpawnMode {
+    /// Obtains the spawning mode from runtime
+    pub fn get_spawn_mode_from_runtime() -> Self {
+        if tokio::runtime::Handle::current().metrics().num_workers() > 1 {
+            RocksDbSpawnMode::BlockInPlace
+        } else {
+            RocksDbSpawnMode::SpawnBlocking
+        }
     }
+
+    /// Runs the computation for a function according to the selected policy.
+    #[inline]
+    pub async fn spawn<F, I, O>(&self, f: F, input: I) -> Result<O, RocksDbStoreError>
+    where
+        F: FnOnce(I) -> Result<O, RocksDbStoreError> + Send + 'static,
+        I: Send + 'static,
+        O: Send + 'static,
+    {
+        Ok(match self {
+            RocksDbSpawnMode::BlockInPlace => {
+                tokio::task::block_in_place(move || f(input))?
+            },
+            RocksDbSpawnMode::SpawnBlocking => {
+                tokio::task::spawn_blocking(move || f(input)).await??
+            },
+        })
+    }
+
 }
+
+
+
 
 #[derive(Clone)]
 struct RocksDbStoreExecutor {
@@ -325,37 +349,18 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
-        match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || {
-                    let key_may_exist = db.key_may_exist(&full_key);
-                    if !key_may_exist {
-                        return Ok(false);
-                    }
-                    Ok(db.get(&full_key)?.is_some())
-                })
-                .await?
+        self.spawn_mode.spawn(move |x| {
+            let key_may_exist = db.key_may_exist(&x);
+            if !key_may_exist {
+                return Ok(false);
             }
-            RocksDbSpawnMode::BlockInPlace => tokio::task::block_in_place(move || {
-                let key_may_exist = db.key_may_exist(&full_key);
-                if !key_may_exist {
-                    return Ok(false);
-                }
-                Ok(db.get(&full_key)?.is_some())
-            }),
-        }
+            Ok(db.get(&x)?.is_some())
+        }, full_key).await
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, RocksDbStoreError> {
         let executor = self.executor.clone();
-        match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || executor.contains_keys_internal(keys)).await?
-            }
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || executor.contains_keys_internal(keys))
-            }
-        }
+        self.spawn_mode.spawn(move |x| executor.contains_keys_internal(x), keys).await
     }
 
     async fn read_multi_values_bytes(
@@ -363,15 +368,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreError> {
         let executor = self.executor.clone();
-        match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || executor.read_multi_values_bytes_internal(keys))
-                    .await?
-            }
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || executor.read_multi_values_bytes_internal(keys))
-            }
-        }
+        self.spawn_mode.spawn(move |x| executor.read_multi_values_bytes_internal(x), keys).await
     }
 
     async fn find_keys_by_prefix(
@@ -380,17 +377,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Self::Keys, RocksDbStoreError> {
         let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
-        match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || {
-                    executor.find_keys_by_prefix_internal(key_prefix)
-                })
-                .await?
-            }
-            RocksDbSpawnMode::BlockInPlace => tokio::task::block_in_place(move || {
-                executor.find_keys_by_prefix_internal(key_prefix)
-            }),
-        }
+        self.spawn_mode.spawn(move |x| executor.find_keys_by_prefix_internal(x), key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
@@ -399,17 +386,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     ) -> Result<Self::KeyValues, RocksDbStoreError> {
         let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
-        match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || {
-                    executor.find_key_values_by_prefix_internal(key_prefix)
-                })
-                .await?
-            }
-            RocksDbSpawnMode::BlockInPlace => tokio::task::block_in_place(move || {
-                executor.find_key_values_by_prefix_internal(key_prefix)
-            }),
-        }
+        self.spawn_mode.spawn(move |x| executor.find_key_values_by_prefix_internal(x), key_prefix).await
     }
 }
 
@@ -418,14 +395,7 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreError> {
         let executor = self.executor.clone();
-        match self.spawn_mode {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || executor.write_batch_internal(batch)).await?
-            }
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || executor.write_batch_internal(batch))
-            }
-        }
+        self.spawn_mode.spawn(move |x| executor.write_batch_internal(x), batch).await
     }
 
     async fn clear_journal(&self) -> Result<(), RocksDbStoreError> {

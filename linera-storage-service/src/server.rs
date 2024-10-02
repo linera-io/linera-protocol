@@ -15,7 +15,7 @@ use linera_views::{
 #[cfg(with_rocksdb)]
 use linera_views::{
     common::AdminKeyValueStore,
-    rocks_db::{get_spawn_mode_from_runtime, PathWithGuard, RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbStore, RocksDbSpawnMode, RocksDbStoreConfig},
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
@@ -584,7 +584,7 @@ async fn main() {
             let path_buf = path.into();
             let path_with_guard = PathWithGuard::new(path_buf);
             // The server is run in multi-threaded mode so we can use the block_in_place.
-            let spawn_mode = get_spawn_mode_from_runtime();
+            let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
             let config = RocksDbStoreConfig {
                 path_with_guard,
                 spawn_mode,
