@@ -448,7 +448,7 @@ where
                 .chain
                 .mark_messages_as_received(&target, height)
                 .await?
-                && self.state.chain.all_messages_delivered_up_to(height);
+                && self.state.all_messages_delivered_up_to(height).await?;
 
             if fully_delivered && height > height_with_fully_delivered_messages {
                 height_with_fully_delivered_messages = height;
