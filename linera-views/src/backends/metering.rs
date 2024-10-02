@@ -387,12 +387,12 @@ where
             .with_label_values(&[])
             .observe(key_prefix.len() as f64);
         let result = self.store.find_keys_by_prefix(key_prefix).await?;
-        let mut num_keys = 0;
-        let mut keys_size = 0;
-        for key in result.iterator() {
-            num_keys += 1;
-            keys_size += key?.len();
-        }
+        let (num_keys, keys_size) = result
+            .iterator()
+            .map(|key| key.map(|k| k.len()))
+            .collect::<Result<Vec<usize>, _>>()?
+            .into_iter()
+            .fold((0, 0), |(count, size), len| (count + 1, size + len));
         self.counter
             .find_keys_by_prefix_num_keys
             .with_label_values(&[])
@@ -414,13 +414,12 @@ where
             .with_label_values(&[])
             .observe(key_prefix.len() as f64);
         let result = self.store.find_key_values_by_prefix(key_prefix).await?;
-        let mut num_keys = 0;
-        let mut key_values_size = 0;
-        for key_value in result.iterator() {
-            let (key, value) = key_value?;
-            num_keys += 1;
-            key_values_size += key.len() + value.len();
-        }
+        let (num_keys, key_values_size) = result
+            .iterator()
+            .map(|key_value| key_value.map(|(key, value)| key.len() + value.len()))
+            .collect::<Result<Vec<usize>, _>>()?
+            .into_iter()
+            .fold((0, 0), |(count, size), len| (count + 1, size + len));
         self.counter
             .find_key_values_by_prefix_num_keys
             .with_label_values(&[])
