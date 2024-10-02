@@ -58,6 +58,27 @@ pub enum RocksDbSpawnMode {
     BlockInPlace,
 }
 
+impl RocksDbSpawnMode
+{
+    /// Evaluate a function on an input
+    pub async fn eval<F, I, O>(&self, f: F, input: I) -> Result<O, RocksDbStoreError>
+    where
+        F: FnOnce(I) -> Result<O, RocksDbStoreError> + Send + 'static,
+        I: Send + 'static,
+        O: Send + 'static,
+    {
+        match self {
+            RocksDbSpawnMode::SpawnBlocking => {
+                tokio::task::spawn_blocking(move || f(input)).await?
+            },
+            RocksDbSpawnMode::BlockInPlace => {
+                tokio::task::block_in_place(move || f(input))
+            },
+        }
+    }
+}
+
+
 /// The inner client
 #[derive(Clone)]
 struct RocksDbStoreInternal {
