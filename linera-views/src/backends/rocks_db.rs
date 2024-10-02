@@ -58,26 +58,6 @@ pub enum RocksDbSpawnMode {
     BlockInPlace,
 }
 
-impl RocksDbSpawnMode
-{
-    /// Evaluate a function on an input
-    pub async fn eval<F, I, O>(&self, f: F, input: I) -> Result<O, RocksDbStoreError>
-    where
-        F: FnOnce(I) -> Result<O, RocksDbStoreError> + Send + 'static,
-        I: Send + 'static,
-        O: Send + 'static,
-    {
-        match self {
-            RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || f(input)).await?
-            },
-            RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || f(input))
-            },
-        }
-    }
-}
-
 #[derive(Clone)]
 struct RocksDbStoreExecutor {
     db: Arc<DB>,
@@ -296,14 +276,6 @@ impl RocksDbStoreInternal {
             spawn_mode,
         })
     }
-
-    fn contains_key_internal(&self, full_key: Vec<u8>) -> Result<bool, RocksDbStoreError> {
-        let key_may_exist = self.executor.db.key_may_exist(&full_key);
-        if !key_may_exist {
-            return Ok(false);
-        }
-        Ok(self.executor.db.get(&full_key)?.is_some())
-    }
 }
 
 impl WithError for RocksDbStoreInternal {
@@ -321,32 +293,42 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbStoreError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
-        let client = self.clone();
+        let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
         Ok(match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.executor.db.get(&full_key)).await?
+                tokio::task::spawn_blocking(move || db.get(&full_key)).await?
             },
             RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || {
-                    client.executor.db.get(&full_key)
-                })
+                tokio::task::block_in_place(move || db.get(&full_key))
             },
         }?)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreError> {
         ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
-        let client = self.clone();
+        let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
         match self.spawn_mode {
             RocksDbSpawnMode::SpawnBlocking => {
-                tokio::task::spawn_blocking(move || client.contains_key_internal(full_key)).await?
+                tokio::task::spawn_blocking(move || {
+                    let key_may_exist = db.key_may_exist(&full_key);
+                    if !key_may_exist {
+                        return Ok(false);
+                    }
+                    Ok(db.get(&full_key)?.is_some())
+                }).await?
             },
             RocksDbSpawnMode::BlockInPlace => {
-                tokio::task::block_in_place(move || client.contains_key_internal(full_key))
+                tokio::task::block_in_place(move || {
+                    let key_may_exist = db.key_may_exist(&full_key);
+                    if !key_may_exist {
+                        return Ok(false);
+                    }
+                    Ok(db.get(&full_key)?.is_some())
+                })
             },
         }
     }
