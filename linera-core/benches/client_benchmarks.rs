@@ -11,7 +11,7 @@ use linera_core::{
     client,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
 };
-use linera_execution::system::{Recipient, UserData};
+use linera_execution::system::Recipient;
 use linera_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
@@ -63,7 +63,7 @@ where
 
     let account = Account::owner(chain2.chain_id(), owner1);
     let cert = chain1
-        .transfer_to_account(None, amt, account, UserData(None))
+        .transfer_to_account(None, amt, account)
         .await
         .unwrap()
         .unwrap();
@@ -80,7 +80,7 @@ where
 
     let account = Recipient::chain(chain1.chain_id());
     let cert = chain1
-        .claim(owner1, chain2.chain_id(), account, amt, UserData(None))
+        .claim(owner1, chain2.chain_id(), account, amt)
         .await
         .unwrap()
         .unwrap();

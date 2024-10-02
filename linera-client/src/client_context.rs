@@ -694,7 +694,6 @@ where
                     owner: None,
                     recipient: Recipient::chain(next_recipient),
                     amount,
-                    user_data: UserData::default(),
                 }),
             };
             let operations = iter::repeat(operation)

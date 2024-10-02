@@ -18,10 +18,7 @@ use linera_core::{
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
-use linera_execution::{
-    system::{Recipient, UserData},
-    ResourceControlPolicy,
-};
+use linera_execution::{system::Recipient, ResourceControlPolicy};
 use linera_rpc::{
     config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
     simple::TransportProtocol,
@@ -189,9 +186,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Recipient::chain(chain_id0);
-    client1
-        .transfer(None, Amount::ONE, recipient0, UserData::default())
-        .await?;
+    client1.transfer(None, Amount::ONE, recipient0).await?;
     for i in 0.. {
         client0.synchronize_from_validators().boxed().await?;
         let balance = client0.local_balance().await?;

@@ -22,7 +22,7 @@ use prometheus::HistogramVec;
 use reqwest::{header::CONTENT_TYPE, Client};
 
 use crate::{
-    system::{OpenChainConfig, Recipient, UserData},
+    system::{OpenChainConfig, Recipient},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
@@ -160,7 +160,6 @@ where
                         source.chain_id,
                         Recipient::Account(destination),
                         amount,
-                        UserData::default(),
                     )
                     .await?;
 

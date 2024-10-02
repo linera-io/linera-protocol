@@ -40,7 +40,7 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{AdminOperation, Recipient, SystemChannel, UserData},
+    system::{AdminOperation, Recipient, SystemChannel},
     Operation, Query, Response, SystemOperation,
 };
 use linera_storage::Storage;
@@ -285,18 +285,14 @@ where
         owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
-        user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |client| {
-            let user_data = user_data.clone();
-            async move {
-                let result = client
-                    .transfer(owner, amount, recipient, user_data.unwrap_or_default())
-                    .await
-                    .map_err(Error::from)
-                    .map(|outcome| outcome.map(|certificate| certificate.hash()));
-                (result, client)
-            }
+        self.apply_client_command(&chain_id, move |client| async move {
+            let result = client
+                .transfer(owner, amount, recipient)
+                .await
+                .map_err(Error::from)
+                .map(|outcome| outcome.map(|certificate| certificate.hash()));
+            (result, client)
         })
         .await
     }
@@ -304,7 +300,6 @@ where
     /// Claims `amount` units of value from the given owner's account in the remote
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
     /// process the message.
-    #[expect(clippy::too_many_arguments)]
     async fn claim(
         &self,
         chain_id: ChainId,
@@ -312,24 +307,14 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |client| {
-            let user_data = user_data.clone();
-            async move {
-                let result = client
-                    .claim(
-                        owner,
-                        target_id,
-                        recipient,
-                        amount,
-                        user_data.unwrap_or_default(),
-                    )
-                    .await
-                    .map_err(Error::from)
-                    .map(|outcome| outcome.map(|certificate| certificate.hash()));
-                (result, client)
-            }
+        self.apply_client_command(&chain_id, move |client| async move {
+            let result = client
+                .claim(owner, target_id, recipient, amount)
+                .await
+                .map_err(Error::from)
+                .map(|outcome| outcome.map(|certificate| certificate.hash()));
+            (result, client)
         })
         .await
     }
