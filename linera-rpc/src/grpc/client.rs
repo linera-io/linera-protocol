@@ -17,7 +17,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 #[cfg(not(web))]
 use {
     super::GrpcProtoConversionError,
@@ -139,13 +139,13 @@ impl GrpcClient {
         match inner {
             Inner::ChainInfoResponse(response) => {
                 Ok(response.try_into().map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to marshal response: {}", err),
+                    error: format!("failed to unmarshal response: {}", err),
                 })?)
             }
             Inner::Error(error) => {
                 Err(
                     bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
-                        error: format!("failed to marshal error message: {}", err),
+                        error: format!("failed to unmarshal error message: {}", err),
                     })?,
                 )
             }
