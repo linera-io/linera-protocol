@@ -81,8 +81,8 @@ where
     pub client: Arc<Client<NodeProvider, Storage>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
-    pub notification_retry_delay: Duration,
-    pub notification_retries: u32,
+    pub retry_delay: Duration,
+    pub max_retries: u32,
     pub options: ClientOptions,
     pub chain_listeners: JoinSet<()>,
 }
@@ -133,8 +133,8 @@ where
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
+            retry_delay: options.retry_delay,
+            max_retries: options.max_retries,
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
@@ -153,8 +153,8 @@ where
             wallet,
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
+            retry_delay: options.retry_delay,
+            max_retries: options.max_retries,
             options,
             chain_listeners: JoinSet::new(),
         }
@@ -209,8 +209,8 @@ where
         NodeOptions {
             send_timeout: self.send_timeout,
             recv_timeout: self.recv_timeout,
-            notification_retry_delay: self.notification_retry_delay,
-            notification_retries: self.notification_retries,
+            retry_delay: self.retry_delay,
+            max_retries: self.max_retries,
         }
     }
 
