@@ -231,7 +231,16 @@ where
 
     /// Runs the proxy. If either the public server or private server dies for whatever
     /// reason we'll kill the proxy.
-    #[instrument(name = "GrpcProxy::run", skip_all, fields(public_address = %self.public_address(), internal_address = %self.internal_address(), metrics_address = %self.metrics_address()), err)]
+    #[instrument(
+        name = "GrpcProxy::run",
+        skip_all,
+        fields(
+            public_address = %self.public_address(),
+            internal_address = %self.internal_address(),
+            metrics_address = %self.metrics_address(),
+        ),
+        err,
+    )]
     pub async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting gRPC server");
         let mut join_set = JoinSet::new();
