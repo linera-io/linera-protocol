@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter;
+use std::{fmt, future::Future, iter};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
@@ -16,7 +16,7 @@ use linera_core::{
     worker::Notification,
 };
 use linera_version::VersionInfo;
-use tonic::{Code, Request, Status};
+use tonic::{Code, IntoRequest, Request, Status};
 use tracing::{debug, info, instrument, warn};
 #[cfg(not(web))]
 use {
@@ -92,6 +92,43 @@ impl GrpcClient {
                 warn!("Unexpected gRPC status: {}", status);
                 false
             }
+        }
+    }
+
+    async fn delegate<F, FUT, R, S>(
+        &self,
+        f: F,
+        request: impl TryInto<R> + fmt::Debug + Clone,
+        handler: &str,
+    ) -> Result<S, NodeError>
+    where
+        F: Fn(ValidatorNodeClient<transport::Channel>, R) -> FUT,
+        FUT: Future<Output = Result<tonic::Response<S>, Status>>,
+        R: IntoRequest<R>,
+    {
+        debug!(request = ?request, "sending gRPC request");
+        let mut retry_count = 0;
+        loop {
+            let request_inner = request
+                .clone()
+                .try_into()
+                .map_err(|_| NodeError::GrpcError {
+                    error: "could not convert request to proto".to_string(),
+                })?;
+            match f(self.client.clone(), request_inner).await {
+                Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
+                    let delay = self.retry_delay.saturating_mul(retry_count);
+                    retry_count += 1;
+                    linera_base::time::timer::sleep(delay).await;
+                    continue;
+                }
+                Err(s) => {
+                    return Err(NodeError::GrpcError {
+                        error: format!("remote request [{handler}] failed with status: {s:?}",),
+                    });
+                }
+                Ok(result) => return Ok(result.into_inner()),
+            };
         }
     }
 }
@@ -265,13 +302,14 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
-        Ok(self
-            .client
-            .clone()
-            .get_version_info(())
-            .await?
-            .into_inner()
-            .into())
+        let version_info = self
+            .delegate(
+                |mut client, ()| async move { client.get_version_info(()).await },
+                (),
+                stringify!(get_version_info),
+            )
+            .await?;
+        Ok(version_info.into())
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
