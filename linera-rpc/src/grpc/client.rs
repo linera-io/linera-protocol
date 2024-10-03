@@ -40,8 +40,8 @@ use crate::{
 pub struct GrpcClient {
     address: String,
     client: ValidatorNodeClient<transport::Channel>,
-    notification_retry_delay: Duration,
-    notification_retries: u32,
+    retry_delay: Duration,
+    max_retries: u32,
 }
 
 impl GrpcClient {
@@ -60,8 +60,8 @@ impl GrpcClient {
         Ok(Self {
             address,
             client,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
+            retry_delay: options.retry_delay,
+            max_retries: options.max_retries,
         })
     }
 
@@ -107,9 +107,9 @@ macro_rules! client_delegate {
             let request = Request::new(request_inner);
             let inner = match $self.client.clone().$handler(request).await {
                 Err(s) if Self::is_retryable(&s)
-                    && retry_count < $self.notification_retries =>
+                    && retry_count < $self.max_retries =>
                 {
-                    let delay = $self.notification_retry_delay.saturating_mul(retry_count);
+                    let delay = $self.retry_delay.saturating_mul(retry_count);
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
                     continue;
@@ -195,8 +195,8 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
-        let notification_retry_delay = self.notification_retry_delay;
-        let notification_retries = self.notification_retries;
+        let retry_delay = self.retry_delay;
+        let max_retries = self.max_retries;
         let mut retry_count = 0;
         let subscription_request = SubscriptionRequest {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
@@ -248,10 +248,10 @@ impl ValidatorNode for GrpcClient {
                     retry_count = 0;
                     return future::Either::Left(future::ready(true));
                 };
-                if !Self::is_retryable(status) || retry_count >= notification_retries {
+                if !Self::is_retryable(status) || retry_count >= max_retries {
                     return future::Either::Left(future::ready(false));
                 }
-                let delay = notification_retry_delay.saturating_mul(retry_count);
+                let delay = retry_delay.saturating_mul(retry_count);
                 retry_count += 1;
                 future::Either::Right(async move {
                     linera_base::time::timer::sleep(delay).await;

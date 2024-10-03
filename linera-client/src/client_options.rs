@@ -118,11 +118,11 @@ pub struct ClientOptions {
         default_value = "1000",
         value_parser = util::parse_millis
     )]
-    pub notification_retry_delay: Duration,
+    pub retry_delay: Duration,
 
     /// Number of times to retry connecting to a validator for notifications.
     #[arg(long, default_value = "10")]
-    pub notification_retries: u32,
+    pub max_retries: u32,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.

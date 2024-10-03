@@ -111,10 +111,10 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--cache-size <CACHE_SIZE>` — The maximal number of entries in the storage cache
 
   Default value: `1000`
-* `--notification-retry-delay-ms <NOTIFICATION_RETRY_DELAY>` — Delay increment for retrying to connect to a validator for notifications
+* `--notification-retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator for notifications
 
   Default value: `1000`
-* `--notification-retries <NOTIFICATION_RETRIES>` — Number of times to retry connecting to a validator for notifications
+* `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator for notifications
 
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
