@@ -102,7 +102,10 @@ impl RocksDbStoreExecutor {
         let mut indices = Vec::new();
         let mut keys_red = Vec::new();
         for (i, key) in keys.into_iter().enumerate() {
-            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreInternalError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                RocksDbStoreInternalError::KeyTooLong
+            );
             let mut full_key = self.root_key.to_vec();
             full_key.extend(key);
             if self.db.key_may_exist(&full_key) {
@@ -122,7 +125,10 @@ impl RocksDbStoreExecutor {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreInternalError> {
         for key in &keys {
-            ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreInternalError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                RocksDbStoreInternalError::KeyTooLong
+            );
         }
         let full_keys = keys
             .into_iter()
@@ -218,13 +224,19 @@ impl RocksDbStoreExecutor {
         for operation in batch.operations {
             match operation {
                 WriteOperation::Delete { key } => {
-                    ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreInternalError::KeyTooLong);
+                    ensure!(
+                        key.len() <= MAX_KEY_SIZE,
+                        RocksDbStoreInternalError::KeyTooLong
+                    );
                     let mut full_key = self.root_key.to_vec();
                     full_key.extend(key);
                     inner_batch.delete(&full_key)
                 }
                 WriteOperation::Put { key, value } => {
-                    ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreInternalError::KeyTooLong);
+                    ensure!(
+                        key.len() <= MAX_KEY_SIZE,
+                        RocksDbStoreInternalError::KeyTooLong
+                    );
                     let mut full_key = self.root_key.to_vec();
                     full_key.extend(key);
                     inner_batch.put(&full_key, value)
@@ -323,8 +335,14 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreInternalError::KeyTooLong);
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            RocksDbStoreInternalError::KeyTooLong
+        );
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
@@ -361,6 +379,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         let executor = self.executor.clone();
         self.spawn_mode
             .spawn(move |x| executor.contains_keys_internal(x), keys)
+            .await
     }
 
     async fn read_multi_values_bytes(
@@ -405,7 +424,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 impl WritableKeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
-    async fn write_batch(&self, mut batch: Batch) -> Result<(), RocksDbStoreInternalError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         self.spawn_mode
             .spawn(move |x| executor.write_batch_internal(x), batch)
