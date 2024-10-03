@@ -99,37 +99,47 @@ impl GrpcClient {
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
         debug!(request = ?$req, "sending gRPC request");
-        let request_inner = $req.try_into().map_err(|_| NodeError::GrpcError {
-            error: "could not convert request to proto".to_string(),
-        })?;
-        let request = Request::new(request_inner);
-        match $self
-            .client
-            .clone()
-            .$handler(request)
-            .await
-            .map_err(|s| NodeError::GrpcError {
-                error: format!(
-                    "remote request [{}] failed with status: {:?}",
-                    stringify!($handler),
-                    s
-                ),
-            })?
-            .into_inner()
-            .inner
-            .ok_or(NodeError::GrpcError {
-                error: "missing body from response".to_string(),
-            })? {
-            Inner::ChainInfoResponse(response) => {
-                Ok(response.try_into().map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to marshal response: {}", err),
-                })?)
-            }
-            Inner::Error(error) => {
-                Err(bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to marshal error message: {}", err),
-                })?)
-            }
+        let mut retry_count = 0;
+        loop {
+            let request_inner = $req.clone().try_into().map_err(|_| NodeError::GrpcError {
+                error: "could not convert request to proto".to_string(),
+            })?;
+            let request = Request::new(request_inner);
+            let inner = match $self.client.clone().$handler(request).await {
+                Err(s) if Self::is_retryable(&s)
+                    && retry_count < $self.notification_retries =>
+                {
+                    let delay = $self.notification_retry_delay.saturating_mul(retry_count);
+                    retry_count += 1;
+                    linera_base::time::timer::sleep(delay).await;
+                    continue;
+                }
+                Err(s) => {
+                    return Err(NodeError::GrpcError {
+                        error: format!(
+                            "remote request [{}] failed with status: {s:?}",
+                            stringify!($handler),
+                        ),
+                    });
+                }
+                Ok(result) => {
+                    result.into_inner().inner.ok_or(NodeError::GrpcError {
+                        error: "missing body from response".to_string(),
+                    })?
+                }
+            };
+            return match inner {
+                Inner::ChainInfoResponse(response) => {
+                    Ok(response.try_into().map_err(|err| NodeError::GrpcError {
+                        error: format!("failed to marshal response: {}", err),
+                    })?)
+                }
+                Inner::Error(error) => {
+                    Err(bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
+                        error: format!("failed to marshal error message: {}", err),
+                    })?)
+                }
+            };
         }
     }};
 }
