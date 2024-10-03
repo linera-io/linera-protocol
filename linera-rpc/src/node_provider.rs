@@ -50,6 +50,6 @@ impl ValidatorNodeProvider for NodeProvider {
 pub struct NodeOptions {
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
-    pub notification_retry_delay: Duration,
-    pub notification_retries: u32,
+    pub retry_delay: Duration,
+    pub max_retries: u32,
 }

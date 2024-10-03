@@ -22,8 +22,8 @@ async fn client() {
     let node_options = linera_rpc::node_provider::NodeOptions {
         send_timeout: Duration::from_millis(100),
         recv_timeout: Duration::from_millis(100),
-        notification_retry_delay: Duration::from_millis(100),
-        notification_retries: 5,
+        retry_delay: Duration::from_millis(100),
+        max_retries: 5,
     };
 
     let _ = linera_rpc::grpc::GrpcClient::new(network_config, node_options)
