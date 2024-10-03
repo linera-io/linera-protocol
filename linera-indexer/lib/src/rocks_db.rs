@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use clap::Parser as _;
 use linera_views::{
     common::{AdminKeyValueStore, CommonStoreConfig},
-    rocks_db::{PathWithGuard, RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
 };
 
 use crate::{
@@ -45,8 +45,12 @@ impl RocksDbRunner {
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);
+        // The tests are run in single threaded mode, therefore we need
+        // to use the safe default value of SpawnBlocking.
+        let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
         let store_config = RocksDbStoreConfig {
             path_with_guard,
+            spawn_mode,
             common_config,
         };
         let namespace = config.client.namespace.clone();
