@@ -214,6 +214,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 let spawn_mode = match parts[1] {
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
+                    "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
                     _ => Err(Error::Format(format!(
                         "Failed to parse {} as a spawn_mode",
                         parts[1]

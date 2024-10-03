@@ -45,10 +45,10 @@ const MAX_KEY_SIZE: usize = 8388208;
 pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The choice of the spawning mode.
-/// The SpawnBlocking always works and is the safest.
-/// The BlockInPlace can only be used in multi-threaded environment.
+/// `SpawnBlocking` always works and is the safest.
+/// `BlockInPlace` can only be used in multi-threaded environment.
 /// One way to select that is to select BlockInPlace when
-/// tokio::runtime::Handle::current().metrics().num_workers() > 1
+/// `tokio::runtime::Handle::current().metrics().num_workers() > 1`
 /// The BlockInPlace is documented in <https://docs.rs/tokio/latest/tokio/task/fn.block_in_place.html>
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RocksDbSpawnMode {
@@ -59,7 +59,7 @@ pub enum RocksDbSpawnMode {
 }
 
 impl RocksDbSpawnMode {
-    /// Obtains the spawning mode from runtime
+    /// Obtains the spawning mode from runtime.
     pub fn get_spawn_mode_from_runtime() -> Self {
         if tokio::runtime::Handle::current().metrics().num_workers() > 1 {
             RocksDbSpawnMode::BlockInPlace
@@ -70,7 +70,7 @@ impl RocksDbSpawnMode {
 
     /// Runs the computation for a function according to the selected policy.
     #[inline]
-    pub async fn spawn<F, I, O>(&self, f: F, input: I) -> Result<O, RocksDbStoreError>
+    async fn spawn<F, I, O>(&self, f: F, input: I) -> Result<O, RocksDbStoreError>
     where
         F: FnOnce(I) -> Result<O, RocksDbStoreError> + Send + 'static,
         I: Send + 'static,
@@ -104,8 +104,7 @@ impl RocksDbStoreExecutor {
             ensure!(key.len() <= MAX_KEY_SIZE, RocksDbStoreError::KeyTooLong);
             let mut full_key = self.root_key.to_vec();
             full_key.extend(key);
-            let key_may_exist = self.db.key_may_exist(&full_key);
-            if key_may_exist {
+            if self.db.key_may_exist(&full_key) {
                 indices.push(i);
                 keys_red.push(full_key);
             }
@@ -262,7 +261,7 @@ struct RocksDbStoreInternal {
 /// The initial configuration of the system
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreConfig {
-    /// The path to the storage containing the namespaces..
+    /// The path to the storage containing the namespaces
     pub path_with_guard: PathWithGuard,
     /// The spawn_mode that is chosen
     pub spawn_mode: RocksDbSpawnMode,
@@ -341,8 +340,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         self.spawn_mode
             .spawn(
                 move |x| {
-                    let key_may_exist = db.key_may_exist(&x);
-                    if !key_may_exist {
+                    if !db.key_may_exist(&x) {
                         return Ok(false);
                     }
                     Ok(db.get(&x)?.is_some())

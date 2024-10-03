@@ -15,7 +15,7 @@ use linera_views::{
 #[cfg(with_rocksdb)]
 use linera_views::{
     common::AdminKeyValueStore,
-    rocks_db::{PathWithGuard, RocksDbStore, RocksDbSpawnMode, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
