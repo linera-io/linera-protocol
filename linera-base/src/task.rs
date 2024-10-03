@@ -78,7 +78,25 @@ mod implementation {
     }
 
     /// The type of errors that can result from sending a message to the spawned task.
-    pub type SendError<T> = JsValue;
+    pub struct SendError<T> {
+        value: JsValue,
+        _phantom: std::marker::PhantomData<T>,
+    }
+
+    impl<T> std::fmt::Debug for SendError<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            std::fmt::Debug::fmt(&self.value, f)
+        }
+    }
+
+    impl<T> From<JsValue> for SendError<T> {
+        fn from(value: JsValue) -> Self {
+            Self {
+                value,
+                _phantom: Default::default(),
+            }
+        }
+    }
 
     /// A channel that can be used to send messages to the spawned task.
     pub struct InputSender<T> {
@@ -99,7 +117,7 @@ mod implementation {
         /// Send a message to the task using
         /// [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage).
         pub fn send(&self, message: T) -> Result<(), SendError<T>> {
-            self.worker.post_message(&message.into())
+            self.worker.post_message(&message.into()).map_err(Into::into)
         }
     }
 

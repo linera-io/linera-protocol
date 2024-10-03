@@ -97,7 +97,9 @@ where
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
+            #[cfg(not(web))]
             LoadContract { id, callback } => callback.respond(self.load_contract(id).await?),
+            #[cfg(not(web))]
             LoadService { id, callback } => callback.respond(self.load_service(id).await?),
 
             ChainBalance { callback } => {
@@ -329,11 +331,13 @@ where
 
 /// Requests to the execution state.
 pub enum ExecutionRequest {
+    #[cfg(not(web))]
     LoadContract {
         id: UserApplicationId,
         callback: Sender<(UserContractCode, UserApplicationDescription)>,
     },
 
+    #[cfg(not(web))]
     LoadService {
         id: UserApplicationId,
         callback: Sender<(UserServiceCode, UserApplicationDescription)>,

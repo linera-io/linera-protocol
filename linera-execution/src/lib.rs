@@ -8,6 +8,8 @@
 
 mod applications;
 pub mod committee;
+#[cfg(web)]
+mod dyn_convert;
 mod execution;
 mod execution_state_actor;
 mod graphql;
@@ -48,6 +50,11 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
+#[cfg(web)]
+use {
+    js_sys::wasm_bindgen,
+    wasm_bindgen::JsValue,
+};
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
 use crate::runtime::ContractSyncRuntime;
@@ -81,10 +88,10 @@ const MAX_EVENT_KEY_LEN: usize = 64;
 const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
-pub type UserContractCode = Box<dyn UserContractModule + Send + Sync>;
+pub struct UserContractCode(Box<dyn UserContractModule>);
 
 /// An implementation of [`UserServiceModule`].
-pub type UserServiceCode = Box<dyn UserServiceModule + Send + Sync>;
+pub struct UserServiceCode(Box<dyn UserServiceModule>);
 
 /// An implementation of [`UserContract`].
 pub type UserContractInstance = Box<dyn UserContract>;
@@ -92,8 +99,15 @@ pub type UserContractInstance = Box<dyn UserContract>;
 /// An implementation of [`UserService`].
 pub type UserServiceInstance = Box<dyn UserService>;
 
+#[cfg(not(web))]
+pub trait Post: Send + Sync {}
+
+#[cfg(web)]
+pub trait Post: dyn_convert::DynInto<JsValue> {}
+
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone {
+// TODO: remove `Send` and `Sync` from here
+pub trait UserContractModule: dyn_clone::DynClone + Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -102,14 +116,14 @@ pub trait UserContractModule: dyn_clone::DynClone {
 
 impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode {
     fn from(module: T) -> Self {
-        Box::new(module)
+        Self(Box::new(module))
     }
 }
 
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone {
+pub trait UserServiceModule: dyn_clone::DynClone + Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -118,11 +132,58 @@ pub trait UserServiceModule: dyn_clone::DynClone {
 
 impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
     fn from(module: T) -> Self {
-        Box::new(module)
+        Self(Box::new(module))
     }
 }
 
 dyn_clone::clone_trait_object!(UserServiceModule);
+
+impl UserServiceCode {
+    fn instantiate(&self, runtime: ServiceSyncRuntimeHandle) -> Result<UserServiceInstance, ExecutionError> {
+        self.0.instantiate(runtime)
+    }
+}
+
+impl UserContractCode {
+    fn instantiate(&self, runtime: ContractSyncRuntimeHandle) -> Result<UserContractInstance, ExecutionError> {
+        self.0.instantiate(runtime)
+    }
+}
+
+#[cfg(web)]
+const _: () = {
+    // TODO: add a vtable pointer into the JsValue rather than assuming the implementor
+
+    impl Into<JsValue> for UserContractCode {
+        fn into(self) -> JsValue {
+            self.0.downcast::<WasmContractModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .into()
+        }
+    }
+
+    impl Into<JsValue> for UserServiceCode {
+        fn into(self) -> JsValue {
+            self.0.downcast::<WasmServiceModule>()
+                .expect("we only support Wasm modules on the Web for now")
+                .into()
+        }
+    }
+
+    impl TryFrom<JsValue> for UserContractCode {
+        type Error = JsValue;
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            WasmContractModule::try_from(value).map(Into::into)
+        }
+    }
+
+    impl TryFrom<JsValue> for UserServiceCode {
+        type Error = JsValue;
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            WasmServiceModule::try_from(value).map(Into::into)
+        }
+    }
+};
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
@@ -205,9 +266,9 @@ pub enum ExecutionError {
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]
     UnstableOracle,
-    #[error("Failed to send contract code to worker thread: {0}")]
+    #[error("Failed to send contract code to worker thread: {0:?}")]
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
-    #[error("Failed to send service code to worker thread: {0}")]
+    #[error("Failed to send service code to worker thread: {0:?}")]
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
 }
 
