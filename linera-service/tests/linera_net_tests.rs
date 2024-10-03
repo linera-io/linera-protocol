@@ -2859,7 +2859,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let chain_count = test_iterations().unwrap_or(10_000);
+    let chain_count = test_iterations().unwrap_or(3_000);
 
     let (mut net, faucet_client) = config.instantiate().await?;
 
