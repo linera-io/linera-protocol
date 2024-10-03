@@ -17,7 +17,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 #[cfg(not(web))]
 use {
     super::GrpcProtoConversionError,
@@ -70,7 +70,7 @@ impl GrpcClient {
     fn is_retryable(status: &Status) -> bool {
         match status.code() {
             Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
-                info!("Notification stream interrupted: {}; retrying", status);
+                info!("gRPC request interrupted: {}; retrying", status);
                 true
             }
             Code::Ok
@@ -78,7 +78,7 @@ impl GrpcClient {
             | Code::NotFound
             | Code::AlreadyExists
             | Code::ResourceExhausted => {
-                warn!("Unexpected gRPC status: {}; retrying", status);
+                error!("Unexpected gRPC status: {}; retrying", status);
                 true
             }
             Code::InvalidArgument
@@ -89,7 +89,7 @@ impl GrpcClient {
             | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
-                warn!("Unexpected gRPC status: {}", status);
+                error!("Unexpected gRPC status: {}", status);
                 false
             }
         }
@@ -104,18 +104,15 @@ impl GrpcClient {
     where
         F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> FUT,
         FUT: Future<Output = Result<tonic::Response<S>, Status>>,
-        R: IntoRequest<R>,
+        R: IntoRequest<R> + Clone,
     {
         debug!(request = ?request, "sending gRPC request");
         let mut retry_count = 0;
+        let request_inner = request.try_into().map_err(|_| NodeError::GrpcError {
+            error: "could not convert request to proto".to_string(),
+        })?;
         loop {
-            let request_inner = request
-                .clone()
-                .try_into()
-                .map_err(|_| NodeError::GrpcError {
-                    error: "could not convert request to proto".to_string(),
-                })?;
-            match f(self.client.clone(), Request::new(request_inner)).await {
+            match f(self.client.clone(), Request::new(request_inner.clone())).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
                     let delay = self.retry_delay.saturating_mul(retry_count);
                     retry_count += 1;
