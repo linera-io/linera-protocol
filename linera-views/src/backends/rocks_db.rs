@@ -263,7 +263,7 @@ impl RocksDbStoreExecutor {
 
 /// The inner client
 #[derive(Clone)]
-struct RocksDbStoreInternal {
+pub struct RocksDbStoreInternal {
     executor: RocksDbStoreExecutor,
     _path_with_guard: PathWithGuard,
     max_stream_queries: usize,
