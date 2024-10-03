@@ -102,7 +102,7 @@ impl GrpcClient {
         handler: &str,
     ) -> Result<S, NodeError>
     where
-        F: Fn(ValidatorNodeClient<transport::Channel>, R) -> FUT,
+        F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> FUT,
         FUT: Future<Output = Result<tonic::Response<S>, Status>>,
         R: IntoRequest<R>,
     {
@@ -115,7 +115,7 @@ impl GrpcClient {
                 .map_err(|_| NodeError::GrpcError {
                     error: "could not convert request to proto".to_string(),
                 })?;
-            match f(self.client.clone(), request_inner).await {
+            match f(self.client.clone(), Request::new(request_inner)).await {
                 Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
                     let delay = self.retry_delay.saturating_mul(retry_count);
                     retry_count += 1;
@@ -131,53 +131,40 @@ impl GrpcClient {
             };
         }
     }
+
+    #[allow(clippy::result_large_err)]
+    fn try_into_chain_info(
+        result: api::ChainInfoResult,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let inner = result.inner.ok_or(NodeError::GrpcError {
+            error: "missing body from response".to_string(),
+        })?;
+        match inner {
+            Inner::ChainInfoResponse(response) => {
+                Ok(response.try_into().map_err(|err| NodeError::GrpcError {
+                    error: format!("failed to marshal response: {}", err),
+                })?)
+            }
+            Inner::Error(error) => {
+                Err(
+                    bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
+                        error: format!("failed to marshal error message: {}", err),
+                    })?,
+                )
+            }
+        }
+    }
 }
 
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
-        debug!(request = ?$req, "sending gRPC request");
-        let mut retry_count = 0;
-        loop {
-            let request_inner = $req.clone().try_into().map_err(|_| NodeError::GrpcError {
-                error: "could not convert request to proto".to_string(),
-            })?;
-            let request = Request::new(request_inner);
-            let inner = match $self.client.clone().$handler(request).await {
-                Err(s) if Self::is_retryable(&s)
-                    && retry_count < $self.max_retries =>
-                {
-                    let delay = $self.retry_delay.saturating_mul(retry_count);
-                    retry_count += 1;
-                    linera_base::time::timer::sleep(delay).await;
-                    continue;
-                }
-                Err(s) => {
-                    return Err(NodeError::GrpcError {
-                        error: format!(
-                            "remote request [{}] failed with status: {s:?}",
-                            stringify!($handler),
-                        ),
-                    });
-                }
-                Ok(result) => {
-                    result.into_inner().inner.ok_or(NodeError::GrpcError {
-                        error: "missing body from response".to_string(),
-                    })?
-                }
-            };
-            return match inner {
-                Inner::ChainInfoResponse(response) => {
-                    Ok(response.try_into().map_err(|err| NodeError::GrpcError {
-                        error: format!("failed to marshal response: {}", err),
-                    })?)
-                }
-                Inner::Error(error) => {
-                    Err(bincode::deserialize(&error).map_err(|err| NodeError::GrpcError {
-                        error: format!("failed to marshal error message: {}", err),
-                    })?)
-                }
-            };
-        }
+        $self
+            .delegate(
+                |mut client, req| async move { client.$handler(req).await },
+                $req,
+                stringify!($handler),
+            )
+            .await
     }};
 }
 
@@ -189,7 +176,7 @@ impl ValidatorNode for GrpcClient {
         &self,
         proposal: data_types::BlockProposal,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_block_proposal, proposal)
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_block_proposal, proposal)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, fields(address = self.address))]
@@ -203,7 +190,7 @@ impl ValidatorNode for GrpcClient {
             certificate,
             wait_for_outgoing_messages,
         };
-        client_delegate!(self, handle_lite_certificate, request)
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_lite_certificate, request)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -219,7 +206,7 @@ impl ValidatorNode for GrpcClient {
             blobs,
             wait_for_outgoing_messages,
         };
-        client_delegate!(self, handle_certificate, request)
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_certificate, request)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -227,7 +214,7 @@ impl ValidatorNode for GrpcClient {
         &self,
         query: linera_core::data_types::ChainInfoQuery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
-        client_delegate!(self, handle_chain_info_query, query)
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_chain_info_query, query)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -302,36 +289,20 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
-        let version_info = self
-            .delegate(
-                |mut client, ()| async move { client.get_version_info(()).await },
-                (),
-                stringify!(get_version_info),
-            )
-            .await?;
-        Ok(version_info.into())
+        let req = ();
+        Ok(client_delegate!(self, get_version_info, req)?.into())
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
-        Ok(self
-            .client
-            .clone()
-            .get_genesis_config_hash(())
-            .await?
-            .into_inner()
-            .try_into()?)
+        let req = ();
+        Ok(client_delegate!(self, get_genesis_config_hash, req)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        Ok(self
-            .client
-            .clone()
-            .download_blob_content(api::BlobId::try_from(blob_id)?)
-            .await?
-            .into_inner()
-            .try_into()?)
+        let req = api::BlobId::try_from(blob_id)?;
+        Ok(client_delegate!(self, download_blob_content, req)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -339,36 +310,19 @@ impl ValidatorNode for GrpcClient {
         &self,
         hash: CryptoHash,
     ) -> Result<HashedCertificateValue, NodeError> {
-        let certificate_value: CertificateValue = self
-            .client
-            .clone()
-            .download_certificate_value(<CryptoHash as Into<api::CryptoHash>>::into(hash))
-            .await?
-            .into_inner()
-            .try_into()?;
-        Ok(certificate_value.with_hash_checked(hash)?)
+        let value = client_delegate!(self, download_certificate_value, hash)?;
+        Ok(CertificateValue::try_from(value)?.with_hash_checked(hash)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
-        Ok(self
-            .client
-            .clone()
-            .download_certificate(<CryptoHash as Into<api::CryptoHash>>::into(hash))
-            .await?
-            .into_inner()
-            .try_into()?)
+        Ok(client_delegate!(self, download_certificate, hash)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
-        Ok(self
-            .client
-            .clone()
-            .blob_last_used_by(api::BlobId::try_from(blob_id)?)
-            .await?
-            .into_inner()
-            .try_into()?)
+        let req = api::BlobId::try_from(blob_id)?;
+        Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)
     }
 }
 
