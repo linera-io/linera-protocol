@@ -112,15 +112,15 @@ pub struct ClientOptions {
     #[command(subcommand)]
     pub command: ClientCommand,
 
-    /// Delay increment for retrying to connect to a validator for notifications.
+    /// Delay increment for retrying to connect to a validator.
     #[arg(
-        long = "notification-retry-delay-ms",
+        long = "retry-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis
     )]
     pub retry_delay: Duration,
 
-    /// Number of times to retry connecting to a validator for notifications.
+    /// Number of times to retry connecting to a validator.
     #[arg(long, default_value = "10")]
     pub max_retries: u32,
 
