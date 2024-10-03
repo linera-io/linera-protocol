@@ -95,15 +95,15 @@ impl GrpcClient {
         }
     }
 
-    async fn delegate<F, FUT, R, S>(
+    async fn delegate<F, Fut, R, S>(
         &self,
         f: F,
         request: impl TryInto<R> + fmt::Debug + Clone,
         handler: &str,
     ) -> Result<S, NodeError>
     where
-        F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> FUT,
-        FUT: Future<Output = Result<tonic::Response<S>, Status>>,
+        F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> Fut,
+        Fut: Future<Output = Result<tonic::Response<S>, Status>>,
         R: IntoRequest<R> + Clone,
     {
         debug!(request = ?request, "sending gRPC request");
