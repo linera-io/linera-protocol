@@ -556,7 +556,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     type Config = ScyllaDbStoreConfig;
 
     async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
-        let uri = create_scylla_db_test_uri();
+        let uri = "localhost:9042".to_string();
         let common_config = CommonStoreConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
@@ -928,11 +928,6 @@ impl ScyllaDbStore {
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
-}
-
-/// Creates the URI used for the tests.
-pub fn create_scylla_db_test_uri() -> String {
-    "localhost:9042".to_string()
 }
 
 /// Creates a ScyllaDB test store.
