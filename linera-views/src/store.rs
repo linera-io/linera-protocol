@@ -8,6 +8,7 @@ use std::{fmt::Debug, future::Future};
 use serde::de::DeserializeOwned;
 
 use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
+use crate::test_utils::generate_test_namespace;
 
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]
@@ -208,6 +209,26 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
             }
             Self::create(config, namespace).await?;
             Self::connect(config, namespace, root_key).await
+        }
+    }
+
+    /// Creates a store for testing purposes
+    fn new_test_store() -> impl Future<Output = Result<Self, Self::Error>> {
+        async {
+            let config = Self::new_test_config().await?;
+            let namespace = generate_test_namespace();
+            let root_key = &[];
+            Self::recreate_and_connect(&config, &namespace, root_key).await
+        }
+    }
+
+    /// Creates a store for benchmarking purposes
+    fn new_benchmark_store() -> impl Future<Output = Result<Self, Self::Error>> {
+        async {
+            let config = Self::new_benchmark_config().await?;
+            let namespace = generate_test_namespace();
+            let root_key = &[];
+            Self::recreate_and_connect(&config, &namespace, root_key).await
         }
     }
 }
