@@ -18,8 +18,6 @@ use thiserror::Error;
 use crate::metering::{
     MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
-#[cfg(with_testing)]
-use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
@@ -646,33 +644,6 @@ fn create_rocks_db_test_path() -> PathWithGuard {
     let path_buf = dir.path().to_path_buf();
     let _dir = Some(Arc::new(dir));
     PathWithGuard { path_buf, _dir }
-}
-
-/// Creates a RocksDB database client to be used for tests.
-/// The temporary directory has to be carried because if it goes
-/// out of scope then the RocksDB client can become unstable.
-#[cfg(with_testing)]
-pub async fn create_rocks_db_test_store() -> RocksDbStore {
-    let config = RocksDbStore::new_test_config().await.expect("config");
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    RocksDbStore::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .expect("store")
-}
-
-/// Creates a RocksDB database client to be used for benchmarks.
-/// The temporary directory has to be carried because if it goes
-/// out of scope then the RocksDB client can become unstable.
-#[cfg(with_testing)]
-pub async fn create_rocks_db_benchmark_store() -> RocksDbStore {
-    let mut config = RocksDbStore::new_test_config().await.expect("config");
-    config.spawn_mode = RocksDbSpawnMode::BlockInPlace;
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    RocksDbStore::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .expect("store")
 }
 
 impl RocksDbStore {

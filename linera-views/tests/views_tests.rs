@@ -6,11 +6,11 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use async_trait::async_trait;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore};
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore};
+use linera_views::scylla_db::ScyllaDbStore;
 #[cfg(with_dynamodb)]
-use linera_views::dynamo_db::{create_dynamo_db_test_store, DynamoDbStore};
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
 use linera_views::store::{AdminKeyValueStore as _};
 use linera_views::{
@@ -158,7 +158,7 @@ impl StateStorage for RocksDbTestStorage {
     type Context = ViewContext<usize, RocksDbStore>;
 
     async fn new() -> Self {
-        let store = create_rocks_db_test_store().await;
+        let store = RocksDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
         RocksDbTestStorage {
             store,
@@ -187,7 +187,7 @@ impl StateStorage for ScyllaDbTestStorage {
     type Context = ViewContext<usize, ScyllaDbStore>;
 
     async fn new() -> Self {
-        let store = create_scylla_db_test_store().await;
+        let store = ScyllaDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStorage {
             store,
@@ -216,7 +216,7 @@ impl StateStorage for DynamoDbTestStorage {
     type Context = ViewContext<usize, DynamoDbStore>;
 
     async fn new() -> Self {
-        let store = create_dynamo_db_test_store().await;
+        let store = DynamoDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
         DynamoDbTestStorage {
             store,

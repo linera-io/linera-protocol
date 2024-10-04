@@ -31,8 +31,6 @@ use thiserror::Error;
 
 #[cfg(with_metrics)]
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
-#[cfg(with_testing)]
-use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::get_upper_bound_option,
@@ -928,15 +926,4 @@ impl ScyllaDbStore {
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
-}
-
-/// Creates a ScyllaDB test store.
-#[cfg(with_testing)]
-pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
-    let config = ScyllaDbStore::new_test_config().await.expect("config");
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .expect("store")
 }

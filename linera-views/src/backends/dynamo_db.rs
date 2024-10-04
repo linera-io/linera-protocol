@@ -31,7 +31,6 @@ use linera_base::ensure;
 use thiserror::Error;
 #[cfg(with_testing)]
 use {
-    crate::test_utils::generate_test_namespace,
     anyhow::Error,
     tokio::sync::{Mutex, MutexGuard},
 };
@@ -1339,17 +1338,6 @@ impl DynamoDbStore {
 /// time.
 #[cfg(with_testing)]
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
-
-/// Creates a basic client that can be used for tests.
-#[cfg(with_testing)]
-pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
-    let config = DynamoDbStore::new_test_config().await.expect("config");
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    DynamoDbStore::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .expect("key_value_store")
-}
 
 #[cfg(test)]
 mod tests {
