@@ -641,7 +641,7 @@ impl PathWithGuard {
 }
 
 /// Returns the test path for RocksDB without common config.
-pub fn create_rocks_db_test_path() -> PathWithGuard {
+fn create_rocks_db_test_path() -> PathWithGuard {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
     let _dir = Some(Arc::new(dir));

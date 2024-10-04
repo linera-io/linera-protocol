@@ -354,7 +354,11 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
 
     async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreInternalError> {
-        let common_config = create_dynamo_db_common_config();
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+            cache_size: TEST_CACHE_SIZE,
+        };
         let use_localstack = true;
         let config = get_config_internal(use_localstack).await?;
         Ok(DynamoDbStoreConfig {
@@ -1335,15 +1339,6 @@ impl DynamoDbStore {
 /// time.
 #[cfg(with_testing)]
 static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
-
-/// Creates the common initialization for RocksDB
-pub fn create_dynamo_db_common_config() -> CommonStoreConfig {
-    CommonStoreConfig {
-        max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-        max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-        cache_size: TEST_CACHE_SIZE,
-    }
-}
 
 /// Creates a basic client that can be used for tests.
 #[cfg(with_testing)]
