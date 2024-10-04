@@ -37,10 +37,7 @@ use linera_views::dynamo_db::{
 };
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::{create_scylla_db_common_config, ScyllaDbStore, ScyllaDbStoreConfig};
-use linera_views::{
-    memory::{create_memory_store_test_config, MemoryStore},
-    test_utils::generate_test_namespace,
-};
+use linera_views::{memory::MemoryStore, test_utils::generate_test_namespace};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
@@ -891,7 +888,7 @@ impl StorageBuilder for MemoryStorageBuilder {
     type Storage = DbStorage<MemoryStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let store_config = create_memory_store_test_config();
+        let store_config = MemoryStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
         Ok(DbStorage::new_for_testing(

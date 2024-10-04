@@ -379,17 +379,6 @@ impl AdminKeyValueStore for MemoryStore {
     }
 }
 
-/// Creates a default memory test config
-pub fn create_memory_store_test_config() -> MemoryStoreConfig {
-    let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
-    let common_config = CommonStoreConfig {
-        max_concurrent_queries: None,
-        max_stream_queries,
-        cache_size: 1000,
-    };
-    MemoryStoreConfig { common_config }
-}
-
 /// Creates a test memory store for working.
 #[cfg(with_testing)]
 pub fn create_test_memory_store() -> MemoryStore {

@@ -249,7 +249,9 @@ where
     }
 
     async fn new_benchmark_config() -> Result<Self::Config, Self::Error> {
-        let first_config = S1::new_benchmark_config().await.map_err(DualStoreError::First)?;
+        let first_config = S1::new_benchmark_config()
+            .await
+            .map_err(DualStoreError::First)?;
         let second_config = S2::new_benchmark_config()
             .await
             .map_err(DualStoreError::Second)?;
