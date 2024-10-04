@@ -287,7 +287,7 @@ where
         ValueSplittingStore { store }
     }
 
-    fn read_count_from_value(value: &[u8]) -> Result<u32, <Self as WithError>::Error> {
+    fn read_count_from_value(value: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
         if value.len() < 4 {
             return Err(ValueSplittingError::NoCountAvailable);
         }
@@ -296,7 +296,7 @@ where
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
-    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, <Self as WithError>::Error> {
+    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
         let mut big_key_segment = key.to_vec();
         let mut bytes = bcs::to_bytes(&index)?;
         bytes.reverse();
@@ -304,10 +304,10 @@ where
         Ok(big_key_segment)
     }
 
-    fn read_index_from_key(key: &[u8]) -> Result<u32, <Self as WithError>::Error> {
+    fn read_index_from_key(key: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
         let len = key.len();
         if len < 4 {
-            return Err(ValueSplittingError::<K::Error>::TooShortKey);
+            return Err(ValueSplittingError::TooShortKey);
         }
         let mut bytes = key[len - 4..len].to_vec();
         bytes.reverse();
@@ -317,7 +317,7 @@ where
     fn get_initial_count_first_chunk(
         count: u32,
         first_chunk: &[u8],
-    ) -> Result<Vec<u8>, <Self as WithError>::Error> {
+    ) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
         let mut bytes = bcs::to_bytes(&count)?;
         bytes.reverse();
         let mut value_ext = Vec::new();
