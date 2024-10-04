@@ -44,9 +44,9 @@ pub struct ChainState {
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pending_blobs: BTreeMap<BlobId, Blob>,
 
-    /// A mutex that is held whilst we are preparing the next block, to ensure that no
-    /// other client can begin preparing a block.
-    preparing_block: Arc<Mutex<()>>,
+    /// A mutex that is held whilst we are performing operations that should not be
+    /// attempted by multiple clients at the same time.
+    client_mutex: Arc<Mutex<()>>,
 }
 
 impl ChainState {
@@ -72,7 +72,7 @@ impl ChainState {
             pending_block: None,
             pending_blobs,
             received_certificate_trackers: HashMap::new(),
-            preparing_block: Arc::default(),
+            client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
             state.set_pending_block(block);
@@ -100,7 +100,7 @@ impl ChainState {
         &self.pending_block
     }
 
-    pub fn set_pending_block(&mut self, block: Block) {
+    pub(super) fn set_pending_block(&mut self, block: Block) {
         if block.height == self.next_block_height {
             self.pending_block = Some(block);
         } else {
@@ -116,7 +116,7 @@ impl ChainState {
         &self.pending_blobs
     }
 
-    pub fn insert_pending_blob(&mut self, blob: Blob) {
+    pub(super) fn insert_pending_blob(&mut self, blob: Blob) {
         self.pending_blobs.insert(blob.id(), blob);
     }
 
@@ -124,7 +124,7 @@ impl ChainState {
         &self.known_key_pairs
     }
 
-    pub fn insert_known_key_pair(&mut self, key_pair: KeyPair) -> PublicKey {
+    pub(super) fn insert_known_key_pair(&mut self, key_pair: KeyPair) -> PublicKey {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         new_public_key
@@ -134,7 +134,11 @@ impl ChainState {
         &self.received_certificate_trackers
     }
 
-    pub fn update_received_certificate_tracker(&mut self, name: ValidatorName, tracker: u64) {
+    pub(super) fn update_received_certificate_tracker(
+        &mut self,
+        name: ValidatorName,
+        tracker: u64,
+    ) {
         self.received_certificate_trackers
             .entry(name)
             .and_modify(|t| {
@@ -147,7 +151,7 @@ impl ChainState {
             .or_insert(tracker);
     }
 
-    pub fn update_from_info(&mut self, info: &ChainInfo) {
+    pub(super) fn update_from_info(&mut self, info: &ChainInfo) {
         if info.next_block_height > self.next_block_height {
             self.next_block_height = info.next_block_height;
             self.clear_pending_block();
@@ -156,12 +160,12 @@ impl ChainState {
         }
     }
 
-    pub fn clear_pending_block(&mut self) {
+    pub(super) fn clear_pending_block(&mut self) {
         self.pending_block = None;
         self.pending_blobs.clear();
     }
 
-    pub fn preparing_block(&self) -> Arc<Mutex<()>> {
-        self.preparing_block.clone()
+    pub(super) fn client_mutex(&self) -> Arc<Mutex<()>> {
+        self.client_mutex.clone()
     }
 }
