@@ -161,7 +161,7 @@ path = "src/server.rs"
 
 [[bin]]
 name = "linera-proxy"
-path = "src/proxy.rs"
+path = "src/proxy/main.rs"
 
 [[bin]]
 name = "linera-schema-export"

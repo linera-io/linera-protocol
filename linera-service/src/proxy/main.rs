@@ -23,12 +23,15 @@ use linera_rpc::{
 };
 #[cfg(with_metrics)]
 use linera_service::prometheus_server;
-use linera_service::{grpc_proxy::GrpcProxy, util};
+use linera_service::util;
 use linera_storage::Storage;
 use linera_views::store::CommonStoreConfig;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
+
+mod grpc;
+use grpc::GrpcProxy;
 
 /// Options for running the proxy.
 #[derive(clap::Parser, Debug, Clone)]
@@ -115,7 +118,7 @@ impl Runnable for ProxyContext {
     {
         let shutdown_notifier = CancellationToken::new();
         tokio::spawn(util::listen_for_shutdown_signals(shutdown_notifier.clone()));
-        let proxy = Proxy::from_context(self, storage).await?;
+        let proxy = Proxy::from_context(self, storage)?;
         match proxy {
             Proxy::Simple(simple_proxy) => simple_proxy.run(shutdown_notifier).await,
             Proxy::Grpc(grpc_proxy) => grpc_proxy.run(shutdown_notifier).await,
@@ -128,7 +131,7 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     /// Constructs and configures the [`Proxy`] given [`ProxyContext`].
-    async fn from_context(context: ProxyContext, storage: S) -> Result<Self> {
+    fn from_context(context: ProxyContext, storage: S) -> Result<Self> {
         let internal_protocol = context.config.internal_network.protocol;
         let external_protocol = context.config.validator.network.protocol;
         let proxy = match (internal_protocol, external_protocol) {
@@ -236,7 +239,7 @@ impl<S> SimpleProxy<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
+    #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.internal_config.metrics_port), err)]
     async fn run(self, shutdown_signal: CancellationToken) -> Result<()> {
         info!("Starting simple server");
         let mut join_set = JoinSet::new();
