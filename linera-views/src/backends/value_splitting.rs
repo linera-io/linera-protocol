@@ -19,7 +19,7 @@ use crate::{
     test_utils::generate_test_namespace,
 };
 
-/// The composed error type built from the
+/// The composed error type built from the inner error type.
 #[derive(Error, Debug)]
 pub enum ValueSplittingError<E> {
     /// inner store error
