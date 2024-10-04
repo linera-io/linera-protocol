@@ -7,7 +7,6 @@ use anyhow::Result;
 use linera_storage_service::client::{create_service_test_store, ServiceStoreClient};
 use linera_views::{
     batch::Batch,
-    test_utils,
     test_utils::{
         admin_test, get_random_byte_vector, get_random_test_scenarios, run_reads,
         run_test_batch_from_blank, run_writes_from_blank, run_writes_from_state,
@@ -47,7 +46,7 @@ async fn test_storage_service_admin() -> Result<()> {
 async fn test_storage_service_big_raw_write() -> Result<()> {
     let key_value_store = create_service_test_store().await?;
     let n = 5000000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = linera_views::random::make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut batch = Batch::new();
     let key_prefix = vec![43];

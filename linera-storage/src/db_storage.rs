@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
-    linera_views::test_utils::generate_test_namespace,
+    linera_views::random::generate_test_namespace,
     std::{cmp::Reverse, collections::BTreeMap},
 };
 #[cfg(with_metrics)]

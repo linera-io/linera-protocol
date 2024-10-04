@@ -317,7 +317,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
 #[cfg(with_testing)]
 mod testing {
     use super::*;
-    use crate::test_utils::generate_test_namespace;
+    use crate::random::generate_test_namespace;
 
     /// Creates a test IndexedDB client for working.
     pub async fn create_indexed_db_store_stream_queries(

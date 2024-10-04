@@ -8,7 +8,7 @@ use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
 #[cfg(with_testing)]
-use linera_views::test_utils::generate_test_namespace;
+use linera_views::random::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingStore,

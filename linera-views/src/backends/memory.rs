@@ -12,7 +12,7 @@ use std::{
 use thiserror::Error;
 
 #[cfg(with_testing)]
-use crate::test_utils::generate_test_namespace;
+use crate::random::generate_test_namespace;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,

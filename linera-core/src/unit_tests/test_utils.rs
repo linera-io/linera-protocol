@@ -32,7 +32,7 @@ use linera_version::VersionInfo;
 use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::{memory::MemoryStore, test_utils::generate_test_namespace};
+use linera_views::{memory::MemoryStore, random::generate_test_namespace};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]

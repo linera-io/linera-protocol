@@ -14,7 +14,7 @@ use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::DynamoDbStore;
 use linera_views::{
-    backends::memory::create_test_memory_store,
+    backends::memory::MemoryStore,
     bucket_queue_view::BucketQueueView,
     context::ViewContext,
     queue_view::QueueView,

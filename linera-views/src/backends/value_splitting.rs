@@ -16,7 +16,7 @@ use crate::{
 #[cfg(with_testing)]
 use crate::{
     memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
-    test_utils::generate_test_namespace,
+    random::generate_test_namespace,
 };
 
 /// The composed error type built from the inner error type.
@@ -472,7 +472,7 @@ mod tests {
         // Writing a big value
         let mut batch = Batch::new();
         let mut value = Vec::new();
-        let mut rng = crate::test_utils::make_deterministic_rng();
+        let mut rng = crate::random::make_deterministic_rng();
         for _ in 0..2 * MAX_LEN - 4 {
             value.push(rng.gen::<u8>());
         }
@@ -509,7 +509,7 @@ mod tests {
         // writing a big key
         let mut batch = Batch::new();
         let mut value = Vec::new();
-        let mut rng = crate::test_utils::make_deterministic_rng();
+        let mut rng = crate::random::make_deterministic_rng();
         for _ in 0..3 * MAX_LEN - 4 {
             value.push(rng.gen::<u8>());
         }

@@ -5,14 +5,14 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use async_trait::async_trait;
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
-#[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
-use linera_views::store::{AdminKeyValueStore as _};
+use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{
     batch::{
         Batch, WriteOperation,
@@ -24,13 +24,14 @@ use linera_views::{
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryStore, LruCachingStore},
     map_view::{ByteMapView, HashedMapView},
-    memory::{create_test_memory_store, MemoryStore},
+    memory::MemoryStore,
     queue_view::HashedQueueView,
+    random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
     test_utils::{
-        self, get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
+        get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
@@ -75,7 +76,7 @@ impl StateStorage for MemoryTestStorage {
     type Context = MemoryContext<usize>;
 
     async fn new() -> Self {
-        let store = create_test_memory_store();
+        let store = MemoryStore::new_test_store().await.unwrap();
         MemoryTestStorage {
             accessed_chains: BTreeSet::new(),
             store,
@@ -128,7 +129,7 @@ impl StateStorage for LruMemoryStorage {
     type Context = ViewContext<usize, LruCachingMemoryStore>;
 
     async fn new() -> Self {
-        let store = create_test_memory_store();
+        let store = MemoryStore::new_test_store().await.unwrap();
         let cache_size = 1000;
         let store = LruCachingStore::new(store, cache_size);
         LruMemoryStorage {
@@ -1056,7 +1057,7 @@ async fn compute_hash_view_iter_large() -> Result<()> {
     let n_iter = 2;
     let n = 100;
     let k = 30;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     for _ in 0..n_iter {
         compute_hash_view_iter(&mut rng, n, k).await?;
     }
@@ -1154,7 +1155,7 @@ where
 #[tokio::test]
 async fn check_hash_memoization_persistence_large() -> Result<()> {
     let n = 100;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let key_value_vector = get_random_key_values(&mut rng, n);
     let mut store = MemoryTestStorage::new().await;
     check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await
@@ -1187,7 +1188,7 @@ async fn check_large_write_dynamo_db() -> Result<()> {
     // By writing 1000 elements we seriously check the Amazon journaling
     // writing system.
     let n = 1000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut store = DynamoDbTestStorage::new().await;
     check_large_write(&mut store, vector).await
@@ -1196,7 +1197,7 @@ async fn check_large_write_dynamo_db() -> Result<()> {
 #[tokio::test]
 async fn check_large_write_memory() -> Result<()> {
     let n = 1000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut store = MemoryTestStorage::new().await;
     check_large_write(&mut store, vector).await

@@ -25,7 +25,7 @@ use crate::{
     views::{HashableView, View, ViewError},
 };
 #[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
-use crate::{context::ViewContext, store::AdminKeyValueStore, test_utils::generate_test_namespace};
+use crate::{context::ViewContext, random::generate_test_namespace, store::AdminKeyValueStore};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {

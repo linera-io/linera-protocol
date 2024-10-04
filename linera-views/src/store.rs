@@ -7,8 +7,9 @@ use std::{fmt::Debug, future::Future};
 
 use serde::de::DeserializeOwned;
 
-use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
-use crate::test_utils::generate_test_namespace;
+use crate::{
+    batch::Batch, common::from_bytes_option, random::generate_test_namespace, views::ViewError,
+};
 
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]

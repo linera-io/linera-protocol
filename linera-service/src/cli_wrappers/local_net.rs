@@ -251,7 +251,7 @@ impl LocalNetConfig {
             initial_amount: Amount::from_tokens(1_000_000),
             policy: ResourceControlPolicy::devnet(),
             testing_prng_seed: Some(37),
-            namespace: linera_views::test_utils::generate_test_namespace(),
+            namespace: linera_views::random::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
             storage_config_builder,
