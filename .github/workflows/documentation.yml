@@ -61,7 +61,7 @@ jobs:
         cd "${{ runner.temp }}/registry"
         grep -v '^#' "$GITHUB_WORKSPACE/$LINERA_PACKAGES" | while read LINE; do
             CRATE="${LINE%% *}"
-            tar -xzvf "${CRATE}-*.crate"
+            tar -xzvf ${CRATE}-*.crate
         done
     - name: Checkout docs.rs tool repository
       run: |
@@ -82,5 +82,5 @@ jobs:
         cargo run -- database migrate
         grep -v ^# "$GITHUB_WORKSPACE/$LINERA_PACKAGES" | while read LINE; do
             CRATE="${LINE%% *}"
-            cargo run -- build crate --local "${{ runner.temp }}/registry/${CRATE}-*/"
+            cargo run -- build crate --local ${{ runner.temp }}/registry/${CRATE}-*/
         done
