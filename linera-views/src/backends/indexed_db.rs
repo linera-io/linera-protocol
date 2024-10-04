@@ -232,6 +232,10 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
         Ok(IndexedDbStoreConfig::new(TEST_INDEX_DB_MAX_STREAM_QUERIES))
     }
 
+    async fn new_benchmark_config() -> Result<IndexedDbStoreConfig, IndexedDbStoreError> {
+        Self::new_test_config().await
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,

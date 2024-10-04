@@ -561,6 +561,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(ScyllaDbStoreConfig { uri, common_config })
     }
 
+    async fn new_benchmark_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
+        Self::new_test_config().await
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -857,6 +861,10 @@ impl AdminKeyValueStore for ScyllaDbStore {
 
     async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
         ScyllaDbStoreInternal::new_test_config().await
+    }
+
+    async fn new_benchmark_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
+        ScyllaDbStoreInternal::new_benchmark_config().await
     }
 
     async fn connect(

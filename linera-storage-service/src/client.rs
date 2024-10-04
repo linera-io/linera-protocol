@@ -386,6 +386,10 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         service_config_from_endpoint(&endpoint)
     }
 
+    async fn new_benchmark_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
+        Self::new_test_config().await
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -613,6 +617,10 @@ impl AdminKeyValueStore for ServiceStoreClient {
 
     async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
         ServiceStoreClientInternal::new_test_config().await
+    }
+
+    async fn new_benchmark_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
+        ServiceStoreClientInternal::new_benchmark_config().await
     }
 
     async fn connect(

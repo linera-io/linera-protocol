@@ -316,6 +316,10 @@ impl AdminKeyValueStore for MemoryStore {
         Ok(MemoryStoreConfig { common_config })
     }
 
+    async fn new_benchmark_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
+        Self::new_test_config().await
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,

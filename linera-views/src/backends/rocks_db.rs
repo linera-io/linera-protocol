@@ -450,6 +450,17 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         })
     }
 
+    async fn new_benchmark_config() -> Result<RocksDbStoreConfig, RocksDbStoreInternalError> {
+        let path_with_guard = create_rocks_db_test_path();
+        let common_config = create_rocks_db_common_config();
+        let spawn_mode = RocksDbSpawnMode::BlockInPlace;
+        Ok(RocksDbStoreConfig {
+            path_with_guard,
+            spawn_mode,
+            common_config,
+        })
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -755,6 +766,10 @@ impl AdminKeyValueStore for RocksDbStore {
 
     async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
         Ok(RocksDbStoreInternal::new_test_config().await?)
+    }
+
+    async fn new_benchmark_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
+        Ok(RocksDbStoreInternal::new_benchmark_config().await?)
     }
 
     async fn connect(

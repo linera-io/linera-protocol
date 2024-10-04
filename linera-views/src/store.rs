@@ -146,6 +146,9 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// Obtains a test config
     async fn new_test_config() -> Result<Self::Config, Self::Error>;
 
+    /// Obtains a benchmark config
+    async fn new_benchmark_config() -> Result<Self::Config, Self::Error>;
+
     /// Connects to an existing namespace using the given configuration.
     async fn connect(
         config: &Self::Config,
