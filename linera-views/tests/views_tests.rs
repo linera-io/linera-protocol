@@ -9,8 +9,10 @@ use async_trait::async_trait;
 use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore};
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore};
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::{create_dynamo_db_test_store, DynamoDbStore};
 #[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
-use linera_views::store::AdminKeyValueStore as _;
+use linera_views::store::{AdminKeyValueStore as _};
 use linera_views::{
     batch::{
         Batch, WriteOperation,
@@ -32,13 +34,6 @@ use linera_views::{
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
-};
-#[cfg(with_dynamodb)]
-use linera_views::{
-    dynamo_db::{
-        create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
-    },
-    test_utils::generate_test_namespace,
 };
 use rand::{Rng, RngCore};
 
@@ -221,18 +216,8 @@ impl StateStorage for DynamoDbTestStorage {
     type Context = ViewContext<usize, DynamoDbStore>;
 
     async fn new() -> Self {
-        let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let namespace = generate_test_namespace();
-        let common_config = create_dynamo_db_common_config();
+        let store = create_dynamo_db_test_store().await;
         let accessed_chains = BTreeSet::new();
-        let store_config = DynamoDbStoreConfig {
-            config: localstack.dynamo_db_config(),
-            common_config,
-        };
-        let root_key = &[];
-        let store = DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key)
-            .await
-            .expect("failed to create from scratch");
         DynamoDbTestStorage {
             store,
             accessed_chains,
