@@ -872,6 +872,9 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
+        let mutex = self.state().client_mutex();
+        let _guard = mutex.lock_owned().await;
+
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
@@ -1850,8 +1853,8 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
-        let block_mutex = self.state().preparing_block();
-        let _block_guard = block_mutex.lock_owned().await;
+        let mutex = self.state().client_mutex();
+        let _guard = mutex.lock_owned().await;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
@@ -3009,10 +3012,13 @@ where
     /// This is similar to `find_received_certificates` but for only one validator.
     /// We also don't try to synchronize the admin chain.
     #[tracing::instrument(level = "trace")]
-    pub async fn find_received_certificates_from_validator(
+    async fn find_received_certificates_from_validator(
         &self,
         remote_node: RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
+        let mutex = self.state().client_mutex();
+        let _guard = mutex.lock_owned().await;
+
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
         let (name, tracker, certificates) = self
