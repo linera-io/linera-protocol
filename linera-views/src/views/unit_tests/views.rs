@@ -8,9 +8,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
 #[cfg(with_dynamodb)]
-use crate::dynamo_db::{
-    create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
-};
+use crate::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
 use crate::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
@@ -206,7 +204,7 @@ impl TestContextFactory for MemoryContextFactory {
 
 #[cfg(with_rocksdb)]
 #[derive(Default)]
-struct RocksDbContextFactory {}
+struct RocksDbContextFactory;
 
 #[cfg(with_rocksdb)]
 #[async_trait]
@@ -226,9 +224,7 @@ impl TestContextFactory for RocksDbContextFactory {
 
 #[cfg(with_dynamodb)]
 #[derive(Default)]
-struct DynamoDbContextFactory {
-    localstack: Option<LocalStackTestContext>,
-}
+struct DynamoDbContextFactory;
 
 #[cfg(with_dynamodb)]
 #[async_trait]
@@ -236,20 +232,10 @@ impl TestContextFactory for DynamoDbContextFactory {
     type Context = ViewContext<(), DynamoDbStore>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        if self.localstack.is_none() {
-            self.localstack = Some(LocalStackTestContext::new().await?);
-        }
-        let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-
+        let config = DynamoDbStore::new_test_config().await?;
         let namespace = generate_test_namespace();
         let root_key = &[];
-        let common_config = create_dynamo_db_common_config();
-        let store_config = DynamoDbStoreConfig {
-            config,
-            common_config,
-        };
-        let store =
-            DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key).await?;
+        let store = DynamoDbStore::recreate_and_connect(&config, &namespace, root_key).await?;
         Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
