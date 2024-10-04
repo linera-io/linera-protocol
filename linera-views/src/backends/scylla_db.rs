@@ -557,7 +557,11 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
 
     async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
         let uri = create_scylla_db_test_uri();
-        let common_config = create_scylla_db_common_config();
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
+            max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+            cache_size: TEST_CACHE_SIZE,
+        };
         Ok(ScyllaDbStoreConfig { uri, common_config })
     }
 
@@ -923,15 +927,6 @@ impl ScyllaDbStore {
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
-    }
-}
-
-/// Creates the common initialization for RocksDB.
-pub fn create_scylla_db_common_config() -> CommonStoreConfig {
-    CommonStoreConfig {
-        max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
-        max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
-        cache_size: TEST_CACHE_SIZE,
     }
 }
 

@@ -36,7 +36,7 @@ use linera_views::dynamo_db::{
     create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
 };
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_common_config, ScyllaDbStore, ScyllaDbStoreConfig};
+use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{memory::MemoryStore, test_utils::generate_test_namespace};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -1085,27 +1085,11 @@ impl StorageBuilder for DynamoDbStorageBuilder {
 }
 
 #[cfg(feature = "scylladb")]
+#[derive(Default)]
 pub struct ScyllaDbStorageBuilder {
     instance_counter: usize,
-    uri: String,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
-}
-
-#[cfg(feature = "scylladb")]
-impl Default for ScyllaDbStorageBuilder {
-    fn default() -> Self {
-        let instance_counter = 0;
-        let uri = "localhost:9042".to_string();
-        let wasm_runtime = None;
-        let clock = TestClock::new();
-        ScyllaDbStorageBuilder {
-            instance_counter,
-            uri,
-            wasm_runtime,
-            clock,
-        }
-    }
 }
 
 #[cfg(feature = "scylladb")]
@@ -1131,11 +1115,7 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
         let namespace = generate_test_namespace();
         let namespace = format!("{}_{}", namespace, self.instance_counter);
         let root_key = &[];
-        let common_config = create_scylla_db_common_config();
-        let store_config = ScyllaDbStoreConfig {
-            uri: self.uri.clone(),
-            common_config,
-        };
+        let store_config = ScyllaDbStore::new_test_config().await?;
         let storage = DbStorage::new_for_testing(
             store_config,
             &namespace,
