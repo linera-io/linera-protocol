@@ -1,4 +1,4 @@
-{ crane, pkgs, rust-toolchain }:
+{ crane, pkgs, rust-toolchain, libclang, rocksdb, git }:
 ((crane.mkLib pkgs).overrideToolchain rust-toolchain).buildPackage {
   pname = "linera";
   src = ./.;
@@ -15,6 +15,7 @@
     nodejs
     openssl
     protobuf
+    git
   ];
   checkInputs = with pkgs; [
     # for native testing
@@ -29,4 +30,7 @@
     wasm-pack
   ];
   passthru = { inherit rust-toolchain; };
+  RUST_SRC_PATH = rust-toolchain.availableComponents.rust-src;
+  LIBCLANG_PATH = "${libclang.lib}/lib";
+  ROCKSDB_LIB_DIR = "${rocksdb}/lib";
 }

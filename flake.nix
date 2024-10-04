@@ -27,17 +27,17 @@
           ./toolchains/stable/rust-toolchain.toml);
         rust-nightly = (pkgs.rust-bin.fromRustupToolchainFile
           ./toolchains/nightly/rust-toolchain.toml);
-        devShell = rust-toolchain: pkgs.mkShell {
+        devShell = rust-toolchain: let linera' = linera rust-toolchain; in pkgs.mkShell {
           inputsFrom = [
             config.treefmt.build.devShell
-            (linera rust-toolchain)
+            linera'
           ];
           shellHook = ''
             # For rust-analyzer 'hover' tooltips to work.
-            export RUST_SRC_PATH=${rust-toolchain.availableComponents.rust-src}
-            export LIBCLANG_PATH=${pkgs.libclang.lib}/lib
             export PATH=$PWD/target/debug:~/.cargo/bin:$PATH
-            export ROCKSDB_LIB_DIR=${pkgs.rocksdb}/lib
+            export RUST_SRC_PATH="${linera'.RUST_SRC_PATH}"
+            export LIBCLANG_PATH="${linera'.LIBCLANG_PATH}"
+            export ROCKSDB_LIB_DIR="${linera'.ROCKSDB_LIB_DIR}";
           '';
           nativeBuildInputs = with pkgs; [
             rust-analyzer
@@ -49,7 +49,7 @@
           overlays = [ (import inputs.rust-overlay) ];
         };
 
-        packages.default = linera;
+        packages.default = linera rust-stable;
 
         # Rust dev environment
         devShells.default = devShell rust-stable;
