@@ -312,6 +312,8 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             });
         }
         error!("available storage: memory");
+        #[cfg(feature = "storage-service")]
+        error!("Also available is linera-storage-service");
         #[cfg(feature = "rocksdb")]
         error!("Also available is RocksDB");
         #[cfg(feature = "dynamodb")]
