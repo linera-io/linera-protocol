@@ -16,9 +16,9 @@ use linera_indexer::{
     plugin::{load, route, sdl, Plugin},
 };
 use linera_views::{
-    common::KeyValueStore,
     context::{Context, ViewContext},
     map_view::MapView,
+    store::KeyValueStore,
     views::RootView,
 };
 use serde::{Deserialize, Serialize};

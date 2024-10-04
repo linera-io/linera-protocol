@@ -33,7 +33,7 @@ use linera_rpc::{
 use linera_service::prometheus_server;
 use linera_service::util;
 use linera_storage::Storage;
-use linera_views::common::CommonStoreConfig;
+use linera_views::store::CommonStoreConfig;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;

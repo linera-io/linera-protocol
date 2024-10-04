@@ -18,12 +18,12 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound,
-        DeletionSet, HasherOutput, KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update,
-        MIN_VIEW_TAG,
+        DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
     },
     context::Context,
     map_view::ByteMapView,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    store::{KeyIterable, KeyValueIterable},
+    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]
@@ -142,7 +142,7 @@ static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> = LazyLo
 
 #[cfg(with_testing)]
 use {
-    crate::common::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    crate::store::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
     async_lock::RwLock,
     std::sync::Arc,
     thiserror::Error,

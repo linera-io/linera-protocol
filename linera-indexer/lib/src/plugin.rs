@@ -8,7 +8,7 @@ use std::sync::Arc;
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedCertificateValue;
-use linera_views::{common::KeyValueStore, context::ViewContext, views::View};
+use linera_views::{context::ViewContext, store::KeyValueStore, views::View};
 use tokio::sync::Mutex;
 
 use crate::common::IndexerError;

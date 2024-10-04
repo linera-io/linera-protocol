@@ -9,10 +9,9 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     backends::memory::MemoryStore,
     batch::{Batch, DeletePrefixExpander},
-    common::{
-        from_bytes_option, KeyIterable, KeyValueIterable, KeyValueStoreError,
-        RestrictedKeyValueStore, MIN_VIEW_TAG,
-    },
+    common::from_bytes_option,
+    store::{KeyIterable, KeyValueIterable, KeyValueStoreError, RestrictedKeyValueStore},
+    views::MIN_VIEW_TAG,
 };
 
 /// The context in which a view is operated. Typically, this includes the client to
@@ -159,7 +158,7 @@ pub trait Context: Clone {
 }
 
 /// Implementation of the [`Context`] trait on top of a DB client implementing
-/// [`crate::common::KeyValueStore`].
+/// [`crate::store::KeyValueStore`].
 #[derive(Debug, Default, Clone)]
 pub struct ViewContext<E, S> {
     /// The DB client that is shared between views.

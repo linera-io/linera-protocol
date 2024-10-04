@@ -28,10 +28,10 @@ use thiserror::Error;
 
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
-    common::{
+    store::{
         AdminKeyValueStore, KeyIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore,
-        MIN_VIEW_TAG,
     },
+    views::MIN_VIEW_TAG,
 };
 
 /// The tag used for the journal stuff.

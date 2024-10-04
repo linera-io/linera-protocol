@@ -12,9 +12,9 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_option, MIN_VIEW_TAG},
+    common::from_bytes_option,
     context::Context,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
 /// A hash for ContainerView and storing of the hash for memoization purposes

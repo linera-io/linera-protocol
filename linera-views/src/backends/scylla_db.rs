@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implements [`crate::common::KeyValueStore`] for the ScyllaDB database.
+//! Implements [`crate::store::KeyValueStore`] for the ScyllaDB database.
 //!
 //! The current connection is done via a Session and a corresponding primary key called
 //! "namespace". The maximum number of concurrent queries is controlled by
@@ -35,13 +35,13 @@ use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
 use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, UnorderedBatch},
-    common::{
-        get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError,
-        ReadableKeyValueStore, WithError, WritableKeyValueStore,
-    },
+    common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
-    value_splitting::DatabaseConsistencyError,
+    store::{
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
+    },
 };
 
 /// The client for ScyllaDb.
@@ -422,10 +422,6 @@ pub enum ScyllaDbStoreError {
     /// Already existing database
     #[error("Already existing database")]
     AlreadyExistingDatabase,
-
-    /// The database is not coherent
-    #[error(transparent)]
-    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// The journal is not coherent
     #[error(transparent)]

@@ -3,16 +3,14 @@
 
 //! Adds support for large values to a given store by splitting them between several keys.
 
-use std::fmt::Debug;
-
 use linera_base::ensure;
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
-    common::{
-        KeyIterable, KeyValueIterable, ReadableKeyValueStore, RestrictedKeyValueStore, WithError,
-        WritableKeyValueStore,
+    store::{
+        KeyIterable, KeyValueIterable, KeyValueStoreError, ReadableKeyValueStore,
+        RestrictedKeyValueStore, WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
@@ -21,9 +19,13 @@ use crate::{
     test_utils::generate_test_namespace,
 };
 
-/// Data type indicating that the database is not consistent
+/// The composed error type built from the inner error type.
 #[derive(Error, Debug)]
-pub enum DatabaseConsistencyError {
+pub enum ValueSplittingError<E> {
+    /// inner store error
+    #[error("inner store error")]
+    InnerStoreError(#[from] E),
+
     /// The key is of length less than 4, so we cannot extract the first byte
     #[error("the key is of length less than 4, so we cannot extract the first byte")]
     TooShortKey,
@@ -35,6 +37,17 @@ pub enum DatabaseConsistencyError {
     /// no count of size u32 is available in the value
     #[error("no count of size u32 is available in the value")]
     NoCountAvailable,
+}
+
+impl<E: KeyValueStoreError> From<bcs::Error> for ValueSplittingError<E> {
+    fn from(error: bcs::Error) -> Self {
+        let error = E::from(error);
+        ValueSplittingError::InnerStoreError(error)
+    }
+}
+
+impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError<E> {
+    const BACKEND: &'static str = "value splitting";
 }
 
 /// A key-value store with no size limit for values.
@@ -52,14 +65,15 @@ pub struct ValueSplittingStore<K> {
 impl<K> WithError for ValueSplittingStore<K>
 where
     K: WithError,
+    K::Error: 'static,
 {
-    type Error = K::Error;
+    type Error = ValueSplittingError<K::Error>;
 }
 
 impl<K> ReadableKeyValueStore for ValueSplittingStore<K>
 where
     K: RestrictedKeyValueStore + Send + Sync,
-    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
+    K::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
     type Keys = Vec<Vec<u8>>;
@@ -90,7 +104,7 @@ where
         for segment in segments {
             match segment {
                 None => {
-                    return Err(DatabaseConsistencyError::MissingSegment.into());
+                    return Err(ValueSplittingError::MissingSegment);
                 }
                 Some(segment) => {
                     big_value.extend(segment);
@@ -103,7 +117,7 @@ where
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
-        self.store.contains_key(&big_key).await
+        Ok(self.store.contains_key(&big_key).await?)
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
@@ -115,7 +129,7 @@ where
                 big_key
             })
             .collect::<Vec<_>>();
-        self.store.contains_keys(big_keys).await
+        Ok(self.store.contains_keys(big_keys).await?)
     }
 
     async fn read_multi_values_bytes(
@@ -203,12 +217,12 @@ where
             for idx in 1..count {
                 let (big_key, value) = small_kv_iterator
                     .next()
-                    .ok_or(DatabaseConsistencyError::MissingSegment)??;
+                    .ok_or(ValueSplittingError::MissingSegment)??;
                 ensure!(
                     Self::read_index_from_key(&big_key)? == idx
                         && big_key.starts_with(&key)
                         && big_key.len() == key.len() + 4,
-                    DatabaseConsistencyError::MissingSegment
+                    ValueSplittingError::MissingSegment
                 );
                 big_value.extend(value);
             }
@@ -221,7 +235,7 @@ where
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
 where
     K: RestrictedKeyValueStore + Send + Sync,
-    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
+    K::Error: 'static,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
@@ -255,34 +269,34 @@ where
                 }
             }
         }
-        self.store.write_batch(batch_new).await
+        Ok(self.store.write_batch(batch_new).await?)
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
-        self.store.clear_journal().await
+        Ok(self.store.clear_journal().await?)
     }
 }
 
 impl<K> ValueSplittingStore<K>
 where
     K: RestrictedKeyValueStore + Send + Sync,
-    K::Error: From<bcs::Error> + From<DatabaseConsistencyError>,
+    K::Error: 'static,
 {
     /// Creates a new store that deals with big values from one that does not.
     pub fn new(store: K) -> Self {
         ValueSplittingStore { store }
     }
 
-    fn read_count_from_value(value: &[u8]) -> Result<u32, K::Error> {
+    fn read_count_from_value(value: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
         if value.len() < 4 {
-            return Err(DatabaseConsistencyError::NoCountAvailable.into());
+            return Err(ValueSplittingError::NoCountAvailable);
         }
         let mut bytes = value[0..4].to_vec();
         bytes.reverse();
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
-    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, K::Error> {
+    fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
         let mut big_key_segment = key.to_vec();
         let mut bytes = bcs::to_bytes(&index)?;
         bytes.reverse();
@@ -290,17 +304,20 @@ where
         Ok(big_key_segment)
     }
 
-    fn read_index_from_key(key: &[u8]) -> Result<u32, K::Error> {
+    fn read_index_from_key(key: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
         let len = key.len();
         if len < 4 {
-            return Err(DatabaseConsistencyError::TooShortKey.into());
+            return Err(ValueSplittingError::TooShortKey);
         }
         let mut bytes = key[len - 4..len].to_vec();
         bytes.reverse();
         Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
-    fn get_initial_count_first_chunk(count: u32, first_chunk: &[u8]) -> Result<Vec<u8>, K::Error> {
+    fn get_initial_count_first_chunk(
+        count: u32,
+        first_chunk: &[u8],
+    ) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
         let mut bytes = bcs::to_bytes(&count)?;
         bytes.reverse();
         let mut value_ext = Vec::new();
@@ -412,7 +429,7 @@ pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedTestM
 mod tests {
     use linera_views::{
         batch::Batch,
-        common::{ReadableKeyValueStore, WritableKeyValueStore},
+        store::{ReadableKeyValueStore, WritableKeyValueStore},
         value_splitting::{LimitedTestMemoryStore, ValueSplittingStore},
     };
     use rand::Rng;

@@ -8,13 +8,13 @@ use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
-#[cfg(with_storage)]
-use linera_views::common::LocalAdminKeyValueStore as _;
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig};
+#[cfg(with_storage)]
+use linera_views::store::LocalAdminKeyValueStore as _;
 use linera_views::{
-    common::CommonStoreConfig,
     memory::{MemoryStore, MemoryStoreConfig},
+    store::CommonStoreConfig,
     views::ViewError,
 };
 use tracing::error;

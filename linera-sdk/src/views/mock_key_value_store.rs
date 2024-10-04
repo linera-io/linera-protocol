@@ -14,8 +14,8 @@ use std::{
 use futures::FutureExt as _;
 use linera_views::{
     batch::Batch,
-    common::{ReadableKeyValueStore, WritableKeyValueStore},
     memory::{create_test_memory_store, MemoryStore},
+    store::{ReadableKeyValueStore, WritableKeyValueStore},
 };
 
 /// A mock [`KeyValueStore`] implementation using a [`MemoryStore`].

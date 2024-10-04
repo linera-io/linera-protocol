@@ -9,8 +9,8 @@ use linera_base::command::resolve_binary;
 #[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
-    common::{CommonStoreConfig, KeyValueStoreError, MIN_VIEW_TAG},
-    value_splitting::DatabaseConsistencyError,
+    store::{CommonStoreConfig, KeyValueStoreError},
+    views::MIN_VIEW_TAG,
 };
 use thiserror::Error;
 use tonic::Status;
@@ -72,10 +72,6 @@ pub enum ServiceStoreError {
     /// An error occurred during BCS serialization
     #[error("An error occurred during BCS serialization")]
     Serialization(#[from] bcs::Error),
-
-    /// The database is not consistent
-    #[error(transparent)]
-    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
 impl KeyValueStoreError for ServiceStoreError {

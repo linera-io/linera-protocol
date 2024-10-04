@@ -9,7 +9,7 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    common::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
 use thiserror::Error;
 
@@ -95,7 +95,7 @@ pub enum KeyValueStoreError {
     Bcs(#[from] bcs::Error),
 }
 
-impl linera_views::common::KeyValueStoreError for KeyValueStoreError {
+impl linera_views::store::KeyValueStoreError for KeyValueStoreError {
     const BACKEND: &'static str = "key_value_store";
 }
 

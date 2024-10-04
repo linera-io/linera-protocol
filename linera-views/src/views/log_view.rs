@@ -18,10 +18,10 @@ use {
 
 use crate::{
     batch::Batch,
-    common::{from_bytes_option_or_default, HasherOutput, MIN_VIEW_TAG},
+    common::{from_bytes_option_or_default, HasherOutput},
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
-    views::{ClonableView, HashableView, Hasher, View, ViewError},
+    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]

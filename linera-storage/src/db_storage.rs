@@ -23,9 +23,8 @@ use linera_execution::{
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
-    common::KeyValueStore,
     context::ViewContext,
-    value_splitting::DatabaseConsistencyError,
+    store::KeyValueStore,
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -357,8 +356,7 @@ impl<Store, C> Storage for DbStorage<Store, C>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    Store::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    Store::Error: Send + Sync,
 {
     type Context = ViewContext<ChainRuntimeContext<Self>, Store>;
     type Clock = C;
@@ -662,7 +660,7 @@ impl<Store, C> DbStorage<Store, C>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    Store::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    Store::Error: Send + Sync,
 {
     fn add_hashed_cert_value_to_batch(
         value: &HashedCertificateValue,
@@ -729,8 +727,7 @@ where
 impl<Store> DbStorage<Store, WallClock>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
-    Store::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    Store::Error: Send + Sync,
 {
     pub async fn initialize(
         config: Store::Config,
@@ -757,8 +754,7 @@ where
 impl<Store> DbStorage<Store, TestClock>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,
-    Store::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    Store::Error: Send + Sync,
 {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Store::new_test_config().await.unwrap();
