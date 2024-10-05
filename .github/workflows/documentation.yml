@@ -56,12 +56,17 @@ jobs:
     - name: Generate packages
       run: |
         scripts/test_publish.sh "$LINERA_PACKAGES" ${{ runner.temp }}/registry
+    - name: Extract SDK version
+      run: |
+        VERSION=$(REGEXP='version = "(.*)"'; grep -A 1 '\[workspace\.package\]' Cargo.toml | while read I; do if [[ $I =~ $REGEXP ]]; then echo "${BASH_REMATCH[1]}"; fi; done)
+        echo "Found SDK version $VERSION"
+        echo "SDK_VERSION=$VERSION" >> "$GITHUB_ENV"
     - name: Extract packaged crates
       run: |
         cd "${{ runner.temp }}/registry"
         grep -v '^#' "$GITHUB_WORKSPACE/$LINERA_PACKAGES" | while read LINE; do
             CRATE="${LINE%% *}"
-            tar -xzvf ${CRATE}-*.crate
+            tar -xzvf ${CRATE}-${SDK_VERSION}.crate
         done
     - name: Checkout docs.rs tool repository
       run: |
@@ -82,5 +87,5 @@ jobs:
         cargo run -- database migrate
         grep -v ^# "$GITHUB_WORKSPACE/$LINERA_PACKAGES" | while read LINE; do
             CRATE="${LINE%% *}"
-            cargo run -- build crate --local ${{ runner.temp }}/registry/${CRATE}-*/
+            cargo run -- build crate --local ${{ runner.temp }}/registry/${CRATE}-${SDK_VERSION}/
         done
