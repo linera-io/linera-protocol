@@ -35,13 +35,13 @@ async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_queue_operations_with_rocks_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(RocksDbContextFactory::default()).await
+    run_test_queue_operations_test_cases(RocksDbContextFactory).await
 }
 
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(DynamoDbContextFactory::default()).await
+    run_test_queue_operations_test_cases(DynamoDbContextFactory).await
 }
 
 #[cfg(with_scylladb)]
@@ -203,7 +203,6 @@ impl TestContextFactory for MemoryContextFactory {
 }
 
 #[cfg(with_rocksdb)]
-#[derive(Default)]
 struct RocksDbContextFactory;
 
 #[cfg(with_rocksdb)]
@@ -223,7 +222,6 @@ impl TestContextFactory for RocksDbContextFactory {
 }
 
 #[cfg(with_dynamodb)]
-#[derive(Default)]
 struct DynamoDbContextFactory;
 
 #[cfg(with_dynamodb)]
@@ -241,7 +239,6 @@ impl TestContextFactory for DynamoDbContextFactory {
 }
 
 #[cfg(with_scylladb)]
-#[derive(Default)]
 struct ScyllaDbContextFactory;
 
 #[cfg(with_scylladb)]

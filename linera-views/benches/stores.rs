@@ -16,7 +16,7 @@ use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
-    store::LocalKeyValueStore,
+    store::{AdminKeyValueStore as _, LocalKeyValueStore},
     test_utils::{add_prefix, get_random_key_values2},
 };
 use tokio::runtime::Runtime;
