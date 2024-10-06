@@ -77,7 +77,8 @@ jobs:
         cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
     - name: Instantiate the set of validators
       run: |
-        cargo run --bin linera -- --storage service:tcp:127.0.0.1:1235:TEST net up --policy-config devnet --path /tmp/WORK &
+        cargo build --features storage-service
+        cargo run --features storage-service --bin linera -- net up --storage-config-namespace service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK &
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
