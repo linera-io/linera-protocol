@@ -155,10 +155,7 @@ pub enum ChainError {
 #[derive(Copy, Clone, Debug)]
 pub enum ChainExecutionContext {
     Query,
-    DescribeApplication,
     IncomingBundle(u32),
     Operation(u32),
     Block,
-    #[cfg(with_testing)]
-    ReadBytecodeLocation,
 }

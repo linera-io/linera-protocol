@@ -528,7 +528,7 @@ fn create_dummy_certificate_value(height: impl Into<BlockHeight>) -> HashedCerti
 
 /// Creates a new dummy data [`Blob`] to use in the tests.
 fn create_dummy_blob(id: usize) -> Blob {
-    Blob::new_data(format!("test{}", id).as_bytes().to_vec())
+    Blob::new_data(format!("test{}", id).as_bytes().to_vec()).unwrap()
 }
 
 /// Creates a dummy [`HashedCertificateValue::ValidatedBlock`] to use in the tests.

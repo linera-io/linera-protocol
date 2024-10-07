@@ -649,9 +649,7 @@ impl Runnable for Job {
                     .await?;
 
                 if let Some(id) = fungible_application_id {
-                    context
-                        .supply_fungible_tokens(&key_pairs, id, max_in_flight)
-                        .await?;
+                    context.supply_fungible_tokens(&key_pairs, id).await?;
                 }
 
                 // For this command, we create proposals and gather certificates without using
@@ -915,29 +913,6 @@ impl Runnable for Job {
                 info!("{}", "Application published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
-            }
-
-            RequestApplication {
-                application_id,
-                target_chain_id,
-                requester_chain_id,
-            } => {
-                let requester_chain_id =
-                    requester_chain_id.unwrap_or_else(|| context.default_chain());
-                info!("Requesting application for chain {}", requester_chain_id);
-                let chain_client = context.make_chain_client(requester_chain_id)?;
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let chain_client = chain_client.clone();
-                        async move {
-                            chain_client
-                                .request_application(application_id, target_chain_id)
-                                .await
-                        }
-                    })
-                    .await
-                    .context("Failed to request application")?;
-                debug!("{:?}", certificate);
             }
 
             Assign { key, message_id } => {
@@ -1283,7 +1258,6 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::ReadDataBlob { .. }
         | ClientCommand::CreateApplication { .. }
         | ClientCommand::PublishAndCreate { .. }
-        | ClientCommand::RequestApplication { .. }
         | ClientCommand::Keygen { .. }
         | ClientCommand::Assign { .. }
         | ClientCommand::Wallet { .. }

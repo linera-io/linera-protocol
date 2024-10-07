@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
-    data_types::{BlobBytes, BlobContent, BlockHeight},
+    data_types::{BlobContent, BlockHeight},
     doc_scalar,
 };
 
@@ -171,6 +171,8 @@ pub enum BlobType {
     ContractBytecode,
     /// A blob containing service bytecode.
     ServiceBytecode,
+    /// A blob containing an application description.
+    ApplicationDescription,
 }
 
 impl Display for BlobType {
@@ -196,6 +198,7 @@ impl From<&BlobContent> for BlobType {
             BlobContent::Data(_) => BlobType::Data,
             BlobContent::ContractBytecode(_) => BlobType::ContractBytecode,
             BlobContent::ServiceBytecode(_) => BlobType::ServiceBytecode,
+            BlobContent::ApplicationDescription(_) => BlobType::ApplicationDescription,
         }
     }
 }
@@ -226,11 +229,11 @@ pub struct BlobId {
 
 impl BlobId {
     /// Creates a new `BlobId` from a `BlobContent`
-    pub fn from_content(content: &BlobContent) -> Self {
-        Self {
-            hash: CryptoHash::new(&BlobBytes(content.inner_bytes())),
+    pub fn from_content(content: &BlobContent) -> Result<Self, bcs::Error> {
+        Ok(Self {
+            hash: CryptoHash::new(&content.blob_bytes()?),
             blob_type: content.into(),
-        }
+        })
     }
 
     /// Creates a new `BlobId` from a `CryptoHash`. This must be a hash of the blob's bytes!
@@ -293,10 +296,10 @@ pub struct MessageId {
 #[derive(WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ApplicationId<A = ()> {
+    /// The hash of the `UserApplicationDescription` this refers to.
+    pub application_description_hash: CryptoHash,
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
 }
 
 /// Alias for `ApplicationId`. Use this alias in the core
@@ -673,11 +676,8 @@ impl<A> Copy for ApplicationId<A> {}
 
 impl<A: PartialEq> PartialEq for ApplicationId<A> {
     fn eq(&self, other: &Self) -> bool {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = other;
-        self.bytecode_id == *bytecode_id && self.creation == *creation
+        self.application_description_hash == other.application_description_hash
+            && self.bytecode_id == other.bytecode_id
     }
 }
 
@@ -685,50 +685,33 @@ impl<A: Eq> Eq for ApplicationId<A> {}
 
 impl<A: PartialOrd> PartialOrd for ApplicationId<A> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = other;
-        match self.bytecode_id.partial_cmp(bytecode_id) {
-            Some(std::cmp::Ordering::Equal) => self.creation.partial_cmp(creation),
-            result => result,
-        }
+        (self.application_description_hash, self.bytecode_id)
+            .partial_cmp(&(other.application_description_hash, other.bytecode_id))
     }
 }
 
 impl<A: Ord> Ord for ApplicationId<A> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = other;
-        match self.bytecode_id.cmp(bytecode_id) {
-            std::cmp::Ordering::Equal => self.creation.cmp(creation),
-            result => result,
-        }
+        (self.application_description_hash, self.bytecode_id)
+            .cmp(&(other.application_description_hash, other.bytecode_id))
     }
 }
 
 impl<A> Hash for ApplicationId<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = self;
-        bytecode_id.hash(state);
-        creation.hash(state);
+        self.application_description_hash.hash(state);
+        self.bytecode_id.hash(state);
     }
 }
 
 impl<A> Debug for ApplicationId<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = self;
         f.debug_struct("ApplicationId")
-            .field("bytecode_id", bytecode_id)
-            .field("creation", creation)
+            .field(
+                "application_description_hash",
+                &self.application_description_hash,
+            )
+            .field("bytecode_id", &self.bytecode_id)
             .finish()
     }
 }
@@ -736,8 +719,8 @@ impl<A> Debug for ApplicationId<A> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "ApplicationId")]
 struct SerializableApplicationId {
+    pub application_description_hash: CryptoHash,
     pub bytecode_id: BytecodeId,
-    pub creation: MessageId,
 }
 
 impl<A> Serialize for ApplicationId<A> {
@@ -747,16 +730,16 @@ impl<A> Serialize for ApplicationId<A> {
     {
         if serializer.is_human_readable() {
             let bytes = bcs::to_bytes(&SerializableApplicationId {
+                application_description_hash: self.application_description_hash,
                 bytecode_id: self.bytecode_id.forget_abi(),
-                creation: self.creation,
             })
             .map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
         } else {
             SerializableApplicationId::serialize(
                 &SerializableApplicationId {
+                    application_description_hash: self.application_description_hash,
                     bytecode_id: self.bytecode_id.forget_abi(),
-                    creation: self.creation,
                 },
                 serializer,
             )
@@ -775,25 +758,33 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
             let application_id: SerializableApplicationId =
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
+                application_description_hash: application_id.application_description_hash,
                 bytecode_id: application_id.bytecode_id.with_abi(),
-                creation: application_id.creation,
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
+                application_description_hash: value.application_description_hash,
                 bytecode_id: value.bytecode_id.with_abi(),
-                creation: value.creation,
             })
         }
     }
 }
 
 impl ApplicationId {
+    /// Creates an application ID from the application description hash.
+    pub fn new(application_description_hash: CryptoHash, bytecode_id: BytecodeId) -> Self {
+        ApplicationId {
+            application_description_hash,
+            bytecode_id,
+        }
+    }
+
     /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
+            application_description_hash: self.application_description_hash,
             bytecode_id: self.bytecode_id.with_abi(),
-            creation: self.creation,
         }
     }
 }
@@ -802,8 +793,8 @@ impl<A> ApplicationId<A> {
     /// Forgets the ABI of a bytecode ID (if any).
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
+            application_description_hash: self.application_description_hash,
             bytecode_id: self.bytecode_id.forget_abi(),
-            creation: self.creation,
         }
     }
 }

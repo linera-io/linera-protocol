@@ -19,14 +19,14 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, Bytecode, OracleResponse, UserApplicationDescription},
+    data_types::{Amount, Bytecode, OracleResponse},
     identifiers::{
-        AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
+        AccountOwner, ApplicationId, BlobId, BlobType, ChainDescription, ChainId, Owner, StreamId,
         StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_chain::data_types::{CertificateValue, EventRecord, MessageAction, OutgoingMessage};
+use linera_chain::data_types::{CertificateValue, EventRecord, MessageAction};
 use linera_execution::{
     Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
 };
@@ -296,28 +296,20 @@ where
         .unwrap()
         .unwrap();
     let (application_id2, certificate) = creator
-        .create_application(
-            bytecode_id2,
-            &application_id1,
-            &(),
-            vec![application_id1.forget_abi()],
-        )
+        .create_application(bytecode_id2, &application_id1, &(), vec![])
         .await
         .unwrap()
         .unwrap();
     assert_eq!(
         certificate.value().executed_block().unwrap().outcome.events,
-        vec![
-            Vec::new(),
-            vec![EventRecord {
-                stream_id: StreamId {
-                    application_id: application_id2.forget_abi().into(),
-                    stream_name: StreamName(b"announcements".to_vec()),
-                },
-                key: b"updates".to_vec(),
-                value: b"instantiated".to_vec(),
-            }]
-        ]
+        vec![vec![EventRecord {
+            stream_id: StreamId {
+                application_id: application_id2.forget_abi().into(),
+                stream_name: StreamName(b"announcements".to_vec()),
+            },
+            key: b"updates".to_vec(),
+            value: b"instantiated".to_vec(),
+        }]]
     );
 
     let query_service = cfg!(feature = "unstable-oracles");
@@ -334,8 +326,25 @@ where
         panic!("Unexpected oracle responses: {:?}", responses);
     };
     if cfg!(feature = "unstable-oracles") {
-        let [OracleResponse::Service(json)] = &responses[..] else {
-            assert_eq!(&responses[..], &[]);
+        assert_eq!(responses.len(), 4);
+        assert_eq!(
+            responses[0..3],
+            [
+                OracleResponse::Blob(BlobId::new(
+                    application_id2.bytecode_id.contract_blob_hash,
+                    BlobType::ContractBytecode
+                )),
+                OracleResponse::Blob(BlobId::new(
+                    application_id2.bytecode_id.service_blob_hash,
+                    BlobType::ServiceBytecode
+                )),
+                OracleResponse::Blob(BlobId::new(
+                    application_id2.application_description_hash,
+                    BlobType::ApplicationDescription
+                )),
+            ]
+        );
+        let OracleResponse::Service(json) = &responses[3] else {
             panic!("Unexpected oracle responses: {:?}", responses);
         };
         let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
@@ -409,10 +418,6 @@ where
     assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
     assert_eq!(
         incoming_bundles[0].bundle.messages[0].kind,
-        MessageKind::Simple
-    );
-    assert_eq!(
-        incoming_bundles[0].bundle.messages[1].kind,
         MessageKind::Tracked
     );
     let messages = cert.value().messages().unwrap();
@@ -441,13 +446,123 @@ where
     // Second message is the bounced message.
     assert_eq!(incoming_bundles[1].action, MessageAction::Accept);
     assert_eq!(
-        incoming_bundles[1].bundle.messages[1].kind,
+        incoming_bundles[1].bundle.messages[0].kind,
         MessageKind::Bouncing
     );
     assert_matches!(
-        incoming_bundles[1].bundle.messages[1].message,
+        incoming_bundles[1].bundle.messages[0].message,
         Message::User { .. }
     );
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_meta_counter_with_blobs(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_meta_counter_with_blobs(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "storage-service")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_service_meta_counter_with_blobs(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_meta_counter_with_blobs(ServiceStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
+}
+
+#[ignore]
+#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_rocks_db_meta_counter_with_blobs(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_meta_counter_with_blobs(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
+        .await
+}
+
+#[ignore]
+#[cfg(feature = "dynamodb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_dynamo_db_meta_counter_with_blobs(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_meta_counter_with_blobs(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "scylladb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_scylla_db_meta_counter_with_blobs(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_meta_counter_with_blobs(ScyllaDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+async fn run_test_meta_counter_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut builder = TestBuilder::new(storage_builder, 4, 1)
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+    let client0 = builder
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
+        .await?;
+    let client1 = builder
+        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
+        .await?;
+
+    let (counter_bytecode_id, _counter_bytecode_cert) = {
+        let (contract_path, service_path) =
+            linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
+        client0
+            .publish_bytecode(
+                Bytecode::load_from_file(contract_path).await?,
+                Bytecode::load_from_file(service_path).await?,
+            )
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    let counter_bytecode_id = counter_bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
+
+    let (counter_application_id, _) = client0
+        .create_application(counter_bytecode_id, &(), &0, vec![])
+        .await
+        .unwrap()
+        .unwrap();
+
+    let (meta_counter_bytecode_id, _meta_counter_cert) = {
+        let (contract_path, service_path) =
+            linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
+        client1
+            .publish_bytecode(
+                Bytecode::load_from_file(contract_path).await?,
+                Bytecode::load_from_file(service_path).await?,
+            )
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    let meta_counter_bytecode_id = meta_counter_bytecode_id
+        .with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
+
+    client1
+        .create_application(
+            meta_counter_bytecode_id,
+            &counter_application_id,
+            &(),
+            vec![],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(client1.process_inbox().await?.0.len(), 1);
 
     Ok(())
 }
@@ -559,23 +674,6 @@ where
         .unwrap()
         .unwrap();
 
-    let messages = cert.value().messages().unwrap();
-    {
-        let OutgoingMessage {
-            destination,
-            message,
-            ..
-        } = &messages[1][0];
-        assert_matches!(
-            message, Message::System(SystemMessage::RegisterApplications { applications })
-            if applications.len() == 1 && matches!(
-                applications[0], UserApplicationDescription{ bytecode_id: b_id, .. }
-                if b_id == bytecode_id.forget_abi()
-            ),
-            "Unexpected message"
-        );
-        assert_eq!(*destination, Destination::Recipient(receiver.chain_id()));
-    }
     receiver.synchronize_from_validators().await.unwrap();
     receiver
         .receive_certificate_and_update_validators(cert)
@@ -589,11 +687,6 @@ where
         }
         _ => panic!("Unexpected value"),
     };
-    assert!(messages.iter().any(|msg| matches!(
-        &msg.bundle.messages[0].message,
-        Message::System(SystemMessage::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_id == bytecode_id.forget_abi())
-    )));
     assert!(messages
         .iter()
         .flat_map(|msg| &msg.bundle.messages)

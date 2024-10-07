@@ -12,8 +12,8 @@ use std::{sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::BlockHeight,
-    identifiers::{BlobId, BytecodeId, ChainId, MessageId},
+    data_types::{Blob, BlockHeight, CompressedBytecode, OracleResponse},
+    identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId},
 };
 use linera_views::{
     context::Context,
@@ -26,25 +26,36 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
-    QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
+    execution::ServiceRuntimeEndpoint, ExecutionRequest, ExecutionRuntimeContext,
+    ExecutionStateView, QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
-pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
+pub fn create_dummy_user_application_description(
+    index: u64,
+) -> (UserApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
-    let contract_blob_hash = CryptoHash::new(&FakeBlob(String::from("contract")));
-    let service_blob_hash = CryptoHash::new(&FakeBlob(String::from("service")));
-    UserApplicationDescription {
-        bytecode_id: BytecodeId::new(contract_blob_hash, service_blob_hash),
-        creation: MessageId {
-            chain_id,
-            height: BlockHeight(index),
-            index: 1,
+    let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
+        compressed_bytes: String::from("contract").as_bytes().to_vec(),
+    })
+    .unwrap();
+    let service_blob = Blob::new_service_bytecode(CompressedBytecode {
+        compressed_bytes: String::from("service").as_bytes().to_vec(),
+    })
+    .unwrap();
+
+    (
+        UserApplicationDescription {
+            bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
+            creator_chain_id: chain_id,
+            block_height: BlockHeight(index),
+            operation_index: 0,
+            required_application_ids: vec![],
+            parameters: vec![],
         },
-        required_application_ids: vec![],
-        parameters: vec![],
-    }
+        contract_blob,
+        service_blob,
+    )
 }
 
 #[derive(Deserialize, Serialize)]
@@ -59,50 +70,88 @@ impl BcsSignable for FakeBlob {}
 pub async fn register_mock_applications<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication)>>
+) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    let mock_applications: Vec<_> =
-        create_dummy_user_application_registrations(&mut state.system.registry, count)
-            .await?
-            .into_iter()
-            .map(|(id, _description)| (id, MockApplication::default()))
-            .collect();
+    let mock_applications: Vec<_> = create_dummy_user_applications(count)
+        .await?
+        .into_iter()
+        .map(|(id, description, contract_blob, service_blob)| {
+            (
+                id,
+                description,
+                MockApplication::default(),
+                contract_blob,
+                service_blob,
+            )
+        })
+        .collect();
     let extra = state.context().extra();
 
-    for (id, mock_application) in &mock_applications {
+    for (id, description, mock_application, contract_blob, service_blob) in &mock_applications {
         extra
             .user_contracts()
             .insert(*id, mock_application.clone().into());
         extra
             .user_services()
             .insert(*id, mock_application.clone().into());
+
+        extra
+            .blobs()
+            .insert(contract_blob.id(), contract_blob.clone());
+        extra
+            .blobs()
+            .insert(service_blob.id(), service_blob.clone());
+
+        let app_blob = Blob::new_application_description(description.clone())?;
+        extra.blobs().insert(app_blob.id(), app_blob);
     }
 
-    Ok(mock_applications.into_iter())
+    Ok(mock_applications
+        .into_iter()
+        .map(|(id, _, mock_application, contract_blob, service_blob)| {
+            (id, mock_application, contract_blob, service_blob)
+        })
+        .collect::<Vec<_>>()
+        .into_iter())
 }
 
-pub async fn create_dummy_user_application_registrations<C>(
-    registry: &mut ApplicationRegistryView<C>,
+pub async fn create_dummy_user_applications(
     count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription)>>
-where
-    C: Context + Clone + Send + Sync + 'static,
-{
+) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)>> {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {
-        let description = create_dummy_user_application_description(index);
-        let id = registry.register_application(description.clone()).await?;
-
-        assert_eq!(registry.describe_application(id).await?, description);
-
-        ids.push((id, description));
+        let (description, contract_blob, service_blob) =
+            create_dummy_user_application_description(index);
+        ids.push((
+            UserApplicationId::try_from(&description)?,
+            description,
+            contract_blob,
+            service_blob,
+        ));
     }
 
     Ok(ids)
+}
+
+pub fn get_application_blob_oracle_responses(app_id: &ApplicationId) -> Vec<OracleResponse> {
+    vec![
+        OracleResponse::Blob(BlobId::new(
+            app_id.bytecode_id.contract_blob_hash,
+            BlobType::ContractBytecode,
+        )),
+        OracleResponse::Blob(BlobId::new(
+            app_id.bytecode_id.service_blob_hash,
+            BlobType::ServiceBytecode,
+        )),
+        OracleResponse::Blob(BlobId::new(
+            app_id.application_description_hash,
+            BlobType::ApplicationDescription,
+        )),
+    ]
 }
 
 impl QueryContext {

@@ -6,7 +6,6 @@
 
 #![deny(clippy::large_futures)]
 
-mod applications;
 pub mod committee;
 mod execution;
 mod execution_state_actor;
@@ -48,8 +47,6 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
-#[cfg(with_testing)]
-pub use crate::applications::ApplicationRegistry;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
@@ -59,7 +56,6 @@ pub use crate::wasm::{
     ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    applications::ApplicationRegistryView,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
@@ -142,6 +138,8 @@ pub enum ExecutionError {
     JoinError(#[from] linera_base::task::Error),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
@@ -184,8 +182,6 @@ pub enum ExecutionError {
     UnexpectedOracleResponse,
     #[error("Invalid JSON: {}", .0)]
     Json(#[from] serde_json::Error),
-    #[error(transparent)]
-    Bcs(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
@@ -193,9 +189,6 @@ pub enum ExecutionError {
         timestamp: Timestamp,
         local_time: Timestamp,
     },
-
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
 
     #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
     EventKeyTooLong,
@@ -277,6 +270,8 @@ pub trait ExecutionRuntimeContext {
 
     fn user_services(&self) -> &Arc<DashMap<UserApplicationId, UserServiceCode>>;
 
+    fn blobs(&self) -> &Arc<DashMap<BlobId, Blob>>;
+
     async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
@@ -303,8 +298,10 @@ pub struct OperationContext {
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The current index of the transaction.
+    pub txn_index: Option<u32>,
     /// The current index of the operation.
-    pub index: Option<u32>,
+    pub operation_index: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -762,7 +759,7 @@ pub struct ChannelSubscription {
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[expect(clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant)]
 pub enum ExecutionOutcome {
     System(RawExecutionOutcome<SystemMessage, Amount>),
     User(UserApplicationId, RawExecutionOutcome<Vec<u8>, Amount>),
@@ -928,11 +925,15 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self.user_services
     }
 
+    fn blobs(&self) -> &Arc<DashMap<BlobId, Blob>> {
+        &self.blobs
+    }
+
     async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        let application_id = description.into();
+        let application_id = UserApplicationId::try_from(description)?;
         Ok(self
             .user_contracts()
             .get(&application_id)
@@ -946,7 +947,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let application_id = description.into();
+        let application_id = UserApplicationId::try_from(description)?;
         Ok(self
             .user_services()
             .get(&application_id)
@@ -958,14 +959,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
         Ok(self
-            .blobs
+            .blobs()
             .get(&blob_id)
             .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
             .clone())
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        Ok(self.blobs.contains_key(&blob_id))
+        Ok(self.blobs().contains_key(&blob_id))
     }
 }
 

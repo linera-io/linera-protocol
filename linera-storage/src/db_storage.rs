@@ -215,6 +215,7 @@ pub struct DbStorage<Store, Clock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    blobs: Arc<DashMap<BlobId, Blob>>,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
@@ -377,6 +378,7 @@ where
             execution_runtime_config: self.execution_runtime_config,
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
+            blobs: self.blobs.clone(),
         };
         let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
         let store = self.store.clone_with_root_key(&root_key)?;
@@ -467,9 +469,8 @@ where
         let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_bytes =
-            maybe_blob_bytes.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
-        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
+        let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobNotFoundOnRead(blob_id))?;
+        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes)?)
     }
 
     async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
@@ -487,9 +488,11 @@ where
             .iter()
             .zip(maybe_blob_bytes)
             .map(|(blob_id, maybe_blob_bytes)| {
-                maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
+                maybe_blob_bytes
+                    .map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
+                    .transpose()
             })
-            .collect())
+            .collect::<Result<Vec<Option<Blob>>, _>>()?)
     }
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
@@ -679,7 +682,7 @@ where
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
-        batch.put_key_value(blob_key.to_vec(), &blob.inner_bytes())?;
+        batch.put_key_value(blob_key.to_vec(), &blob.inner_bytes()?)?;
         Ok(())
     }
 
@@ -719,6 +722,7 @@ where
             wasm_runtime,
             user_contracts: Arc::new(DashMap::new()),
             user_services: Arc::new(DashMap::new()),
+            blobs: Arc::new(DashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }

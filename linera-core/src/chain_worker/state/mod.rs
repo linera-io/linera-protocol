@@ -16,7 +16,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -159,17 +159,6 @@ where
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .query_application(query)
-            .await
-    }
-
-    /// Returns an application's description.
-    pub(super) async fn describe_application(
-        &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
-            .await
-            .describe_application(application_id)
             .await
     }
 
@@ -345,20 +334,60 @@ where
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
-    /// chain or in the `recent_blobs` cache.
+    /// chain, in the `recent_blobs` cache or in storage.
     async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
         let pending_blobs = &self.chain.manager.get().pending_blobs;
         let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
             self.recent_blobs.try_get_many(blob_ids).await;
 
         let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
+        let mut missing_blobs = Vec::new();
         for blob_id in not_found_blobs {
             if let Some(blob) = pending_blobs.get(&blob_id) {
                 blobs.push(blob.clone());
+            } else if let Ok(blob) = self.storage.read_blob(blob_id).await {
+                blobs.push(blob);
+            } else {
+                missing_blobs.push(blob_id);
             }
         }
 
-        Ok(blobs)
+        if missing_blobs.is_empty() {
+            Ok(blobs)
+        } else {
+            Err(WorkerError::BlobsNotFound(missing_blobs))
+        }
+    }
+
+    async fn get_pending_application_descriptions(
+        &self,
+        application_ids: HashSet<ApplicationId>,
+    ) -> Result<BTreeMap<ApplicationId, UserApplicationDescription>, WorkerError> {
+        let blob_id_to_application_id = application_ids
+            .into_iter()
+            .map(|application_id| {
+                (
+                    BlobId::new(
+                        application_id.application_description_hash,
+                        BlobType::ApplicationDescription,
+                    ),
+                    application_id,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        Ok(self
+            .get_blobs(blob_id_to_application_id.keys().copied().collect())
+            .await?
+            .into_iter()
+            .map(|blob| {
+                (
+                    blob_id_to_application_id[&blob.id()],
+                    blob.into_inner_application_description()
+                        .expect("Should be an application description blob!"),
+                )
+            })
+            .collect())
     }
 
     /// Inserts a [`Blob`] into the worker's cache.

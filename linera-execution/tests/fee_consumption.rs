@@ -5,12 +5,12 @@
 
 #![allow(clippy::items_after_test_module)]
 
-use std::{sync::Arc, vec};
+use std::{collections::BTreeMap, sync::Arc, vec};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
+    identifiers::{Account, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
     test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
@@ -130,7 +130,7 @@ async fn test_fee_consumption(
     }
 
     let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
-    let (application_id, application) = applications
+    let (application_id, application, contract_blob, service_blob) = applications
         .next()
         .expect("Caller mock application should be registered");
 
@@ -194,7 +194,18 @@ async fn test_fee_consumption(
         message_id: MessageId::default(),
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(vec![
+            OracleResponse::Blob(contract_blob.id()),
+            OracleResponse::Blob(service_blob.id()),
+            OracleResponse::Blob(BlobId::new(
+                application_id.application_description_hash,
+                BlobType::ApplicationDescription,
+            )),
+        ]),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_message(
         context,
         Timestamp::from(0),

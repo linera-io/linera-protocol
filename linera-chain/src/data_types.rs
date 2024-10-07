@@ -10,8 +10,8 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
-        Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
-        MessageId, Owner, StreamId,
+        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, Destination,
+        GenericApplicationId, MessageId, Owner, StreamId,
     },
 };
 use linera_execution::{
@@ -74,9 +74,51 @@ impl Block {
                     BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode),
                 ]);
             }
+            if let Operation::System(SystemOperation::CreateApplication {
+                application_id, ..
+            }) = operation
+            {
+                blob_ids.insert(BlobId::new(
+                    application_id.application_description_hash,
+                    BlobType::ApplicationDescription,
+                ));
+            }
         }
 
         blob_ids
+    }
+
+    /// Returns all the published application blob IDs in this block's operations.
+    pub fn published_application_blob_ids(&self) -> HashSet<BlobId> {
+        let mut blob_ids = HashSet::new();
+        for operation in &self.operations {
+            if let Operation::System(SystemOperation::CreateApplication {
+                application_id, ..
+            }) = operation
+            {
+                blob_ids.insert(BlobId::new(
+                    application_id.application_description_hash,
+                    BlobType::ApplicationDescription,
+                ));
+            }
+        }
+
+        blob_ids
+    }
+
+    /// Returns all the published application IDs in this block's operations.
+    pub fn published_application_ids(&self) -> HashSet<ApplicationId> {
+        let mut application_ids = HashSet::new();
+        for operation in &self.operations {
+            if let Operation::System(SystemOperation::CreateApplication {
+                application_id, ..
+            }) = operation
+            {
+                application_ids.insert(*application_id);
+            }
+        }
+
+        application_ids
     }
 
     /// Returns whether the block contains only rejected incoming messages, which

@@ -17,8 +17,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner, StreamId,
-        UserApplicationId,
+        ApplicationId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
+        StreamId, UserApplicationId,
     },
 };
 use linera_execution::{
@@ -393,20 +393,6 @@ where
         Ok(response)
     }
 
-    pub async fn describe_application(
-        &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, ChainError> {
-        self.execution_state
-            .system
-            .registry
-            .describe_application(application_id)
-            .await
-            .map_err(|err| {
-                ChainError::ExecutionError(err.into(), ChainExecutionContext::DescribeApplication)
-            })
-    }
-
     pub async fn mark_messages_as_received(
         &mut self,
         target: &Target,
@@ -692,6 +678,7 @@ where
         block: &Block,
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+        pending_applications: BTreeMap<ApplicationId, UserApplicationDescription>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
         #[cfg(with_metrics)]
         let _execution_latency = BLOCK_EXECUTION_LATENCY.measure_latency();
@@ -788,6 +775,8 @@ where
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut messages = Vec::new();
+        let pending_applications = Arc::new(pending_applications);
+        let mut operation_index = 0;
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -800,7 +789,11 @@ where
                 Some(None) => return Err(ChainError::MissingOracleResponseList),
                 None => None,
             };
-            let mut txn_tracker = TransactionTracker::new(next_message_index, maybe_responses);
+            let mut txn_tracker = TransactionTracker::new(
+                next_message_index,
+                maybe_responses,
+                pending_applications.clone(),
+            );
             match transaction {
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     resource_controller
@@ -829,10 +822,12 @@ where
                     let context = OperationContext {
                         chain_id,
                         height: block.height,
-                        index: Some(txn_index),
+                        txn_index: Some(txn_index),
+                        operation_index: Some(operation_index),
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
                     };
+                    operation_index += 1;
                     self.execution_state
                         .execute_operation(
                             context,
@@ -851,10 +846,6 @@ where
                 }
             }
 
-            self.execution_state
-                .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-                .await
-                .map_err(with_context)?;
             let (txn_outcomes, txn_oracle_responses, new_next_message_index) =
                 txn_tracker.destructure().map_err(with_context)?;
             next_message_index = new_next_message_index;

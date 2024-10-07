@@ -11,8 +11,8 @@ use std::{
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    data_types::{Blob, BlockHeight, Timestamp},
+    identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -67,12 +67,6 @@ where
     QueryApplication {
         query: Query,
         callback: oneshot::Sender<Result<Response, WorkerError>>,
-    },
-
-    /// Describe an application.
-    DescribeApplication {
-        application_id: UserApplicationId,
-        callback: oneshot::Sender<Result<UserApplicationDescription, WorkerError>>,
     },
 
     /// Execute a block but discard any changes to the chain state.
@@ -247,12 +241,6 @@ where
                 ChainWorkerRequest::QueryApplication { query, callback } => callback
                     .send(self.worker.query_application(query).await)
                     .is_ok(),
-                ChainWorkerRequest::DescribeApplication {
-                    application_id,
-                    callback,
-                } => callback
-                    .send(self.worker.describe_application(application_id).await)
-                    .is_ok(),
                 ChainWorkerRequest::StageBlockExecution { block, callback } => callback
                     .send(self.worker.stage_block_execution(block).await)
                     .is_ok(),
@@ -364,13 +352,6 @@ where
             } => formatter
                 .debug_struct("ChainWorkerRequest::QueryApplication")
                 .field("query", &query)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::DescribeApplication {
-                application_id,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::DescribeApplication")
-                .field("application_id", &application_id)
                 .finish_non_exhaustive(),
             ChainWorkerRequest::StageBlockExecution {
                 block,

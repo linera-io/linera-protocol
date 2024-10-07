@@ -31,7 +31,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
-* [`linera request-application`↴](#linera-request-application)
 * [`linera keygen`↴](#linera-keygen)
 * [`linera assign`↴](#linera-assign)
 * [`linera retry-pending-block`↴](#linera-retry-pending-block)
@@ -83,7 +82,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
-* `request-application` — Request an application from another chain, so it can be used on this one
 * `keygen` — Create an unassigned key-pair
 * `assign` — Link a key owned by the wallet to a chain that was just created for that key
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
@@ -624,23 +622,6 @@ Create an application, and publish the required bytecode
 * `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
 * `--json-argument-path <JSON_ARGUMENT_PATH>` — Path to a JSON file containing the instantiation argument
 * `--required-application-ids <REQUIRED_APPLICATION_IDS>` — The list of required dependencies of application, if any
-
-
-
-## `linera request-application`
-
-Request an application from another chain, so it can be used on this one
-
-**Usage:** `linera request-application [OPTIONS] <APPLICATION_ID>`
-
-###### **Arguments:**
-
-* `<APPLICATION_ID>` — The ID of the application to request
-
-###### **Options:**
-
-* `--target-chain-id <TARGET_CHAIN_ID>` — The target chain on which the application is already registered. If not specified, the chain on which the application was created is used
-* `--requester-chain-id <REQUESTER_CHAIN_ID>` — The owned chain on which the application is missing
 
 
 

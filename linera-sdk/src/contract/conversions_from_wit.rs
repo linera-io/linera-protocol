@@ -30,10 +30,10 @@ impl From<wit_system_api::MessageId> for MessageId {
 
 impl From<wit_system_api::ApplicationId> for ApplicationId {
     fn from(application_id: wit_system_api::ApplicationId) -> Self {
-        ApplicationId {
-            bytecode_id: application_id.bytecode_id.into(),
-            creation: application_id.creation.into(),
-        }
+        ApplicationId::new(
+            application_id.application_description_hash.into(),
+            application_id.bytecode_id.into(),
+        )
     }
 }
 

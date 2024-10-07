@@ -3,12 +3,12 @@
 
 #![cfg(with_wasm_runtime)]
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
+    identifiers::{Account, ChainDescription, ChainId, UserApplicationId},
 };
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
@@ -41,12 +41,10 @@ async fn test_fuel_for_counter_wasm_application(
     let mut view = state
         .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
         .await;
-    let app_desc = create_dummy_user_application_description(1);
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
+    let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
+    let app_id = UserApplicationId::try_from(&app_desc)?;
+
+    let app_blob = Blob::new_application_description(app_desc)?;
 
     let contract =
         WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
@@ -62,12 +60,27 @@ async fn test_fuel_for_counter_wasm_application(
         .user_services()
         .insert(app_id, service.into());
 
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+    let app_blob_id = app_blob.id();
+
+    view.context()
+        .extra()
+        .blobs()
+        .insert(contract_blob_id, contract_blob);
+    view.context()
+        .extra()
+        .blobs()
+        .insert(service_blob_id, service_blob);
+    view.context().extra().blobs().insert(app_blob_id, app_blob);
+
     let app_id = app_id.with_abi::<CounterAbi>();
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
-        index: Some(0),
+        txn_index: Some(0),
+        operation_index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
     };
@@ -83,12 +96,21 @@ async fn test_fuel_for_counter_wasm_application(
         tracker: ResourceTracker::default(),
         account: None,
     };
+
     for increment in &increments {
         let account = Account {
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(
+            0,
+            Some(vec![
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+                OracleResponse::Blob(app_blob_id),
+            ]),
+            Arc::new(BTreeMap::new()),
+        );
         view.execute_operation(
             context,
             Timestamp::from(0),

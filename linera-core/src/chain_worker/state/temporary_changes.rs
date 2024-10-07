@@ -6,9 +6,9 @@
 use std::borrow::Cow;
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
+    data_types::{ArithmeticError, Timestamp},
     ensure,
-    identifiers::{GenericApplicationId, UserApplicationId},
+    identifiers::GenericApplicationId,
 };
 use linera_chain::{
     data_types::{
@@ -107,16 +107,6 @@ where
         Ok(response)
     }
 
-    /// Returns an application's description.
-    pub(super) async fn describe_application(
-        &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
-        self.0.ensure_is_active()?;
-        let response = self.0.chain.describe_application(application_id).await?;
-        Ok(response)
-    }
-
     /// Executes a block without persisting any changes to the state.
     pub(super) async fn stage_block_execution(
         &mut self,
@@ -125,9 +115,18 @@ where
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
-        let executed_block = Box::pin(self.0.chain.execute_block(&block, local_time, None))
-            .await?
-            .with(block);
+        let pending_applications = self
+            .0
+            .get_pending_application_descriptions(block.published_application_ids())
+            .await?;
+        let executed_block = Box::pin(self.0.chain.execute_block(
+            &block,
+            local_time,
+            None,
+            pending_applications,
+        ))
+        .await?
+        .with(block);
 
         let mut response = ChainInfoResponse::new(&self.0.chain, None);
         if let Some(signer) = signer {
@@ -221,10 +220,15 @@ where
         );
         self.0.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.0.storage.clock().current_time();
+        let pending_applications = self
+            .0
+            .get_pending_application_descriptions(block.published_application_ids())
+            .await?;
         let outcome = Box::pin(self.0.chain.execute_block(
             block,
             local_time,
             forced_oracle_responses.clone(),
+            pending_applications,
         ))
         .await?;
         if let Some(lite_certificate) = &validated_block_certificate {

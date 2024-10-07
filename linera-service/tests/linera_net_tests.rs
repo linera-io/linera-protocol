@@ -607,16 +607,6 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .run_node_service(port2, ProcessInbox::Automatic)
         .await?;
 
-    // Request the application so chain 2 has it, too.
-    node_service2
-        .request_application(&chain2, &application_id)
-        .await?;
-
-    // First chain1 receives the request for application and then
-    // chain2 receives the requested application
-    node_service1.process_inbox(&chain1).await?;
-    node_service2.process_inbox(&chain2).await?;
-
     let app2 = node_service2
         .make_application(&chain2, &application_id)
         .await?;
@@ -625,6 +615,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
         .await?;
 
     node_service1.process_inbox(&chain1).await?;
+    node_service2.process_inbox(&chain2).await?;
 
     // The returned hash should now be the latest one.
     let query = format!("query {{ chain(chainId: \"{chain2}\") {{ tipState {{ blockHash }} }} }}");
@@ -743,8 +734,12 @@ async fn test_wasm_end_to_end_fungible(
             .await?,
     );
 
-    // Needed synchronization though removing it does not get error in 100% of cases.
-    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    if example_name == "native-fungible" {
+        // native-fungible needs to do transfers on instantiation to properly set
+        // the initial balances of the accounts. So we'll have a `Credit` message being
+        // processed here.
+        assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    }
 
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
@@ -913,8 +908,12 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
             .await?,
     );
 
-    // Needed synchronization though removing it does not get error in 100% of cases.
-    assert_eq!(node_service.process_inbox(&chain1).await?.len(), 1);
+    if example_name == "native-fungible" {
+        // native-fungible needs to do transfers on instantiation to properly set
+        // the initial balances of the accounts. So we'll have a `Credit` message being
+        // processed here.
+        assert_eq!(node_service.process_inbox(&chain1).await?.len(), 1);
+    }
 
     let expected_balances = [
         (account_owner1, Amount::from_tokens(5)),
@@ -1305,7 +1304,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
             // TODO(#723): This hack will disappear soon.
             &application_id_fungible,
             &state_crowd,
-            &[application_id_fungible.forget_abi()],
+            &[],
             None,
         )
         .await?;
@@ -1337,14 +1336,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         )
         .await;
 
-    // Register the campaign on chain2.
-    node_service2
-        .request_application(&chain2, &application_id_crowd)
-        .await?;
-
-    // Chain2 requests the application from chain1, so chain1 has
-    // to receive the request and then chain2 receive the answer.
-    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     let app_crowd2 = node_service2
@@ -1402,8 +1393,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     client_b.wallet_init(&[], FaucetOption::None).await?;
 
     // Create initial server and client config.
-    let (contract_fungible_a, service_fungible_a) = client_a.build_example("fungible").await?;
-    let (contract_fungible_b, service_fungible_b) = client_b.build_example("fungible").await?;
+    let (contract_fungible, service_fungible) = client_a.build_example("fungible").await?;
     let (contract_matching, service_matching) =
         client_admin.build_example("matching-engine").await?;
 
@@ -1425,30 +1415,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         accounts: accounts1,
     };
 
-    // Setting up the application fungible on chain_a and chain_b
-    let params0 = fungible::Parameters::new("ZERO");
-    let token0 = client_a
-        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-            contract_fungible_a,
-            service_fungible_a,
-            &params0,
-            &state_fungible0,
-            &[],
-            None,
-        )
-        .await?;
-    let params1 = fungible::Parameters::new("ONE");
-    let token1 = client_b
-        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-            contract_fungible_b,
-            service_fungible_b,
-            &params1,
-            &state_fungible1,
-            &[],
-            None,
-        )
-        .await?;
-
     // Now creating the service and exporting the applications
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
@@ -1459,29 +1425,38 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
 
-    node_service_a
-        .request_application(&chain_a, &token1)
-        .await?;
-    node_service_b
-        .request_application(&chain_b, &token0)
-        .await?;
-    node_service_admin
-        .request_application(&chain_admin, &token0)
-        .await?;
-    node_service_admin
-        .request_application(&chain_admin, &token1)
-        .await?;
+    // Setting up the application fungible on chain_a and chain_b
+    let fungible_bytecode_id = node_service_admin
+        .publish_bytecode::<
+            fungible::FungibleTokenAbi,
+            fungible::Parameters,
+            fungible::InitialState
+        >(&chain_admin, contract_fungible, service_fungible).await?;
 
-    // In an operation node_service_a.request_application(&chain_a, app_b)
-    // chain_b needs to process the request first and then chain_a
-    // the answer.
-    node_service_a.process_inbox(&chain_a).await?;
-    node_service_b.process_inbox(&chain_b).await?;
-    node_service_a.process_inbox(&chain_a).await?;
-    node_service_admin.process_inbox(&chain_admin).await?;
+    let params0 = fungible::Parameters::new("ZERO");
+    let token0 = node_service_a
+        .create_application(
+            &chain_a,
+            &fungible_bytecode_id,
+            &params0,
+            &state_fungible0,
+            &[],
+        )
+        .await?;
+    let params1 = fungible::Parameters::new("ONE");
+    let token1 = node_service_b
+        .create_application(
+            &chain_b,
+            &fungible_bytecode_id,
+            &params1,
+            &state_fungible1,
+            &[],
+        )
+        .await?;
 
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
+
     let app_fungible0_b = FungibleApp(node_service_b.make_application(&chain_b, &token0).await?);
     let app_fungible1_b = FungibleApp(node_service_b.make_application(&chain_b, &token1).await?);
     app_fungible0_a
@@ -1498,6 +1473,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             (owner_admin, Amount::ZERO),
         ])
         .await;
+
     let app_fungible0_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token0)
@@ -1535,34 +1511,13 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         )
         .await?;
     let application_id_matching = node_service_admin
-        .create_application(
-            &chain_admin,
-            &bytecode_id,
-            &parameter,
-            &(),
-            &[token0.forget_abi(), token1.forget_abi()],
-        )
+        .create_application(&chain_admin, &bytecode_id, &parameter, &(), &[])
         .await?;
     let app_matching_admin = MatchingEngineApp(
         node_service_admin
             .make_application(&chain_admin, &application_id_matching)
             .await?,
     );
-    node_service_a
-        .request_application(&chain_a, &application_id_matching)
-        .await?;
-    node_service_b
-        .request_application(&chain_b, &application_id_matching)
-        .await?;
-
-    // First chain_admin needs to process the two requests and
-    // then chain_a / chain_b the answers.
-    assert_eq!(
-        node_service_admin.process_inbox(&chain_admin).await?.len(),
-        1
-    );
-    assert_eq!(node_service_a.process_inbox(&chain_a).await?.len(), 1);
-    assert_eq!(node_service_b.process_inbox(&chain_b).await?.len(), 1);
 
     let app_matching_a = MatchingEngineApp(
         node_service_a
@@ -1876,13 +1831,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
         .publish_bytecode::<AmmAbi, Parameters, ()>(&chain_amm, contract_amm, service_amm)
         .await?;
     let application_id_amm = node_service_amm
-        .create_application(
-            &chain_amm,
-            &bytecode_id,
-            &parameters,
-            &(),
-            &[token0.forget_abi(), token1.forget_abi()],
-        )
+        .create_application(&chain_amm, &bytecode_id, &parameters, &(), &[])
         .await?;
 
     let owner_amm_app = AccountOwner::Application(application_id_amm.forget_abi());
@@ -1893,18 +1842,6 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
             .make_application(&chain_amm, &application_id_amm)
             .await?,
     );
-    node_service0
-        .request_application(&chain0, &application_id_amm)
-        .await?;
-    node_service1
-        .request_application(&chain1, &application_id_amm)
-        .await?;
-
-    // The chain_amm must first requests those two requests
-    // and then chain0 / chain1 must handle the answers.
-    assert_eq!(node_service_amm.process_inbox(&chain_amm).await?.len(), 1);
-    assert_eq!(node_service0.process_inbox(&chain0).await?.len(), 1);
-    assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
 
     let app_amm0 = AmmApp(
         node_service0

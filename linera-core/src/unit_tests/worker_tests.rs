@@ -3601,7 +3601,7 @@ where
         chain.save().await?;
     }
 
-    let (application_id, application) = applications
+    let (application_id, application, _, _) = applications
         .next()
         .expect("Mock application should be registered");
 
@@ -3691,7 +3691,7 @@ where
         chain.save().await?;
     }
 
-    let (application_id, application) = applications
+    let (application_id, application, _, _) = applications
         .next()
         .expect("Mock application should be registered");
 

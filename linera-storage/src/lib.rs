@@ -296,7 +296,7 @@ pub trait Storage: Sized {
         );
         let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
         let compressed_contract_bytecode = CompressedBytecode {
-            compressed_bytes: contract_blob.inner_bytes(),
+            compressed_bytes: contract_blob.inner_bytes()?,
         };
         let contract_bytecode =
             linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
@@ -335,7 +335,7 @@ pub trait Storage: Sized {
         );
         let service_blob = self.read_blob(service_bytecode_blob_id).await?;
         let compressed_service_bytecode = CompressedBytecode {
-            compressed_bytes: service_blob.inner_bytes(),
+            compressed_bytes: service_blob.inner_bytes()?,
         };
         let service_bytecode =
             linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
@@ -366,6 +366,7 @@ pub struct ChainRuntimeContext<S> {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
+    blobs: Arc<DashMap<BlobId, Blob>>,
 }
 
 #[async_trait]
@@ -389,11 +390,18 @@ where
         &self.user_services
     }
 
+    fn blobs(&self) -> &Arc<DashMap<BlobId, Blob>> {
+        &self.blobs
+    }
+
     async fn get_user_contract(
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
-        match self.user_contracts.entry(description.into()) {
+        match self
+            .user_contracts
+            .entry(UserApplicationId::try_from(description)?)
+        {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
                 let contract = self.storage.load_contract(description).await?;
@@ -407,7 +415,10 @@ where
         &self,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
-        match self.user_services.entry(description.into()) {
+        match self
+            .user_services
+            .entry(UserApplicationId::try_from(description)?)
+        {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
                 let service = self.storage.load_service(description).await?;
@@ -418,11 +429,22 @@ where
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
-        Ok(self.storage.read_blob(blob_id).await?)
+        match self.blobs.entry(blob_id) {
+            Entry::Occupied(entry) => Ok(entry.get().clone()),
+            Entry::Vacant(entry) => {
+                let blob = self.storage.read_blob(blob_id).await?;
+                entry.insert(blob.clone());
+                Ok(blob)
+            }
+        }
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        self.storage.contains_blob(blob_id).await
+        if self.blobs.contains_key(&blob_id) {
+            Ok(true)
+        } else {
+            self.storage.contains_blob(blob_id).await
+        }
     }
 }
 

@@ -1420,7 +1420,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::BlobNotFound(not_found_blob_id)) if not_found_blob_id == blob0_id
+        Err(ChainClientError::BlobsNotFound(not_found_blob_ids)) if not_found_blob_ids.contains(&blob0_id)
     );
 
     // Take one validator down
@@ -1462,10 +1462,10 @@ where
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
-    let blob1 = Blob::new_data(b"blob1".to_vec());
+    let blob1 = Blob::new_data(b"blob1".to_vec())?;
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1]).await;
+    client2_a.add_pending_blobs(vec![blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1606,10 +1606,10 @@ where
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
-    let blob1 = Blob::new_data(b"blob1".to_vec());
+    let blob1 = Blob::new_data(b"blob1".to_vec())?;
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1]).await;
+    client2_a.add_pending_blobs(vec![blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1783,10 +1783,10 @@ where
         .await;
 
     client3_a.synchronize_from_validators().await.unwrap();
-    let blob1 = Blob::new_data(b"blob1".to_vec());
+    let blob1 = Blob::new_data(b"blob1".to_vec())?;
     let blob1_hash = blob1.id().hash;
 
-    client3_a.add_pending_blobs([blob1]).await;
+    client3_a.add_pending_blobs(vec![blob1]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1858,10 +1858,10 @@ where
         .await;
 
     client3_b.synchronize_from_validators().await.unwrap();
-    let blob3 = Blob::new_data(b"blob3".to_vec());
+    let blob3 = Blob::new_data(b"blob3".to_vec())?;
     let blob3_hash = blob3.id().hash;
 
-    client3_b.add_pending_blobs([blob3]).await;
+    client3_b.add_pending_blobs(vec![blob3]).await;
     let blob_2_3_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
         Operation::System(SystemOperation::PublishDataBlob {

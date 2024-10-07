@@ -14,9 +14,9 @@ use std::{
 use linera_base::crypto::PublicKey;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, Blob, BlockHeight, Round, UserApplicationDescription},
+    data_types::{ArithmeticError, Blob, BlockHeight, Round},
     doc_scalar,
-    identifiers::{BlobId, ChainId, Owner, UserApplicationId},
+    identifiers::{BlobId, ChainId, Owner},
     time::timer::{sleep, timeout},
 };
 use linera_chain::{
@@ -492,21 +492,6 @@ where
     ) -> Result<Response, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::QueryApplication { query, callback }
-        })
-        .await
-    }
-
-    #[tracing::instrument(level = "trace", skip(self, chain_id, application_id))]
-    pub async fn describe_application(
-        &self,
-        chain_id: ChainId,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
-        self.query_chain_worker(chain_id, move |callback| {
-            ChainWorkerRequest::DescribeApplication {
-                application_id,
-                callback,
-            }
         })
         .await
     }

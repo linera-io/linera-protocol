@@ -10,28 +10,23 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use linera_base::{
     crypto::KeyPair,
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
-    identifiers::{
-        BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
-    },
+    identifiers::{BytecodeId, ChainDescription, ChainId, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, HashedCertificateValue, OutgoingMessage},
+    data_types::{BlockExecutionOutcome, HashedCertificateValue},
     test::{make_child_block, make_first_block, BlockTestExt},
 };
 use linera_execution::{
-    committee::Epoch,
-    system::{SystemMessage, SystemOperation},
-    test_utils::SystemExecutionState,
-    Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState, Operation,
+    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -115,8 +110,8 @@ where
     let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
     let service_bytecode = Bytecode::load_from_file(service_path).await?;
 
-    let contract_blob = Blob::new_contract_bytecode(contract_bytecode.clone().compress());
-    let service_blob = Blob::new_service_bytecode(service_bytecode.compress());
+    let contract_blob = Blob::new_contract_bytecode(contract_bytecode.clone().compress())?;
+    let service_blob = Blob::new_service_bytecode(service_bytecode.compress())?;
 
     let contract_blob_id = contract_blob.id();
     let service_blob_id = service_blob.id();
@@ -158,7 +153,7 @@ where
         .await;
 
     let info = worker
-        .fully_handle_certificate(publish_certificate.clone(), vec![service_blob])
+        .fully_handle_certificate(publish_certificate.clone(), vec![service_blob.clone()])
         .await
         .unwrap()
         .info;
@@ -180,33 +175,30 @@ where
     let initial_value = 10_u64;
     let initial_value_bytes = serde_json::to_vec(&initial_value)?;
     let parameters_bytes = serde_json::to_vec(&())?;
-    let create_operation = SystemOperation::CreateApplication {
-        bytecode_id,
-        parameters: parameters_bytes.clone(),
-        instantiation_argument: initial_value_bytes.clone(),
-        required_application_ids: vec![],
-    };
-    let application_id = UserApplicationId {
-        bytecode_id,
-        creation: MessageId {
-            chain_id: creator_chain.into(),
-            height: BlockHeight::from(0),
-            index: 0,
-        },
-    };
+
     let application_description = UserApplicationDescription {
         bytecode_id,
-        creation: application_id.creation,
+        creator_chain_id: creator_chain.into(),
+        block_height: BlockHeight(0),
+        operation_index: 0,
         required_application_ids: vec![],
-        parameters: parameters_bytes,
+        parameters: parameters_bytes.clone(),
+    };
+    let application_id = UserApplicationId::try_from(&application_description)?;
+
+    let app_blob = Blob::new_application_description(application_description.clone())?;
+
+    let create_operation = SystemOperation::CreateApplication {
+        application_id,
+        creator_chain_id: application_description.creator_chain_id,
+        block_height: application_description.block_height,
+        operation_index: application_description.operation_index,
+        instantiation_argument: initial_value_bytes.clone(),
+        required_application_ids: vec![],
     };
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
         .with_operation(create_operation);
-    creator_system_state
-        .registry
-        .known_applications
-        .insert(application_id, application_description.clone());
     creator_system_state.timestamp = Timestamp::from(2);
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
@@ -215,31 +207,28 @@ where
             Timestamp::from(2),
             application_description,
             initial_value_bytes.clone(),
+            contract_blob,
+            service_blob,
         )
         .await?;
+    let oracle_responses = vec![
+        OracleResponse::Blob(contract_blob_id),
+        OracleResponse::Blob(service_blob_id),
+        OracleResponse::Blob(app_blob.id()),
+    ];
     let create_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(creator_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::ApplicationCreated),
-            }]],
+            messages: vec![Vec::new()],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![vec![
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-            ]],
+            oracle_responses: vec![oracle_responses.clone()],
         }
         .with(create_block),
     );
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(create_certificate.clone(), vec![])
+        .fully_handle_certificate(create_certificate.clone(), vec![app_blob])
         .await
         .unwrap()
         .info;
@@ -264,7 +253,8 @@ where
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: run_block.height,
-        index: Some(0),
+        txn_index: Some(0),
+        operation_index: Some(0),
     };
     let mut controller = ResourceController::default();
     creator_state
@@ -275,7 +265,11 @@ where
                 application_id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                Some(oracle_responses.clone()),
+                Arc::new(BTreeMap::new()),
+            ),
             &mut controller,
         )
         .await?;
@@ -285,7 +279,7 @@ where
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![Vec::new()],
+            oracle_responses: vec![oracle_responses],
         }
         .with(run_block),
     );

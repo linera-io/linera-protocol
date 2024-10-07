@@ -17,7 +17,7 @@ use dashmap::{
     DashMap,
 };
 use futures::{
-    future::{self, FusedFuture, Future},
+    future::{self, try_join_all, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -29,11 +29,11 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
+        UserApplicationDescription,
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
-        UserApplicationId,
+        Account, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -49,7 +49,7 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
-        CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
+        OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
     SystemQuery, SystemResponse,
@@ -466,6 +466,9 @@ pub enum ChainClientError {
     #[error(transparent)]
     CommunicationError(#[from] CommunicationError<NodeError>),
 
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
     #[error("Internal error within chain client: {0}")]
     InternalError(&'static str),
 
@@ -499,8 +502,8 @@ pub enum ChainClientError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Blob not found: {0}")]
-    BlobNotFound(BlobId),
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1492,21 +1495,12 @@ where
                 .handle_block_proposal(*proposal.clone())
                 .await
             {
-                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
-                    &original_err
-                {
-                    if let ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
-                            blob_id,
-                        )),
-                        _,
-                    ) = &**chain_error
-                    {
-                        self.update_local_node_with_blob_from(*blob_id, remote_node)
-                            .await?;
-                        continue; // We found the missing blob: retry.
-                    }
+                if let Some(blob_ids) = original_err.get_blobs_not_found() {
+                    self.update_local_node_with_blobs_from(blob_ids, remote_node)
+                        .await?;
+                    continue; // We found the missing blobs: retry.
                 }
+
                 warn!(
                     "Skipping proposal from {} and validator {}: {}",
                     owner, remote_node.name, original_err
@@ -1542,40 +1536,77 @@ where
 
     /// Downloads and processes from the specified validator a confirmed block certificate that
     /// uses the given blob. If this succeeds, the blob will be in our storage.
-    async fn update_local_node_with_blob_from(
+    async fn update_local_node_with_blobs_from(
         &self,
-        blob_id: BlobId,
+        blob_ids: Vec<BlobId>,
         remote_node: &RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
-        let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
-        // This will download all ancestors of the certificate and process all of them locally.
-        self.receive_certificate(certificate).await?;
+        try_join_all(blob_ids.into_iter().map(|blob_id| async move {
+            let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+            // This will download all ancestors of the certificate and process all of them locally.
+            self.receive_certificate(certificate).await
+        }))
+        .await?;
+
         Ok(())
     }
 
     /// Downloads and processes a confirmed block certificate that uses the given blob.
     /// If this succeeds, the blob will be in our storage.
-    async fn receive_certificate_for_blob(&self, blob_id: BlobId) -> Result<(), ChainClientError> {
-        let validators = self.validator_nodes().await?;
-        let mut tasks = FuturesUnordered::new();
-        for remote_node in validators {
-            let remote_node = remote_node.clone();
-            tasks.push(async move {
-                let cert = remote_node
-                    .download_certificate_for_blob(blob_id)
-                    .await
-                    .ok()?;
-                self.receive_certificate(cert).await.ok()
-            });
-        }
+    pub async fn receive_certificate_for_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<(), ChainClientError> {
+        self.receive_certificates_for_blobs(vec![blob_id]).await
+    }
 
-        while let Some(result) = tasks.next().await {
-            if result.is_some() {
-                return Ok(());
+    /// Downloads and processes confirmed block certificates that use the given blobs.
+    /// If this succeeds, the blobs will be in our storage.
+    pub async fn receive_certificates_for_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<(), ChainClientError> {
+        let validators = self.validator_nodes().await?;
+        let mut tasks = BTreeMap::new();
+
+        for blob_id in blob_ids {
+            if tasks.contains_key(&blob_id) {
+                continue;
+            }
+
+            tasks.insert(blob_id, FuturesUnordered::new());
+            for remote_node in validators.clone() {
+                let remote_node = remote_node.clone();
+                tasks[&blob_id].push(async move {
+                    let cert = remote_node
+                        .download_certificate_for_blob(blob_id)
+                        .await
+                        .ok()?;
+                    self.receive_certificate(cert).await.ok()
+                });
             }
         }
 
-        Err(ChainClientError::BlobNotFound(blob_id))
+        let mut missing_blobs = Vec::new();
+        for (blob_id, mut blob_id_tasks) in tasks {
+            let mut found_blob = false;
+            while let Some(result) = blob_id_tasks.next().await {
+                if result.is_some() {
+                    found_blob = true;
+                    break;
+                }
+            }
+
+            if !found_blob {
+                missing_blobs.push(blob_id);
+            }
+        }
+
+        if missing_blobs.is_empty() {
+            Ok(())
+        } else {
+            Err(ChainClientError::BlobsNotFound(missing_blobs))
+        }
     }
 
     /// Attempts to execute the block locally. If any incoming message execution fails, that
@@ -1633,14 +1664,9 @@ where
                 .local_node
                 .stage_block_execution(block.clone())
                 .await;
-            if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
-            {
-                if let ChainError::ExecutionError(
-                    ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
-                    _,
-                ) = &**chain_error
-                {
-                    self.receive_certificate_for_blob(*blob_id).await?;
+            if let Err(err) = &result {
+                if let Some(blob_ids) = err.get_blobs_not_found() {
+                    self.receive_certificates_for_blobs(blob_ids).await?;
                     continue; // We found the missing blob: retry.
                 }
             }
@@ -1946,12 +1972,20 @@ where
     /// Queries an application.
     #[tracing::instrument(level = "trace", skip(query))]
     pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
-        let response = self
-            .client
-            .local_node
-            .query_application(self.chain_id, query)
-            .await?;
-        Ok(response)
+        loop {
+            let result = self
+                .client
+                .local_node
+                .query_application(self.chain_id, query.clone())
+                .await;
+            if let Err(err) = &result {
+                if let Some(blob_ids) = err.get_blobs_not_found() {
+                    self.receive_certificates_for_blobs(blob_ids).await?;
+                    continue; // We found the missing blob: retry.
+                }
+            }
+            return Ok(result?);
+        }
     }
 
     /// Queries a system application.
@@ -1960,11 +1994,7 @@ where
         &self,
         query: SystemQuery,
     ) -> Result<SystemResponse, ChainClientError> {
-        let response = self
-            .client
-            .local_node
-            .query_application(self.chain_id, Query::System(query))
-            .await?;
+        let response = self.query_application(Query::System(query)).await?;
         match response {
             Response::System(response) => Ok(response),
             _ => Err(ChainClientError::InternalError(
@@ -1981,11 +2011,7 @@ where
         query: &A::Query,
     ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let response = self
-            .client
-            .local_node
-            .query_application(self.chain_id, query)
-            .await?;
+        let response = self.query_application(query).await?;
         match response {
             Response::User(response) => Ok(serde_json::from_slice(&response)?),
             _ => Err(ChainClientError::InternalError(
@@ -2131,22 +2157,6 @@ where
         )
         .await?;
         Ok(())
-    }
-
-    /// Requests a `RegisterApplications` message from another chain so the application can be used
-    /// on this one.
-    #[tracing::instrument(level = "trace")]
-    pub async fn request_application(
-        &self,
-        application_id: UserApplicationId,
-        chain_id: Option<ChainId>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
-        self.execute_operation(Operation::System(SystemOperation::RequestApplication {
-            application_id,
-            chain_id,
-        }))
-        .await
     }
 
     /// Sends tokens to a chain.
@@ -2486,11 +2496,12 @@ where
             tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
                 .await
                 .expect("Compression should not panic");
-        let contract_blob = Blob::new_contract_bytecode(compressed_contract);
-        let service_blob = Blob::new_service_bytecode(compressed_service);
+        let contract_blob = Blob::new_contract_bytecode(compressed_contract)?;
+        let service_blob = Blob::new_service_bytecode(compressed_service)?;
 
         let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
-        self.add_pending_blobs([contract_blob, service_blob]).await;
+        self.add_pending_blobs(vec![contract_blob, service_blob])
+            .await;
         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
             bytecode_id,
         }))
@@ -2504,9 +2515,12 @@ where
         &self,
         bytes: Vec<Vec<u8>>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let blobs = bytes.into_iter().map(Blob::new_data);
+        let mut blobs = Vec::new();
+        for byte_vec in bytes {
+            blobs.push(Blob::new_data(byte_vec)?);
+        }
         let publish_blob_operations = blobs
-            .clone()
+            .iter()
             .map(|blob| {
                 Operation::System(SystemOperation::PublishDataBlob {
                     blob_hash: blob.id().hash,
@@ -2527,7 +2541,7 @@ where
     }
 
     /// Adds pending blobs
-    pub async fn add_pending_blobs(&self, pending_blobs: impl IntoIterator<Item = Blob>) {
+    pub async fn add_pending_blobs(&self, pending_blobs: Vec<Blob>) {
         for blob in pending_blobs {
             self.client.local_node.cache_recent_blob(&blob).await;
             self.state_mut().insert_pending_blob(blob);
@@ -2581,28 +2595,28 @@ where
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+        let application_description = UserApplicationDescription {
             bytecode_id,
+            creator_chain_id: self.chain_id,
+            block_height: self.next_block_height(),
+            operation_index: 0,
             parameters,
+            required_application_ids: required_application_ids.clone(),
+        };
+        let application_id = UserApplicationId::try_from(&application_description)?;
+        let application_blob = Blob::new_application_description(application_description.clone())?;
+
+        self.add_pending_blobs(vec![application_blob]).await;
+        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+            application_id,
+            creator_chain_id: application_description.creator_chain_id,
+            block_height: application_description.block_height,
+            operation_index: application_description.operation_index,
             instantiation_argument,
             required_application_ids,
         }))
         .await?
-        .try_map(|certificate| {
-            // The first message of the only operation created the application.
-            let creation = certificate
-                .value()
-                .executed_block()
-                .and_then(|executed_block| {
-                    executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-                })
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
-            let id = ApplicationId {
-                creation,
-                bytecode_id,
-            };
-            Ok((id, certificate))
-        })
+        .try_map(|certificate| Ok((application_id, certificate)))
     }
 
     /// Creates a new committee and starts using it (admin chains only).

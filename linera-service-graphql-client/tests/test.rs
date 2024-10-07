@@ -16,7 +16,7 @@ use linera_service::cli_wrappers::{
     LineraNet, LineraNetConfig, Network,
 };
 use linera_service_graphql_client::{
-    applications, block, blocks, chains, request, transfer, Applications, Block, Blocks, Chains,
+    application, block, blocks, chains, request, transfer, Application, Block, Blocks, Chains,
     Transfer,
 };
 use test_case::test_case;
@@ -97,18 +97,19 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) {
         .chains;
     assert_eq!((chains.default, chains.list), node_chains);
 
-    // check applications query
-    let applications = request::<Applications, _>(
+    // check application query
+    let application = request::<Application, _>(
         req_client,
         url,
-        applications::Variables {
-            chain_id: node_chains.0.unwrap(),
+        application::Variables {
+            chain_id,
+            app_id: application_id.forget_abi().to_string(),
         },
     )
     .await
     .unwrap()
-    .applications;
-    assert_eq!(applications[0].id, application_id.forget_abi().to_string());
+    .application;
+    assert_eq!(application.id, application_id.forget_abi().to_string());
 
     // check blocks query
     let blocks = request::<Blocks, _>(

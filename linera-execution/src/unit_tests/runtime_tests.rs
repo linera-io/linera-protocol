@@ -7,6 +7,7 @@
 
 use std::{
     any::Any,
+    collections::BTreeMap,
     sync::{Arc, Mutex},
 };
 
@@ -14,7 +15,7 @@ use futures::{channel::mpsc, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
 };
 use linera_views::batch::Batch;
 
@@ -184,7 +185,7 @@ fn create_runtime<Application>() -> (
         execution_state_sender,
         None,
         resource_controller,
-        TransactionTracker::new(0, Some(Vec::new())),
+        TransactionTracker::new(0, Some(Vec::new()), Arc::new(BTreeMap::new())),
     );
 
     (runtime, execution_state_receiver)
@@ -198,24 +199,19 @@ fn create_dummy_application() -> ApplicationStatus {
         parameters: vec![],
         signer: None,
         outcome: RawExecutionOutcome::default(),
+        creator_chain_id: ChainId::root(0),
     }
 }
 
 /// Creates a dummy [`ApplicationId`].
 fn create_dummy_application_id() -> ApplicationId {
-    let chain_id = ChainDescription::Root(1).into();
-
-    ApplicationId {
-        bytecode_id: BytecodeId::new(
+    ApplicationId::new(
+        CryptoHash::test_hash("application description hash"),
+        BytecodeId::new(
             CryptoHash::test_hash("contract"),
             CryptoHash::test_hash("service"),
         ),
-        creation: MessageId {
-            chain_id,
-            height: BlockHeight(1),
-            index: 1,
-        },
-    }
+    )
 }
 
 /// Creates a fake application instance that's just a reference to the `runtime`.
@@ -227,5 +223,6 @@ fn create_fake_application_with_runtime(
     LoadedApplication {
         instance: Arc::new(Mutex::new(fake_instance)),
         parameters: vec![],
+        creator_chain_id: ChainId::root(0),
     }
 }

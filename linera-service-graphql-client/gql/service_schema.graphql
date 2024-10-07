@@ -688,11 +688,6 @@ type MutationRoot {
 	Creates a new application.
 	"""
 	createApplication(chainId: ChainId!, bytecodeId: BytecodeId!, parameters: String!, instantiationArgument: String!, requiredApplicationIds: [ApplicationId!]!): ApplicationId!
-	"""
-	Requests a `RegisterApplications` message from another chain so the application can be used
-	on this one.
-	"""
-	requestApplication(chainId: ChainId!, applicationId: ApplicationId!, targetChainId: ChainId): CryptoHash!
 }
 
 """
@@ -808,8 +803,9 @@ scalar PublicKey
 
 type QueryRoot {
 	chain(chainId: ChainId!): ChainStateExtendedView!
-	applications(chainId: ChainId!): [ApplicationOverview!]!
 	chains: Chains!
+	application(chainId: ChainId!, appId: ApplicationId!): ApplicationOverview!
+	applications(chainId: ChainId!): [ApplicationOverview!]!
 	block(hash: CryptoHash, chainId: ChainId!): HashedCertificateValue
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedCertificateValue!]!
 	"""
