@@ -194,16 +194,11 @@ On both http://localhost:8080 and http://localhost:8081, you recognize the crowd
 application by its ID. The entry also has a field `link`. If you open that in a new tab, you
 see the GraphQL API for that application on that chain.
 
-Let's pledge 30 tokens by the campaign creator themself, i.e.
-[`$OWNER_0` on 8080](http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1):
+Let's pledge 30 tokens by the campaign creator themself.
+For `$OWNER_0` on 8080, run `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1"` to get the URL, open it
+and run the following query:
 
-Let's give it a variable for testing (for instance with `curl -g -X POST -H "Content-Type: application/json" -d '{ "query": "'$QUERY'" }' $URI | jq -e .data`):
-
-```bash
-CAMPAIGN=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
-```
-
-```gql,uri=$CAMPAIGN
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 mutation { pledge(
     owner:"User:$OWNER_0",
     amount:"30."
@@ -212,20 +207,16 @@ mutation { pledge(
 
 This will make the owner show up if we list everyone who has made a pledge so far:
 
-```gql,uri=$CAMPAIGN
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 query { pledges { keys } }
 ```
 
 To also have `$OWNER_1` make a pledge, they first need to claim their tokens. Those are still
-on the other chain, where the application was created. Find the [link on 8081
-for the fungible application](http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0),
-open it and run the following query.
+on the other chain, where the application was created. To get the link on 8081
+for the fungible application, run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0"`,
+open it and run the following query:
 
-```bash
-TOKEN1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
-```
-
-```gql,uri=$TOKEN1
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 mutation { claim(
   sourceAccount: {
     owner: "User:$OWNER_1",
@@ -241,21 +232,17 @@ mutation { claim(
 
 You can check that the 200 tokens have arrived:
 
-```gql,uri=$TOKEN1
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_0
 query {
     accounts { entry(key: "User:$OWNER_1") { value } }
 }
 ```
 
-Now, also on 8081, you can open the [link for the crowd-funding
-application](http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1)
+Now, also on 8081, you can open the link for the crowd-funding
+application you get when you run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1"`
 and run:
 
-```bash
-PLEDGE1=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
-```
-
-```gql,uri=$PLEDGE1
+```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID_1
 mutation { pledge(
   owner:"User:$OWNER_1",
   amount:"80."
@@ -265,14 +252,14 @@ mutation { pledge(
 This pledges another 80 tokens. With 110 pledged in total, we have now reached the campaign
 goal. Now the campaign owner (on 8080) can collect the funds:
 
-```gql,uri=$CAMPAIGN
+```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_1
 mutation { collect }
 ```
 
-[In the fungible application on
-8080](http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0),
-check that we have received 110 tokens, in addition to the
-70 that we had left after pledging 30:
+Get the fungible application on
+8080 URL by running `echo "http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0"`,
+then check that we have received 110 tokens, in addition to the
+70 that we had left after pledging 30 by running the following query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_0/applications/$APP_ID_0
 query {

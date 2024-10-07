@@ -133,7 +133,7 @@ linera service --port $PORT &
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
-- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
+- Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"`.
 - To get the current balance of user $OWNER_1, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID

@@ -183,7 +183,7 @@ mutation {
 Note: The above mutation has to be performed from `http://localhost:8080`.
 
 Before performing any operation we need to provide liquidity to it, so we will use the `AddLiquidity` operation,
-navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID`.
+navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"`.
 
 To perform `AddLiquidity` operation:
 
@@ -209,7 +209,7 @@ mutation {
 
 Note: The above mutation has to be performed from `http://localhost:8080`.
 
-To perform `Swap` operation, navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID` and
+To perform `Swap` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID"` and
 perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$AMM_APPLICATION_ID
@@ -222,7 +222,7 @@ mutation {
 }
 ```
 
-To perform the `RemoveLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
+To perform the `RemoveLiquidity` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"` and
 perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
@@ -235,7 +235,7 @@ mutation {
 }
 ```
 
-To perform the `RemoveAllAddedLiquidity` operation, navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and
+To perform the `RemoveAllAddedLiquidity` operation, navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"` and
 perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
@@ -275,8 +275,8 @@ linera --wait-for-outgoing-messages change-application-permissions \
 linera service --port $PORT &
 ```
 
-First, let's add some liquidity again to the AMM. Navigate to
-`http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID` and perform the following mutation:
+First, let's add some liquidity again to the AMM. Navigate to the URL you get by running
+`echo "http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID"` and perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$AMM_APPLICATION_ID
 mutation {
@@ -288,15 +288,15 @@ mutation {
 }
 ```
 
-The only way to close the chain is via the application. Navigate to
-`http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID` and perform the following mutation:
+The only way to close the chain is via the application. Navigate to the URL you get by running
+`echo "http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID"` and perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_AMM/applications/$AMM_APPLICATION_ID
 mutation { closeChain }
 ```
 
 Owner 1 should now get back their tokens, and have around 49 FUN1 left and 51 FUN2 left. To check that, navigate
-to `http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID`, and perform the following mutation:
+to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID"`, and perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$FUN1_APP_ID
 query {
@@ -310,7 +310,7 @@ query {
 }
 ```
 
-Then navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID`, and perform the following mutation:
+Then navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID"`, and perform the following mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$FUN2_APP_ID
 query {

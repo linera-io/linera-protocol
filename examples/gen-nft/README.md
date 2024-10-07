@@ -86,7 +86,7 @@ linera service --port $PORT &
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
-- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
+- Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"`.
 - To mint an NFT, run the query:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
@@ -105,6 +105,9 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
         ownedNfts(owner: "User:$OWNER_1")
     }
 ```
+
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `TOKEN_ID` will be properly set for you.
+Alternatively you can set the `TOKEN_ID` variable to the `tokenId` value returned by the previous query yourself.
 
 ```bash
 TOKEN_ID=$(echo "$QUERY_RESULT" | jq -r '.ownedNfts[].tokenId')

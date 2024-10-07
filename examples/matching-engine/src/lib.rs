@@ -128,7 +128,7 @@ linera service --port $PORT &
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
-Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`:
+Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE"`:
 
 To create a `Bid` order as owner 1, offering to buy 1 FUN1 for 5 FUN2:
 
@@ -185,7 +185,7 @@ linera --wait-for-outgoing-messages change-application-permissions \
 linera service --port $PORT &
 ```
 
-First, owner 2 should claim their tokens. Navigate to `http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID`:
+First, owner 2 should claim their tokens. Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID"`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN1_APP_ID
 mutation {
@@ -203,7 +203,7 @@ mutation {
 }
 ```
 
-And to `http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`:
+And to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID"`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
 mutation {
@@ -222,7 +222,7 @@ mutation {
 ```
 
 Owner 2 offers to buy 2 FUN1 for 10 FUN2. This gets partially filled, and they buy 1 FUN1
-for 5 FUN2 from owner 1. This leaves 5 FUN2 of owner 2 on chain 1. On `http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE`:
+for 5 FUN2 from owner 1. This leaves 5 FUN2 of owner 2 on chain 1. On the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE"`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$MATCHING_ENGINE
 mutation {
@@ -241,13 +241,13 @@ mutation {
 }
 ```
 
-The only way to close the chain is via the application now. On `http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE`:
+The only way to close the chain is via the application now. On the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE"`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$MATCHING_ENGINE
 mutation { closeChain }
 ```
 
-Owner 2 should now get back their tokens, and have 145 FUN2 left. On `http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID`
+Owner 2 should now get back their tokens, and have 145 FUN2 left. On the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID"`
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$FUN2_APP_ID
 query {
