@@ -83,6 +83,7 @@ test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["rt", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
+wasmer = { workspace = true, features = ["wat"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
