@@ -1402,37 +1402,54 @@ pub struct ApplicationWrapper<A> {
 
 impl<A> ApplicationWrapper<A> {
     pub async fn raw_query(&self, query: impl AsRef<str>) -> Result<Value> {
-        let query = query.as_ref();
-        let client = reqwest_client();
-        let response = client
-            .post(&self.uri)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .with_context(|| {
-                format!(
-                    "raw_query: failed to post query={}",
-                    truncate_query_output(query)
-                )
-            })?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Query \"{}\" failed: {}",
-            truncate_query_output(query),
-            response
-                .text()
-                .await
-                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
-        );
-        let value: Value = response.json().await.context("invalid JSON")?;
-        if let Some(errors) = value.get("errors") {
-            bail!(
+        const MAX_RETRIES: usize = 5;
+
+        for i in 0.. {
+            let query = query.as_ref();
+            let client = reqwest_client();
+            let result = client
+                .post(&self.uri)
+                .json(&json!({ "query": query }))
+                .send()
+                .await;
+            let response = match result {
+                Ok(response) => response,
+                Err(error) if i < MAX_RETRIES => {
+                    warn!(
+                        "Failed to post query \"{}\": {error}; retrying",
+                        truncate_query_output(query),
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "raw_query: failed to post query={}",
+                            truncate_query_output(query)
+                        )
+                    });
+                }
+            };
+            anyhow::ensure!(
+                response.status().is_success(),
                 "Query \"{}\" failed: {}",
                 truncate_query_output(query),
-                errors
+                response
+                    .text()
+                    .await
+                    .unwrap_or_else(|error| format!("Could not get response text: {error}"))
             );
+            let value: Value = response.json().await.context("invalid JSON")?;
+            if let Some(errors) = value.get("errors") {
+                bail!(
+                    "Query \"{}\" failed: {}",
+                    truncate_query_output(query),
+                    errors
+                );
+            }
+            return Ok(value["data"].clone());
         }
-        Ok(value["data"].clone())
+        unreachable!()
     }
 
     pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {
