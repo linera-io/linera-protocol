@@ -872,9 +872,6 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        let mutex = self.state().client_mutex();
-        let _guard = mutex.lock_owned().await;
-
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
@@ -894,6 +891,9 @@ where
         let ownership = &info.manager.ownership;
         let keys: HashSet<_> = self.state().known_key_pairs().keys().cloned().collect();
         if ownership.all_owners().any(|owner| !keys.contains(owner)) {
+            let mutex = self.state().client_mutex();
+            let _guard = mutex.lock_owned().await;
+
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -3024,6 +3024,8 @@ where
         let (name, tracker, certificates) = self
             .synchronize_received_certificates_from_validator(chain_id, &remote_node)
             .await?;
+
+        drop(_guard);
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
         self.receive_certificates_from_validator(name, tracker, certificates)
