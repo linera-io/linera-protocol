@@ -87,6 +87,7 @@ jobs:
         sleep 10
         psql "${DOCSRS_DATABASE_URL}"
         cargo run -- database migrate
+        cargo run -- build update-toolchain
         grep -v ^# "$GITHUB_WORKSPACE/$LINERA_PACKAGES" | while read LINE; do
             CRATE="${LINE%% *}"
             cargo run -- build crate --local ${{ runner.temp }}/registry/${CRATE}-${SDK_VERSION}/
