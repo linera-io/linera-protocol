@@ -8,29 +8,29 @@ use linera_sdk::{{
     Contract, ContractRuntime,
 }};
 
-use self::state::Application;
+use self::state::{project_name};
 
-pub struct ApplicationContract {{
-    state: Application,
+pub struct {project_name}Contract {{
+    state: {project_name},
     runtime: ContractRuntime<Self>,
 }}
 
-linera_sdk::contract!(ApplicationContract);
+linera_sdk::contract!({project_name}Contract);
 
-impl WithContractAbi for ApplicationContract {{
-    type Abi = {project_name}::ApplicationAbi;
+impl WithContractAbi for {project_name}Contract {{
+    type Abi = {module_name}::{project_name}Abi;
 }}
 
-impl Contract for ApplicationContract {{
+impl Contract for {project_name}Contract {{
     type Message = ();
     type Parameters = ();
     type InstantiationArgument = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {{
-        let state = Application::load(runtime.root_view_storage_context())
+        let state = {project_name}::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        ApplicationContract {{ state, runtime }}
+        {project_name}Contract {{ state, runtime }}
     }}
 
     async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {{}}
