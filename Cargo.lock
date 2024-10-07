@@ -4669,6 +4669,7 @@ dependencies = [
  "clap-markdown",
  "colored",
  "comfy-table",
+ "convert_case 0.6.0",
  "counter",
  "criterion",
  "crowd-funding",

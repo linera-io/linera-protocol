@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
+use convert_case::{Case, Casing};
 use current_platform::CURRENT_PLATFORM;
 use fs_err::File;
 use tracing::debug;
@@ -160,7 +161,7 @@ impl Project {
     }
 
     fn create_state_file(source_directory: &Path, project_name: &str) -> Result<()> {
-        let project_name = Self::to_pascal_case(project_name);
+        let project_name = project_name.to_case(Case::Pascal);
         let state_path = source_directory.join("state.rs");
         let file_content = format!(
             include_str!("../template/state.rs.template"),
@@ -170,7 +171,7 @@ impl Project {
     }
 
     fn create_lib_file(source_directory: &Path, project_name: &str) -> Result<()> {
-        let project_name = Self::to_pascal_case(project_name);
+        let project_name = project_name.to_case(Case::Pascal);
         let state_path = source_directory.join("lib.rs");
         let file_content = format!(
             include_str!("../template/lib.rs.template"),
@@ -180,7 +181,7 @@ impl Project {
     }
 
     fn create_contract_file(source_directory: &Path, name: &str) -> Result<()> {
-        let project_name = Self::to_pascal_case(name);
+        let project_name = name.to_case(Case::Pascal);
         let contract_path = source_directory.join("contract.rs");
         let contract_contents = format!(
             include_str!("../template/contract.rs.template"),
@@ -191,7 +192,7 @@ impl Project {
     }
 
     fn create_service_file(source_directory: &Path, name: &str) -> Result<()> {
-        let project_name = Self::to_pascal_case(name);
+        let project_name = name.to_case(Case::Pascal);
         let service_path = source_directory.join("service.rs");
         let service_contents = format!(
             include_str!("../template/service.rs.template"),
@@ -242,26 +243,6 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
-    /// Converts a string to PascalCase.
-    fn to_pascal_case(s: &str) -> String {
-        let mut result = String::new();
-        // Start a word with capital letter.
-        let mut capitalize = true;
-        for c in s.chars() {
-            if c == '-' {
-                // New word incoming.
-                capitalize = true;
-            } else if capitalize {
-                result.push(c.to_ascii_uppercase());
-                // If we capitalize a letter, we should not capitalize the next one.
-                capitalize = false;
-            } else {
-                result.push(c);
-            }
-        }
-        result
-    }
-
     pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
         let name = match name {
             Some(name) => name,
@@ -297,20 +278,5 @@ impl Project {
 
     fn cargo_toml_path(&self) -> PathBuf {
         self.root.join("Cargo.toml")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Project;
-
-    #[test]
-    fn test_to_pascal_case() {
-        assert_eq!(Project::to_pascal_case("foo-bar"), "FooBar");
-        assert_eq!(Project::to_pascal_case("foo-bar-baz"), "FooBarBaz");
-        assert_eq!(Project::to_pascal_case("foo"), "Foo");
-        assert_eq!(Project::to_pascal_case("foo-"), "Foo");
-        assert_eq!(Project::to_pascal_case("-foo"), "Foo");
-        assert_eq!(Project::to_pascal_case("-foo-"), "Foo");
     }
 }
