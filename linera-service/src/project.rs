@@ -49,10 +49,10 @@ impl Project {
         Self::create_rust_toolchain(&root)?;
 
         debug!("writing state.rs");
-        Self::create_state_file(&source_directory)?;
+        Self::create_state_file(&source_directory, name)?;
 
         debug!("writing lib.rs");
-        Self::create_lib_file(&source_directory)?;
+        Self::create_lib_file(&source_directory, name)?;
 
         debug!("writing contract.rs");
         Self::create_contract_file(&source_directory, name)?;
@@ -159,31 +159,43 @@ impl Project {
         )
     }
 
-    fn create_state_file(source_directory: &Path) -> Result<()> {
+    fn create_state_file(source_directory: &Path, project_name: &str) -> Result<()> {
+        let project_name = Self::to_pascal_case(project_name);
         let state_path = source_directory.join("state.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/state.rs.template"))
+        let file_content = format!(
+            include_str!("../template/state.rs.template"),
+            project_name = project_name
+        );
+        Self::write_string_to_file(&state_path, &file_content)
     }
 
-    fn create_lib_file(source_directory: &Path) -> Result<()> {
+    fn create_lib_file(source_directory: &Path, project_name: &str) -> Result<()> {
+        let project_name = Self::to_pascal_case(project_name);
         let state_path = source_directory.join("lib.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/lib.rs.template"))
+        let file_content = format!(
+            include_str!("../template/lib.rs.template"),
+            project_name = project_name
+        );
+        Self::write_string_to_file(&state_path, &file_content)
     }
 
-    fn create_contract_file(source_directory: &Path, project_name: &str) -> Result<()> {
-        let project_name = project_name.replace('-', "_");
+    fn create_contract_file(source_directory: &Path, name: &str) -> Result<()> {
+        let project_name = Self::to_pascal_case(name);
         let contract_path = source_directory.join("contract.rs");
         let contract_contents = format!(
             include_str!("../template/contract.rs.template"),
+            module_name = name.replace('-', "_"),
             project_name = project_name
         );
         Self::write_string_to_file(&contract_path, &contract_contents)
     }
 
-    fn create_service_file(source_directory: &Path, project_name: &str) -> Result<()> {
-        let project_name = project_name.replace('-', "_");
+    fn create_service_file(source_directory: &Path, name: &str) -> Result<()> {
+        let project_name = Self::to_pascal_case(name);
         let service_path = source_directory.join("service.rs");
         let service_contents = format!(
             include_str!("../template/service.rs.template"),
+            module_name = name.replace('-', "_"),
             project_name = project_name
         );
         Self::write_string_to_file(&service_path, &service_contents)
@@ -230,6 +242,26 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
+    /// Converts a string to PascalCase.
+    fn to_pascal_case(s: &str) -> String {
+        let mut result = String::new();
+        // Start a word with capital letter.
+        let mut capitalize = true;
+        for c in s.chars() {
+            if c == '-' {
+                // New word incoming.
+                capitalize = true;
+            } else if capitalize {
+                result.push(c.to_ascii_uppercase());
+                // If we capitalize a letter, we should not capitalize the next one.
+                capitalize = false;
+            } else {
+                result.push(c);
+            }
+        }
+        result
+    }
+
     pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
         let name = match name {
             Some(name) => name,
@@ -265,5 +297,20 @@ impl Project {
 
     fn cargo_toml_path(&self) -> PathBuf {
         self.root.join("Cargo.toml")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Project;
+
+    #[test]
+    fn test_to_pascal_case() {
+        assert_eq!(Project::to_pascal_case("foo-bar"), "FooBar");
+        assert_eq!(Project::to_pascal_case("foo-bar-baz"), "FooBarBaz");
+        assert_eq!(Project::to_pascal_case("foo"), "Foo");
+        assert_eq!(Project::to_pascal_case("foo-"), "Foo");
+        assert_eq!(Project::to_pascal_case("-foo"), "Foo");
+        assert_eq!(Project::to_pascal_case("-foo-"), "Foo");
     }
 }
