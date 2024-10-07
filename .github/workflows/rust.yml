@@ -70,19 +70,23 @@ jobs:
     - name: Run the storage service related tests and then the remote net tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo build --features storage-service
-        mkdir /tmp/WORK
-        cargo run --features storage-service --bin linera -- net up --storage-config-namespace service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK &
         cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
-        cargo run --release --bin linera -- faucet --amount 1000 --port 8079 &
-        cargo test -p linera-service remote_net_grpc --features remote-net
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
         cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+    - name: Run the validators
+      run: |
+        cargo build --features storage-service
+        mkdir /tmp/WORK
+        cargo run --features storage-service --bin linera -- net up --storage-config-namespace service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK &
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+    - name: Run the remote-net tests
+      run: |
+        cargo run --release --bin linera -- faucet --amount 1000 --port 8079 &
+        cargo test -p linera-service remote_net_grpc --features remote-net
     - name: Check that the WIT files are up-to-date
       run: |
         cargo run --bin wit-generator -- -c
