@@ -71,6 +71,7 @@ jobs:
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
         cargo build --features storage-service
+        mkdir /tmp/WORK
         cargo run --features storage-service --bin linera -- net up --storage-config-namespace service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK &
         cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
         cargo run --release --bin linera -- faucet --amount 1000 --port 8079 &
