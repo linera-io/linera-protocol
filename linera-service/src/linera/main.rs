@@ -1432,6 +1432,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 binaries,
                 path: _,
                 storage: _,
+                external_protocol: _,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
@@ -1457,6 +1458,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 policy_config,
                 path,
                 storage,
+                external_protocol,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1469,6 +1471,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     policy_config.into_policy(),
                     path,
                     storage,
+                    external_protocol.clone(),
                 )
                 .boxed()
                 .await

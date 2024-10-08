@@ -39,7 +39,6 @@ use linera_rpc::{
     },
 };
 use linera_storage::Storage;
-use rcgen::generate_simple_self_signed;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -288,9 +287,8 @@ where
     fn public_server(&self) -> Result<Server> {
         match self.0.tls {
             TlsConfig::Tls => {
-                let cert = generate_simple_self_signed(vec![self.0.public_config.host.clone()])?;
-                let identity =
-                    Identity::from_pem(cert.serialize_pem()?, cert.serialize_private_key_pem());
+                use linera_rpc::{CERT_PEM, KEY_PEM};
+                let identity = Identity::from_pem(CERT_PEM, KEY_PEM);
                 let tls_config = ServerTlsConfig::new().identity(identity);
                 Ok(Server::builder().tls_config(tls_config)?)
             }

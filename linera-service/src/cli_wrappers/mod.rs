@@ -56,36 +56,56 @@ pub trait LineraNet {
     async fn terminate(&mut self) -> Result<()>;
 }
 
-/// Network protocol in use outside and inside a Linera net.
+/// Network protocol in use
 #[derive(Copy, Clone)]
 pub enum Network {
     Grpc,
+    Grpcs,
     Tcp,
     Udp,
 }
 
+/// Network protocol in use outside and inside a Linera net.
+#[derive(Copy, Clone)]
+pub struct NetworkConfig {
+    /// The internal network (e.g. proxy to validator)
+    pub internal: Network,
+    /// The external network (e.g. proxy to the exterior)
+    pub external: Network,
+}
+
 impl Network {
-    fn internal(&self) -> &'static str {
+    fn toml(&self) -> &'static str {
         match self {
             Network::Grpc => "{ Grpc = \"ClearText\" }",
+            Network::Grpcs => "{ Grpc = \"Tls\" }",
             Network::Tcp => "{ Simple = \"Tcp\" }",
             Network::Udp => "{ Simple = \"Udp\" }",
         }
     }
 
-    fn external(&self) -> &'static str {
-        match self {
-            Network::Grpc => "{ Grpc = \"ClearText\" }",
-            Network::Tcp => "{ Simple = \"Tcp\" }",
-            Network::Udp => "{ Simple = \"Udp\" }",
-        }
-    }
-
-    pub fn external_short(&self) -> &'static str {
+    pub fn short(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
+            Network::Grpcs => "grpcs",
             Network::Tcp => "tcp",
             Network::Udp => "udp",
+        }
+    }
+
+    pub fn drop_tls(&self) -> Self {
+        match self {
+            Network::Grpc => Network::Grpc,
+            Network::Grpcs => Network::Grpc,
+            Network::Tcp => Network::Tcp,
+            Network::Udp => Network::Udp,
+        }
+    }
+
+    pub fn localhost(&self) -> &'static str {
+        match self {
+            Network::Grpc | Network::Grpcs => "localhost",
+            Network::Tcp | Network::Udp => "127.0.0.1",
         }
     }
 }

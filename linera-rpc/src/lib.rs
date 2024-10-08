@@ -40,3 +40,8 @@ pub struct HandleCertificateRequest {
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("file_descriptor_set");
+
+#[cfg(not(target_arch = "wasm32"))]
+pub const CERT_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/self_signed_cert.pem"));
+#[cfg(not(target_arch = "wasm32"))]
+pub const KEY_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/private_key.pem"));
