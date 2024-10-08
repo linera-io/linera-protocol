@@ -139,7 +139,11 @@ where
     type Error = EthereumServiceError;
 
     async fn get_accounts(&self) -> Result<Vec<String>, Self::Error> {
-        Ok(self.request("eth_accounts", ()).await?)
+        let results: Vec<String> = self.request("eth_accounts", ()).await?;
+        Ok(results
+            .into_iter()
+            .map(|x| x.to_lowercase())
+            .collect::<Vec<_>>())
     }
 
     async fn get_block_number(&self) -> Result<u64, Self::Error> {
