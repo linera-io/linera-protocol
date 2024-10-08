@@ -19,7 +19,7 @@ use linera_views::{
     context::ViewContext,
     queue_view::QueueView,
     random::{make_deterministic_rng, DeterministicRng},
-    store::{AdminKeyValueStore as _, KeyValueStore},
+    store::{KeyValueStore, TestKeyValueStore as _},
     views::{CryptoHashRootView, RootView, View},
 };
 use rand::Rng;
