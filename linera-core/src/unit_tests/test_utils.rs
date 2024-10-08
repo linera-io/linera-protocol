@@ -33,7 +33,7 @@ use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
-    memory::MemoryStore, random::generate_test_namespace, store::AdminKeyValueStore as _,
+    memory::MemoryStore, random::generate_test_namespace, store::TestKeyValueStore as _,
 };
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;

@@ -13,6 +13,8 @@ use thiserror::Error;
 
 #[cfg(with_testing)]
 use crate::random::generate_test_namespace;
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
@@ -306,16 +308,6 @@ impl MemoryStore {
 impl AdminKeyValueStore for MemoryStore {
     type Config = MemoryStoreConfig;
 
-    async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
-        let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            cache_size: 1000,
-        };
-        Ok(MemoryStoreConfig { common_config })
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -372,6 +364,19 @@ impl AdminKeyValueStore for MemoryStore {
             .expect("MEMORY_STORES lock should not be poisoned");
         memory_stores.sync_delete(namespace);
         Ok(())
+    }
+}
+
+#[cfg(with_testing)]
+impl TestKeyValueStore for MemoryStore {
+    async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
+        let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries,
+            cache_size: 1000,
+        };
+        Ok(MemoryStoreConfig { common_config })
     }
 }
 

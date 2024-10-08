@@ -13,6 +13,8 @@ use crate::dynamo_db::DynamoDbStore;
 use crate::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use crate::scylla_db::ScyllaDbStore;
+#[cfg(any(with_scylladb, with_dynamodb, with_rocksdb))]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::Batch,
     context::{create_test_memory_context, Context, MemoryContext},

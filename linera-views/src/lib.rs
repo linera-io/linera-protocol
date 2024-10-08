@@ -84,7 +84,8 @@ pub mod metrics;
 /// GraphQL implementations.
 mod graphql;
 
-/// Functions for random numbers
+/// Functions for random generation
+#[cfg(with_testing)]
 pub mod random;
 
 /// Helper types for tests.

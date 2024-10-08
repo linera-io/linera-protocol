@@ -7,7 +7,7 @@ use linera_views::{
     key_value_store_view::ViewContainer,
     memory::MemoryStore,
     random::make_deterministic_rng,
-    store::AdminKeyValueStore as _,
+    store::TestKeyValueStore as _,
     test_utils::{
         get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
         run_writes_from_state,

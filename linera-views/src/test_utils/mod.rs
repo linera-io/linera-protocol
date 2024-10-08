@@ -16,7 +16,10 @@ use crate::{
         WriteOperation::{Delete, Put},
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
-    store::{KeyIterable, KeyValueIterable, LocalKeyValueStore, LocalRestrictedKeyValueStore},
+    store::{
+        KeyIterable, KeyValueIterable, LocalKeyValueStore, LocalRestrictedKeyValueStore,
+        TestKeyValueStore,
+    },
 };
 
 /// Returns a random key_prefix used for tests
@@ -614,7 +617,7 @@ where
 /// Exercises the functionalities of the `AdminKeyValueStore`.
 /// This tests everything except the `delete_all` which would
 /// interact with other namespaces.
-pub async fn admin_test<S: LocalKeyValueStore>()
+pub async fn admin_test<S: TestKeyValueStore>()
 where
     S::Error: Debug,
 {

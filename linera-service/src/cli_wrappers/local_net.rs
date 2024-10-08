@@ -24,7 +24,7 @@ use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
-use linera_views::{scylla_db::ScyllaDbStore, store::AdminKeyValueStore as _};
+use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
 use tonic_health::pb::{

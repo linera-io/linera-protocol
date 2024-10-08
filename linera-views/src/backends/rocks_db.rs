@@ -21,15 +21,18 @@ use crate::metering::{
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
+    lru_caching::LruCachingStore,
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
+#[cfg(with_testing)]
+use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
 
 /// The number of streams for the test
+#[cfg(with_testing)]
 const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximum size of values in RocksDB is 3 GB
@@ -437,17 +440,6 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
 impl AdminKeyValueStore for RocksDbStoreInternal {
     type Config = RocksDbStoreConfig;
 
-    async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreInternalError> {
-        let path_with_guard = create_rocks_db_test_path();
-        let common_config = create_rocks_db_common_config();
-        let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
-        Ok(RocksDbStoreConfig {
-            path_with_guard,
-            spawn_mode,
-            common_config,
-        })
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -540,6 +532,24 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     }
 }
 
+#[cfg(with_testing)]
+impl TestKeyValueStore for RocksDbStoreInternal {
+    async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreInternalError> {
+        let path_with_guard = create_rocks_db_test_path();
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
+            cache_size: TEST_CACHE_SIZE,
+        };
+        let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
+        Ok(RocksDbStoreConfig {
+            path_with_guard,
+            spawn_mode,
+            common_config,
+        })
+    }
+}
+
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
@@ -599,15 +609,6 @@ pub struct RocksDbStore {
     store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
-/// Creates the common initialization for RocksDB
-pub fn create_rocks_db_common_config() -> CommonStoreConfig {
-    CommonStoreConfig {
-        max_concurrent_queries: None,
-        max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-        cache_size: TEST_CACHE_SIZE,
-    }
-}
-
 /// A path and the guard for the temporary directory if needed
 #[derive(Clone, Debug)]
 pub struct PathWithGuard {
@@ -628,6 +629,7 @@ impl PathWithGuard {
 }
 
 /// Returns the test path for RocksDB without common config.
+#[cfg(with_testing)]
 fn create_rocks_db_test_path() -> PathWithGuard {
     let dir = TempDir::new().unwrap();
     let path_buf = dir.path().to_path_buf();
@@ -724,10 +726,6 @@ impl WritableKeyValueStore for RocksDbStore {
 impl AdminKeyValueStore for RocksDbStore {
     type Config = RocksDbStoreConfig;
 
-    async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
-        Ok(RocksDbStoreInternal::new_test_config().await?)
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -762,5 +760,12 @@ impl AdminKeyValueStore for RocksDbStore {
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
         Ok(RocksDbStoreInternal::delete(config, namespace).await?)
+    }
+}
+
+#[cfg(with_testing)]
+impl TestKeyValueStore for RocksDbStore {
+    async fn new_test_config() -> Result<RocksDbStoreConfig, RocksDbStoreError> {
+        Ok(RocksDbStoreInternal::new_test_config().await?)
     }
 }

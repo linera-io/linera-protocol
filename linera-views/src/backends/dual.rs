@@ -5,6 +5,8 @@
 
 use thiserror::Error;
 
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::Batch,
     store::{
@@ -237,17 +239,6 @@ where
 {
     type Config = DualStoreConfig<S1::Config, S2::Config>;
 
-    async fn new_test_config() -> Result<Self::Config, Self::Error> {
-        let first_config = S1::new_test_config().await.map_err(DualStoreError::First)?;
-        let second_config = S2::new_test_config()
-            .await
-            .map_err(DualStoreError::Second)?;
-        Ok(DualStoreConfig {
-            first_config,
-            second_config,
-        })
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -331,6 +322,25 @@ where
             .await
             .map_err(DualStoreError::Second)?;
         Ok(())
+    }
+}
+
+#[cfg(with_testing)]
+impl<S1, S2, A> TestKeyValueStore for DualStore<S1, S2, A>
+where
+    S1: TestKeyValueStore + Send + Sync,
+    S2: TestKeyValueStore + Send + Sync,
+    A: DualStoreRootKeyAssignment + Send + Sync,
+{
+    async fn new_test_config() -> Result<Self::Config, Self::Error> {
+        let first_config = S1::new_test_config().await.map_err(DualStoreError::First)?;
+        let second_config = S2::new_test_config()
+            .await
+            .map_err(DualStoreError::Second)?;
+        Ok(DualStoreConfig {
+            first_config,
+            second_config,
+        })
     }
 }
 

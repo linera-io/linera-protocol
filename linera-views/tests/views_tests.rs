@@ -11,6 +11,8 @@ use linera_views::dynamo_db::DynamoDbStore;
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
+#[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
+use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{
     batch::{
         Batch, WriteOperation,
@@ -28,7 +30,7 @@ use linera_views::{
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
-    store::AdminKeyValueStore as _,
+    store::TestKeyValueStore as _,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,

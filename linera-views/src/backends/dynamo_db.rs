@@ -42,13 +42,15 @@ use crate::metering::{
 use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
+    lru_caching::LruCachingStore,
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyIterable, KeyValueIterable, KeyValueStoreError,
         ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
+#[cfg(with_testing)]
+use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
@@ -173,9 +175,11 @@ const MAX_TRANSACT_WRITE_ITEM_TOTAL_SIZE: usize = 4000000;
 /// The DynamoDb database is potentially handling an infinite number of connections.
 /// However, for testing or some other purpose we really need to decrease the number of
 /// connections.
+#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of entries in a stream of the tests can be controlled by this parameter for tests.
+#[cfg(with_testing)]
 const TEST_DYNAMO_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// Fundamental constants in DynamoDB: The maximum size of a TransactWriteItem is 100.
@@ -351,20 +355,6 @@ pub struct DynamoDbStoreConfig {
 
 impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Config = DynamoDbStoreConfig;
-
-    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreInternalError> {
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
-            max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
-            cache_size: TEST_CACHE_SIZE,
-        };
-        let use_localstack = true;
-        let config = get_config_internal(use_localstack).await?;
-        Ok(DynamoDbStoreConfig {
-            config,
-            common_config,
-        })
-    }
 
     async fn connect(
         config: &Self::Config,
@@ -1260,10 +1250,6 @@ impl WritableKeyValueStore for DynamoDbStore {
 impl AdminKeyValueStore for DynamoDbStore {
     type Config = DynamoDbStoreConfig;
 
-    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
-        Ok(DynamoDbStoreInternal::new_test_config().await?)
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -1298,6 +1284,23 @@ impl AdminKeyValueStore for DynamoDbStore {
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
         Ok(DynamoDbStoreInternal::delete(config, namespace).await?)
+    }
+}
+
+#[cfg(with_testing)]
+impl TestKeyValueStore for DynamoDbStore {
+    async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: Some(TEST_DYNAMO_DB_MAX_CONCURRENT_QUERIES),
+            max_stream_queries: TEST_DYNAMO_DB_MAX_STREAM_QUERIES,
+            cache_size: TEST_CACHE_SIZE,
+        };
+        let use_localstack = true;
+        let config = get_config_internal(use_localstack).await?;
+        Ok(DynamoDbStoreConfig {
+            config,
+            common_config,
+        })
     }
 }
 

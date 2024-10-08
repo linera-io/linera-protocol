@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
-    linera_views::random::generate_test_namespace,
+    linera_views::{random::generate_test_namespace, store::TestKeyValueStore},
     std::{cmp::Reverse, collections::BTreeMap},
 };
 #[cfg(with_metrics)]
@@ -753,7 +753,7 @@ where
 #[cfg(with_testing)]
 impl<Store> DbStorage<Store, TestClock>
 where
-    Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Store: TestKeyValueStore + Clone + Send + Sync + 'static,
     Store::Error: Send + Sync,
 {
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
