@@ -20,6 +20,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
+* [`linera finalize-committee`↴](#linera-finalize-committee)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
@@ -71,6 +72,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
+* `finalize-committee` — Deprecates all committees except the last one
 * `resource-control-policy` — View or update the resource control policy
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
@@ -378,6 +380,14 @@ Remove a validator (admin only)
 ###### **Options:**
 
 * `--name <NAME>` — The public key of the validator
+
+
+
+## `linera finalize-committee`
+
+Deprecates all committees except the last one
+
+**Usage:** `linera finalize-committee`
 
 
 
