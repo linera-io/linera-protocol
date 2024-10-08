@@ -79,7 +79,7 @@ jobs:
       run: |
         cargo build --features storage-service
         mkdir /tmp/WORK
-        cargo run --features storage-service --bin linera -- net up --storage-config-namespace service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK &
+        cargo run --features storage-service --bin linera -- net up --storage-config-namespace service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK --validators 4 --shards 4 &
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
