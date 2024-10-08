@@ -78,6 +78,9 @@ use crate::{
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
+/// The maximum number of parallel requests that are made to a validator.
+const MAX_PARALLEL_DOWNLOADS: usize = 100;
+
 /// A builder that creates `ChainClients` which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>
 where
@@ -1076,7 +1079,7 @@ where
         tracker: u64,
         committees: BTreeMap<Epoch, Committee>,
         max_epoch: Epoch,
-        node: impl LocalValidatorNode,
+        node: impl LocalValidatorNode + Clone,
         node_client: LocalNodeClient<S>,
     ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError> {
         // Retrieve newly received certificates from this validator.
@@ -1084,70 +1087,103 @@ where
         let response = node.handle_chain_info_query(query).await?;
         // Responses are authenticated for accountability.
         response.check(&name)?;
+        let log = response.info.requested_received_log;
+        let mut new_tracker = tracker + log.len() as u64;
+        let mut stream = stream::iter(log.into_iter().zip(tracker..))
+            .map(|(entry, index)| {
+                let node_client = node_client.clone();
+                let node = node.clone();
+                let committees = committees.clone();
+                async move {
+                    let query = ChainInfoQuery::new(entry.chain_id)
+                        .with_sent_certificate_hashes_in_range(BlockHeightRange::single(
+                            entry.height,
+                        ));
+                    let local_response =
+                        match node_client.handle_chain_info_query(query.clone()).await {
+                            Err(error) => {
+                                warn!("Failed to get chain info from the local node: {error}");
+                                return (None, Some(index));
+                            }
+                            Ok(local_response) => local_response,
+                        };
+                    if !local_response
+                        .info
+                        .requested_sent_certificate_hashes
+                        .is_empty()
+                    {
+                        return (None, None);
+                    }
+
+                    let mut response = match node.handle_chain_info_query(query).await {
+                        Err(error) => {
+                            warn!("Failed to get chain info from the validator: {error}");
+                            return (None, Some(index));
+                        }
+                        Ok(response) => response,
+                    };
+                    let Some(certificate_hash) =
+                        response.info.requested_sent_certificate_hashes.pop()
+                    else {
+                        return (None, None);
+                    };
+
+                    let certificate = match node.download_certificate(certificate_hash).await {
+                        Err(error) => {
+                            warn!("Failed to download certificate {certificate_hash:.8}: {error}");
+                            return (None, Some(index));
+                        }
+                        Ok(certificate) => certificate,
+                    };
+                    let CertificateValue::ConfirmedBlock { executed_block, .. } =
+                        certificate.value()
+                    else {
+                        return (None, Some(index));
+                    };
+                    let block = &executed_block.block;
+                    // Check that certificates are valid w.r.t one of our trusted committees.
+                    if block.epoch > max_epoch {
+                        // We don't accept a certificate from a committee in the future.
+                        warn!(
+                            "Postponing received certificate from {:.8} at height {} from future
+                             epoch {}",
+                            entry.chain_id, entry.height, block.epoch
+                        );
+                        // Do not increment the tracker further so that this certificate can still be
+                        // downloaded later, once our committee is updated.
+                        return (None, Some(index));
+                    }
+                    match committees.get(&block.epoch) {
+                        Some(committee) => {
+                            // This epoch is recognized by our chain. Let's verify the
+                            // certificate.
+                            if let Err(error) = certificate.check(committee) {
+                                warn!("Invalid signatures: {error}");
+                                return (None, Some(index));
+                            }
+                            (Some(certificate), None)
+                        }
+                        None => {
+                            // This epoch is not recognized any more. Let's skip the certificate.
+                            // If a higher block with a recognized epoch comes up later from the
+                            // same chain, the call to `receive_certificate` below will download
+                            // the skipped certificate again.
+                            warn!(
+                                "Skipping received certificate from past epoch {:?}",
+                                block.epoch
+                            );
+                            (None, None)
+                        }
+                    }
+                }
+            })
+            .buffer_unordered(MAX_PARALLEL_DOWNLOADS);
         let mut certificates = Vec::new();
-        let mut new_tracker = tracker;
-        for entry in response.info.requested_received_log {
-            let query = ChainInfoQuery::new(entry.chain_id)
-                .with_sent_certificate_hashes_in_range(BlockHeightRange::single(entry.height));
-            let local_response = node_client
-                .handle_chain_info_query(query.clone())
-                .await
-                .map_err(|error| NodeError::LocalNodeQuery {
-                    error: error.to_string(),
-                })?;
-            if !local_response
-                .info
-                .requested_sent_certificate_hashes
-                .is_empty()
-            {
-                new_tracker += 1;
-                continue;
+        while let Some((maybe_certificate, maybe_index)) = stream.next().await {
+            if let Some(index) = maybe_index {
+                new_tracker = new_tracker.min(index);
             }
-
-            let mut response = node.handle_chain_info_query(query).await?;
-            let Some(certificate_hash) = response.info.requested_sent_certificate_hashes.pop()
-            else {
-                break;
-            };
-
-            let certificate = node.download_certificate(certificate_hash).await?;
-            let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
-            else {
-                return Err(NodeError::InvalidChainInfoResponse);
-            };
-            let block = &executed_block.block;
-            // Check that certificates are valid w.r.t one of our trusted committees.
-            if block.epoch > max_epoch {
-                // We don't accept a certificate from a committee in the future.
-                warn!(
-                    "Postponing received certificate from {:.8} at height {} from future epoch {}",
-                    entry.chain_id, entry.height, block.epoch
-                );
-                // Stop the synchronization here. Do not increment the tracker further so
-                // that this certificate can still be downloaded later, once our committee
-                // is updated.
-                break;
-            }
-            match committees.get(&block.epoch) {
-                Some(committee) => {
-                    // This epoch is recognized by our chain. Let's verify the
-                    // certificate.
-                    certificate.check(committee)?;
-                    certificates.push(certificate);
-                    new_tracker += 1;
-                }
-                None => {
-                    // This epoch is not recognized any more. Let's skip the certificate.
-                    // If a higher block with a recognized epoch comes up later from the
-                    // same chain, the call to `receive_certificate` below will download
-                    // the skipped certificate again.
-                    warn!(
-                        "Skipping received certificate from past epoch {:?}",
-                        block.epoch
-                    );
-                    new_tracker += 1;
-                }
-            }
+            certificates.extend(maybe_certificate);
         }
         Ok((name, new_tracker, certificates))
     }
