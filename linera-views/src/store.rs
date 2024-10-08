@@ -148,9 +148,6 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// Obtains a test config
     async fn new_test_config() -> Result<Self::Config, Self::Error>;
 
-    /// Obtains a benchmark config
-    async fn new_benchmark_config() -> Result<Self::Config, Self::Error>;
-
     /// Connects to an existing namespace using the given configuration.
     async fn connect(
         config: &Self::Config,
@@ -217,16 +214,6 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     fn new_test_store() -> impl Future<Output = Result<Self, Self::Error>> {
         async {
             let config = Self::new_test_config().await?;
-            let namespace = generate_test_namespace();
-            let root_key = &[];
-            Self::recreate_and_connect(&config, &namespace, root_key).await
-        }
-    }
-
-    /// Creates a store for benchmarking purposes
-    fn new_benchmark_store() -> impl Future<Output = Result<Self, Self::Error>> {
-        async {
-            let config = Self::new_benchmark_config().await?;
             let namespace = generate_test_namespace();
             let root_key = &[];
             Self::recreate_and_connect(&config, &namespace, root_key).await

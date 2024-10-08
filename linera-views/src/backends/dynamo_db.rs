@@ -366,10 +366,6 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         })
     }
 
-    async fn new_benchmark_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreInternalError> {
-        Self::new_test_config().await
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -1266,10 +1262,6 @@ impl AdminKeyValueStore for DynamoDbStore {
 
     async fn new_test_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
         Ok(DynamoDbStoreInternal::new_test_config().await?)
-    }
-
-    async fn new_benchmark_config() -> Result<DynamoDbStoreConfig, DynamoDbStoreError> {
-        Ok(DynamoDbStoreInternal::new_benchmark_config().await?)
     }
 
     async fn connect(

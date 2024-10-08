@@ -184,10 +184,6 @@ where
         K::new_test_config().await
     }
 
-    async fn new_benchmark_config() -> Result<K::Config, Self::Error> {
-        K::new_benchmark_config().await
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
