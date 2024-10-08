@@ -112,8 +112,8 @@ query {
 ```
 
 Open both URLs under the entry `link`. Now you can use the application on each chain.
-E.g. [in the 8081 tab](http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID)
-subscribe to the other chain:
+For the 8081 tab, you can run `echo "http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID"`
+to print the URL to navigate to, then subscribe to the other chain using the following query:
 
 ```gql,uri=http://localhost:8081/chains/$CHAIN_1/applications/$APP_ID
 mutation {
@@ -123,7 +123,7 @@ mutation {
 }
 ```
 
-Now make a post [in the 8080 tab](http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID):
+Run `echo "http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID"` to print the URL to navigate to, then make a post:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_2/applications/$APP_ID
 mutation {

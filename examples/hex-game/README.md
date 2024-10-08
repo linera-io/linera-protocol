@@ -73,7 +73,7 @@ sleep 1
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
 The `start` mutation starts a new game. We specify the two players using their new public keys,
-on [`http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`][main_chain]:
+on the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"`:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
 mutation {
@@ -112,13 +112,15 @@ query {
 }
 ```
 
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `HEX_CHAIN` and `MESSAGE_ID` will be properly set for you.
+Alternatively you can set the variables to the `chainId` and `messageId` values, respectively, returned by the previous query yourself.
 Using the message ID, we can assign the new chain to the key in each wallet:
 
 ```bash
 kill %% && sleep 1    # Kill the service so we can use CLI commands for wallet 0.
 
-HEX_CHAIN=ae41b40b288a1e7ed064e2ff749a9ce3e780a5742dca074e6015e77e9dd373f8
-MESSAGE_ID=e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65040000000000000000000000
+HEX_CHAIN=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].chainId')
+MESSAGE_ID=$(echo "$QUERY_RESULT" | jq -r '.gameChains.entry.value[0].messageId')
 
 linera -w0 assign --key $PUB_KEY_1 --message-id $MESSAGE_ID
 linera -w1 assign --key $PUB_KEY_2 --message-id $MESSAGE_ID
@@ -130,20 +132,16 @@ sleep 1
 
 ## Playing the Game
 
-Now the first player can make a move by navigating to [`http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID`][first_player]
+Now the first player can make a move by navigating to the URL you get by running `echo "http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID"`:
 
 ```gql,uri=http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID
 mutation { makeMove(x: 4, y: 4) }
 ```
 
-And the second player player at [`http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID`][second_player]
+And the second player player at the URL you get by running `echo "http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID"`:
 
 ```gql,uri=http://localhost:8081/chains/$HEX_CHAIN/applications/$APP_ID
 mutation { makeMove(x: 4, y: 5) }
 ```
-
-[main_chain]: http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-[first_player]: http://localhost:8080/chains/$HEX_CHAIN/applications/$APP_ID
-[second_player]: http://localhost:8081/chains/$HEX_CHAIN/applications/$APP_ID
 
 <!-- cargo-rdme end -->

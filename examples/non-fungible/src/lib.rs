@@ -102,11 +102,14 @@ Type each of these in the GraphiQL interface and substitute the env variables wi
     }
 ```
 
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `BLOB_HASH` will be properly set for you.
+Alternatively you can set the `BLOB_HASH` variable to the hash returned by the previous query yourself.
+
 ```bash
 BLOB_HASH=$(echo "$QUERY_RESULT" | jq -r '.publishDataBlob')
 ```
 
-- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
+- Run `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"` to print the URL to navigate to.
 - To mint an NFT, run the mutation:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
@@ -126,6 +129,9 @@ BLOB_HASH=$(echo "$QUERY_RESULT" | jq -r '.publishDataBlob')
         ownedNfts(owner: "User:$OWNER_1")
     }
 ```
+
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `TOKEN_ID` will be properly set for you.
+Alternatively you can set the `TOKEN_ID` variable to the `tokenId` value returned by the previous query yourself.
 
 ```bash
 TOKEN_ID=$(echo "$QUERY_RESULT" | jq -r '.ownedNfts[].tokenId')
