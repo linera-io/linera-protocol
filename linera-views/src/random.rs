@@ -59,25 +59,22 @@ pub fn make_nondeterministic_rng() -> NonDeterministicRng {
 }
 
 /// Get a random alphanumeric string that can be used for all tests.
-pub fn generate_random_alphanumeric_string(length: usize) -> String {
-    // Define the characters that are allowed in the alphanumeric string
-    let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
-
-    let alphanumeric_string: String = (0..length)
+pub fn generate_random_alphanumeric_string(length: usize, charset: &[u8]) -> String {
+    (0..length)
         .map(|_| {
             let random_index = make_nondeterministic_rng()
                 .rng_mut()
                 .gen_range(0..charset.len());
             charset[random_index] as char
         })
-        .collect();
-
-    alphanumeric_string
+        .collect()
 }
 
 /// Returns a unique namespace for testing.
 pub fn generate_test_namespace() -> String {
-    let entry = generate_random_alphanumeric_string(20);
+    // Define the characters that are allowed in the alphanumeric string
+    let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    let entry = generate_random_alphanumeric_string(20, charset);
     let namespace = format!("table_{}", entry);
     tracing::warn!("Generating namespace={}", namespace);
     namespace
