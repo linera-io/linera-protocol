@@ -138,6 +138,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
         .await?;
+    client.finalize_committee().await?;
 
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
@@ -150,6 +151,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
         .await?;
+    client.finalize_committee().await?;
     if matches!(network, Network::Grpc) {
         assert_eq!(faucet.current_validators().await?.len(), 6);
     }
@@ -158,6 +160,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client
         .remove_validator(net.validator_name(4).unwrap())
         .await?;
+    client.finalize_committee().await?;
     net.remove_validator(4)?;
     if matches!(network, Network::Grpc) {
         assert_eq!(faucet.current_validators().await?.len(), 5);
@@ -174,6 +177,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     for i in 0..4 {
         let name = net.validator_name(i).unwrap();
         client.remove_validator(name).await?;
+        client.finalize_committee().await?;
         if let Some(service) = &node_service_2 {
             service.process_inbox(&chain_2).await?;
         } else {
@@ -203,6 +207,16 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         let response = node_service_2.query_node(query.clone()).await?;
         let balances = &response["chain"]["executionState"]["system"]["balances"];
         assert_eq!(balances["entry"]["value"].as_str(), Some("5."));
+
+        let query = format!(
+            "query {{ chain(chainId:\"{chain_2}\") {{
+                executionState {{ system {{ committees }} }}
+            }} }}"
+        );
+        let response = node_service_2.query_node(query.clone()).await?;
+        let committees = &response["chain"]["executionState"]["system"]["committees"];
+        let epochs = committees.as_object().unwrap().keys().collect::<Vec<_>>();
+        assert_eq!(&epochs, &["7"]);
     } else {
         client_2.sync(chain_2).await?;
         client_2.process_inbox(chain_2).await?;
