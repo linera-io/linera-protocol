@@ -228,10 +228,6 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
 impl LocalAdminKeyValueStore for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
 
-    async fn new_test_config() -> Result<IndexedDbStoreConfig, IndexedDbStoreError> {
-        Ok(IndexedDbStoreConfig::new(TEST_INDEX_DB_MAX_STREAM_QUERIES))
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -313,7 +309,7 @@ impl LocalAdminKeyValueStore for IndexedDbStore {
 #[cfg(with_testing)]
 mod testing {
     use super::*;
-    use crate::test_utils::generate_test_namespace;
+    use crate::random::generate_test_namespace;
 
     /// Creates a test IndexedDB client for working.
     pub async fn create_indexed_db_store_stream_queries(

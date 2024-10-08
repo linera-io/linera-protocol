@@ -20,7 +20,7 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [features]
 metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
-test = ["tokio/macros", "rand"]
+test = ["tokio/macros"]
 web = ["linera-base/web"]
 indexeddb = ["indexed_db_futures", "wasm-bindgen"]
 web-default = ["web", "indexeddb"]
@@ -46,7 +46,7 @@ linera-views-derive.workspace = true
 linera-witty.workspace = true
 linked-hash-map.workspace = true
 prometheus.workspace = true
-rand = { workspace = true, optional = true, features = ["small_rng"] }
+rand = { workspace = true, features = ["small_rng"] }
 rocksdb = { workspace = true, optional = true }
 scylla = { workspace = true, optional = true }
 serde.workspace = true

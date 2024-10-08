@@ -26,27 +26,20 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
-use linera_storage_service::{
-    client::{service_config_from_endpoint, ServiceStoreClient},
-    common::storage_service_test_endpoint,
-};
+use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{
-    create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
-};
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::{create_scylla_db_common_config, ScyllaDbStore, ScyllaDbStoreConfig};
+use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
-    memory::{create_memory_store_test_config, MemoryStore},
-    test_utils::generate_test_namespace,
+    memory::MemoryStore, random::generate_test_namespace, store::TestKeyValueStore as _,
 };
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
 use {
     linera_views::rocks_db::RocksDbStore,
-    linera_views::store::AdminKeyValueStore as _,
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 
@@ -882,6 +875,8 @@ static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
 pub struct MemoryStorageBuilder {
+    namespace: String,
+    instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
@@ -891,11 +886,15 @@ impl StorageBuilder for MemoryStorageBuilder {
     type Storage = DbStorage<MemoryStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let store_config = create_memory_store_test_config();
-        let namespace = generate_test_namespace();
+        self.instance_counter += 1;
+        let config = MemoryStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
         Ok(DbStorage::new_for_testing(
-            store_config,
+            config,
             &namespace,
             root_key,
             self.wasm_runtime,
@@ -923,6 +922,8 @@ impl MemoryStorageBuilder {
 
 #[cfg(feature = "rocksdb")]
 pub struct RocksDbStorageBuilder {
+    namespace: String,
+    instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
     _permit: SemaphorePermit<'static>,
@@ -932,6 +933,8 @@ pub struct RocksDbStorageBuilder {
 impl RocksDbStorageBuilder {
     pub async fn new() -> Self {
         RocksDbStorageBuilder {
+            namespace: String::new(),
+            instance_counter: 0,
             wasm_runtime: None,
             clock: TestClock::default(),
             _permit: ROCKS_DB_SEMAPHORE.acquire().await.unwrap(),
@@ -955,18 +958,21 @@ impl StorageBuilder for RocksDbStorageBuilder {
     type Storage = DbStorage<RocksDbStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let store_config = RocksDbStore::new_test_config().await?;
-        let namespace = generate_test_namespace();
+        self.instance_counter += 1;
+        let config = RocksDbStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        let storage = DbStorage::new_for_testing(
-            store_config,
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
             root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
-        .await?;
-        Ok(storage)
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -975,8 +981,8 @@ impl StorageBuilder for RocksDbStorageBuilder {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+#[derive(Default)]
 pub struct ServiceStorageBuilder {
-    endpoint: String,
     namespace: String,
     instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
@@ -992,15 +998,9 @@ impl ServiceStorageBuilder {
 
     /// Creates a `ServiceStorage` with the given Wasm runtime.
     pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        let endpoint = storage_service_test_endpoint().unwrap();
-        let clock = TestClock::default();
-        let namespace = generate_test_namespace();
-        Self {
-            endpoint,
-            namespace,
-            instance_counter: 0,
+        ServiceStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            clock,
+            ..ServiceStorageBuilder::default()
         }
     }
 }
@@ -1011,12 +1011,15 @@ impl StorageBuilder for ServiceStorageBuilder {
     type Storage = DbStorage<ServiceStoreClient, TestClock>;
 
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
-        let store_config = service_config_from_endpoint(&self.endpoint)?;
-        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         self.instance_counter += 1;
+        let config = ServiceStoreClient::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
         Ok(DbStorage::new_for_testing(
-            store_config,
+            config,
             &namespace,
             root_key,
             self.wasm_runtime,
@@ -1033,8 +1036,8 @@ impl StorageBuilder for ServiceStorageBuilder {
 #[cfg(feature = "dynamodb")]
 #[derive(Default)]
 pub struct DynamoDbStorageBuilder {
+    namespace: String,
     instance_counter: usize,
-    localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
@@ -1058,28 +1061,21 @@ impl StorageBuilder for DynamoDbStorageBuilder {
     type Storage = DbStorage<DynamoDbStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        if self.localstack.is_none() {
-            self.localstack = Some(LocalStackTestContext::new().await?);
-        }
-        let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let namespace = generate_test_namespace();
-        let namespace = format!("{}_{}", namespace, self.instance_counter);
-        let root_key = &[];
-        let common_config = create_dynamo_db_common_config();
-        let store_config = DynamoDbStoreConfig {
-            config,
-            common_config,
-        };
         self.instance_counter += 1;
-        let storage = DbStorage::new_for_testing(
-            store_config,
+        let config = DynamoDbStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
             root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
-        .await?;
-        Ok(storage)
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1088,27 +1084,12 @@ impl StorageBuilder for DynamoDbStorageBuilder {
 }
 
 #[cfg(feature = "scylladb")]
+#[derive(Default)]
 pub struct ScyllaDbStorageBuilder {
+    namespace: String,
     instance_counter: usize,
-    uri: String,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
-}
-
-#[cfg(feature = "scylladb")]
-impl Default for ScyllaDbStorageBuilder {
-    fn default() -> Self {
-        let instance_counter = 0;
-        let uri = "localhost:9042".to_string();
-        let wasm_runtime = None;
-        let clock = TestClock::new();
-        ScyllaDbStorageBuilder {
-            instance_counter,
-            uri,
-            wasm_runtime,
-            clock,
-        }
-    }
 }
 
 #[cfg(feature = "scylladb")]
@@ -1131,23 +1112,20 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let namespace = generate_test_namespace();
-        let namespace = format!("{}_{}", namespace, self.instance_counter);
+        let config = ScyllaDbStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         let root_key = &[];
-        let common_config = create_scylla_db_common_config();
-        let store_config = ScyllaDbStoreConfig {
-            uri: self.uri.clone(),
-            common_config,
-        };
-        let storage = DbStorage::new_for_testing(
-            store_config,
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
             root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
-        .await?;
-        Ok(storage)
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {

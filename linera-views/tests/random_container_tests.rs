@@ -11,9 +11,9 @@ use linera_views::{
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::HashedByteMapView,
     queue_view::HashedQueueView,
+    random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::RegisterView,
-    test_utils,
     views::{CryptoHashRootView, CryptoHashView, RootView, View, ViewError},
 };
 use rand::{distributions::Uniform, Rng, RngCore};
@@ -43,7 +43,7 @@ where
 #[tokio::test]
 async fn classic_collection_view_check() -> Result<()> {
     let context = create_test_memory_context();
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;
     let nmax: u8 = 25;
@@ -157,7 +157,7 @@ fn total_size(vec: &Vec<(Vec<u8>, Vec<u8>)>) -> SizeData {
 #[tokio::test]
 async fn key_value_store_view_mutability() -> Result<()> {
     let context = create_test_memory_context();
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let mut state_map = BTreeMap::new();
     let n = 40;
     let mut all_keys = BTreeSet::new();
@@ -396,7 +396,7 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
 
 #[tokio::test]
 async fn map_view_mutability() -> Result<()> {
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     for _ in 0..5 {
         run_map_view_mutability(&mut rng).await?;
     }
@@ -411,7 +411,7 @@ pub struct BucketQueueStateView<C> {
 #[tokio::test]
 async fn bucket_queue_view_mutability_check() -> Result<()> {
     let context = create_test_memory_context();
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let mut vector = Vec::new();
     let n = 200;
     for _ in 0..n {
@@ -517,7 +517,7 @@ pub struct QueueStateView<C> {
 #[tokio::test]
 async fn queue_view_mutability_check() -> Result<()> {
     let context = create_test_memory_context();
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let mut vector = Vec::new();
     let n = 20;
     for _ in 0..n {
@@ -626,7 +626,7 @@ where
 #[tokio::test]
 async fn reentrant_collection_view_check() -> Result<()> {
     let context = create_test_memory_context();
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let mut map = BTreeMap::<u8, u32>::new();
     let n = 20;
     let nmax: u8 = 25;

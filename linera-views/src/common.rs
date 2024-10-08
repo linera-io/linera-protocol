@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn test_ordering_serialization() {
-        let mut rng = crate::test_utils::make_deterministic_rng();
+        let mut rng = crate::random::make_deterministic_rng();
         let n = 1000;
         let mut set = BTreeSet::new();
         for _ in 0..n {

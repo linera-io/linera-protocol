@@ -8,15 +8,15 @@ use std::{
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 #[cfg(with_dynamodb)]
-use linera_views::dynamo_db::create_dynamo_db_test_store;
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::create_rocks_db_benchmark_store;
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::create_scylla_db_test_store;
+use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     batch::Batch,
-    memory::create_test_memory_store,
-    store::LocalKeyValueStore,
+    memory::MemoryStore,
+    store::{LocalKeyValueStore, TestKeyValueStore as _},
     test_utils::{add_prefix, get_random_key_values2},
 };
 use tokio::runtime::Runtime;
@@ -81,7 +81,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_contains_key(store, iterations).await
             })
     });
@@ -91,7 +91,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_contains_key(store, iterations).await
             })
     });
@@ -101,7 +101,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_contains_key(store, iterations).await
             })
     });
@@ -111,7 +111,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_contains_key(store, iterations).await
             })
     });
@@ -152,7 +152,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_contains_keys(store, iterations).await
             })
     });
@@ -162,7 +162,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_contains_keys(store, iterations).await
             })
     });
@@ -172,7 +172,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_contains_keys(store, iterations).await
             })
     });
@@ -182,7 +182,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_contains_keys(store, iterations).await
             })
     });
@@ -222,7 +222,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_find_keys_by_prefix(store, iterations).await
             })
     });
@@ -232,7 +232,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_find_keys_by_prefix(store, iterations).await
             })
     });
@@ -242,7 +242,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_find_keys_by_prefix(store, iterations).await
             })
     });
@@ -252,7 +252,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_find_keys_by_prefix(store, iterations).await
             })
     });
@@ -297,7 +297,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_find_key_values_by_prefix(store, iterations).await
             })
     });
@@ -307,7 +307,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_find_key_values_by_prefix(store, iterations).await
             })
     });
@@ -317,7 +317,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_find_key_values_by_prefix(store, iterations).await
             })
     });
@@ -327,7 +327,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_find_key_values_by_prefix(store, iterations).await
             })
     });
@@ -369,7 +369,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_read_value_bytes(store, iterations).await
             })
     });
@@ -379,7 +379,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_read_value_bytes(store, iterations).await
             })
     });
@@ -389,7 +389,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_read_value_bytes(store, iterations).await
             })
     });
@@ -399,7 +399,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_read_value_bytes(store, iterations).await
             })
     });
@@ -443,7 +443,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_read_multi_values_bytes(store, iterations).await
             })
     });
@@ -453,7 +453,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_read_multi_values_bytes(store, iterations).await
             })
     });
@@ -463,7 +463,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_read_multi_values_bytes(store, iterations).await
             })
     });
@@ -473,7 +473,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_read_multi_values_bytes(store, iterations).await
             })
     });
@@ -509,7 +509,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_test_memory_store();
+                let store = MemoryStore::new_test_store().await.unwrap();
                 performance_write_batch(store, iterations).await
             })
     });
@@ -519,7 +519,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_rocks_db_benchmark_store().await;
+                let store = RocksDbStore::new_test_store().await.unwrap();
                 performance_write_batch(store, iterations).await
             })
     });
@@ -529,7 +529,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_dynamo_db_test_store().await;
+                let store = DynamoDbStore::new_test_store().await.unwrap();
                 performance_write_batch(store, iterations).await
             })
     });
@@ -539,7 +539,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                let store = create_scylla_db_test_store().await;
+                let store = ScyllaDbStore::new_test_store().await.unwrap();
                 performance_write_batch(store, iterations).await
             })
     });
