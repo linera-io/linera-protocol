@@ -795,6 +795,15 @@ impl ClientWrapper {
         Ok(())
     }
 
+    pub async fn finalize_committee(&self) -> Result<()> {
+        self.command()
+            .await?
+            .arg("finalize-committee")
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
     /// Runs `linera keygen`.
     pub async fn keygen(&self) -> Result<PublicKey> {
         let stdout = self
@@ -994,7 +1003,7 @@ impl NodeService {
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
-        let n_try = 15;
+        let n_try = 5;
         let query = query.as_ref();
         for i in 0..n_try {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;

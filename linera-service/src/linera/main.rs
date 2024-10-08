@@ -602,9 +602,20 @@ impl Runnable for Job {
                 let Some(certificate) = maybe_certificate else {
                     return Ok(());
                 };
+                info!("Created new committee:\n{:?}", certificate);
+
+                let time_total = time_start.elapsed();
+                info!("Operations confirmed after {} ms", time_total.as_millis());
+            }
+
+            FinalizeCommittee => {
+                info!("Starting operations to remove old committees");
+                let time_start = Instant::now();
+
+                let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
 
                 // Remove the old committee.
-                info!("Finalizing committee:\n{:?}", certificate);
+                info!("Finalizing current committee");
                 context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
@@ -1263,6 +1274,7 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::SetValidator { .. }
         | ClientCommand::RemoveValidator { .. }
         | ClientCommand::ResourceControlPolicy { .. }
+        | ClientCommand::FinalizeCommittee
         | ClientCommand::CreateGenesisConfig { .. }
         | ClientCommand::PublishBytecode { .. }
         | ClientCommand::PublishDataBlob { .. }
