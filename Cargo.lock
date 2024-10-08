@@ -4552,7 +4552,6 @@ dependencies = [
  "dashmap 5.5.3",
  "ed25519-dalek",
  "futures",
- "http 1.1.0",
  "insta",
  "linera-base",
  "linera-chain",
