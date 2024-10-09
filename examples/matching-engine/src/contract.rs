@@ -9,7 +9,7 @@ use std::cmp::min;
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use matching_engine::{
@@ -57,7 +57,7 @@ impl Contract for MatchingEngineContract {
     type Parameters = Parameters;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = MatchingEngine::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = MatchingEngine::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         MatchingEngineContract { state, runtime }
@@ -78,7 +78,7 @@ impl Contract for MatchingEngineContract {
                 let owner = Self::get_owner(&order);
                 let chain_id = self.runtime.chain_id();
                 self.check_account_authentication(owner);
-                if chain_id == self.runtime.application_id().creation.chain_id {
+                if chain_id == self.runtime.application_creator_chain_id() {
                     self.execute_order_local(order, chain_id).await;
                 } else {
                     self.execute_order_remote(order);
@@ -109,7 +109,7 @@ impl Contract for MatchingEngineContract {
     async fn execute_message(&mut self, message: Message) {
         assert_eq!(
             self.runtime.chain_id(),
-            self.runtime.application_id().creation.chain_id,
+            self.runtime.application_creator_chain_id(),
             "Action can only be executed on the chain that created the matching engine"
         );
         match message {
@@ -276,7 +276,7 @@ impl MatchingEngineContract {
     /// * Creation of the message that will represent the order on the chain of the matching
     ///   engine
     fn execute_order_remote(&mut self, order: Order) {
-        let chain_id = self.runtime.application_id().creation.chain_id;
+        let chain_id = self.runtime.application_creator_chain_id();
         let message = Message::ExecuteOrder {
             order: order.clone(),
         };

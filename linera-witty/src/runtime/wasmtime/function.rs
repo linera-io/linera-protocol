@@ -42,7 +42,9 @@ macro_rules! impl_instance_with_function {
                 function: &Self::Function,
                 parameters: Parameters,
             ) -> Result<Results, RuntimeError> {
-                let results = function.call(self.as_context_mut(), parameters.into_wasmtime())?;
+                let results = function
+                    .call(self.as_context_mut(), parameters.into_wasmtime())
+                    .map_err(RuntimeError::Wasmtime)?;
 
                 Ok(Results::from_wasmtime(results))
             }

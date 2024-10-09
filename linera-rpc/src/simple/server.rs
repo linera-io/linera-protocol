@@ -1,17 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use async_trait::async_trait;
 use futures::{channel::mpsc, stream::StreamExt};
+use linera_base::time::Duration;
 use linera_core::{
     node::NodeError,
     worker::{NetworkActions, WorkerError, WorkerState},
     JoinSetExt as _,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use rand::Rng;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -27,7 +25,6 @@ use crate::{
 pub struct Server<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
     host: String,
@@ -43,9 +40,7 @@ where
 impl<S> Server<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         host: String,
@@ -78,9 +73,8 @@ where
 impl<S> Server<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
@@ -111,7 +105,10 @@ where
             // Send the cross-chain query and retry if needed.
             for i in 0..cross_chain_max_retries {
                 // Delay increases linearly with the attempt number.
-                tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i).await;
+                linera_base::time::timer::sleep(
+                    cross_chain_sender_delay + cross_chain_retry_delay * i,
+                )
+                .await;
 
                 let status = pool.send_message_to(message.clone(), &remote_address).await;
                 match status {
@@ -183,7 +180,6 @@ where
 struct RunningServerState<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     server: Server<S>,
     cross_chain_sender: mpsc::Sender<(RpcMessage, ShardId)>,
@@ -193,7 +189,6 @@ where
 impl<S> MessageHandler for RunningServerState<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname(), chain_id = ?message.target_chain_id()))]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
@@ -252,12 +247,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_certificate(
-                        request.certificate,
-                        request.hashed_certificate_values,
-                        request.hashed_blobs,
-                        sender,
-                    )
+                    .handle_certificate(request.certificate, request.blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -312,8 +302,8 @@ where
             | RpcMessage::VersionInfoResponse(_)
             | RpcMessage::GenesisConfigHashQuery
             | RpcMessage::GenesisConfigHashResponse(_)
-            | RpcMessage::DownloadBlob(_)
-            | RpcMessage::DownloadBlobResponse(_)
+            | RpcMessage::DownloadBlobContent(_)
+            | RpcMessage::DownloadBlobContentResponse(_)
             | RpcMessage::DownloadCertificateValue(_)
             | RpcMessage::DownloadCertificateValueResponse(_)
             | RpcMessage::BlobLastUsedBy(_)
@@ -353,7 +343,6 @@ where
 impl<S> RunningServerState<S>
 where
     S: Storage + Send,
-    ViewError: From<S::StoreError>,
 {
     fn handle_network_actions(&mut self, actions: NetworkActions) {
         for request in actions.cross_chain_requests {

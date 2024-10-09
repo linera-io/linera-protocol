@@ -6,14 +6,14 @@
 //! The [`TestValidator`] is a minimal validator with a single shard. Micro-chains can be added to
 //! it, and blocks can be added to each microchain individually.
 
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use dashmap::DashMap;
 use futures::FutureExt as _;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, ApplicationPermissions, Timestamp},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_core::worker::WorkerState;
@@ -22,7 +22,8 @@ use linera_execution::{
     system::{OpenChainConfig, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
     WasmRuntime,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
+use linera_views::memory::MemoryStore;
 use serde::Serialize;
 
 use super::ActiveChain;
@@ -35,13 +36,16 @@ use crate::ContractAbi;
 /// # use linera_base::{data_types::BlockHeight, identifiers::ChainId};
 /// # tokio_test::block_on(async {
 /// let validator = TestValidator::new().await;
-/// assert_eq!(validator.new_chain().await.get_tip_height().await, BlockHeight(0));
+/// assert_eq!(
+///     validator.new_chain().await.get_tip_height().await,
+///     BlockHeight(0)
+/// );
 /// # });
 /// ```
 pub struct TestValidator {
     key_pair: KeyPair,
     committee: Committee,
-    worker: WorkerState<MemoryStorage<TestClock>>,
+    worker: WorkerState<DbStorage<MemoryStore, TestClock>>,
     clock: TestClock,
     chains: Arc<DashMap<ChainId, ActiveChain>>,
 }
@@ -64,14 +68,15 @@ impl TestValidator {
         let key_pair = KeyPair::generate();
         let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
         let wasm_runtime = Some(WasmRuntime::default());
-        let storage = MemoryStorage::make_test_storage(wasm_runtime)
+        let storage = DbStorage::<MemoryStore, _>::make_test_storage(wasm_runtime)
             .now_or_never()
-            .expect("execution of MemoryStorage::new should not await anything");
-        let clock = storage.clock.clone();
+            .expect("execution of DbStorage::new should not await anything");
+        let clock = storage.clock().clone();
         let worker = WorkerState::new(
             "Single validator node".to_string(),
             Some(key_pair.copy()),
             storage,
+            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
         );
 
         let validator = TestValidator {
@@ -132,7 +137,7 @@ impl TestValidator {
     }
 
     /// Returns the locked [`WorkerState`] of this validator.
-    pub(crate) fn worker(&self) -> WorkerState<MemoryStorage<TestClock>> {
+    pub(crate) fn worker(&self) -> WorkerState<DbStorage<MemoryStore, TestClock>> {
         self.worker.clone()
     }
 
@@ -190,13 +195,21 @@ impl TestValidator {
             application_permissions: ApplicationPermissions::default(),
         };
 
-        let messages = admin_chain
+        let certificate = admin_chain
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
             })
             .await;
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
 
-        ChainDescription::Child(messages[OPEN_CHAIN_MESSAGE_INDEX as usize])
+        ChainDescription::Child(MessageId {
+            chain_id: executed_block.block.chain_id,
+            height: executed_block.block.height,
+            index: OPEN_CHAIN_MESSAGE_INDEX,
+        })
     }
 
     /// Returns the [`ActiveChain`] reference to the microchain identified by `chain_id`.

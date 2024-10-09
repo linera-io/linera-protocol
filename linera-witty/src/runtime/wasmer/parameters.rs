@@ -43,7 +43,6 @@ where
     type ImportParameters = Parameter;
     type ExportParameters = (Parameter,);
 
-    #[allow(clippy::unused_unit)]
     fn into_wasmer(self) -> Self::ImportParameters {
         let hlist_pat![parameter] = self;
 
@@ -103,5 +102,6 @@ repeat_macro!(parameters =>
     m: M,
     n: N,
     o: O,
-    p: P
+    p: P,
+    q: Q
 );

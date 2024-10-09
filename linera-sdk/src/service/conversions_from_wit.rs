@@ -5,8 +5,8 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Blob, BlockHeight, HashedBlob, Timestamp},
-    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, MessageId, Owner},
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 
 use super::wit::service_system_api as wit_system_api;
@@ -20,27 +20,6 @@ impl From<wit_system_api::CryptoHash> for ChainId {
 impl From<wit_system_api::Owner> for Owner {
     fn from(owner: wit_system_api::Owner) -> Self {
         Owner(owner.inner0.into())
-    }
-}
-
-impl From<wit_system_api::HashedBlob> for HashedBlob {
-    fn from(hashed_blob: wit_system_api::HashedBlob) -> Self {
-        HashedBlob {
-            id: hashed_blob.id.into(),
-            blob: hashed_blob.blob.into(),
-        }
-    }
-}
-
-impl From<wit_system_api::BlobId> for BlobId {
-    fn from(blob_id: wit_system_api::BlobId) -> Self {
-        BlobId(blob_id.inner0.into())
-    }
-}
-
-impl From<wit_system_api::Blob> for Blob {
-    fn from(blob: wit_system_api::Blob) -> Self {
-        Blob { bytes: blob.bytes }
     }
 }
 
@@ -96,7 +75,10 @@ impl From<wit_system_api::ApplicationId> for ApplicationId {
 
 impl From<wit_system_api::BytecodeId> for BytecodeId {
     fn from(bytecode_id: wit_system_api::BytecodeId) -> Self {
-        BytecodeId::new(bytecode_id.message_id.into())
+        BytecodeId::new(
+            bytecode_id.contract_blob_hash.into(),
+            bytecode_id.service_blob_hash.into(),
+        )
     }
 }
 

@@ -3,44 +3,56 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{iter, sync::Arc};
+use std::{collections::BTreeMap, iter};
 
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, BlockHeight, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, Blob, BlockHeight, Bytecode, Timestamp,
+        UserApplicationDescription,
+    },
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId},
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
-    system::OpenChainConfig,
+    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
-    BytecodeLocation, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, SystemMessage,
-    TestExecutionRuntimeContext, UserApplicationDescription,
+    ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
+    Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
-    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    context::{Context as _, MemoryContext},
+    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+    random::generate_test_namespace,
     views::{View, ViewError},
 };
 
 use crate::{
-    data_types::HashedCertificateValue,
+    data_types::{HashedCertificateValue, IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
-    ChainError, ChainStateView,
+    ChainError, ChainExecutionContext, ChainStateView,
 };
 
 impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
     MemoryContext<TestExecutionRuntimeContext>:
-        linera_views::common::Context + Clone + Send + Sync + 'static,
+        linera_views::context::Context + Clone + Send + Sync + 'static,
     ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
+        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::context::Context>::Error>,
 {
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, exec_runtime_context);
+        let namespace = generate_test_namespace();
+        let root_key = &[];
+        let context = MemoryContext::new_for_testing(
+            TEST_MEMORY_MAX_STREAM_QUERIES,
+            &namespace,
+            root_key,
+            exec_runtime_context,
+        );
         Self::load(context)
             .await
             .expect("Loading from memory should work")
@@ -48,12 +60,14 @@ where
 }
 
 fn make_app_description() -> UserApplicationDescription {
+    let contract = Bytecode::new(b"contract".into());
+    let service = Bytecode::new(b"service".into());
+    let contract_blob = Blob::new_contract_bytecode(contract.compress());
+    let service_blob = Blob::new_service_bytecode(service.compress());
+
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
     UserApplicationDescription {
-        bytecode_id: BytecodeId::new(make_admin_message_id(BlockHeight(1))),
-        bytecode_location: BytecodeLocation {
-            certificate_hash: CryptoHash::test_hash("bytecode certificate"),
-            operation_index: 0,
-        },
+        bytecode_id,
         creation: make_admin_message_id(BlockHeight(2)),
         required_application_ids: vec![],
         parameters: vec![],
@@ -85,6 +99,82 @@ fn make_open_chain_config() -> OpenChainConfig {
 }
 
 #[tokio::test]
+async fn test_block_size_limit() {
+    let time = Timestamp::from(0);
+    let message_id = make_admin_message_id(BlockHeight(3));
+    let chain_id = ChainId::child(message_id);
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    // The size of the executed valid block below.
+    let maximum_executed_block_size = 675;
+
+    // Initialize the chain.
+    let mut config = make_open_chain_config();
+    config.committees.insert(
+        Epoch(0),
+        Committee::new(
+            BTreeMap::from([(
+                ValidatorName(PublicKey::test_key(1)),
+                ValidatorState {
+                    network_address: PublicKey::test_key(1).to_string(),
+                    votes: 1,
+                },
+            )]),
+            ResourceControlPolicy {
+                maximum_executed_block_size,
+                ..ResourceControlPolicy::default()
+            },
+        ),
+    );
+
+    chain
+        .execute_init_message(message_id, &config, time, time)
+        .await
+        .unwrap();
+    let open_chain_bundle = IncomingBundle {
+        origin: Origin::chain(admin_id()),
+        bundle: MessageBundle {
+            certificate_hash: CryptoHash::test_hash("certificate"),
+            height: BlockHeight(1),
+            transaction_index: 0,
+            timestamp: time,
+            messages: vec![Message::System(SystemMessage::OpenChain(config))
+                .to_posted(0, MessageKind::Protected)],
+        },
+        action: MessageAction::Accept,
+    };
+
+    let valid_block = make_first_block(chain_id).with_incoming_bundle(open_chain_bundle.clone());
+
+    // Any block larger than the valid block is rejected.
+    let invalid_block = valid_block
+        .clone()
+        .with_operation(SystemOperation::Transfer {
+            owner: None,
+            recipient: Recipient::root(0),
+            amount: Amount::ONE,
+        });
+    let result = chain.execute_block(&invalid_block, time, None).await;
+    assert_matches!(
+        result,
+        Err(ChainError::ExecutionError(
+            ExecutionError::ExecutedBlockTooLarge,
+            ChainExecutionContext::Operation(1),
+        ))
+    );
+
+    // The valid block is accepted...
+    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
+    let executed_block = outcome.with(valid_block);
+
+    // ...because its size is exactly at the allowed limit.
+    assert_eq!(
+        bcs::serialized_size(&executed_block).unwrap(),
+        maximum_executed_block_size as usize
+    );
+}
+
+#[tokio::test]
 async fn test_application_permissions() {
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
@@ -94,34 +184,50 @@ async fn test_application_permissions() {
     // Create a mock application.
     let app_description = make_app_description();
     let application_id = ApplicationId::from(&app_description);
-    let application = Arc::new(MockApplication::default());
-    let extra = &chain.context().extra;
+    let application = MockApplication::default();
+    let extra = &chain.context().extra();
     extra
         .user_contracts()
-        .insert(application_id, application.clone());
+        .insert(application_id, application.clone().into());
+    let contract_blob = Blob::new_contract_bytecode(Bytecode::new(b"contract".into()).compress());
+    extra.add_blob(contract_blob);
+    let service_blob = Blob::new_service_bytecode(Bytecode::new(b"service".into()).compress());
+    extra.add_blob(service_blob);
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {
         application_permissions: ApplicationPermissions::new_single(application_id),
         ..make_open_chain_config()
     };
-    let message = SystemMessage::OpenChain(config).into();
     chain
-        .execute_init_message(message_id, &message, time, time)
+        .execute_init_message(message_id, &config, time, time)
         .await
         .unwrap();
+    let open_chain_message = Message::System(SystemMessage::OpenChain(config));
 
-    // The OpenChain message must be included in the first block. Also register the app.
-    let open_chain_message = message.to_simple_incoming(admin_id(), BlockHeight(1));
     let register_app_message = SystemMessage::RegisterApplications {
         applications: vec![app_description],
-    }
-    .to_simple_incoming(admin_id(), BlockHeight(2));
+    };
+
+    // The OpenChain message must be included in the first block. Also register the app.
+    let bundle = IncomingBundle {
+        origin: Origin::chain(admin_id()),
+        bundle: MessageBundle {
+            certificate_hash: CryptoHash::test_hash("certificate"),
+            height: BlockHeight(1),
+            transaction_index: 0,
+            timestamp: Timestamp::from(0),
+            messages: vec![
+                open_chain_message.to_posted(0, MessageKind::Protected),
+                register_app_message.to_posted(1, MessageKind::Simple),
+            ],
+        },
+        action: MessageAction::Accept,
+    };
 
     // An operation that doesn't belong to the app isn't allowed.
     let invalid_block = make_first_block(chain_id)
-        .with_incoming_message(open_chain_message.clone())
-        .with_incoming_message(register_app_message.clone())
+        .with_incoming_bundle(bundle.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
@@ -136,8 +242,7 @@ async fn test_application_permissions() {
         bytes: b"foo".to_vec(),
     };
     let valid_block = make_first_block(chain_id)
-        .with_incoming_message(open_chain_message)
-        .with_incoming_message(register_app_message.clone())
+        .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
     let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));

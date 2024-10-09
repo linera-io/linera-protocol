@@ -3,21 +3,15 @@
 
 use std::collections::{HashMap, HashSet};
 
-use custom_debug_derive::Debug;
-use linera_base::{
-    crypto::CryptoHash,
-    hex_debug,
-    identifiers::{BytecodeId, MessageId},
-};
+use linera_base::{data_types::UserApplicationDescription, identifiers::UserApplicationId};
 use linera_views::{
-    common::Context,
+    context::Context,
     map_view::HashedMapView,
-    views::{ClonableView, HashableView, ViewError},
+    views::{ClonableView, HashableView},
 };
-use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
-    linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    linera_views::context::{create_test_memory_context, MemoryContext},
     linera_views::views::View,
     std::collections::BTreeMap,
 };
@@ -28,50 +22,8 @@ use crate::SystemExecutionError;
 #[path = "unit_tests/applications_tests.rs"]
 mod applications_tests;
 
-/// Alias for `linera_base::identifiers::ApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type UserApplicationId<A = ()> = linera_base::identifiers::ApplicationId<A>;
-
-/// Description of the necessary information to run a user application.
-#[allow(clippy::large_enum_variant)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
-pub struct UserApplicationDescription {
-    /// The unique ID of the bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
-    /// The location of the bytecode to use for the application.
-    pub bytecode_location: BytecodeLocation,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
-    /// The parameters of the application.
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    pub parameters: Vec<u8>,
-    /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
-}
-
-impl From<&UserApplicationDescription> for UserApplicationId {
-    fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId {
-            bytecode_id: description.bytecode_id,
-            creation: description.creation,
-        }
-    }
-}
-
-/// A reference to where the application bytecode is stored.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct BytecodeLocation {
-    /// The certificate that published the bytecode.
-    pub certificate_hash: CryptoHash,
-    /// The index in the certificate of the operation that published the bytecode (not the message!).
-    pub operation_index: u32,
-}
-
 #[derive(Debug, ClonableView, HashableView)]
 pub struct ApplicationRegistryView<C> {
-    /// The application bytecodes that have been published.
-    pub published_bytecodes: HashedMapView<C, BytecodeId, BytecodeLocation>,
     /// The applications that are known by the chain.
     pub known_applications: HashedMapView<C, UserApplicationId, UserApplicationDescription>,
 }
@@ -79,58 +31,19 @@ pub struct ApplicationRegistryView<C> {
 #[cfg(with_testing)]
 #[derive(Default, Eq, PartialEq, Debug, Clone)]
 pub struct ApplicationRegistry {
-    pub published_bytecodes: BTreeMap<BytecodeId, BytecodeLocation>,
     pub known_applications: BTreeMap<UserApplicationId, UserApplicationDescription>,
 }
 
 impl<C> ApplicationRegistryView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     #[cfg(with_testing)]
     pub fn import(&mut self, registry: ApplicationRegistry) -> Result<(), SystemExecutionError> {
-        for (id, location) in registry.published_bytecodes {
-            self.published_bytecodes.insert(&id, location)?;
-        }
         for (id, description) in registry.known_applications {
             self.known_applications.insert(&id, description)?;
         }
         Ok(())
-    }
-
-    /// Registers a published bytecode so that it can be used by applications.
-    ///
-    /// Keeps track of the bytecode's location so that it can be loaded when needed.
-    pub fn register_published_bytecode(
-        &mut self,
-        id: BytecodeId,
-        location: BytecodeLocation,
-    ) -> Result<(), SystemExecutionError> {
-        self.published_bytecodes.insert(&id, location)?;
-        Ok(())
-    }
-
-    /// Returns all the known locations of published bytecode.
-    pub async fn bytecode_locations(
-        &self,
-    ) -> Result<Vec<(BytecodeId, BytecodeLocation)>, SystemExecutionError> {
-        let mut locations = Vec::new();
-        self.published_bytecodes
-            .for_each_index_value(|id, location| {
-                locations.push((id, location));
-                Ok(())
-            })
-            .await?;
-        Ok(locations)
-    }
-
-    /// Returns the location of published bytecode with the given ID.
-    pub async fn bytecode_location_for(
-        &self,
-        id: &BytecodeId,
-    ) -> Result<Option<BytecodeLocation>, SystemExecutionError> {
-        Ok(self.published_bytecodes.get(id).await?)
     }
 
     /// Registers an existing application.
@@ -165,13 +78,7 @@ where
             bytecode_id,
             creation,
         } = application_id;
-        let bytecode_location = self
-            .published_bytecodes
-            .get(&bytecode_id)
-            .await?
-            .ok_or(SystemExecutionError::UnknownBytecodeId(bytecode_id))?;
         let description = UserApplicationDescription {
-            bytecode_location,
             bytecode_id,
             parameters,
             creation,
@@ -260,10 +167,9 @@ where
 impl ApplicationRegistryView<MemoryContext<()>>
 where
     MemoryContext<()>: Context + Clone + Send + Sync + 'static,
-    ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
+        let context = create_test_memory_context();
         Self::load(context)
             .await
             .expect("Loading from memory should work")

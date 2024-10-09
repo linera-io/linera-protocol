@@ -10,11 +10,11 @@ use std::{
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, Owner},
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{ApplicationId, ChainId, EventId, Owner},
 };
 
-use crate::{KeyValueStore, Service};
+use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
 pub struct MockServiceRuntime<Application>
@@ -30,6 +30,7 @@ where
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
+    blobs: RefCell<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     key_value_store: KeyValueStore,
 }
 
@@ -58,6 +59,7 @@ where
             owner_balances: RefCell::new(None),
             query_application_handler: RefCell::new(None),
             url_blobs: RefCell::new(None),
+            blobs: RefCell::new(None),
             key_value_store: KeyValueStore::mock(),
         }
     }
@@ -65,6 +67,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         self.key_value_store.clone()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Configures the application parameters to return during the test.
@@ -357,6 +364,61 @@ where
             })
     }
 
+    /// Configures the `blobs` returned when fetching from hashes during the test.
+    pub fn with_blobs(self, blobs: impl IntoIterator<Item = (DataBlobHash, Vec<u8>)>) -> Self {
+        *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
+        self
+    }
+
+    /// Configures the `blobs` returned when fetching from hashes during the test.
+    pub fn set_blobs(&self, blobs: impl IntoIterator<Item = (DataBlobHash, Vec<u8>)>) -> &Self {
+        *self.blobs.borrow_mut() = Some(blobs.into_iter().collect());
+        self
+    }
+
+    /// Configures the `blob` returned when fetching from the given hash during the test.
+    pub fn with_blob(self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> Self {
+        self.set_blob(hash, blob);
+        self
+    }
+
+    /// Configures the `blob` returned when fetching from the hash during the test.
+    pub fn set_blob(&self, hash: impl Into<DataBlobHash>, blob: Vec<u8>) -> &Self {
+        self.blobs
+            .borrow_mut()
+            .get_or_insert_with(HashMap::new)
+            .insert(hash.into(), blob);
+        self
+    }
+
+    /// Fetches a blob from a given hash.
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+        self.blobs
+            .borrow()
+            .as_ref()
+            .and_then(|blobs| blobs.get(&hash).cloned())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Blob for hash {hash:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_blob` first"
+                )
+            })
+    }
+
+    /// Asserts that a blob with the given hash exists in storage.
+    pub fn assert_blob_exists(&mut self, hash: DataBlobHash) {
+        self.blobs
+            .borrow()
+            .as_ref()
+            .map(|blobs| blobs.contains_key(&hash))
+            .unwrap_or_else(|| {
+                panic!(
+                    "Blob for hash {hash:?} has not been mocked, \
+                    please call `MockServiceRuntime::set_blob` first"
+                )
+            });
+    }
+
     /// Loads a mocked value from the `cell` cache or panics with a provided `message`.
     fn fetch_mocked_value<T>(cell: &Cell<Option<T>>, message: &str) -> T
     where
@@ -365,11 +427,6 @@ where
         let value = cell.take().expect(message);
         cell.set(Some(value.clone()));
         value
-    }
-
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, _blob_id: &BlobId) -> HashedBlob {
-        panic!("Unexpected read_blob call");
     }
 
     /// Reads an event with the given ID from storage.

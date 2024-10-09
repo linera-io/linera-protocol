@@ -7,12 +7,12 @@ use std::cell::Cell;
 
 use linera_base::{
     abi::ServiceAbi,
-    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, Owner},
+    data_types::{Amount, BlockHeight, Timestamp},
+    identifiers::{ApplicationId, ChainId, EventId, Owner},
 };
 
 use super::wit::service_system_api as wit;
-use crate::{KeyValueStore, Service};
+use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
 
 /// The runtime available during execution of a query.
 pub struct ServiceRuntime<Application>
@@ -50,6 +50,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         KeyValueStore::for_services()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Returns the application parameters provided when the application was created.
@@ -145,9 +150,14 @@ where
         value
     }
 
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
-        wit::read_blob(blob_id.into()).into()
+    /// Reads a data blob with the given hash from storage.
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+        wit::read_data_blob(hash.0.into())
+    }
+
+    /// Asserts that a data blob with the given hash exists in storage.
+    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+        wit::assert_data_blob_exists(hash.0.into())
     }
 
     /// Reads an event with the given ID from storage.

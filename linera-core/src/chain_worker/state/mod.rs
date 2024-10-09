@@ -9,14 +9,14 @@ mod temporary_changes;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    sync::Arc,
+    sync::{self, Arc},
 };
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, HashedBlob},
+    data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -26,14 +26,11 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BytecodeLocation, ExecutionRequest, Query, QueryContext, Response,
-    ServiceRuntimeRequest, UserApplicationDescription, UserApplicationId,
+    committee::Epoch, Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
 };
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
-#[cfg(with_testing)]
-use {linera_base::identifiers::BytecodeId, linera_chain::data_types::Event};
 
 #[cfg(test)]
 pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
@@ -52,33 +49,31 @@ use crate::{
 pub struct ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     config: ChainWorkerConfig,
     storage: StorageClient,
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
-    execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-    runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+    service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-    recent_hashed_blobs: Arc<ValueCache<BlobId, HashedBlob>>,
+    recent_blobs: Arc<ValueCache<BlobId, Blob>>,
+    tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     knows_chain_is_active: bool,
 }
 
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-        blob_cache: Arc<ValueCache<BlobId, HashedBlob>>,
+        blob_cache: Arc<ValueCache<BlobId, Blob>>,
+        tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         chain_id: ChainId,
-        execution_state_receiver: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -87,10 +82,10 @@ where
             storage,
             chain,
             shared_chain_view: None,
-            execution_state_receiver,
-            runtime_request_sender,
+            service_runtime_endpoint,
             recent_hashed_certificate_values: certificate_value_cache,
-            recent_hashed_blobs: blob_cache,
+            recent_blobs: blob_cache,
+            tracked_chains,
             knows_chain_is_active: false,
         })
     }
@@ -141,18 +136,18 @@ where
             .await
     }
 
-    /// Searches for an event in one of the chain's inboxes.
+    /// Searches for a bundle in one of the chain's inboxes.
     #[cfg(with_testing)]
-    pub(super) async fn find_event_in_inbox(
+    pub(super) async fn find_bundle_in_inbox(
         &mut self,
         inbox_id: Origin,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
-    ) -> Result<Option<Event>, WorkerError> {
+    ) -> Result<Option<MessageBundle>, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
-            .find_event_in_inbox(inbox_id, certificate_hash, height, index)
+            .find_bundle_in_inbox(inbox_id, certificate_hash, height, index)
             .await
     }
 
@@ -164,19 +159,6 @@ where
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .query_application(query)
-            .await
-    }
-
-    /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
-    /// chain.
-    #[cfg(with_testing)]
-    pub(super) async fn read_bytecode_location(
-        &mut self,
-        bytecode_id: BytecodeId,
-    ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
-            .await
-            .read_bytecode_location(bytecode_id)
             .await
     }
 
@@ -243,12 +225,11 @@ where
     pub(super) async fn process_validated_block(
         &mut self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_validated_block(certificate, hashed_certificate_values, hashed_blobs)
+            .process_validated_block(certificate, blobs)
             .await
     }
 
@@ -256,12 +237,11 @@ where
     pub(super) async fn process_confirmed_block(
         &mut self,
         certificate: Certificate,
-        hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_confirmed_block(certificate, hashed_certificate_values, hashed_blobs)
+            .process_confirmed_block(certificate, blobs)
             .await
     }
 
@@ -269,8 +249,8 @@ where
     pub(super) async fn process_cross_chain_update(
         &mut self,
         origin: Origin,
-        bundles: Vec<MessageBundle>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
+        bundles: Vec<(Epoch, MessageBundle)>,
+    ) -> Result<Option<(BlockHeight, NetworkActions)>, WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
             .process_cross_chain_update(origin, bundles)
@@ -323,39 +303,30 @@ where
         Ok(())
     }
 
-    /// Returns an error if the block requires bytecode or a blob we don't have, or if unrelated bytecode
-    /// hashed certificate values or blobs were provided.
+    /// Returns an error if the block requires a blob we don't have, or if unrelated blobs were provided.
     async fn check_no_missing_blobs(
         &self,
-        block: &Block,
         blobs_in_block: HashSet<BlobId>,
-        hashed_certificate_values: &[HashedCertificateValue],
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<(), WorkerError> {
-        let missing_bytecodes = self
-            .get_missing_bytecodes(block, hashed_certificate_values)
-            .await?;
-        let missing_blobs = self.get_missing_blobs(blobs_in_block, hashed_blobs).await?;
+        let missing_blobs = self.get_missing_blobs(blobs_in_block, blobs).await?;
 
-        if missing_bytecodes.is_empty() && missing_blobs.is_empty() {
+        if missing_blobs.is_empty() {
             return Ok(());
         }
 
-        Err(WorkerError::ApplicationBytecodesOrBlobsNotFound(
-            missing_bytecodes,
-            missing_blobs,
-        ))
+        Err(WorkerError::BlobsNotFound(missing_blobs))
     }
 
     /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
     async fn get_missing_blobs(
         &self,
         mut required_blob_ids: HashSet<BlobId>,
-        hashed_blobs: &[HashedBlob],
+        blobs: &[Blob],
     ) -> Result<Vec<BlobId>, WorkerError> {
         // Find all certificates containing blobs used when executing this block.
-        for hashed_blob in hashed_blobs {
-            let blob_id = hashed_blob.id();
+        for blob in blobs {
+            let blob_id = blob.id();
             ensure!(
                 required_blob_ids.remove(&blob_id),
                 WorkerError::UnneededBlob { blob_id }
@@ -364,7 +335,7 @@ where
 
         let pending_blobs = &self.chain.manager.get().pending_blobs;
         let blob_ids = self
-            .recent_hashed_blobs
+            .recent_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
@@ -374,11 +345,11 @@ where
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
-    /// chain or in the `recent_hashed_blobs` cache.
-    async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<HashedBlob>, WorkerError> {
+    /// chain or in the `recent_blobs` cache.
+    async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, HashedBlob>, HashSet<BlobId>) =
-            self.recent_hashed_blobs.try_get_many(blob_ids).await;
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
+            self.recent_blobs.try_get_many(blob_ids).await;
 
         let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
         for blob_id in not_found_blobs {
@@ -390,63 +361,46 @@ where
         Ok(blobs)
     }
 
-    /// Returns an error if the block requires bytecode we don't have, or if unrelated bytecode
-    /// hashed certificate values were provided.
-    async fn get_missing_bytecodes(
-        &self,
-        block: &Block,
-        hashed_certificate_values: &[HashedCertificateValue],
-    ) -> Result<Vec<BytecodeLocation>, WorkerError> {
-        // Find all certificates containing bytecode used when executing this block.
-        let mut required_locations_left: HashMap<_, _> = block
-            .bytecode_locations()
-            .into_iter()
-            .map(|bytecode_location| (bytecode_location.certificate_hash, bytecode_location))
-            .collect();
-        for value in hashed_certificate_values {
-            let value_hash = value.hash();
-            ensure!(
-                required_locations_left.remove(&value_hash).is_some(),
-                WorkerError::UnneededValue { value_hash }
-            );
-        }
-        let locations = self
-            .recent_hashed_certificate_values
-            .subtract_cached_items_from::<_, Vec<_>>(
-                required_locations_left.into_values(),
-                |location| &location.certificate_hash,
-            )
-            .await
-            .into_iter()
-            .collect::<Vec<_>>();
-        let hashes = locations
-            .iter()
-            .map(|location| location.certificate_hash)
-            .collect::<Vec<_>>();
-        let results = self
-            .storage
-            .contains_hashed_certificate_values(hashes)
-            .await?;
-        let mut missing_locations = vec![];
-        for (location, result) in locations.into_iter().zip(results) {
-            if !result {
-                missing_locations.push(location);
-            }
-        }
-
-        Ok(missing_locations)
+    /// Inserts a [`Blob`] into the worker's cache.
+    async fn cache_recent_blob<'a>(&mut self, blob: Cow<'a, Blob>) -> bool {
+        self.recent_blobs.insert(blob).await
     }
 
-    /// Inserts a [`HashedBlob`] into the worker's cache.
-    async fn cache_recent_blob<'a>(&mut self, hashed_blob: Cow<'a, HashedBlob>) -> bool {
-        self.recent_hashed_blobs.insert(hashed_blob).await
+    /// Adds any newly created chains to the set of `tracked_chains`.
+    fn track_newly_created_chains(&self, block: &ExecutedBlock) {
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            let messages = block.messages().iter().flatten();
+            let open_chain_message_indices =
+                messages
+                    .enumerate()
+                    .filter_map(|(index, outgoing_message)| match outgoing_message.message {
+                        Message::System(SystemMessage::OpenChain(_)) => Some(index),
+                        _ => None,
+                    });
+            let open_chain_message_ids =
+                open_chain_message_indices.map(|index| block.message_id(index as u32));
+            let new_chain_ids = open_chain_message_ids.map(ChainId::child);
+
+            tracked_chains
+                .write()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`")
+                .extend(new_chain_ids);
+        }
     }
 
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
         let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
-        let pairs = self.chain.outboxes.try_load_all_entries().await?;
-        for (target, outbox) in pairs {
+        let mut targets = self.chain.outboxes.indices().await?;
+        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            let tracked_chains = tracked_chains
+                .read()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`");
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
+        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        for (target, outbox) in targets.into_iter().zip(outboxes) {
+            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let heights = outbox.queue.elements().await?;
             heights_by_recipient
                 .entry(target.recipient)

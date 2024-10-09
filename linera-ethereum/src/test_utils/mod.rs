@@ -14,7 +14,7 @@ use linera_alloy::{
     sol,
     transports::http::reqwest::Client,
 };
-use linera_storage_service::child::get_free_port;
+use linera_base::port::get_free_port;
 use url::Url;
 
 use crate::{
@@ -36,7 +36,7 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,

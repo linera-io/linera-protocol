@@ -7,8 +7,6 @@ This document contains the help content for the `linera` command-line program.
 * [`linera`↴](#linera)
 * [`linera transfer`↴](#linera-transfer)
 * [`linera open-chain`↴](#linera-open-chain)
-* [`linera subscribe`↴](#linera-subscribe)
-* [`linera unsubscribe`↴](#linera-unsubscribe)
 * [`linera open-multi-owner-chain`↴](#linera-open-multi-owner-chain)
 * [`linera change-ownership`↴](#linera-change-ownership)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
@@ -22,13 +20,15 @@ This document contains the help content for the `linera` command-line program.
 * [`linera query-validators`↴](#linera-query-validators)
 * [`linera set-validator`↴](#linera-set-validator)
 * [`linera remove-validator`↴](#linera-remove-validator)
+* [`linera finalize-committee`↴](#linera-finalize-committee)
 * [`linera resource-control-policy`↴](#linera-resource-control-policy)
 * [`linera create-genesis-config`↴](#linera-create-genesis-config)
 * [`linera watch`↴](#linera-watch)
 * [`linera service`↴](#linera-service)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-bytecode`↴](#linera-publish-bytecode)
-* [`linera publish-blob`↴](#linera-publish-blob)
+* [`linera publish-data-blob`↴](#linera-publish-data-blob)
+* [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera request-application`↴](#linera-request-application)
@@ -59,8 +59,6 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
 * `transfer` — Transfer funds
 * `open-chain` — Open (i.e. activate) a new chain deriving the UID from an existing one
-* `subscribe` — Subscribe to a system channel
-* `unsubscribe` — Unsubscribe from a system channel
 * `open-multi-owner-chain` — Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
 * `change-ownership` — Change who owns the chain, and how the owners work together proposing blocks
 * `change-application-permissions` — Changes the application permissions configuration
@@ -74,13 +72,15 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `query-validators` — Show the current set of validators for a chain
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
+* `finalize-committee` — Deprecates all committees except the last one
 * `resource-control-policy` — View or update the resource control policy
 * `create-genesis-config` — Create genesis configuration for a Linera deployment. Create initial user chains and print information to be used for initialization of validator setup. This will also create an initial wallet for the owner of the initial "root" chains
 * `watch` — Watch the network for notifications
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-bytecode` — Publish bytecode
-* `publish-blob` — Publish a blob of binary data
+* `publish-data-blob` — Publish a data blob of binary data
+* `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required bytecode
 * `request-application` — Request an application from another chain, so it can be used on this one
@@ -102,7 +102,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--recv-timeout-ms <RECV_TIMEOUT>` — Timeout for receiving responses (milliseconds)
 
   Default value: `4000`
-* `--max-pending-messages <MAX_PENDING_MESSAGES>`
+* `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
@@ -113,15 +113,16 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--cache-size <CACHE_SIZE>` — The maximal number of entries in the storage cache
 
   Default value: `1000`
-* `--notification-retry-delay-ms <NOTIFICATION_RETRY_DELAY>` — Delay increment for retrying to connect to a validator for notifications
+* `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`
-* `--notification-retries <NOTIFICATION_RETRIES>` — Number of times to retry connecting to a validator for notifications
+* `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator
 
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
+* `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
-* `--message-policy <MESSAGE_POLICY>` — The policy for handling incoming messages
+* `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 
   Default value: `accept`
 
@@ -133,6 +134,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
   - `ignore`:
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
+* `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
 
 
 
@@ -169,48 +171,6 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 
 
 
-## `linera subscribe`
-
-Subscribe to a system channel
-
-**Usage:** `linera subscribe [OPTIONS] --channel <CHANNEL>`
-
-###### **Options:**
-
-* `--subscriber <SUBSCRIBER>` — Chain ID (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain ID
-* `--channel <CHANNEL>` — System channel available in the system application
-
-  Possible values:
-  - `admin`:
-    Channel used to broadcast reconfigurations
-  - `published-bytecodes`:
-    Channel used to broadcast new published bytecodes
-
-
-
-
-## `linera unsubscribe`
-
-Unsubscribe from a system channel
-
-**Usage:** `linera unsubscribe [OPTIONS] --channel <CHANNEL>`
-
-###### **Options:**
-
-* `--subscriber <SUBSCRIBER>` — Chain ID (must be one of our chains)
-* `--publisher <PUBLISHER>` — Chain ID
-* `--channel <CHANNEL>` — System channel available in the system application
-
-  Possible values:
-  - `admin`:
-    Channel used to broadcast reconfigurations
-  - `published-bytecodes`:
-    Channel used to broadcast new published bytecodes
-
-
-
-
 ## `linera open-multi-owner-chain`
 
 Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one
@@ -222,7 +182,9 @@ Open (i.e. activate) a new multi-owner chain deriving the UID from an existing o
 * `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
 * `--super-owner-public-keys <SUPER_OWNER_PUBLIC_KEYS>` — Public keys of the new super owners
 * `--owner-public-keys <OWNER_PUBLIC_KEYS>` — Public keys of the new regular owners
-* `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners
+* `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
+
+   If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
 * `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
@@ -256,7 +218,9 @@ Specify the complete set of new owners, by public key. Existing owners that are 
 * `--chain-id <CHAIN_ID>` — The ID of the chain whose owners will be changed
 * `--super-owner-public-keys <SUPER_OWNER_PUBLIC_KEYS>` — Public keys of the new super owners
 * `--owner-public-keys <OWNER_PUBLIC_KEYS>` — Public keys of the new regular owners
-* `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners
+* `--owner-weights <OWNER_WEIGHTS>` — Weights for the new owners.
+
+   If they are specified there must be exactly one weight for each owner. If no weights are given, every owner will have weight 100.
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds
 * `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds
@@ -419,6 +383,14 @@ Remove a validator (admin only)
 
 
 
+## `linera finalize-committee`
+
+Deprecates all committees except the last one
+
+**Usage:** `linera finalize-committee`
+
+
+
 ## `linera resource-control-policy`
 
 View or update the resource control policy
@@ -438,6 +410,8 @@ View or update the resource control policy
 * `--operation-byte <OPERATION_BYTE>` — Set the additional price for each byte in the argument of a user operation
 * `--message <MESSAGE>` — Set the base price of sending a message from a block..
 * `--message-byte <MESSAGE_BYTE>` — Set the additional price for each byte in the argument of a user message
+* `--maximum-fuel-per-block <MAXIMUM_FUEL_PER_BLOCK>` — Set the maximum amount of fuel per block
+* `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
 
@@ -497,6 +471,8 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--message-byte-price <MESSAGE_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user message
 
   Default value: `0`
+* `--maximum-fuel-per-block <MAXIMUM_FUEL_PER_BLOCK>` — Set the maximum amount of fuel per block
+* `--maximum-executed-block-size <MAXIMUM_EXECUTED_BLOCK_SIZE>` — Set the maximum size of an executed block
 * `--maximum-bytes-read-per-block <MAXIMUM_BYTES_READ_PER_BLOCK>` — Set the maximum read data per block
 * `--maximum-bytes-written-per-block <MAXIMUM_BYTES_WRITTEN_PER_BLOCK>` — Set the maximum write data per block
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
@@ -558,6 +534,13 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
   Default value: `8080`
 * `--amount <AMOUNT>` — The number of tokens to send to each new chain
 * `--limit-rate-until <LIMIT_RATE_UNTIL>` — The end timestamp: The faucet will rate-limit the token supply so it runs out of money no earlier than this
+* `--listener-skip-process-inbox` — Do not create blocks automatically to receive incoming messages. Instead, wait for an explicit mutation `processInbox`
+* `--listener-delay-before-ms <DELAY_BEFORE_MS>` — Wait before processing any notification (useful for testing)
+
+  Default value: `0`
+* `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
+
+  Default value: `0`
 
 
 
@@ -575,16 +558,29 @@ Publish bytecode
 
 
 
-## `linera publish-blob`
+## `linera publish-data-blob`
 
-Publish a blob of binary data
+Publish a data blob of binary data
 
-**Usage:** `linera publish-blob <BLOB_PATH> [PUBLISHER]`
+**Usage:** `linera publish-data-blob <BLOB_PATH> [PUBLISHER]`
 
 ###### **Arguments:**
 
-* `<BLOB_PATH>` — Path to blob file to be published
+* `<BLOB_PATH>` — Path to data blob file to be published
 * `<PUBLISHER>` — An optional chain ID to publish the blob. The default chain of the wallet is used otherwise
+
+
+
+## `linera read-data-blob`
+
+Verify that a data blob is readable
+
+**Usage:** `linera read-data-blob <HASH> [READER]`
+
+###### **Arguments:**
+
+* `<HASH>` — The hash of the content
+* `<READER>` — An optional chain ID to verify the blob. The default chain of the wallet is used otherwise
 
 
 
@@ -816,7 +812,9 @@ Build and publish a Linera project
 ###### **Arguments:**
 
 * `<PATH>` — The path of the root of the Linera project. Defaults to current working directory if unspecified
-* `<NAME>` — Specify the name of the Linera project. This is used to locate the generated bytecode. The generated bytecode should be of the form `<name>_{contract,service}.wasm`
+* `<NAME>` — Specify the name of the Linera project. This is used to locate the generated bytecode. The generated bytecode should be of the form `<name>_{contract,service}.wasm`.
+
+   Defaults to the package name in Cargo.toml, with dashes replaced by underscores.
 * `<PUBLISHER>` — An optional chain ID to publish the bytecode. The default chain of the wallet is used otherwise
 
 ###### **Options:**
@@ -870,9 +868,8 @@ Start a Local Linera Network
   Possible values: `default`, `only-fuel`, `fuel-and-block`, `all-categories`, `devnet`
 
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
-* `--table-name <TABLE_NAME>` — The name for the database table to store the chain data in
-
-  Default value: `table_default`
+* `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
+* `--storage-config-namespace <STORAGE_CONFIG_NAMESPACE>` — Run with a specific storage. If none, then a linera-storage-service is spanned on a random free port
 
 
 

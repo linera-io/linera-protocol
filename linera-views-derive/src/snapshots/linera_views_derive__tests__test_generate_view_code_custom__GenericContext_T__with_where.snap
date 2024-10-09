@@ -23,11 +23,11 @@ where
     fn pre_load(
         context: &custom::GenericContext<T>,
     ) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut keys = Vec::new();
         let index = 0;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             RegisterView::<
                 custom::GenericContext<T>,
@@ -36,7 +36,7 @@ where
         );
         let index = 1;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         keys.extend(
             CollectionView::<
                 custom::GenericContext<T>,
@@ -50,13 +50,13 @@ where
         context: custom::GenericContext<T>,
         values: &[Option<Vec<u8>>],
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let mut pos = 0;
         let index = 0;
         let pos_next = pos
             + RegisterView::<custom::GenericContext<T>, usize>::NUM_INIT_KEYS;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let register = RegisterView::<
             custom::GenericContext<T>,
             usize,
@@ -70,7 +70,7 @@ where
                 RegisterView<custom::GenericContext<T>, usize>,
             >::NUM_INIT_KEYS;
         let base_key = context
-            .derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
         let collection = CollectionView::<
             custom::GenericContext<T>,
             usize,
@@ -82,7 +82,7 @@ where
     async fn load(
         context: custom::GenericContext<T>,
     ) -> Result<Self, linera_views::views::ViewError> {
-        use linera_views::common::Context as _;
+        use linera_views::context::Context as _;
         let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)

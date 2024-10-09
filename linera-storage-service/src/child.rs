@@ -1,30 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use anyhow::{bail, Result};
-use linera_base::command::CommandExt;
-use port_selector::random_free_tcp_port;
+use linera_base::{command::CommandExt, time::Duration};
 use tokio::process::{Child, Command};
 
 use crate::client::{storage_service_check_absence, storage_service_check_validity};
-
-pub async fn get_free_port() -> Result<u16> {
-    for i in 1..10 {
-        let port = random_free_tcp_port();
-        if let Some(port) = port {
-            return Ok(port);
-        }
-        tokio::time::sleep(Duration::from_secs(i)).await;
-    }
-    bail!("Failed to obtain a port");
-}
-
-pub async fn get_free_endpoint() -> Result<String> {
-    let port = get_free_port().await?;
-    Ok(format!("127.0.0.1:{}", port))
-}
 
 /// Configuration for a storage service running as a child process
 pub struct StorageService {
@@ -63,7 +44,7 @@ impl StorageService {
             if storage_service_check_absence(&self.endpoint).await? {
                 return Ok(());
             }
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         }
         bail!("Failed to start child server");
     }
@@ -80,7 +61,7 @@ impl StorageService {
             if result.is_ok() {
                 return Ok(guard);
             }
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         }
         bail!("Failed to start child server");
     }

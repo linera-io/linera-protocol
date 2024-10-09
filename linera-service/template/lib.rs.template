@@ -1,13 +1,13 @@
-use linera_sdk::base::{ContractAbi, ServiceAbi};
+use linera_sdk::base::{{ContractAbi, ServiceAbi}};
 
-pub struct ApplicationAbi;
+pub struct {project_name}Abi;
 
-impl ContractAbi for ApplicationAbi {
+impl ContractAbi for {project_name}Abi {{
     type Operation = ();
     type Response = ();
-}
+}}
 
-impl ServiceAbi for ApplicationAbi {
+impl ServiceAbi for {project_name}Abi {{
     type Query = ();
     type QueryResponse = ();
-}
+}}

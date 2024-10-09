@@ -25,7 +25,7 @@ mod types {
     pub type ChainOwnership = Value;
     pub type ChannelFullName = Value;
     pub type Epoch = Value;
-    pub type Event = Value;
+    pub type MessageBundle = Value;
     pub type MessageKind = Value;
     pub type Message = Value;
     pub type MessageAction = Value;
@@ -41,13 +41,13 @@ mod types {
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-    #[allow(clippy::enum_variant_names)]
+    #[expect(clippy::enum_variant_names)]
     pub enum Reason {
         NewBlock {
             height: BlockHeight,
             hash: CryptoHash,
         },
-        NewIncomingMessage {
+        NewIncomingBundle {
             origin: Origin,
             height: BlockHeight,
         },
@@ -60,15 +60,13 @@ mod types {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod types {
-    pub use linera_base::ownership::ChainOwnership;
+    pub use linera_base::{data_types::UserApplicationDescription, ownership::ChainOwnership};
     pub use linera_chain::{
-        data_types::{ChannelFullName, Event, MessageAction, Origin, Target},
+        data_types::{ChannelFullName, MessageAction, MessageBundle, Origin, Target},
         manager::ChainManager,
     };
     pub use linera_core::worker::{Notification, Reason};
-    pub use linera_execution::{
-        committee::Epoch, Message, MessageKind, Operation, UserApplicationDescription,
-    };
+    pub use linera_execution::{committee::Epoch, Message, MessageKind, Operation};
 }
 
 pub use types::*;
@@ -134,23 +132,66 @@ pub struct Transfer;
 mod from {
     use linera_base::identifiers::StreamId;
     use linera_chain::data_types::{
-        BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingMessage,
-        OutgoingMessage,
+        BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingBundle,
+        MessageBundle, OutgoingMessage, PostedMessage,
     };
 
     use super::*;
 
-    impl From<block::BlockBlockValueExecutedBlockBlockIncomingMessages> for IncomingMessage {
-        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingMessages) -> Self {
-            let block::BlockBlockValueExecutedBlockBlockIncomingMessages {
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundles> for IncomingBundle {
+        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundles) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundles {
                 origin,
-                event,
+                bundle,
                 action,
             } = val;
-            IncomingMessage {
+            IncomingBundle {
                 origin,
-                event,
+                bundle: bundle.into(),
                 action,
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle> for MessageBundle {
+        fn from(val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundle {
+                height,
+                timestamp,
+                certificate_hash,
+                transaction_index,
+                messages,
+            } = val;
+            let messages = messages.into_iter().map(PostedMessage::from).collect();
+            MessageBundle {
+                height,
+                timestamp,
+                certificate_hash,
+                transaction_index: transaction_index as u32,
+                messages,
+            }
+        }
+    }
+
+    impl From<block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages> for PostedMessage {
+        fn from(
+            val: block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages,
+        ) -> Self {
+            let block::BlockBlockValueExecutedBlockBlockIncomingBundlesBundleMessages {
+                authenticated_signer,
+                grant,
+                refund_grant_to,
+                kind,
+                index,
+                message,
+            } = val;
+            PostedMessage {
+                authenticated_signer,
+                grant,
+                refund_grant_to,
+                kind,
+                index: index as u32,
+                message,
             }
         }
     }
@@ -160,21 +201,21 @@ mod from {
             let block::BlockBlockValueExecutedBlockBlock {
                 chain_id,
                 epoch,
-                incoming_messages,
+                incoming_bundles,
                 operations,
                 height,
                 timestamp,
                 authenticated_signer,
                 previous_block_hash,
             } = val;
-            let incoming_messages = incoming_messages
+            let incoming_bundles = incoming_bundles
                 .into_iter()
-                .map(IncomingMessage::from)
+                .map(IncomingBundle::from)
                 .collect();
             linera_chain::data_types::Block {
                 chain_id,
                 epoch,
-                incoming_messages,
+                incoming_bundles,
                 operations,
                 height,
                 timestamp,

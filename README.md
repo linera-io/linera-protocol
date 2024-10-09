@@ -45,6 +45,11 @@ from low to high levels in the dependency graph)
   Defines the data-type for RPC messages (currently all client &#x2194; proxy &#x2194;
   chain &#x2194; chain interactions), and track the corresponding data schemas.
 
+* [`linera-client`](https://linera-io.github.io/linera-protocol/linera_client/index.html)
+  Library for writing Linera clients.  Used for the command-line
+  client and the node service in `linera-service`, as well as the Web
+  client in [`linera-web`](https://github.com/linera-io/linera-web/).
+
 * [`linera-service`](https://linera-io.github.io/linera-protocol/linera_service/index.html)
   Executable for clients (aka CLI wallets), proxy (aka validator frontend) and servers.
 
@@ -62,7 +67,7 @@ microchains owned by a single wallet.
 
 ```bash
 # Make sure to compile the Linera binaries and add them in the $PATH.
-# cargo build -p linera-service --bins
+# cargo build -p linera-storage-service -p linera-service --bins --features storage-service
 export PATH="$PWD/target/debug:$PATH"
 
 # Import the optional helper function `linera_spawn_and_read_wallet_variables`.

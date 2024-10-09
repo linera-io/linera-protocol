@@ -10,10 +10,7 @@ use std::sync::Arc;
 use amm::{Operation, Parameters};
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{
-    base::WithServiceAbi,
-    graphql::GraphQLMutationRoot,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 
 use self::state::Amm;
@@ -32,7 +29,7 @@ impl Service for AmmService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = Amm::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = Amm::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         AmmService {

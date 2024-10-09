@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
-use linera_core::node::{LocalValidatorNodeProvider, NodeError};
+use linera_base::time::Duration;
+use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 #[cfg(with_simple_network)]
 use crate::simple::SimpleNodeProvider;
@@ -28,7 +27,7 @@ impl NodeProvider {
     }
 }
 
-impl LocalValidatorNodeProvider for NodeProvider {
+impl ValidatorNodeProvider for NodeProvider {
     type Node = Client;
 
     fn make_node(&self, address: &str) -> anyhow::Result<Self::Node, NodeError> {
@@ -51,6 +50,6 @@ impl LocalValidatorNodeProvider for NodeProvider {
 pub struct NodeOptions {
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
-    pub notification_retry_delay: Duration,
-    pub notification_retries: u32,
+    pub retry_delay: Duration,
+    pub max_retries: u32,
 }

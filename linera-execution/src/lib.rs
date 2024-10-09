@@ -1,7 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module manages the execution of the system application and the user applications in a Linera chain.
+//! This module manages the execution of the system application and the user applications in a
+//! Linera chain.
 
 #![deny(clippy::large_futures)]
 
@@ -16,6 +17,7 @@ mod runtime;
 pub mod system;
 #[cfg(with_testing)]
 pub mod test_utils;
+mod transaction_tracker;
 mod util;
 mod wasm;
 
@@ -31,18 +33,19 @@ use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlockHeight, HashedBlob, Resources,
-        SendMessageRequest, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
+        Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
     doc_scalar, hex_debug,
     identifiers::{
         Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, EventId,
-        GenericApplicationId, MessageId, Owner, StreamName,
+        GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
+use system::OpenChainConfig;
 use thiserror::Error;
 
 #[cfg(with_testing)]
@@ -56,10 +59,8 @@ pub use crate::wasm::{
     ViewSystemApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    applications::{
-        ApplicationRegistryView, BytecodeLocation, UserApplicationDescription, UserApplicationId,
-    },
-    execution::ExecutionStateView,
+    applications::ApplicationRegistryView,
+    execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
     policy::ResourceControlPolicy,
     resources::{ResourceController, ResourceTracker},
@@ -71,6 +72,7 @@ pub use crate::{
         SystemExecutionError, SystemExecutionStateView, SystemMessage, SystemOperation,
         SystemQuery, SystemResponse,
     },
+    transaction_tracker::TransactionTracker,
 };
 
 /// The maximum length of an event key in bytes.
@@ -79,32 +81,48 @@ const MAX_EVENT_KEY_LEN: usize = 64;
 const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
-pub type UserContractCode = Arc<dyn UserContractModule + Send + Sync + 'static>;
+pub type UserContractCode = Box<dyn UserContractModule + Send + Sync>;
 
 /// An implementation of [`UserServiceModule`].
-pub type UserServiceCode = Arc<dyn UserServiceModule + Send + Sync + 'static>;
+pub type UserServiceCode = Box<dyn UserServiceModule + Send + Sync>;
 
 /// An implementation of [`UserContract`].
-pub type UserContractInstance = Box<dyn UserContract + 'static>;
+pub type UserContractInstance = Box<dyn UserContract>;
 
 /// An implementation of [`UserService`].
-pub type UserServiceInstance = Box<dyn UserService + 'static>;
+pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule {
+pub trait UserContractModule: dyn_clone::DynClone {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError>;
 }
 
+impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode {
+    fn from(module: T) -> Self {
+        Box::new(module)
+    }
+}
+
+dyn_clone::clone_trait_object!(UserContractModule);
+
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule {
+pub trait UserServiceModule: dyn_clone::DynClone {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError>;
 }
+
+impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
+    fn from(module: T) -> Self {
+        Box::new(module)
+    }
+}
+
+dyn_clone::clone_trait_object!(UserServiceModule);
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
@@ -121,7 +139,9 @@ pub enum ExecutionError {
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
-    JoinError(#[from] tokio::task::JoinError),
+    JoinError(#[from] linera_base::task::Error),
+    #[error(transparent)]
+    DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
@@ -144,6 +164,10 @@ pub enum ExecutionError {
     ExcessiveRead,
     #[error("Excessive number of bytes written to storage")]
     ExcessiveWrite,
+    #[error("Block execution required too much fuel")]
+    MaximumFuelExceeded,
+    #[error("Serialized size of the executed block exceeds limit")]
+    ExecutedBlockTooLarge,
     #[error("Runtime failed to respond to application")]
     MissingRuntimeResponse,
     #[error("Bytecode ID {0:?} is invalid")]
@@ -156,10 +180,12 @@ pub enum ExecutionError {
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered IO error")]
     IoError(#[from] std::io::Error),
-    #[error("No recorded response for oracle query")]
-    MissingOracleResponse,
+    #[error("More recorded oracle responses than expected")]
+    UnexpectedOracleResponse,
     #[error("Invalid JSON: {}", .0)]
     Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Bcs(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
@@ -177,6 +203,10 @@ pub enum ExecutionError {
     StreamNameTooLong,
     #[error("Event not found: {0}")]
     EventNotFound(Box<EventId>),
+    // TODO(#2127): Remove this error and the unstable-oracles feature once there are fees
+    // and enforced limits for all oracles.
+    #[error("Unstable oracles are disabled on this network.")]
+    UnstableOracle,
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -259,7 +289,9 @@ pub trait ExecutionRuntimeContext {
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
+
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError>;
 }
@@ -277,8 +309,6 @@ pub struct OperationContext {
     pub height: BlockHeight,
     /// The current index of the operation.
     pub index: Option<u32>,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -298,8 +328,6 @@ pub struct MessageContext {
     /// The ID of the message (based on the operation height and index in the remote
     /// certificate).
     pub message_id: MessageId,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -310,8 +338,6 @@ pub struct FinalizeContext {
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
-    /// The index of the next message to be created.
-    pub next_message_index: u32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -341,6 +367,9 @@ pub trait BaseRuntime {
 
     /// The current application ID.
     fn application_id(&mut self) -> Result<UserApplicationId, ExecutionError>;
+
+    /// The current application creator's chain ID.
+    fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError>;
 
     /// The current application parameters.
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError>;
@@ -450,7 +479,7 @@ pub trait BaseRuntime {
 
     /// Reads the data from the key/values having a specific prefix.
     #[cfg(feature = "test")]
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix(
         &mut self,
         key_prefix: Vec<u8>,
@@ -466,7 +495,7 @@ pub trait BaseRuntime {
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError>;
 
     /// Resolves the promise to access key/values having a specific prefix
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
@@ -494,8 +523,11 @@ pub trait BaseRuntime {
     /// owner, not a super owner.
     fn assert_before(&mut self, timestamp: Timestamp) -> Result<(), ExecutionError>;
 
-    /// Reads a blob specified by a given `BlobId`.
-    fn read_blob(&mut self, blob_id: &BlobId) -> Result<HashedBlob, ExecutionError>;
+    /// Reads a data blob content specified by a given hash.
+    fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError>;
+
+    /// Asserts the existence of a data blob with the given hash.
+    fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError>;
 
     /// Reads an event.
     fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError>;
@@ -582,7 +614,7 @@ pub trait ContractRuntime: BaseRuntime {
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ChainId, ExecutionError>;
+    ) -> Result<(MessageId, ChainId), ExecutionError>;
 
     /// Closes the current chain.
     fn close_chain(&mut self) -> Result<(), ExecutionError>;
@@ -737,7 +769,7 @@ pub struct ChannelSubscription {
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 pub enum ExecutionOutcome {
     System(RawExecutionOutcome<SystemMessage, Amount>),
     User(UserApplicationId, RawExecutionOutcome<Vec<u8>, Amount>),
@@ -748,6 +780,13 @@ impl ExecutionOutcome {
         match self {
             ExecutionOutcome::System(_) => GenericApplicationId::System,
             ExecutionOutcome::User(app_id, _) => GenericApplicationId::User(*app_id),
+        }
+    }
+
+    pub fn message_count(&self) -> usize {
+        match self {
+            ExecutionOutcome::System(outcome) => outcome.messages.len(),
+            ExecutionOutcome::User(_, outcome) => outcome.messages.len(),
         }
     }
 }
@@ -841,11 +880,11 @@ impl OperationContext {
         })
     }
 
-    fn next_message_id(&self) -> MessageId {
+    fn next_message_id(&self, next_message_index: u32) -> MessageId {
         MessageId {
             chain_id: self.chain_id,
             height: self.height,
-            index: self.next_message_index,
+            index: next_message_index,
         }
     }
 }
@@ -857,7 +896,7 @@ pub struct TestExecutionRuntimeContext {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    blobs: Arc<DashMap<BlobId, HashedBlob>>,
+    blobs: Arc<DashMap<BlobId, Blob>>,
     events: Arc<DashMap<EventId, Vec<u8>>>,
 }
 
@@ -872,6 +911,10 @@ impl TestExecutionRuntimeContext {
             blobs: Arc::default(),
             events: Arc::default(),
         }
+    }
+
+    pub fn add_blob(&self, blob: Blob) {
+        self.blobs.insert(blob.id(), blob);
     }
 }
 
@@ -922,12 +965,16 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
         Ok(self
             .blobs
             .get(&blob_id)
             .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
             .clone())
+    }
+
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        Ok(self.blobs.contains_key(&blob_id))
     }
 
     async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
@@ -999,6 +1046,39 @@ impl Message {
             Self::User { application_id, .. } => GenericApplicationId::User(*application_id),
         }
     }
+
+    /// Returns whether this message must be added to the inbox.
+    pub fn goes_to_inbox(&self) -> bool {
+        !matches!(
+            self,
+            Message::System(SystemMessage::Subscribe { .. } | SystemMessage::Unsubscribe { .. })
+        )
+    }
+
+    pub fn matches_subscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
+        match self {
+            Message::System(SystemMessage::Subscribe { id, subscription }) => {
+                Some((id, subscription))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn matches_unsubscribe(&self) -> Option<(&ChainId, &ChannelSubscription)> {
+        match self {
+            Message::System(SystemMessage::Unsubscribe { id, subscription }) => {
+                Some((id, subscription))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn matches_open_chain(&self) -> Option<&OpenChainConfig> {
+        match self {
+            Message::System(SystemMessage::OpenChain(config)) => Some(config),
+            _ => None,
+        }
+    }
 }
 
 impl From<SystemQuery> for Query {
@@ -1044,40 +1124,6 @@ impl From<Vec<u8>> for Response {
     }
 }
 
-/// A WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct Bytecode {
-    #[serde(with = "serde_bytes")]
-    bytes: Vec<u8>,
-}
-
-impl Bytecode {
-    /// Creates a new [`Bytecode`] instance using the provided `bytes`.
-    #[allow(dead_code)]
-    pub(crate) fn new(bytes: Vec<u8>) -> Self {
-        Bytecode { bytes }
-    }
-
-    #[cfg(with_fs)]
-    /// Load bytecode from a Wasm module file.
-    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
-        let bytes = tokio::fs::read(path).await?;
-        Ok(Bytecode { bytes })
-    }
-}
-
-impl AsRef<[u8]> for Bytecode {
-    fn as_ref(&self) -> &[u8] {
-        self.bytes.as_ref()
-    }
-}
-
-impl std::fmt::Debug for Bytecode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        f.debug_tuple("Bytecode").finish()
-    }
-}
-
 /// The state of a blob of binary data.
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
 pub struct BlobState {
@@ -1093,11 +1139,11 @@ pub struct BlobState {
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
-    #[display(fmt = "wasmer")]
+    #[display("wasmer")]
     Wasmer,
     #[cfg(with_wasmtime)]
     #[cfg_attr(not(with_wasmer), default)]
-    #[display(fmt = "wasmtime")]
+    #[display("wasmtime")]
     Wasmtime,
     #[cfg(with_wasmer)]
     WasmerWithSanitizer,

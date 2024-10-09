@@ -10,16 +10,18 @@ use std::{
 
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::{Amount, BlockHeight, HashedBlob, Resources, SendMessageRequest, Timestamp},
+    data_types::{
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
+    },
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, EventId, MessageId,
-        Owner, StreamName,
+        Account, ApplicationId, ChainId, ChannelName, Destination, EventId, MessageId, Owner,
+        StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
 
-use crate::{Contract, KeyValueStore};
+use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 
 /// A mock of the common runtime to interface with the host executing the contract.
 pub struct MockContractRuntime<Application>
@@ -28,6 +30,7 @@ where
 {
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
+    application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
@@ -48,7 +51,10 @@ where
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
     expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
-    expected_read_blob_requests: VecDeque<(BlobId, HashedBlob)>,
+    expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
+    expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
+    expected_open_chain_calls:
+        VecDeque<(ChainOwnership, ApplicationPermissions, Amount, MessageId)>,
     expected_read_event_requests: VecDeque<(EventId, Vec<u8>)>,
     key_value_store: KeyValueStore,
 }
@@ -71,6 +77,7 @@ where
         MockContractRuntime {
             application_parameters: None,
             application_id: None,
+            application_creator_chain_id: None,
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
@@ -91,7 +98,9 @@ where
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
             expected_post_requests: VecDeque::new(),
-            expected_read_blob_requests: VecDeque::new(),
+            expected_read_data_blob_requests: VecDeque::new(),
+            expected_assert_data_blob_exists_requests: VecDeque::new(),
+            expected_open_chain_calls: VecDeque::new(),
             expected_read_event_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
@@ -100,6 +109,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         self.key_value_store.clone()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Configures the application parameters to return during the test.
@@ -148,6 +162,26 @@ where
         self.application_id.expect(
             "Application ID has not been mocked, \
             please call `MockContractRuntime::set_application_id` first",
+        )
+    }
+
+    /// Configures the application creator chain ID to return during the test.
+    pub fn with_application_creator_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.application_creator_chain_id = Some(chain_id);
+        self
+    }
+
+    /// Configures the application creator chain ID to return during the test.
+    pub fn set_application_creator_chain_id(&mut self, chain_id: ChainId) -> &mut Self {
+        self.application_creator_chain_id = Some(chain_id);
+        self
+    }
+
+    /// Returns the chain ID of the current application creator.
+    pub fn application_creator_chain_id(&mut self) -> ChainId {
+        self.application_creator_chain_id.expect(
+            "Application creator chain ID has not been mocked, \
+            please call `MockContractRuntime::set_application_creator_chain_id` first",
         )
     }
 
@@ -553,6 +587,41 @@ where
         }
     }
 
+    /// Adds an expected call to `open_chain`, and the message ID that should be returned.
+    pub fn add_expected_open_chain_call(
+        &mut self,
+        ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
+        balance: Amount,
+        message_id: MessageId,
+    ) {
+        self.expected_open_chain_calls.push_back((
+            ownership,
+            application_permissions,
+            balance,
+            message_id,
+        ));
+    }
+
+    /// Opens a new chain, configuring it with the provided `chain_ownership`,
+    /// `application_permissions` and initial `balance` (debited from the current chain).
+    pub fn open_chain(
+        &mut self,
+        ownership: ChainOwnership,
+        application_permissions: ApplicationPermissions,
+        balance: Amount,
+    ) -> (MessageId, ChainId) {
+        let (expected_ownership, expected_permissions, expected_balance, message_id) = self
+            .expected_open_chain_calls
+            .pop_front()
+            .expect("Unexpected open_chain call");
+        assert_eq!(ownership, expected_ownership);
+        assert_eq!(application_permissions, expected_permissions);
+        assert_eq!(balance, expected_balance);
+        let chain_id = ChainId::child(message_id);
+        (message_id, chain_id)
+    }
+
     /// Configures the handler for cross-application calls made during the test.
     pub fn with_call_application_handler(
         mut self,
@@ -615,10 +684,20 @@ where
             .push_back((url, payload, response));
     }
 
-    /// Adds an expected `read_blob` call, and the response it should return in the test.
-    pub fn add_expected_read_blob_request(&mut self, blob_id: BlobId, response: HashedBlob) {
-        self.expected_read_blob_requests
-            .push_back((blob_id, response));
+    /// Adds an expected `read_data_blob` call, and the response it should return in the test.
+    pub fn add_expected_read_data_blob_request(&mut self, hash: DataBlobHash, response: Vec<u8>) {
+        self.expected_read_data_blob_requests
+            .push_back((hash, response));
+    }
+
+    /// Adds an expected `assert_data_blob_exists` call, and the response it should return in the test.
+    pub fn add_expected_assert_data_blob_exists_requests(
+        &mut self,
+        hash: DataBlobHash,
+        response: Option<()>,
+    ) {
+        self.expected_assert_data_blob_exists_requests
+            .push_back((hash, response));
     }
 
     /// Adds an expected `read_event` call, and the response it should return in the test.
@@ -673,12 +752,21 @@ where
         assert!(self.timestamp.is_some_and(|t| t < timestamp))
     }
 
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: &BlobId) -> HashedBlob {
-        let maybe_request = self.expected_read_blob_requests.pop_front();
-        let (expected_blob_id, response) = maybe_request.expect("Unexpected read_blob request");
-        assert_eq!(*blob_id, expected_blob_id);
+    /// Reads a data blob with the given hash from storage.
+    pub fn read_data_blob(&mut self, hash: &DataBlobHash) -> Vec<u8> {
+        let maybe_request = self.expected_read_data_blob_requests.pop_front();
+        let (expected_hash, response) = maybe_request.expect("Unexpected read_data_blob request");
+        assert_eq!(*hash, expected_hash);
         response
+    }
+
+    /// Asserts that a blob with the given hash exists in storage.
+    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+        let maybe_request = self.expected_assert_data_blob_exists_requests.pop_front();
+        let (expected_blob_hash, response) =
+            maybe_request.expect("Unexpected assert_data_blob_exists request");
+        assert_eq!(hash, expected_blob_hash);
+        response.expect("Blob does not exist!");
     }
 
     /// Reads an event with the given ID from storage.

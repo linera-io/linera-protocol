@@ -1,11 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::str::FromStr;
 
 use colored::Colorize as _;
-use linera_base::data_types::Amount;
-use linera_client::storage::StorageConfig;
+use linera_base::{data_types::Amount, time::Duration};
+use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
 use linera_service::{
     cli_wrappers::{
@@ -14,8 +14,9 @@ use linera_service::{
     },
     util::listen_for_shutdown_signals,
 };
+#[cfg(feature = "storage-service")]
 use linera_storage_service::{
-    child::{get_free_endpoint, StorageService},
+    child::{StorageService, StorageServiceGuard},
     common::get_service_storage_binary,
 };
 use tokio_util::sync::CancellationToken;
@@ -26,7 +27,86 @@ use {
     std::path::PathBuf,
 };
 
-#[allow(clippy::too_many_arguments)]
+struct StorageConfigProvider {
+    /// The StorageConfig and the namespace
+    pub storage_config_namespace: StorageConfigNamespace,
+    #[cfg(feature = "storage-service")]
+    _service_guard: Option<StorageServiceGuard>,
+}
+
+impl StorageConfigProvider {
+    pub async fn new(
+        storage_config_namespace: &Option<String>,
+    ) -> anyhow::Result<StorageConfigProvider> {
+        match storage_config_namespace {
+            #[cfg(feature = "storage-service")]
+            None => {
+                let service_endpoint = linera_base::port::get_free_endpoint().await?;
+                let binary = get_service_storage_binary().await?.display().to_string();
+                let service = StorageService::new(&service_endpoint, binary);
+                let _service_guard = service.run().await?;
+                let _service_guard = Some(_service_guard);
+                let storage_config = StorageConfig::Service {
+                    endpoint: service_endpoint,
+                };
+                let namespace = "table_default".to_string();
+                let storage_config_namespace = StorageConfigNamespace {
+                    storage_config,
+                    namespace,
+                };
+                Ok(StorageConfigProvider {
+                    storage_config_namespace,
+                    _service_guard,
+                })
+            }
+            #[cfg(not(feature = "storage-service"))]
+            None => {
+                panic!("When storage_config_namespace is not selected, the storage-service needs to be enabled");
+            }
+            #[cfg(feature = "storage-service")]
+            Some(storage_config_namespace) => {
+                let storage_config_namespace =
+                    StorageConfigNamespace::from_str(storage_config_namespace)?;
+                Ok(StorageConfigProvider {
+                    storage_config_namespace,
+                    _service_guard: None,
+                })
+            }
+            #[cfg(not(feature = "storage-service"))]
+            Some(storage_config_namespace) => {
+                let storage_config_namespace =
+                    StorageConfigNamespace::from_str(storage_config_namespace)?;
+                Ok(StorageConfigProvider {
+                    storage_config_namespace,
+                })
+            }
+        }
+    }
+
+    pub fn storage_config(&self) -> StorageConfig {
+        self.storage_config_namespace.storage_config.clone()
+    }
+
+    pub fn namespace(&self) -> String {
+        self.storage_config_namespace.namespace.clone()
+    }
+
+    pub fn database(&self) -> anyhow::Result<Database> {
+        match self.storage_config_namespace.storage_config {
+            StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
+            #[cfg(feature = "rocksdb")]
+            StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
+            #[cfg(feature = "storage-service")]
+            StorageConfig::Service { .. } => Ok(Database::Service),
+            #[cfg(feature = "dynamodb")]
+            StorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
+            #[cfg(feature = "scylladb")]
+            StorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
+        }
+    }
+}
+
+#[expect(clippy::too_many_arguments)]
 #[cfg(feature = "kubernetes")]
 pub async fn handle_net_up_kubernetes(
     extra_wallets: Option<usize>,
@@ -63,7 +143,7 @@ pub async fn handle_net_up_kubernetes(
     wait_for_shutdown(shutdown_notifier, &mut net).await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
     extra_wallets: Option<usize>,
     num_other_initial_chains: u32,
@@ -71,8 +151,9 @@ pub async fn handle_net_up_service(
     num_initial_validators: usize,
     num_shards: usize,
     testing_prng_seed: Option<u64>,
-    table_name: &str,
     policy: ResourceControlPolicy,
+    path: &Option<String>,
+    storage_config_namespace: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -84,24 +165,17 @@ pub async fn handle_net_up_service(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-    let tmp_dir = tempfile::tempdir()?;
-    let path = tmp_dir.path();
-
-    let service_endpoint = get_free_endpoint().await.unwrap();
-    let binary = get_service_storage_binary().await?.display().to_string();
-    let service = StorageService::new(&service_endpoint, binary);
-    let _service_guard = service.run().await?;
-
-    let storage_config = StorageConfig::Service {
-        endpoint: service_endpoint,
-    };
+    let storage_config_namespace = StorageConfigProvider::new(storage_config_namespace).await?;
+    let storage_config = storage_config_namespace.storage_config();
+    let namespace = storage_config_namespace.namespace();
+    let database = storage_config_namespace.database()?;
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
-    let path_provider = PathProvider::new(path);
+    let path_provider = PathProvider::new(path)?;
     let config = LocalNetConfig {
         network: Network::Grpc,
-        database: Database::Service,
+        database,
         testing_prng_seed,
-        table_name: table_name.to_string(),
+        namespace,
         num_other_initial_chains,
         initial_amount: Amount::from_tokens(initial_amount),
         num_initial_validators,
@@ -137,7 +211,7 @@ async fn net_up(
         .expect("Initialized clients should always have a default chain");
 
     // Make time to (hopefully) display the message after the tracing logs.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    linera_base::time::timer::sleep(Duration::from_secs(1)).await;
 
     // Create the wallet for the initial "root" chains.
     info!("Local test network successfully started.");

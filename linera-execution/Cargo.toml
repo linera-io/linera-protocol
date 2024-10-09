@@ -12,9 +12,10 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["tokio/macros"]
+test = ["tokio/macros", "linera-views/test"]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
+unstable-oracles = []
 wasmer = [
     "bytes",
     "dep:wasmer",
@@ -41,7 +42,8 @@ cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
 dashmap.workspace = true
-derive_more.workspace = true
+derive_more = { workspace = true, features = ["display"] }
+dyn-clone.workspace = true
 futures.workspace = true
 linera-base.workspace = true
 linera-views.workspace = true
@@ -63,11 +65,11 @@ wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-wasmer = { workspace = true, optional = true, features = ["sys-default", "singlepass"] }
+wasmer = { workspace = true, optional = true, features = ["cranelift", "singlepass"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
-wasmer = { workspace = true, optional = true, features = ["js-default"] }
+wasmer = { workspace = true, optional = true, features = ["js-default", "js-serializable-module"] }
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -81,6 +83,7 @@ test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["rt", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
+wasmer = { workspace = true, features = ["wat"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

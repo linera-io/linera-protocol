@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{Blob, HashedBlob, Timestamp},
+    data_types::{Blob, BlobContent, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
@@ -13,23 +13,21 @@ use linera_chain::data_types::{
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
     wallet::Wallet,
+    Error,
 };
 use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
     },
 };
 use linera_execution::committee::{Committee, ValidatorName};
 use linera_service::node_service::NodeService;
-use linera_storage::{MemoryStorage, Storage};
+use linera_storage::{DbStorage, Storage};
 use linera_version::VersionInfo;
-use linera_views::{
-    memory::{MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES},
-    views::ViewError,
-};
+use linera_views::memory::{MemoryStore, MemoryStoreConfig, TEST_MEMORY_MAX_STREAM_QUERIES};
 
 #[derive(Clone)]
 struct DummyValidatorNode;
@@ -55,8 +53,7 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_certificate(
         &self,
         _: Certificate,
-        _: Vec<HashedCertificateValue>,
-        _: Vec<HashedBlob>,
+        _: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
@@ -81,7 +78,7 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_blob(&self, _: BlobId) -> Result<Blob, NodeError> {
+    async fn download_blob_content(&self, _: BlobId) -> Result<BlobContent, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
@@ -103,7 +100,7 @@ impl ValidatorNode for DummyValidatorNode {
 
 struct DummyValidatorNodeProvider;
 
-impl LocalValidatorNodeProvider for DummyValidatorNodeProvider {
+impl ValidatorNodeProvider for DummyValidatorNodeProvider {
     type Node = DummyValidatorNode;
 
     fn make_node(&self, _address: &str) -> Result<Self::Node, NodeError> {
@@ -131,7 +128,7 @@ struct DummyContext<P, S> {
 }
 
 #[async_trait]
-impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
+impl<P: ValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
     for DummyContext<P, S>
 {
     type ValidatorNodeProvider = P;
@@ -141,19 +138,25 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S>
-    where
-        ViewError: From<S::StoreError>,
-    {
+    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S> {
         unimplemented!()
     }
 
-    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
+    async fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 
-    async fn update_wallet(&mut self, _: &ChainClient<P, S>)
-    where
-        ViewError: From<S::StoreError>,
-    {
+    async fn update_wallet(&mut self, _: &ChainClient<P, S>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+        vec![]
     }
 }
 
@@ -163,7 +166,8 @@ async fn main() -> std::io::Result<()> {
 
     let store_config = MemoryStoreConfig::new(TEST_MEMORY_MAX_STREAM_QUERIES);
     let namespace = "schema_export";
-    let storage = MemoryStorage::new(store_config, namespace, None)
+    let root_key = &[];
+    let storage = DbStorage::<MemoryStore, _>::initialize(store_config, namespace, root_key, None)
         .await
         .expect("storage");
     let config = ChainListenerConfig::default();
@@ -176,7 +180,8 @@ async fn main() -> std::io::Result<()> {
         None,
         storage,
         context,
-    );
+    )
+    .await;
     let schema = service.schema().sdl();
     print!("{}", schema);
     Ok(())

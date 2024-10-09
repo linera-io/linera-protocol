@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig},
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
 use crate::{
@@ -41,11 +41,12 @@ impl ScyllaDbRunner {
             cache_size: config.client.cache_size,
         };
         let namespace = config.client.table.clone();
+        let root_key = &[];
         let store_config = ScyllaDbStoreConfig {
             uri: config.client.uri.clone(),
             common_config,
         };
-        let store = ScyllaDbStore::connect(&store_config, &namespace).await?;
+        let store = ScyllaDbStore::connect(&store_config, &namespace, root_key).await?;
         Self::new(config, store).await
     }
 }

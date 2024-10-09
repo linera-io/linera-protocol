@@ -24,7 +24,7 @@ use linera_execution::{
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
     OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceControlPolicy, ResourceController, Response, SystemOperation,
+    ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
 };
 use linera_views::batch::Batch;
 
@@ -35,7 +35,6 @@ fn make_operation_context() -> OperationContext {
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
-        next_message_index: 0,
     }
 }
 
@@ -58,7 +57,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -146,23 +145,24 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ..make_operation_context()
     };
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id: caller_id,
-                bytes: dummy_operation.clone(),
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await
-        .unwrap();
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id: caller_id,
+            bytes: dummy_operation.clone(),
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
     let account = Account {
         chain_id: ChainId::root(0),
         owner: Some(owner),
     };
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![
@@ -197,6 +197,14 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ]
     );
 
+    {
+        let state_key = state_key.clone();
+        caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
+            let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
+            Ok(state)
+        }));
+    }
+
     caller_application.expect_call(ExpectedCall::handle_query(|runtime, _context, _query| {
         let state = runtime.read_value_bytes(state_key)?.unwrap_or_default();
         Ok(state)
@@ -207,8 +215,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let (mut execution_request_receiver, mut runtime_request_sender) =
-        context.spawn_service_runtime_actor();
+    let mut service_runtime_endpoint = context.spawn_service_runtime_actor();
     assert_eq!(
         view.query_application(
             context,
@@ -216,8 +223,21 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![]
             },
-            &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            Some(&mut service_runtime_endpoint),
+        )
+        .await
+        .unwrap(),
+        Response::User(dummy_operation.clone())
+    );
+
+    assert_eq!(
+        view.query_application(
+            context,
+            Query::User {
+                application_id: caller_id,
+                bytes: vec![]
+            },
+            Some(&mut service_runtime_endpoint),
         )
         .await
         .unwrap(),
@@ -304,22 +324,23 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await?;
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
     };
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![
@@ -413,7 +434,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -454,7 +475,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
                 application_id: id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -525,7 +546,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
                 application_id: first_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -634,17 +655,19 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id: first_id,
-                bytes: vec![],
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id: first_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
+    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
         .await?;
 
     let applications = stream::iter([third_id, first_id])
@@ -663,6 +686,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         owner: None,
     };
 
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![
@@ -749,7 +773,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -809,7 +833,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -868,7 +892,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await;
@@ -925,7 +949,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            Some(Vec::new()),
+            &mut TransactionTracker::new(0, Some(Vec::new())),
             &mut controller,
         )
         .await,
@@ -971,17 +995,19 @@ async fn test_simple_message() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id,
-                bytes: vec![],
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
+    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
         .await?;
 
     let application_description = view
@@ -1003,6 +1029,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         owner: None,
     };
 
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         &[
@@ -1073,17 +1100,19 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
+    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
         .await?;
 
     let target_description = view.system.registry.describe_application(target_id).await?;
@@ -1101,6 +1130,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         owner: None,
     };
 
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         &[
@@ -1189,18 +1219,18 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await?;
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
 
     let target_description = view.system.registry.describe_application(target_id).await?;
     let registration_message = RawOutgoingMessage {
@@ -1212,10 +1242,13 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
             applications: vec![target_description],
         },
     };
+    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
+        .await?;
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
     };
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         &[
@@ -1350,17 +1383,19 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // Execute the operation, starting the test scenario
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            Operation::User {
-                application_id: caller_id,
-                bytes: vec![],
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        Operation::User {
+            application_id: caller_id,
+            bytes: vec![],
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await?;
+    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
         .await?;
 
     // Describe the two applications that sent messages, and will therefore handle them in the
@@ -1399,6 +1434,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     };
 
     // Return to checking the user application outcomes
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         &[
@@ -1461,11 +1497,11 @@ async fn test_open_chain() {
 
     let context = OperationContext {
         height: BlockHeight(1),
-        next_message_index: 5,
         ..make_operation_context()
     };
+    let first_message_index = 5;
     // We will send one additional message before calling open_chain.
-    let index = context.next_message_index + 1;
+    let index = first_message_index + 1;
     let message_id = MessageId {
         chain_id: context.chain_id,
         height: context.height,
@@ -1480,9 +1516,10 @@ async fn test_open_chain() {
             runtime.transfer(None, destination, Amount::ONE).unwrap();
             let id = runtime.application_id().unwrap();
             let application_permissions = ApplicationPermissions::new_single(id);
-            let chain_id = runtime
+            let (actual_message_id, chain_id) = runtime
                 .open_chain(child_ownership, application_permissions, Amount::ONE)
                 .unwrap();
+            assert_eq!(message_id, actual_message_id);
             assert_eq!(chain_id, ChainId::child(message_id));
             Ok(vec![])
         }
@@ -1494,25 +1531,26 @@ async fn test_open_chain() {
         application_id,
         bytes: vec![],
     };
-    let (outcomes, _) = view
-        .execute_operation(
-            context,
-            Timestamp::from(0),
-            operation,
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await
-        .unwrap();
+    let mut txn_tracker = TransactionTracker::new(first_message_index, Some(Vec::new()));
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        operation,
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     let message = outcomes
         .iter()
         .flat_map(|outcome| match outcome {
             ExecutionOutcome::System(outcome) => &outcome.messages,
             ExecutionOutcome::User(_, _) => panic!("Unexpected message"),
         })
-        .nth((index - context.next_message_index) as usize)
+        .nth((index - first_message_index) as usize)
         .unwrap();
     let RawOutgoingMessage {
         message: SystemMessage::OpenChain(config),
@@ -1581,7 +1619,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation,
-        Some(Vec::new()),
+        &mut TransactionTracker::new(0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -1595,7 +1633,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation.into(),
-        Some(Vec::new()),
+        &mut TransactionTracker::new(0, Some(Vec::new())),
         &mut controller,
     )
     .await
@@ -1617,7 +1655,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation,
-        Some(Vec::new()),
+        &mut TransactionTracker::new(0, Some(Vec::new())),
         &mut controller,
     )
     .await

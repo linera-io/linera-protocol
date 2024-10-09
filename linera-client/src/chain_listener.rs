@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::btree_map, sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::{
@@ -16,16 +16,15 @@ use linera_base::{
 };
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
-    client::ChainClient,
-    node::{LocalValidatorNodeProvider, ValidatorNode, ValidatorNodeProvider},
+    client::{ChainClient, ChainClientError},
+    node::{ValidatorNode, ValidatorNodeProvider},
     worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
-use linera_storage::Storage;
-use linera_views::views::ViewError;
+use linera_storage::{Clock as _, Storage};
 use tracing::{debug, error, info, warn, Instrument as _};
 
-use crate::{chain_clients::ChainClients, wallet::Wallet};
+use crate::{chain_clients::ChainClients, wallet::Wallet, Error};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_listener.rs"]
@@ -58,9 +57,10 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ClientContext {
-    type ValidatorNodeProvider: LocalValidatorNodeProvider;
+    type ValidatorNodeProvider: ValidatorNodeProvider;
     type Storage: Storage;
 
     fn wallet(&self) -> &Wallet;
@@ -68,22 +68,27 @@ pub trait ClientContext {
     fn make_chain_client(
         &self,
         chain_id: ChainId,
-    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>
-    where
-        ViewError: From<<Self::Storage as Storage>::StoreError>;
+    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>;
 
-    fn update_wallet_for_new_chain(
+    async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    );
+    ) -> Result<(), Error>;
 
     async fn update_wallet(
         &mut self,
         client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    ) where
-        ViewError: From<<Self::Storage as Storage>::StoreError>;
+    ) -> Result<(), Error>;
+
+    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+        let mut clients = vec![];
+        for chain_id in &self.wallet().chain_ids() {
+            clients.push(self.make_chain_client(*chain_id));
+        }
+        clients
+    }
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
@@ -91,10 +96,10 @@ pub trait ClientContext {
 pub struct ChainListener<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     config: ChainListenerConfig,
     clients: ChainClients<P, S>,
+    listening: Arc<Mutex<HashSet<ChainId>>>,
 }
 
 impl<P, S> ChainListener<P, S>
@@ -102,11 +107,14 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Creates a new chain listener given client chains.
     pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
-        Self { config, clients }
+        Self {
+            config,
+            clients,
+            listening: Default::default(),
+        }
     }
 
     /// Runs the chain listener.
@@ -122,6 +130,7 @@ where
                 context.clone(),
                 storage.clone(),
                 self.config.clone(),
+                self.listening.clone(),
             );
         }
     }
@@ -133,13 +142,15 @@ where
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
+        listening: Arc<Mutex<HashSet<ChainId>>>,
     ) where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
-        let _handle = tokio::task::spawn(
+        let _handle = linera_base::task::spawn(
             async move {
                 if let Err(err) =
-                    Self::run_client_stream(chain_id, clients, context, storage, config).await
+                    Self::run_client_stream(chain_id, clients, context, storage, config, listening)
+                        .await
                 {
                     error!("Stream for chain {} failed: {}", chain_id, err);
                 }
@@ -155,26 +166,25 @@ where
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
-    ) -> anyhow::Result<()>
+        listening: Arc<Mutex<HashSet<ChainId>>>,
+    ) -> Result<(), Error>
     where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
     {
-        let client = {
-            let mut map_guard = clients.map_lock().await;
-            let context_guard = context.lock().await;
-            let btree_map::Entry::Vacant(entry) = map_guard.entry(chain_id) else {
-                // For every entry in the client map we are already listening to notifications, so
-                // there's nothing to do. This can happen if we download a child before the parent
-                // chain, and then process the OpenChain message in the parent.
-                return Ok(());
-            };
-            let client = context_guard.make_chain_client(chain_id);
-            entry.insert(client.clone());
-            client
-        };
+        let mut guard = listening.lock().await;
+        if guard.contains(&chain_id) {
+            // If we are already listening to notifications, there's nothing to do.
+            // This can happen if we download a child before the parent
+            // chain, and then process the OpenChain message in the parent.
+            return Ok(());
+        }
+        // If the client is not present, we can request it.
+        let client = clients.request_client(chain_id, context.clone()).await;
         let (listener, _listen_handle, mut local_stream) = client.listen().await?;
+        guard.insert(chain_id);
+        drop(guard);
         client.synchronize_from_validators().await?;
-        tokio::spawn(listener.in_current_span());
+        drop(linera_base::task::spawn(listener.in_current_span()));
         let mut timeout = storage.clock().current_time();
         loop {
             let sleep = Box::pin(storage.clock().sleep_until(timeout));
@@ -182,35 +192,35 @@ where
                 Either::Left((Some(notification), _)) => notification,
                 Either::Left((None, _)) => break,
                 Either::Right(((), _)) => {
+                    timeout = Timestamp::from(u64::MAX);
                     if config.skip_process_inbox {
                         debug!("Not processing inbox due to listener configuration");
-                        timeout = Timestamp::from(u64::MAX);
                         continue;
                     }
                     debug!("Processing inbox");
-                    match client.process_inbox_if_owned().await {
-                        Err(error) => {
-                            warn!(%error, "Failed to process inbox.");
-                            timeout = Timestamp::from(u64::MAX);
-                        }
+                    match client.process_inbox_without_prepare().await {
+                        Err(ChainClientError::CannotFindKeyForChain(_)) => {}
+                        Err(error) => warn!(%error, "Failed to process inbox."),
                         Ok((certs, None)) => {
-                            info!("Done processing inbox ({} blocks created)", certs.len());
-                            timeout = Timestamp::from(u64::MAX);
+                            info!("Done processing inbox. {} blocks created.", certs.len());
                         }
                         Ok((certs, Some(new_timeout))) => {
-                            info!("Done processing inbox ({} blocks created)", certs.len());
-                            info!("I will try processing the inbox later based on the given round timeout: {:?}", new_timeout);
+                            info!(
+                                "{} blocks created. Will try processing the inbox later based \
+                                 on the given round timeout: {new_timeout:?}",
+                                certs.len(),
+                            );
                             timeout = new_timeout.timestamp;
                         }
                     }
-                    context.lock().await.update_wallet(&client).await;
+                    context.lock().await.update_wallet(&client).await?;
                     continue;
                 }
             };
             info!("Received new notification: {:?}", notification);
             Self::maybe_sleep(config.delay_before_ms).await;
             match &notification.reason {
-                Reason::NewIncomingMessage { .. } => timeout = storage.clock().current_time(),
+                Reason::NewIncomingBundle { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
                     if let Err(error) = client.update_validators().await {
                         warn!(
@@ -226,7 +236,7 @@ where
                 continue;
             };
             {
-                context.lock().await.update_wallet(&client).await;
+                context.lock().await.update_wallet(&client).await?;
             }
             let value = storage.read_hashed_certificate_value(hash).await?;
             let Some(executed_block) = value.inner().executed_block() else {
@@ -264,13 +274,16 @@ where
                 let key_pair = owners
                     .iter()
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
-                context_guard.update_wallet_for_new_chain(new_id, key_pair, timestamp);
+                context_guard
+                    .update_wallet_for_new_chain(new_id, key_pair, timestamp)
+                    .await?;
                 Self::run_with_chain_id(
                     new_id,
                     clients.clone(),
                     context.clone(),
                     storage.clone(),
                     config.clone(),
+                    listening.clone(),
                 );
             }
         }
@@ -279,7 +292,7 @@ where
 
     async fn maybe_sleep(delay_ms: u64) {
         if delay_ms > 0 {
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            linera_base::time::timer::sleep(Duration::from_millis(delay_ms)).await;
         }
     }
 }

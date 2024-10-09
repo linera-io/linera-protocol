@@ -10,7 +10,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
 };
 use linera_chain::{
-    data_types::{ChainAndHeight, IncomingMessage, Medium, MessageBundle},
+    data_types::{ChainAndHeight, IncomingBundle, Medium, MessageBundle},
     manager::ChainManagerInfo,
     ChainStateView,
 };
@@ -19,7 +19,7 @@ use linera_execution::{
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
-use linera_views::{common::Context, views::ViewError};
+use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::client::ChainClientError;
@@ -55,11 +55,11 @@ pub struct ChainInfoQuery {
     /// Query the current committees.
     pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
-    pub request_pending_messages: bool,
+    pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
-    pub request_received_log_excluding_first_nth: Option<u64>,
+    pub request_received_log_excluding_first_n: Option<u64>,
     /// Query values from the chain manager, not just votes.
     pub request_manager_values: bool,
     /// Include a timeout vote for the current round, if appropriate.
@@ -75,9 +75,9 @@ impl ChainInfoQuery {
             test_next_block_height: None,
             request_committees: false,
             request_owner_balance: None,
-            request_pending_messages: false,
+            request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: None,
-            request_received_log_excluding_first_nth: None,
+            request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: false,
             request_fallback: false,
@@ -99,8 +99,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_pending_messages(mut self) -> Self {
-        self.request_pending_messages = true;
+    pub fn with_pending_message_bundles(mut self) -> Self {
+        self.request_pending_message_bundles = true;
         self
     }
 
@@ -109,8 +109,8 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_received_log_excluding_first_nth(mut self, n: u64) -> Self {
-        self.request_received_log_excluding_first_nth = Some(n);
+    pub fn with_received_log_excluding_first_n(mut self, n: u64) -> Self {
+        self.request_received_log_excluding_first_n = Some(n);
         self
     }
 
@@ -156,12 +156,12 @@ pub struct ChainInfo {
     /// The current committees.
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
-    pub requested_pending_messages: Vec<IncomingMessage>,
+    pub requested_pending_message_bundles: Vec<IncomingBundle>,
     /// The response to `request_sent_certificate_hashes_in_range`
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
-    /// The current number of received certificates (useful for `request_received_log_excluding_first_nth`)
+    /// The current number of received certificates (useful for `request_received_log_excluding_first_n`)
     pub count_received_log: usize,
-    /// The response to `request_received_certificates_excluding_first_nth`
+    /// The response to `request_received_certificates_excluding_first_n`
     pub requested_received_log: Vec<ChainAndHeight>,
 }
 
@@ -182,7 +182,7 @@ pub enum CrossChainRequest {
     UpdateRecipient {
         sender: ChainId,
         recipient: ChainId,
-        bundle_vecs: Vec<(Medium, Vec<MessageBundle>)>,
+        bundle_vecs: Vec<(Medium, Vec<(Epoch, MessageBundle)>)>,
     },
     /// Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
     ConfirmUpdatedRecipient {
@@ -207,8 +207,8 @@ impl CrossChainRequest {
         match self {
             CrossChainRequest::UpdateRecipient { bundle_vecs, .. } => {
                 bundle_vecs.iter().any(|(_, bundles)| {
-                    debug_assert!(bundles.windows(2).all(|w| w[0].height <= w[1].height));
-                    matches!(bundles.first(), Some(h) if h.height <= height)
+                    debug_assert!(bundles.windows(2).all(|w| w[0].1.height <= w[1].1.height));
+                    matches!(bundles.first(), Some((_, h)) if h.height <= height)
                 })
             }
             _ => false,
@@ -220,7 +220,6 @@ impl<C, S> From<&ChainStateView<C>> for ChainInfo
 where
     C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
     ChainRuntimeContext<S>: ExecutionRuntimeContext,
-    ViewError: From<C::Error>,
 {
     fn from(view: &ChainStateView<C>) -> Self {
         let system_state = &view.execution_state.system;
@@ -237,7 +236,7 @@ where
             state_hash: *view.execution_state_hash.get(),
             requested_committees: None,
             requested_owner_balance: None,
-            requested_pending_messages: Vec::new(),
+            requested_pending_message_bundles: Vec::new(),
             requested_sent_certificate_hashes: Vec::new(),
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
@@ -314,7 +313,7 @@ impl<T> ClientOutcome<T> {
         }
     }
 
-    #[allow(clippy::result_large_err)]
+    #[expect(clippy::result_large_err)]
     pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
     where
         F: FnOnce(T) -> Result<S, ChainClientError>,

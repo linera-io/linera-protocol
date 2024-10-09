@@ -1,30 +1,63 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{env, iter, num::NonZeroU16, path::PathBuf, time::Duration};
+use std::{collections::HashSet, env, fmt, iter, num::NonZeroU16, path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::{Amount, ApplicationPermissions, TimeDelta},
-    identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
-use linera_core::client::MessagePolicy;
+use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
-    committee::ValidatorName, system::SystemChannel, ResourceControlPolicy, UserApplicationId,
-    WasmRuntime, WithWasmDefault as _,
+    committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
-use linera_views::common::CommonStoreConfig;
+use linera_views::store::CommonStoreConfig;
 
+#[cfg(feature = "fs")]
+use crate::config::GenesisConfig;
 use crate::{
     chain_listener::ChainListenerConfig,
-    config::{GenesisConfig, WalletState},
-    persistent::{self, Persist},
+    config::WalletState,
+    persistent,
     storage::{full_initialize_storage, run_with_storage, Runnable, StorageConfigNamespace},
     util,
     wallet::Wallet,
 };
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("a storage option must be provided")]
+    NoStorageOption,
+    #[error("wallet already exists at {0}")]
+    WalletAlreadyExists(PathBuf),
+    #[error("default configuration directory not supported: please specify a path")]
+    NoDefaultConfigurationDirectory,
+    #[error("no wallet found")]
+    NonexistentWallet,
+    #[error("there are {public_keys} public keys but {weights} weights")]
+    MisalignedWeights { public_keys: usize, weights: usize },
+    #[error("storage error: {0}")]
+    Storage(#[from] crate::storage::Error),
+    #[error("persistence error: {0}")]
+    Persistence(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("config error: {0}")]
+    Config(#[from] crate::config::Error),
+}
+
+#[cfg(feature = "fs")]
+util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
+
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
+
+util::impl_from_infallible!(Error);
 
 #[derive(Clone, clap::Parser)]
 #[command(
@@ -55,8 +88,9 @@ pub struct ClientOptions {
     #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub recv_timeout: Duration,
 
+    /// The maximum number of incoming message bundles to include in a block proposal.
     #[arg(long, default_value = "10")]
-    pub max_pending_messages: usize,
+    pub max_pending_message_bundles: usize,
 
     /// The WebAssembly runtime to use.
     #[arg(long)]
@@ -78,22 +112,26 @@ pub struct ClientOptions {
     #[command(subcommand)]
     pub command: ClientCommand,
 
-    /// Delay increment for retrying to connect to a validator for notifications.
+    /// Delay increment for retrying to connect to a validator.
     #[arg(
-        long = "notification-retry-delay-ms",
+        long = "retry-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis
     )]
-    pub notification_retry_delay: Duration,
+    pub retry_delay: Duration,
 
-    /// Number of times to retry connecting to a validator for notifications.
+    /// Number of times to retry connecting to a validator.
     #[arg(long, default_value = "10")]
-    pub notification_retries: u32,
+    pub max_retries: u32,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]
     pub wait_for_outgoing_messages: bool,
+
+    /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
+    #[arg(long)]
+    pub long_lived_services: bool,
 
     /// The number of Tokio worker threads to use.
     #[arg(long, env = "LINERA_CLIENT_TOKIO_THREADS")]
@@ -101,16 +139,22 @@ pub struct ClientOptions {
 
     /// The policy for handling incoming messages.
     #[arg(long, default_value = "accept")]
-    pub message_policy: MessagePolicy,
+    pub blanket_message_policy: BlanketMessagePolicy,
+
+    /// A set of chains to restrict incoming messages from. By default, messages
+    /// from all chains are accepted. To reject messages from all chains, specify
+    /// an empty string.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
 impl ClientOptions {
-    pub fn init() -> anyhow::Result<Self> {
+    pub fn init() -> Result<Self, Error> {
         let mut options = <ClientOptions as clap::Parser>::parse();
-        let suffix = match options.with_wallet {
-            None => String::new(),
-            Some(n) => format!("_{}", n),
-        };
+        let suffix = options
+            .with_wallet
+            .map(|n| format!("_{}", n))
+            .unwrap_or_default();
         let wallet_env_var = env::var(format!("LINERA_WALLET{suffix}")).ok();
         let storage_env_var = env::var(format!("LINERA_STORAGE{suffix}")).ok();
         if let (None, Some(wallet_path)) = (&options.wallet_state_path, wallet_env_var) {
@@ -130,8 +174,8 @@ impl ClientOptions {
         }
     }
 
-    pub async fn run_with_storage<R: Runnable>(&self, job: R) -> anyhow::Result<R::Output> {
-        let genesis_config = self.wallet()?.genesis_config().clone();
+    pub async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
+        let genesis_config = self.wallet().await?.genesis_config().clone();
         let output = Box::pin(run_with_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
@@ -144,27 +188,32 @@ impl ClientOptions {
         Ok(output)
     }
 
-    pub fn storage_config(&self) -> Result<StorageConfigNamespace, anyhow::Error> {
-        match &self.storage_config {
-            Some(config) => config.parse(),
-            #[cfg(feature = "rocksdb")]
-            None => {
-                let storage_config = crate::storage::StorageConfig::RocksDb {
-                    path: self.config_path()?.join("wallet.db"),
-                };
-                let namespace = "default".to_string();
-                Ok(StorageConfigNamespace {
-                    storage_config,
-                    namespace,
-                })
+    pub fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+        if let Some(config) = &self.storage_config {
+            Ok(config.parse()?)
+        } else {
+            cfg_if::cfg_if! {
+                if #[cfg(all(feature = "rocksdb", feature = "fs"))] {
+                    // The block_in_place is enabled since the client is run in multi-threaded
+                    let spawn_mode = linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                    let storage_config = crate::storage::StorageConfig::RocksDb {
+                        path: self.config_path()?.join("wallet.db"),
+                        spawn_mode,
+                    };
+                    let namespace = "default".to_string();
+                    Ok(StorageConfigNamespace {
+                        storage_config,
+                        namespace,
+                    })
+                } else {
+                    Err(Error::NoStorageOption)
+                }
             }
-            #[cfg(not(feature = "rocksdb"))]
-            None => anyhow::bail!("A storage option must be provided"),
         }
     }
 
-    pub async fn initialize_storage(&self) -> anyhow::Result<()> {
-        let wallet = self.wallet()?;
+    pub async fn initialize_storage(&self) -> Result<(), Error> {
+        let wallet = self.wallet().await?;
         full_initialize_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
@@ -174,23 +223,24 @@ impl ClientOptions {
         .await?;
         Ok(())
     }
+}
 
-    pub fn wallet(&self) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+#[cfg(feature = "fs")]
+impl ClientOptions {
+    pub async fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
         let wallet = persistent::File::read(&self.wallet_path()?)?;
         Ok(WalletState::new(wallet))
     }
 
-    pub fn wallet_path(&self) -> anyhow::Result<PathBuf> {
+    fn wallet_path(&self) -> Result<PathBuf, Error> {
         self.wallet_state_path
             .clone()
             .map(Ok)
             .unwrap_or_else(|| Ok(self.config_path()?.join("wallet.json")))
     }
 
-    pub fn config_path(&self) -> anyhow::Result<PathBuf> {
-        let mut config_dir = dirs::config_dir().ok_or(anyhow::anyhow!(
-            "Default configuration directory not supported. Please specify a path."
-        ))?;
+    fn config_path(&self) -> Result<PathBuf, Error> {
+        let mut config_dir = dirs::config_dir().ok_or(Error::NoDefaultConfigurationDirectory)?;
         config_dir.push("linera");
         if !config_dir.exists() {
             tracing::debug!("{} does not exist, creating", config_dir.display());
@@ -204,14 +254,35 @@ impl ClientOptions {
         &self,
         genesis_config: GenesisConfig,
         testing_prng_seed: Option<u64>,
-    ) -> anyhow::Result<WalletState<impl Persist<Target = Wallet>>> {
+    ) -> Result<WalletState<persistent::File<Wallet>>, Error> {
         let wallet_path = self.wallet_path()?;
-        anyhow::ensure!(
-            !wallet_path.exists(),
-            "Wallet already exists at {}. Aborting",
-            wallet_path.display()
-        );
-        WalletState::create(&wallet_path, Wallet::new(genesis_config, testing_prng_seed))
+        if wallet_path.exists() {
+            return Err(Error::WalletAlreadyExists(wallet_path));
+        }
+        Ok(WalletState::create_from_file(
+            &wallet_path,
+            Wallet::new(genesis_config, testing_prng_seed),
+        )?)
+    }
+}
+
+#[cfg(with_indexed_db)]
+impl ClientOptions {
+    pub async fn wallet(&self) -> Result<WalletState<persistent::IndexedDb<Wallet>>, Error> {
+        Ok(WalletState::new(
+            persistent::IndexedDb::read("linera-wallet")
+                .await?
+                .ok_or(Error::NonexistentWallet)?,
+        ))
+    }
+}
+
+#[cfg(not(with_persist))]
+impl ClientOptions {
+    pub async fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
+        #![allow(unreachable_code)]
+        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `indexed-db` features");
+        Ok(WalletState::new(persistent::Memory::new(_wallet)))
     }
 }
 
@@ -249,36 +320,6 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
-    },
-
-    /// Subscribe to a system channel.
-    Subscribe {
-        /// Chain ID (must be one of our chains).
-        #[arg(long)]
-        subscriber: Option<ChainId>,
-
-        /// Chain ID.
-        #[arg(long)]
-        publisher: Option<ChainId>,
-
-        /// System channel available in the system application.
-        #[arg(long)]
-        channel: SystemChannel,
-    },
-
-    /// Unsubscribe from a system channel.
-    Unsubscribe {
-        /// Chain ID (must be one of our chains).
-        #[arg(long)]
-        subscriber: Option<ChainId>,
-
-        /// Chain ID.
-        #[arg(long)]
-        publisher: Option<ChainId>,
-
-        /// System channel available in the system application.
-        #[arg(long)]
-        channel: SystemChannel,
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
@@ -423,6 +464,9 @@ pub enum ClientCommand {
         name: ValidatorName,
     },
 
+    /// Deprecates all committees except the last one.
+    FinalizeCommittee,
+
     /// View or update the resource control policy
     ResourceControlPolicy {
         /// Set the base price for creating a block.
@@ -468,6 +512,14 @@ pub enum ClientCommand {
         /// Set the additional price for each byte in the argument of a user message.
         #[arg(long)]
         message_byte: Option<Amount>,
+
+        /// Set the maximum amount of fuel per block.
+        #[arg(long)]
+        maximum_fuel_per_block: Option<u64>,
+
+        /// Set the maximum size of an executed block.
+        #[arg(long)]
+        maximum_executed_block_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]
@@ -575,6 +627,14 @@ pub enum ClientCommand {
         #[arg(long, default_value = "0")]
         message_byte_price: Amount,
 
+        /// Set the maximum amount of fuel per block.
+        #[arg(long)]
+        maximum_fuel_per_block: Option<u64>,
+
+        /// Set the maximum size of an executed block.
+        #[arg(long)]
+        maximum_executed_block_size: Option<u64>,
+
         /// Set the maximum read data per block.
         #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
@@ -631,6 +691,10 @@ pub enum ClientCommand {
         /// no earlier than this.
         #[arg(long)]
         limit_rate_until: Option<DateTime<Utc>>,
+
+        /// Configuration for the faucet chain listener.
+        #[command(flatten)]
+        config: ChainListenerConfig,
     },
 
     /// Publish bytecode.
@@ -646,13 +710,23 @@ pub enum ClientCommand {
         publisher: Option<ChainId>,
     },
 
-    /// Publish a blob of binary data.
-    PublishBlob {
-        /// Path to blob file to be published.
+    /// Publish a data blob of binary data.
+    PublishDataBlob {
+        /// Path to data blob file to be published.
         blob_path: PathBuf,
         /// An optional chain ID to publish the blob. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,
+    },
+
+    // TODO(#2490): Consider removing or renaming this.
+    /// Verify that a data blob is readable.
+    ReadDataBlob {
+        /// The hash of the content.
+        hash: CryptoHash,
+        /// An optional chain ID to verify the blob. The default chain of the wallet
+        /// is used otherwise.
+        reader: Option<ChainId>,
     },
 
     /// Create an application.
@@ -807,10 +881,6 @@ pub enum NetCommand {
         #[arg(long)]
         testing_prng_seed: Option<u64>,
 
-        /// The name for the database table to store the chain data in.
-        #[arg(long, default_value = "table_default")]
-        table_name: String,
-
         /// Start the local network on a local Kubernetes deployment.
         #[cfg(feature = "kubernetes")]
         #[arg(long)]
@@ -822,6 +892,16 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, num_args=0..=1)]
         binaries: Option<Option<PathBuf>>,
+
+        /// Run with a specific path where the wallet and validator input files are.
+        /// If none, then a temporary directory is created.
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Run with a specific storage.
+        /// If none, then a linera-storage-service is spanned on a random free port.
+        #[arg(long)]
+        storage_config_namespace: Option<String>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
@@ -859,8 +939,8 @@ impl std::str::FromStr for ResourceControlPolicyConfig {
     }
 }
 
-impl std::fmt::Display for ResourceControlPolicyConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for ResourceControlPolicyConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
@@ -1016,9 +1096,9 @@ pub struct ChainOwnershipConfig {
 }
 
 impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
-    type Error = anyhow::Error;
+    type Error = Error;
 
-    fn try_from(config: ChainOwnershipConfig) -> anyhow::Result<ChainOwnership> {
+    fn try_from(config: ChainOwnershipConfig) -> Result<ChainOwnership, Error> {
         let ChainOwnershipConfig {
             super_owner_public_keys,
             owner_public_keys,
@@ -1029,12 +1109,12 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
             timeout_increment,
             fallback_duration,
         } = config;
-        anyhow::ensure!(
-            owner_weights.is_empty() || owner_weights.len() == owner_public_keys.len(),
-            "There are {} public keys but {} weights.",
-            owner_public_keys.len(),
-            owner_weights.len()
-        );
+        if !owner_weights.is_empty() && owner_weights.len() != owner_public_keys.len() {
+            return Err(Error::MisalignedWeights {
+                public_keys: owner_public_keys.len(),
+                weights: owner_weights.len(),
+            });
+        }
         let super_owners = super_owner_public_keys
             .into_iter()
             .map(|pub_key| (Owner::from(pub_key), pub_key))

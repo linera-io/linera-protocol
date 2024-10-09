@@ -13,10 +13,10 @@ use std::{sync::Arc, thread, vec};
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, MessageId},
+    identifiers::{BlobId, BytecodeId, ChainId, MessageId},
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -26,24 +26,17 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationRegistryView, BytecodeLocation, ExecutionRequest, ExecutionRuntimeContext,
-    ExecutionStateView, QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime,
+    ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
+    QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
 pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
     let chain_id = ChainId::root(1);
-    let certificate_hash = CryptoHash::new(&FakeCertificate);
+    let contract_blob_hash = CryptoHash::new(&FakeBlob(String::from("contract")));
+    let service_blob_hash = CryptoHash::new(&FakeBlob(String::from("service")));
     UserApplicationDescription {
-        bytecode_id: BytecodeId::new(MessageId {
-            chain_id,
-            height: BlockHeight(index),
-            index: 0,
-        }),
-        bytecode_location: BytecodeLocation {
-            certificate_hash,
-            operation_index: 0,
-        },
+        bytecode_id: BytecodeId::new(contract_blob_hash, service_blob_hash),
         creation: MessageId {
             chain_id,
             height: BlockHeight(index),
@@ -55,9 +48,9 @@ pub fn create_dummy_user_application_description(index: u64) -> UserApplicationD
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct FakeCertificate;
+pub struct FakeBlob(String);
 
-impl BcsSignable for FakeCertificate {}
+impl BcsSignable for FakeBlob {}
 
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///
@@ -70,7 +63,6 @@ pub async fn register_mock_applications<C>(
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
-    ViewError: From<C::Error>,
 {
     let mock_applications: Vec<_> =
         create_dummy_user_application_registrations(&mut state.system.registry, count)
@@ -83,10 +75,10 @@ where
     for (id, mock_application) in &mock_applications {
         extra
             .user_contracts()
-            .insert(*id, Arc::new(mock_application.clone()));
+            .insert(*id, mock_application.clone().into());
         extra
             .user_services()
-            .insert(*id, Arc::new(mock_application.clone()));
+            .insert(*id, mock_application.clone().into());
     }
 
     Ok(mock_applications.into_iter())
@@ -98,7 +90,6 @@ pub async fn create_dummy_user_application_registrations<C>(
 ) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription)>>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     let mut ids = Vec::with_capacity(count as usize);
 
@@ -118,20 +109,18 @@ impl QueryContext {
     /// Spawns a thread running the [`ServiceSyncRuntime`] actor.
     ///
     /// Returns the endpoints to communicate with the actor.
-    pub fn spawn_service_runtime_actor(
-        self,
-    ) -> (
-        futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
-        std::sync::mpsc::Sender<ServiceRuntimeRequest>,
-    ) {
-        let (execution_state_sender, execution_state_receiver) =
+    pub fn spawn_service_runtime_actor(self) -> ServiceRuntimeEndpoint {
+        let (execution_state_sender, incoming_execution_requests) =
             futures::channel::mpsc::unbounded();
-        let (request_sender, request_receiver) = std::sync::mpsc::channel();
+        let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
 
         thread::spawn(move || {
-            ServiceSyncRuntime::new(execution_state_sender, self).run(request_receiver)
+            ServiceSyncRuntime::new(execution_state_sender, self).run(runtime_request_receiver)
         });
 
-        (execution_state_receiver, request_sender)
+        ServiceRuntimeEndpoint {
+            incoming_execution_requests,
+            runtime_request_sender,
+        }
     }
 }

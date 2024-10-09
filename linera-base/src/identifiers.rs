@@ -4,8 +4,9 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{Debug, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
+    marker::PhantomData,
     str::FromStr,
 };
 
@@ -18,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
-    data_types::{Blob, BlockHeight},
+    data_types::{BlobBytes, BlobContent, BlockHeight},
     doc_scalar,
 };
 
@@ -81,7 +82,7 @@ impl Account {
 }
 
 impl Display for Account {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.owner {
             Some(owner) => write!(f, "{}:{}", self.chain_id, owner),
             None => write!(f, "{}", self.chain_id),
@@ -144,7 +145,63 @@ impl ChainDescription {
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ChainId(pub CryptoHash);
 
-/// A content-addressed blob ID i.e. the hash of the Blob.
+/// The type of the blob.
+/// Should be a 1:1 mapping of the types in `Blob`.
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    Debug,
+    Serialize,
+    Deserialize,
+    WitType,
+    WitStore,
+    WitLoad,
+    Default,
+)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
+pub enum BlobType {
+    /// A generic data blob.
+    #[default]
+    Data,
+    /// A blob containing contract bytecode.
+    ContractBytecode,
+    /// A blob containing service bytecode.
+    ServiceBytecode,
+}
+
+impl Display for BlobType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match serde_json::to_string(self) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => Err(fmt::Error),
+        }
+    }
+}
+
+impl FromStr for BlobType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s).with_context(|| format!("Invalid BlobType: {}", s))
+    }
+}
+
+impl From<&BlobContent> for BlobType {
+    fn from(content: &BlobContent) -> Self {
+        match content {
+            BlobContent::Data(_) => BlobType::Data,
+            BlobContent::ContractBytecode(_) => BlobType::ContractBytecode,
+            BlobContent::ServiceBytecode(_) => BlobType::ServiceBytecode,
+        }
+    }
+}
+
+/// A content-addressed blob ID i.e. the hash of the `BlobContent`.
 #[derive(
     Eq,
     PartialEq,
@@ -161,18 +218,49 @@ pub struct ChainId(pub CryptoHash);
     WitLoad,
 )]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
-pub struct BlobId(pub CryptoHash);
+pub struct BlobId {
+    /// The hash of the blob.
+    pub hash: CryptoHash,
+    /// The type of the blob.
+    pub blob_type: BlobType,
+}
 
 impl BlobId {
-    /// Creates a new `BlobId` from a `Blob`
-    pub fn new(blob: &Blob) -> Self {
-        BlobId(CryptoHash::new(blob))
+    /// Creates a new `BlobId` from a `BlobContent`
+    pub fn from_content(content: &BlobContent) -> Self {
+        Self {
+            hash: CryptoHash::new(&BlobBytes(content.inner_bytes())),
+            blob_type: content.into(),
+        }
+    }
+
+    /// Creates a new `BlobId` from a `CryptoHash`. This must be a hash of the blob's bytes!
+    pub fn new(hash: CryptoHash, blob_type: BlobType) -> Self {
+        Self { hash, blob_type }
     }
 }
 
 impl Display for BlobId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.blob_type, self.hash)?;
+        Ok(())
+    }
+}
+
+impl FromStr for BlobId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.split(':').collect::<Vec<_>>();
+        if parts.len() == 2 {
+            let blob_type = BlobType::from_str(parts[0]).context("Invalid BlobType!")?;
+            Ok(BlobId {
+                hash: CryptoHash::from_str(parts[1]).context("Invalid hash!")?,
+                blob_type,
+            })
+        } else {
+            Err(anyhow!("Invalid blob ID: {}", s))
+        }
     }
 }
 
@@ -211,6 +299,10 @@ pub struct ApplicationId<A = ()> {
     /// The unique ID of the application's creation.
     pub creation: MessageId,
 }
+
+/// Alias for `ApplicationId`. Use this alias in the core
+/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
+pub type UserApplicationId<A = ()> = ApplicationId<A>;
 
 /// A unique identifier for an application.
 #[derive(
@@ -265,10 +357,12 @@ impl From<ApplicationId> for GenericApplicationId {
 #[derive(WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
-    /// The message ID that published the bytecode.
-    pub message_id: MessageId,
+    /// The hash of the blob containing the contract bytecode.
+    pub contract_blob_hash: CryptoHash,
+    /// The hash of the blob containing the service bytecode.
+    pub service_blob_hash: CryptoHash,
     #[witty(skip)]
-    _phantom: std::marker::PhantomData<(Abi, Parameters, InstantiationArgument)>,
+    _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
 /// The name of a subscription channel.
@@ -455,44 +549,44 @@ impl<Abi, Parameters, InstantiationArgument> Copy
 {
 }
 
-impl<Abi: PartialEq, Parameters, InstantiationArgument> PartialEq
+impl<Abi, Parameters, InstantiationArgument> PartialEq
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
     fn eq(&self, other: &Self) -> bool {
         let BytecodeId {
-            message_id,
+            contract_blob_hash,
+            service_blob_hash,
             _phantom,
         } = other;
-        self.message_id == *message_id
+        self.contract_blob_hash == *contract_blob_hash
+            && self.service_blob_hash == *service_blob_hash
     }
 }
 
-impl<Abi: Eq, Parameters, InstantiationArgument> Eq
+impl<Abi, Parameters, InstantiationArgument> Eq
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
 }
 
-impl<Abi: PartialOrd, Parameters, InstantiationArgument> PartialOrd
+impl<Abi, Parameters, InstantiationArgument> PartialOrd
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let BytecodeId {
-            message_id,
-            _phantom,
-        } = other;
-        self.message_id.partial_cmp(message_id)
+        Some(self.cmp(other))
     }
 }
 
-impl<Abi: Ord, Parameters, InstantiationArgument> Ord
+impl<Abi, Parameters, InstantiationArgument> Ord
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let BytecodeId {
-            message_id,
+            contract_blob_hash,
+            service_blob_hash,
             _phantom,
         } = other;
-        self.message_id.cmp(message_id)
+        (self.contract_blob_hash, self.service_blob_hash)
+            .cmp(&(*contract_blob_hash, *service_blob_hash))
     }
 }
 
@@ -501,31 +595,36 @@ impl<Abi, Parameters, InstantiationArgument> Hash
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let BytecodeId {
-            message_id,
+            contract_blob_hash: contract_blob_id,
+            service_blob_hash: service_blob_id,
             _phantom,
         } = self;
-        message_id.hash(state);
+        contract_blob_id.hash(state);
+        service_blob_id.hash(state);
     }
 }
 
 impl<Abi, Parameters, InstantiationArgument> Debug
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let BytecodeId {
-            message_id,
+            contract_blob_hash: contract_blob_id,
+            service_blob_hash: service_blob_id,
             _phantom,
         } = self;
         f.debug_struct("BytecodeId")
-            .field("message_id", message_id)
-            .finish()
+            .field("contract_blob_id", contract_blob_id)
+            .field("service_blob_id", service_blob_id)
+            .finish_non_exhaustive()
     }
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "BytecodeId")]
 struct SerializableBytecodeId {
-    message_id: MessageId,
+    contract_blob_hash: CryptoHash,
+    service_blob_hash: CryptoHash,
 }
 
 impl<Abi, Parameters, InstantiationArgument> Serialize
@@ -535,16 +634,16 @@ impl<Abi, Parameters, InstantiationArgument> Serialize
     where
         S: serde::ser::Serializer,
     {
+        let serializable_bytecode_id = SerializableBytecodeId {
+            contract_blob_hash: self.contract_blob_hash,
+            service_blob_hash: self.service_blob_hash,
+        };
         if serializer.is_human_readable() {
-            let bytes = bcs::to_bytes(&self.message_id).map_err(serde::ser::Error::custom)?;
+            let bytes =
+                bcs::to_bytes(&serializable_bytecode_id).map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
         } else {
-            SerializableBytecodeId::serialize(
-                &SerializableBytecodeId {
-                    message_id: self.message_id,
-                },
-                serializer,
-            )
+            SerializableBytecodeId::serialize(&serializable_bytecode_id, serializer)
         }
     }
 }
@@ -558,29 +657,32 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let message_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let message_id =
-                bcs::from_bytes(&message_id_bytes).map_err(serde::de::Error::custom)?;
+            let bytecode_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let serializable_bytecode_id: SerializableBytecodeId =
+                bcs::from_bytes(&bytecode_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(BytecodeId {
-                message_id,
-                _phantom: std::marker::PhantomData,
+                contract_blob_hash: serializable_bytecode_id.contract_blob_hash,
+                service_blob_hash: serializable_bytecode_id.service_blob_hash,
+                _phantom: PhantomData,
             })
         } else {
-            let value = SerializableBytecodeId::deserialize(deserializer)?;
+            let serializable_bytecode_id = SerializableBytecodeId::deserialize(deserializer)?;
             Ok(BytecodeId {
-                message_id: value.message_id,
-                _phantom: std::marker::PhantomData,
+                contract_blob_hash: serializable_bytecode_id.contract_blob_hash,
+                service_blob_hash: serializable_bytecode_id.service_blob_hash,
+                _phantom: PhantomData,
             })
         }
     }
 }
 
 impl BytecodeId {
-    /// Creates a bytecode ID from a message ID.
-    pub fn new(message_id: MessageId) -> Self {
+    /// Creates a bytecode ID from contract/service hashes.
+    pub fn new(contract_blob_hash: CryptoHash, service_blob_hash: CryptoHash) -> Self {
         BytecodeId {
-            message_id,
-            _phantom: std::marker::PhantomData,
+            contract_blob_hash,
+            service_blob_hash,
+            _phantom: PhantomData,
         }
     }
 
@@ -589,8 +691,9 @@ impl BytecodeId {
         self,
     ) -> BytecodeId<Abi, Parameters, InstantiationArgument> {
         BytecodeId {
-            message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
+            contract_blob_hash: self.contract_blob_hash,
+            service_blob_hash: self.service_blob_hash,
+            _phantom: PhantomData,
         }
     }
 }
@@ -599,16 +702,18 @@ impl<Abi, Parameters, InstantiationArgument> BytecodeId<Abi, Parameters, Instant
     /// Forgets the ABI of a bytecode ID (if any).
     pub fn forget_abi(self) -> BytecodeId {
         BytecodeId {
-            message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
+            contract_blob_hash: self.contract_blob_hash,
+            service_blob_hash: self.service_blob_hash,
+            _phantom: PhantomData,
         }
     }
 
     /// Leaves just the ABI of a bytecode ID (if any).
     pub fn just_abi(self) -> BytecodeId<Abi> {
         BytecodeId {
-            message_id: self.message_id,
-            _phantom: std::marker::PhantomData,
+            contract_blob_hash: self.contract_blob_hash,
+            service_blob_hash: self.service_blob_hash,
+            _phantom: PhantomData,
         }
     }
 }
@@ -672,7 +777,7 @@ impl<A> Hash for ApplicationId<A> {
 }
 
 impl<A> Debug for ApplicationId<A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ApplicationId {
             bytecode_id,
             creation,
@@ -760,7 +865,7 @@ impl<A> ApplicationId<A> {
 }
 
 impl Display for Owner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
@@ -825,7 +930,7 @@ impl<'de> Deserialize<'de> for AccountOwner {
 }
 
 impl Display for AccountOwner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AccountOwner::User(owner) => write!(f, "User:{}", owner)?,
             AccountOwner::Application(app_id) => write!(f, "Application:{}", app_id)?,
@@ -863,7 +968,7 @@ where
 }
 
 impl Display for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)
     }
 }
@@ -884,8 +989,8 @@ impl TryFrom<&[u8]> for ChainId {
     }
 }
 
-impl std::fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+impl fmt::Debug for ChainId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
@@ -941,7 +1046,7 @@ doc_scalar!(AccountOwner, "An owner of an account.");
 doc_scalar!(Account, "An account");
 doc_scalar!(
     BlobId,
-    "A content-addressed blob ID i.e. the hash of the Blob"
+    "A content-addressed blob ID i.e. the hash of the `BlobContent`"
 );
 
 #[cfg(test)]

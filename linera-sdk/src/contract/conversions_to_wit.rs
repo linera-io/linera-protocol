@@ -10,7 +10,7 @@ use linera_base::{
         Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, EventId,
+        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, EventId,
         GenericApplicationId, MessageId, Owner, StreamId, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
@@ -41,14 +41,6 @@ impl From<Owner> for wit_system_api::Owner {
     fn from(owner: Owner) -> Self {
         wit_system_api::Owner {
             inner0: owner.0.into(),
-        }
-    }
-}
-
-impl From<BlobId> for wit_system_api::BlobId {
-    fn from(blob_id: BlobId) -> Self {
-        wit_system_api::BlobId {
-            inner0: blob_id.0.into(),
         }
     }
 }
@@ -98,7 +90,8 @@ impl From<ApplicationId> for wit_system_api::ApplicationId {
 impl From<BytecodeId> for wit_system_api::BytecodeId {
     fn from(bytecode_id: BytecodeId) -> Self {
         wit_system_api::BytecodeId {
-            message_id: bytecode_id.message_id.into(),
+            contract_blob_hash: bytecode_id.contract_blob_hash.into(),
+            service_blob_hash: bytecode_id.service_blob_hash.into(),
         }
     }
 }

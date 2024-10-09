@@ -1,18 +1,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    mem, vec,
+};
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
+    data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ChainId, Destination, Owner},
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     key_value_store_view::KeyValueStoreView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, View, ViewError},
+    views::{ClonableView, View},
 };
 use linera_views_derive::CryptoHashView;
 #[cfg(with_testing)]
@@ -20,7 +23,7 @@ use {
     crate::{
         ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
-    linera_views::memory::MemoryContext,
+    linera_views::context::MemoryContext,
     std::sync::Arc,
 };
 
@@ -29,8 +32,8 @@ use crate::{
     resources::ResourceController, system::SystemExecutionStateView, ContractSyncRuntime,
     ExecutionError, ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message,
     MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, Response, SystemMessage, UserApplicationDescription,
-    UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, Response, ServiceSyncRuntime, SystemMessage,
+    TransactionTracker, UserApplicationDescription, UserApplicationId,
 };
 
 /// A view accessing the execution state of a chain.
@@ -42,12 +45,18 @@ pub struct ExecutionStateView<C> {
     pub users: HashedReentrantCollectionView<C, UserApplicationId, KeyValueStoreView<C>>,
 }
 
+/// How to interact with a long-lived service runtime.
+pub struct ServiceRuntimeEndpoint {
+    /// How to receive requests.
+    pub incoming_execution_requests: futures::channel::mpsc::UnboundedReceiver<ExecutionRequest>,
+    /// How to query the runtime.
+    pub runtime_request_sender: std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+}
+
 #[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
     MemoryContext<TestExecutionRuntimeContext>: Context + Clone + Send + Sync + 'static,
-    ViewError:
-        From<<MemoryContext<TestExecutionRuntimeContext> as linera_views::common::Context>::Error>,
 {
     /// Simulates the instantiation of an application.
     pub async fn simulate_instantiation(
@@ -63,11 +72,11 @@ where
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: application_description.creation.height,
-            index: Some(application_description.creation.index),
-            next_message_index: 0,
+            index: Some(0),
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
+        let next_message_index = application_description.creation.index + 1;
 
         let application_id = self
             .system
@@ -87,6 +96,7 @@ where
             tracker,
             account: None,
         };
+        let mut txn_tracker = TransactionTracker::new(next_message_index, None);
         self.run_user_action(
             application_id,
             chain_id,
@@ -94,11 +104,12 @@ where
             action,
             context.refund_grant_to(),
             None,
-            None,
+            &mut txn_tracker,
             &mut resource_controller,
         )
         .await?;
-
+        self.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
+            .await?;
         Ok(())
     }
 }
@@ -126,23 +137,14 @@ impl UserAction {
             UserAction::Message(context, _) => context.height,
         }
     }
-
-    pub(crate) fn next_message_index(&self) -> u32 {
-        match self {
-            UserAction::Instantiate(context, _) => context.next_message_index,
-            UserAction::Operation(context, _) => context.next_message_index,
-            UserAction::Message(context, _) => context.next_message_index,
-        }
-    }
 }
 
 impl<C> ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
         application_id: UserApplicationId,
@@ -151,29 +153,25 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-        let (execution_outcomes, oracle_responses) = self
-            .run_user_action_with_runtime(
-                application_id,
-                chain_id,
-                local_time,
-                action,
-                refund_grant_to,
-                grant,
-                oracle_responses,
-                resource_controller,
-            )
-            .await?;
-        let execution_outcomes = self
-            .update_execution_outcomes_with_app_registrations(execution_outcomes)
-            .await?;
-        Ok((execution_outcomes, oracle_responses))
+        self.run_user_action_with_runtime(
+            application_id,
+            chain_id,
+            local_time,
+            action,
+            refund_grant_to,
+            grant,
+            txn_tracker,
+            resource_controller,
+        )
+        .await?;
+        Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn run_user_action_with_runtime(
         &mut self,
         application_id: UserApplicationId,
@@ -182,9 +180,9 @@ where
         action: UserAction,
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         let mut cloned_grant = grant.as_ref().map(|x| **x);
         let initial_balance = resource_controller
             .with_state_and_grant(self, cloned_grant.as_mut())
@@ -197,7 +195,8 @@ where
         };
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
-        let execution_outcomes_future = tokio::task::spawn_blocking(move || {
+        let txn_tracker_moved = mem::take(txn_tracker);
+        let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
             ContractSyncRuntime::run_action(
                 execution_state_sender,
                 application_id,
@@ -206,30 +205,32 @@ where
                 refund_grant_to,
                 controller,
                 action,
-                oracle_responses,
+                txn_tracker_moved,
             )
         });
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
-        let (execution_outcomes, oracle_responses, controller) =
-            execution_outcomes_future.await??;
+
+        let (controller, txn_tracker_moved) = execution_outcomes_future.await??;
+        *txn_tracker = txn_tracker_moved;
         resource_controller
             .with_state_and_grant(self, grant)
             .await?
             .merge_balance(initial_balance, controller.balance()?)?;
         resource_controller.tracker = controller.tracker;
-        Ok((execution_outcomes, oracle_responses))
+        Ok(())
     }
 
     /// Schedules application registration messages when needed.
     ///
     /// Ensures that the outgoing messages in `results` are preceded by a system message that
     /// registers the application that will handle the messages.
-    async fn update_execution_outcomes_with_app_registrations(
+    pub async fn update_execution_outcomes_with_app_registrations(
         &self,
-        mut results: Vec<ExecutionOutcome>,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        let results = txn_tracker.outcomes_mut();
         let user_application_outcomes = results.iter().filter_map(|outcome| match outcome {
             ExecutionOutcome::User(application_id, result) => Some((application_id, result)),
             _ => None,
@@ -247,7 +248,7 @@ where
         }
 
         if applications_to_register_per_destination.is_empty() {
-            return Ok(results);
+            return Ok(());
         }
 
         let messages = applications_to_register_per_destination
@@ -279,9 +280,15 @@ where
             ..RawExecutionOutcome::default()
         };
 
-        results.insert(0, ExecutionOutcome::System(system_outcome));
+        // Insert the message before the first user outcome.
+        let index = results
+            .iter()
+            .position(|outcome| matches!(outcome, ExecutionOutcome::User(_, _)))
+            .unwrap_or(results.len());
+        // TODO(#2362): This inserts messages in front of existing ones, invalidating their IDs.
+        results.insert(index, ExecutionOutcome::System(system_outcome));
 
-        Ok(results)
+        Ok(())
     }
 
     pub async fn execute_operation(
@@ -289,55 +296,49 @@ where
         context: OperationContext,
         local_time: Timestamp,
         operation: Operation,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
-                let (mut result, new_application, mut returned_oracle_responses) =
-                    self.system.execute_operation(context, op).await?;
-                result.authenticated_signer = context.authenticated_signer;
-                result.refund_grant_to = context.refund_grant_to();
-                let mut outcomes = vec![ExecutionOutcome::System(result)];
+                let new_application = self
+                    .system
+                    .execute_operation(context, op, txn_tracker)
+                    .await?;
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
-                    let (user_outcomes, oracle_responses) = self
-                        .run_user_action(
-                            application_id,
-                            context.chain_id,
-                            local_time,
-                            user_action,
-                            context.refund_grant_to(),
-                            None,
-                            oracle_responses,
-                            resource_controller,
-                        )
-                        .await?;
-                    outcomes.extend(user_outcomes);
-                    returned_oracle_responses.extend(oracle_responses);
+                    self.run_user_action(
+                        application_id,
+                        context.chain_id,
+                        local_time,
+                        user_action,
+                        context.refund_grant_to(),
+                        None,
+                        txn_tracker,
+                        resource_controller,
+                    )
+                    .await?;
                 }
-                Ok((outcomes, returned_oracle_responses))
             }
             Operation::User {
                 application_id,
                 bytes,
             } => {
-                let (outcomes, oracle_responses) = self
-                    .run_user_action(
-                        application_id,
-                        context.chain_id,
-                        local_time,
-                        UserAction::Operation(context, bytes),
-                        context.refund_grant_to(),
-                        None,
-                        oracle_responses,
-                        resource_controller,
-                    )
-                    .await?;
-                Ok((outcomes, oracle_responses))
+                self.run_user_action(
+                    application_id,
+                    context.chain_id,
+                    local_time,
+                    UserAction::Operation(context, bytes),
+                    context.refund_grant_to(),
+                    None,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
             }
         }
+        Ok(())
     }
 
     pub async fn execute_message(
@@ -346,49 +347,51 @@ where
         local_time: Timestamp,
         message: Message,
         grant: Option<&mut Amount>,
-        oracle_responses: Option<Vec<OracleResponse>>,
+        txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
-    ) -> Result<(Vec<ExecutionOutcome>, Vec<OracleResponse>), ExecutionError> {
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
-                let outcome = self.system.execute_message(context, message).await?;
-                Ok((vec![ExecutionOutcome::System(outcome)], Vec::new()))
+                let outcome = self
+                    .system
+                    .execute_message(context, message, txn_tracker)
+                    .await?;
+                txn_tracker.add_system_outcome(outcome)?;
             }
             Message::User {
                 application_id,
                 bytes,
             } => {
-                let (outcomes, oracle_responses) = self
-                    .run_user_action(
-                        application_id,
-                        context.chain_id,
-                        local_time,
-                        UserAction::Message(context, bytes),
-                        context.refund_grant_to,
-                        grant,
-                        oracle_responses,
-                        resource_controller,
-                    )
-                    .await?;
-                Ok((outcomes, oracle_responses))
+                self.run_user_action(
+                    application_id,
+                    context.chain_id,
+                    local_time,
+                    UserAction::Message(context, bytes),
+                    context.refund_grant_to,
+                    grant,
+                    txn_tracker,
+                    resource_controller,
+                )
+                .await?;
             }
         }
+        Ok(())
     }
 
     pub async fn bounce_message(
         &self,
         context: MessageContext,
         grant: Amount,
-        refund_grant_to: Option<Account>,
         message: Message,
-    ) -> Result<Vec<ExecutionOutcome>, ExecutionError> {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match message {
             Message::System(message) => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
-                    refund_grant_to,
+                    refund_grant_to: context.refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
@@ -398,7 +401,7 @@ where
                     kind: MessageKind::Bouncing,
                     message,
                 });
-                Ok(vec![ExecutionOutcome::System(outcome)])
+                txn_tracker.add_system_outcome(outcome)?;
             }
             Message::User {
                 application_id,
@@ -406,7 +409,7 @@ where
             } => {
                 let mut outcome = RawExecutionOutcome {
                     authenticated_signer: context.authenticated_signer,
-                    refund_grant_to,
+                    refund_grant_to: context.refund_grant_to,
                     ..Default::default()
                 };
                 outcome.messages.push(RawOutgoingMessage {
@@ -416,9 +419,10 @@ where
                     kind: MessageKind::Bouncing,
                     message: bytes,
                 });
-                Ok(vec![ExecutionOutcome::User(application_id, outcome)])
+                txn_tracker.add_user_outcome(application_id, outcome)?;
             }
         }
+        Ok(())
     }
 
     pub async fn send_refund(
@@ -426,7 +430,8 @@ where
         context: MessageContext,
         amount: Amount,
         account: Account,
-    ) -> Result<ExecutionOutcome, ExecutionError> {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         let mut outcome = RawExecutionOutcome::default();
         let message = RawOutgoingMessage {
@@ -441,17 +446,15 @@ where
             },
         };
         outcome.messages.push(message);
-        Ok(ExecutionOutcome::System(outcome))
+        txn_tracker.add_system_outcome(outcome)?;
+        Ok(())
     }
 
     pub async fn query_application(
         &mut self,
         context: QueryContext,
         query: Query,
-        incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
-            ExecutionRequest,
-        >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        endpoint: Option<&mut ServiceRuntimeEndpoint>,
     ) -> Result<Response, ExecutionError> {
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match query {
@@ -464,21 +467,48 @@ where
                 bytes,
             } => {
                 let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
-                let response = self
-                    .query_user_application(
-                        application_id,
-                        context,
-                        bytes,
-                        incoming_execution_requests,
-                        runtime_request_sender,
-                    )
-                    .await?;
+                let response = match endpoint {
+                    Some(endpoint) => {
+                        self.query_user_application_with_long_lived_service(
+                            application_id,
+                            context,
+                            bytes,
+                            &mut endpoint.incoming_execution_requests,
+                            &mut endpoint.runtime_request_sender,
+                        )
+                        .await?
+                    }
+                    None => {
+                        self.query_user_application(application_id, context, bytes)
+                            .await?
+                    }
+                };
                 Ok(Response::User(response))
             }
         }
     }
 
     async fn query_user_application(
+        &mut self,
+        application_id: UserApplicationId,
+        context: QueryContext,
+        query: Vec<u8>,
+    ) -> Result<Vec<u8>, ExecutionError> {
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+        let execution_outcomes_future = linera_base::task::spawn_blocking(move || {
+            let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
+            runtime.run_query(application_id, query)
+        });
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+
+        let response = execution_outcomes_future.await??;
+        Ok(response)
+    }
+
+    async fn query_user_application_with_long_lived_service(
         &mut self,
         application_id: UserApplicationId,
         context: QueryContext,

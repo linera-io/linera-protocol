@@ -1,26 +1,44 @@
 ## Motivation
 
-<!-- Short text indicating what this PR aims to accomplish. -->
+<!--
+Briefly describe the goal(s) of this PR.
+-->
 
 ## Proposal
 
-<!-- What are the proposed changes and why are they appropriate? -->
+<!--
+Summarize the proposed changes and how they address the goal(s) stated above.
+-->
 
 ## Test Plan
 
-<!-- How to test that the changes are correct. -->
+<!--
+Explain how you made sure that the changes are correct and that they perform as intended.
+
+Please describe testing protocols (CI, manual tests, benchmarks, etc) in a way that others
+can reproduce the results.
+-->
 
 ## Release Plan
 
 <!--
-How to safely release the changes.
+If this PR targets the `main` branch, **keep the applicable lines** to indicate if you
+recommend the changes to be picked in release branches, SDKs, and hotfixes.
 
-Please only include the relevant items (if any) and create issues to track future release work.
+This generally concerns only bug fixes.
+
+Note that altering the public protocol (e.g. transaction format, WASM syscalls) or storage
+formats requires a new deployment.
 -->
-- Need to bump the major/minor version number in the next release of the crates.
-- Need to update the developer manual.
-- This PR is adding or removing Cargo features.
-- Release is blocked and/or tracked by other issues (see links below)
+- Nothing to do / These changes follow the usual release cycle.
+- These changes should be backported to the latest `devnet` branch, then
+    - be released in a new SDK,
+    - be released in a validator hotfix.
+- These changes should be backported to the latest `testnet` branch, then
+    - be released in a new SDK,
+    - be released in a validator hotfix.
+- Backporting is not possible but we may want to deploy a new `devnet` and release a new
+      SDK soon.
 
 ## Links
 

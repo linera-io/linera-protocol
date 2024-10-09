@@ -4,11 +4,10 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use linera_base::{
-    data_types::{
-        Amount, ApplicationPermissions, BlockHeight, HashedBlob, SendMessageRequest, Timestamp,
-    },
+    crypto::CryptoHash,
+    data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, EventId, MessageId, Owner, StreamName,
+        Account, ApplicationId, ChainId, ChannelName, EventId, MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -109,6 +108,15 @@ where
             .user_data_mut()
             .runtime
             .application_id()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the chain ID of the current application creator.
+    fn get_application_creator_chain_id(caller: &mut Caller) -> Result<ChainId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .application_creator_chain_id()
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -270,7 +278,7 @@ where
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ChainId, RuntimeError> {
+    ) -> Result<(MessageId, ChainId), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -356,12 +364,21 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Reads a blob from storage.
-    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<HashedBlob, RuntimeError> {
+    /// Reads a data blob from storage.
+    fn read_data_blob(caller: &mut Caller, hash: CryptoHash) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_blob(&blob_id)
+            .read_data_blob(&hash)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Asserts the existence of a data blob with the given hash.
+    fn assert_data_blob_exists(caller: &mut Caller, hash: CryptoHash) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .assert_data_blob_exists(&hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -433,6 +450,15 @@ where
             .user_data_mut()
             .runtime
             .application_id()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Returns the chain ID of the current application creator.
+    fn get_application_creator_chain_id(caller: &mut Caller) -> Result<ChainId, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .application_creator_chain_id()
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -539,12 +565,21 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Reads a blob from storage.
-    fn read_blob(caller: &mut Caller, blob_id: BlobId) -> Result<HashedBlob, RuntimeError> {
+    /// Reads a data blob from storage.
+    fn read_data_blob(caller: &mut Caller, hash: CryptoHash) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_blob(&blob_id)
+            .read_data_blob(&hash)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Asserts the existence of a data blob with the given hash.
+    fn assert_data_blob_exists(caller: &mut Caller, hash: CryptoHash) -> Result<(), RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .assert_data_blob_exists(&hash)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -717,7 +752,7 @@ where
     }
 
     /// Waits for the promise to search for entries whose keys that start with the `key_prefix`.
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_wait(
         caller: &mut Caller,
         promise_id: u32,

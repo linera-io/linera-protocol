@@ -15,14 +15,16 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, HashedBlob, OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
-    identifiers::{Account, BlobId, BytecodeId, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
@@ -37,9 +39,9 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, Bytecode, BytecodeLocation, ChannelName, ChannelSubscription,
-    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
-    QueryContext, RawExecutionOutcome, RawOutgoingMessage, UserApplicationDescription,
+    ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
+    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
     UserApplicationId,
 };
 
@@ -115,7 +117,6 @@ pub enum SystemOperation {
         owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     },
     /// Claims `amount` units of value from the given owner's account in the remote
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
@@ -125,7 +126,6 @@ pub enum SystemOperation {
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     },
     /// Creates (or activates) a new chain.
     /// This will automatically subscribe to the future committees created by `admin_id`.
@@ -156,14 +156,11 @@ pub enum SystemOperation {
         channel: SystemChannel,
     },
     /// Publishes a new application bytecode.
-    PublishBytecode {
-        contract: Bytecode,
-        service: Bytecode,
-    },
-    /// Publishes a new blob.
-    PublishBlob { blob_id: BlobId },
-    /// Reads a blob. This is test-only, so we can test without a Wasm application.
-    #[cfg(with_testing)]
+    PublishBytecode { bytecode_id: BytecodeId },
+    /// Publishes a new data blob.
+    PublishDataBlob { blob_hash: CryptoHash },
+    /// Reads a blob and discards the result.
+    // TODO(#2490): Consider removing this.
     ReadBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
@@ -189,10 +186,10 @@ pub enum SystemOperation {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum AdminOperation {
     /// Registers a new committee. This will notify the subscribers of the admin chain so that they
-    /// can migrate to the new epoch by accepting the resulting `SetCommittees` as an incoming
+    /// can migrate to the new epoch by accepting the resulting `CreateCommittee` as an incoming
     /// message in a block.
     CreateCommittee { epoch: Epoch, committee: Committee },
-    /// Removes a committee. Once the resulting `SetCommittees` message is accepted by a chain,
+    /// Removes a committee. Once the resulting `RemoveCommittee` message is accepted by a chain,
     /// blocks from the retired epoch will not be accepted until they are followed (hence
     /// re-certified) by a block certified by a recent committee.
     RemoveCommittee { epoch: Epoch },
@@ -215,15 +212,13 @@ pub enum SystemMessage {
         owner: Owner,
         amount: Amount,
         recipient: Recipient,
-        user_data: UserData,
     },
     /// Creates (or activates) a new chain.
     OpenChain(OpenChainConfig),
-    /// Sets the current epoch and the recognized committees.
-    SetCommittees {
-        epoch: Epoch,
-        committees: BTreeMap<Epoch, Committee>,
-    },
+    /// Adds a new epoch and committee.
+    CreateCommittee { epoch: Epoch, committee: Committee },
+    /// Removes an old committee.
+    RemoveCommittee { epoch: Epoch },
     /// Subscribes to a channel.
     Subscribe {
         id: ChainId,
@@ -234,57 +229,16 @@ pub enum SystemMessage {
         id: ChainId,
         subscription: ChannelSubscription,
     },
-    /// Notifies that a new application bytecode was published.
-    BytecodePublished { operation_index: u32 },
     /// Notifies that a new application was created.
     ApplicationCreated,
-    /// Shares the locations of published bytecodes.
-    BytecodeLocations {
-        locations: Vec<(BytecodeId, BytecodeLocation)>,
-    },
     /// Shares information about some applications to help the recipient use them.
     /// Applications must be registered after their dependencies.
     RegisterApplications {
         applications: Vec<UserApplicationDescription>,
     },
-    /// Does nothing. Used to debug the intended recipients of a block.
-    Notify { id: ChainId },
     /// Requests a `RegisterApplication` message from the target chain to register the specified
     /// application on the sender chain.
     RequestApplication(UserApplicationId),
-}
-
-impl SystemMessage {
-    /// Returns an iterator over all bytecode locations this message introduces to the receiving
-    /// chain, given the hash of the certificate that it originates from.
-    pub fn bytecode_locations(
-        &self,
-        certificate_hash: CryptoHash,
-    ) -> Box<dyn Iterator<Item = BytecodeLocation> + '_> {
-        match self {
-            SystemMessage::BytecodePublished { operation_index } => {
-                Box::new(iter::once(BytecodeLocation {
-                    certificate_hash,
-                    operation_index: *operation_index,
-                }))
-            }
-            SystemMessage::BytecodeLocations {
-                locations: new_locations,
-            } => Box::new(new_locations.iter().map(|(_id, location)| *location)),
-            SystemMessage::RegisterApplications { applications } => {
-                Box::new(applications.iter().map(|app| app.bytecode_location))
-            }
-            SystemMessage::Credit { .. }
-            | SystemMessage::Withdraw { .. }
-            | SystemMessage::OpenChain(_)
-            | SystemMessage::SetCommittees { .. }
-            | SystemMessage::Subscribe { .. }
-            | SystemMessage::Unsubscribe { .. }
-            | SystemMessage::ApplicationCreated
-            | SystemMessage::Notify { .. }
-            | SystemMessage::RequestApplication(_) => Box::new(iter::empty()),
-        }
-    }
 }
 
 /// A query to the system state.
@@ -305,8 +259,6 @@ pub struct SystemResponse {
 pub enum SystemChannel {
     /// Channel used to broadcast reconfigurations.
     Admin,
-    /// Channel used to broadcast new published bytecodes.
-    PublishedBytecodes,
 }
 
 impl SystemChannel {
@@ -322,7 +274,6 @@ impl Display for SystemChannel {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         let display_name = match self {
             SystemChannel::Admin => "Admin",
-            SystemChannel::PublishedBytecodes => "PublishedBytecodes",
         };
 
         write!(formatter, "{display_name}")
@@ -354,6 +305,34 @@ impl Recipient {
 /// Optional user message attached to a transfer.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
+
+impl UserData {
+    pub fn from_option_string(opt_str: Option<String>) -> Result<Self, usize> {
+        // Convert the Option<String> to Option<[u8; 32]>
+        let option_array = match opt_str {
+            Some(s) => {
+                // Convert the String to a Vec<u8>
+                let vec = s.into_bytes();
+                if vec.len() <= 32 {
+                    // Create an array from the Vec<u8>
+                    let mut array = [b' '; 32];
+
+                    // Copy bytes from the vector into the array
+                    let len = vec.len().min(32);
+                    array[..len].copy_from_slice(&vec[..len]);
+
+                    Some(array)
+                } else {
+                    return Err(vec.len());
+                }
+            }
+            None => None,
+        };
+
+        // Return the UserData with the converted Option<[u8; 32]>
+        Ok(UserData(option_array))
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
@@ -419,12 +398,15 @@ pub enum SystemExecutionError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+    #[error("Oracle response mismatch")]
+    OracleResponseMismatch,
+    #[error("No recorded response for oracle query")]
+    MissingOracleResponse,
 }
 
 impl<C> SystemExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
@@ -448,21 +430,18 @@ where
         &mut self,
         context: OperationContext,
         operation: SystemOperation,
-    ) -> Result<
-        (
-            RawExecutionOutcome<SystemMessage, Amount>,
-            Option<(UserApplicationId, Vec<u8>)>,
-            Vec<OracleResponse>,
-        ),
-        SystemExecutionError,
-    > {
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<Option<(UserApplicationId, Vec<u8>)>, SystemExecutionError> {
         use SystemOperation::*;
-        let mut outcome = RawExecutionOutcome::default();
+        let mut outcome = RawExecutionOutcome {
+            authenticated_signer: context.authenticated_signer,
+            refund_grant_to: context.refund_grant_to(),
+            ..RawExecutionOutcome::default()
+        };
         let mut new_application = None;
-        let mut oracle_responses = Vec::new();
         match operation {
             OpenChain(config) => {
-                let next_message_id = context.next_message_id();
+                let next_message_id = context.next_message_id(txn_tracker.next_message_index());
                 let messages = self.open_chain(config, next_message_id)?;
                 outcome.messages.extend(messages);
                 #[cfg(with_metrics)]
@@ -513,7 +492,6 @@ where
                 target_id,
                 recipient,
                 amount,
-                user_data,
             } => {
                 let message = self
                     .claim(
@@ -522,7 +500,6 @@ where
                         target_id,
                         recipient,
                         amount,
-                        user_data,
                     )
                     .await?;
 
@@ -539,17 +516,14 @@ where
                             epoch == self.epoch.get().expect("chain is active").try_add_one()?,
                             SystemExecutionError::InvalidCommitteeCreation
                         );
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().insert(epoch, committee.clone());
                         self.epoch.set(Some(epoch));
                         let message = RawOutgoingMessage {
                             destination: Destination::Subscribers(SystemChannel::Admin.name()),
                             authenticated: false,
                             grant: Amount::ZERO,
                             kind: MessageKind::Protected,
-                            message: SystemMessage::SetCommittees {
-                                epoch,
-                                committees: self.committees.get().clone(),
-                            },
+                            message: SystemMessage::CreateCommittee { epoch, committee },
                         };
                         outcome.messages.push(message);
                     }
@@ -563,10 +537,7 @@ where
                             authenticated: false,
                             grant: Amount::ZERO,
                             kind: MessageKind::Protected,
-                            message: SystemMessage::SetCommittees {
-                                epoch: self.epoch.get().expect("chain is active"),
-                                committees: self.committees.get().clone(),
-                            },
+                            message: SystemMessage::RemoveCommittee { epoch },
                         };
                         outcome.messages.push(message);
                     }
@@ -626,21 +597,15 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBytecode { .. } => {
-                // Send a `BytecodePublished` message to ourself so that we can broadcast
-                // the bytecode-id next.
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(context.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::BytecodePublished {
-                        operation_index: context
-                            .index
-                            .expect("System application can not be called by other applications"),
-                    },
-                };
-                outcome.messages.push(message);
+            PublishBytecode { bytecode_id } => {
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    bytecode_id.contract_blob_hash,
+                    BlobType::ContractBytecode,
+                )))?;
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    bytecode_id.service_blob_hash,
+                    BlobType::ServiceBytecode,
+                )))?;
             }
             CreateApplication {
                 bytecode_id,
@@ -650,8 +615,12 @@ where
             } => {
                 let id = UserApplicationId {
                     bytecode_id,
-                    creation: context.next_message_id(),
+                    creation: context.next_message_id(txn_tracker.next_message_index()),
                 };
+                for application in required_application_ids.iter().chain(iter::once(&id)) {
+                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
+                        .await?;
+                }
                 self.registry
                     .register_new_application(
                         id,
@@ -683,17 +652,20 @@ where
                 };
                 outcome.messages.push(message);
             }
-            PublishBlob { blob_id } => {
-                oracle_responses.push(OracleResponse::Blob(blob_id));
+            PublishDataBlob { blob_hash } => {
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    blob_hash,
+                    BlobType::Data,
+                )))?;
             }
-            #[cfg(with_testing)]
             ReadBlob { blob_id } => {
-                self.read_blob(blob_id).await?;
-                oracle_responses.push(OracleResponse::Blob(blob_id));
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
+                self.read_blob_content(blob_id).await?;
             }
         }
 
-        Ok((outcome, new_application, oracle_responses))
+        txn_tracker.add_system_outcome(outcome)?;
+        Ok(new_application)
     }
 
     pub async fn transfer(
@@ -747,7 +719,6 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: UserData,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
         ensure!(
             authenticated_signer.as_ref() == Some(&owner),
@@ -766,7 +737,6 @@ where
             message: SystemMessage::Withdraw {
                 amount,
                 owner,
-                user_data,
                 recipient,
             },
         })
@@ -777,6 +747,7 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
+        txn_tracker: &mut TransactionTracker,
     ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
@@ -801,7 +772,6 @@ where
             Withdraw {
                 amount,
                 owner,
-                user_data: _,
                 recipient,
             } => {
                 ensure!(
@@ -831,71 +801,24 @@ where
                     Recipient::Burn => (),
                 }
             }
-            SetCommittees { epoch, committees } => {
+            CreateCommittee { epoch, committee } => {
                 ensure!(
-                    epoch >= self.epoch.get().expect("chain is active"),
-                    SystemExecutionError::CannotRewindEpoch
+                    epoch == self.epoch.get().expect("chain is active").try_add_one()?,
+                    SystemExecutionError::InvalidCommitteeCreation
                 );
+                self.committees.get_mut().insert(epoch, committee.clone());
                 self.epoch.set(Some(epoch));
-                self.committees.set(committees);
             }
-            Subscribe { id, subscription } => {
+            RemoveCommittee { epoch } => {
                 ensure!(
-                    subscription.chain_id == context.chain_id,
-                    SystemExecutionError::IncorrectChainId(subscription.chain_id)
+                    self.committees.get_mut().remove(&epoch).is_some(),
+                    SystemExecutionError::InvalidCommitteeRemoval
                 );
-                // Notify the subscriber about this block, so that it is included in the
-                // received_log of the subscriber and correctly synchronized.
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Notify { id },
-                };
-                outcome.messages.push(message);
-                outcome.subscribe.push((subscription.name.clone(), id));
-            }
-            Unsubscribe { id, subscription } => {
-                ensure!(
-                    subscription.chain_id == context.chain_id,
-                    SystemExecutionError::IncorrectChainId(subscription.chain_id)
-                );
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::Notify { id },
-                };
-                outcome.messages.push(message);
-                outcome.unsubscribe.push((subscription.name.clone(), id));
-            }
-            BytecodePublished { operation_index } => {
-                let bytecode_id = BytecodeId::new(context.message_id);
-                let bytecode_location = BytecodeLocation {
-                    certificate_hash: context.certificate_hash,
-                    operation_index,
-                };
-                self.registry
-                    .register_published_bytecode(bytecode_id, bytecode_location)?;
-                let locations = self.registry.bytecode_locations().await?;
-                let message = RawOutgoingMessage {
-                    destination: Destination::Subscribers(SystemChannel::PublishedBytecodes.name()),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::BytecodeLocations { locations },
-                };
-                outcome.messages.push(message);
-            }
-            BytecodeLocations { locations } => {
-                for (id, location) in locations {
-                    self.registry.register_published_bytecode(id, location)?;
-                }
             }
             RegisterApplications { applications } => {
                 for application in applications {
+                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
+                        .await?;
                     self.registry
                         .register_application(application.clone())
                         .await?;
@@ -918,10 +841,10 @@ where
                 };
                 outcome.messages.push(message);
             }
-            OpenChain(_) => {
-                // This special message is executed immediately when cross-chain requests are received.
-            }
-            ApplicationCreated | Notify { .. } => (),
+            // These messages are executed immediately when cross-chain requests are received.
+            Subscribe { .. } | Unsubscribe { .. } | OpenChain(_) => {}
+            // This message is only a placeholder: Its ID is part of the application ID.
+            ApplicationCreated => {}
         }
         Ok(outcome)
     }
@@ -1031,7 +954,7 @@ where
         id: ChainId,
     ) -> Result<Vec<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
         let mut messages = Vec::new();
-        // Unsubscribe to all channels.
+        // Unsubscribe from all channels.
         self.subscriptions
             .for_each_index(|subscription| {
                 let message = RawOutgoingMessage {
@@ -1050,22 +973,68 @@ where
         Ok(messages)
     }
 
-    pub async fn read_blob(&mut self, blob_id: BlobId) -> Result<HashedBlob, SystemExecutionError> {
+    pub async fn read_blob_content(
+        &mut self,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, SystemExecutionError> {
         self.context()
             .extra()
             .get_blob(blob_id)
             .await
             .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))
+            .map(Into::into)
+    }
+
+    pub async fn assert_blob_exists(
+        &mut self,
+        blob_id: BlobId,
+    ) -> Result<(), SystemExecutionError> {
+        if self.context().extra().contains_blob(blob_id).await? {
+            Ok(())
+        } else {
+            Err(SystemExecutionError::BlobNotFoundOnRead(blob_id))
+        }
+    }
+
+    async fn check_and_record_bytecode_blobs(
+        &mut self,
+        bytecode_id: &BytecodeId,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), SystemExecutionError> {
+        let contract_bytecode_blob_id =
+            BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
+        ensure!(
+            self.context()
+                .extra()
+                .contains_blob(contract_bytecode_blob_id)
+                .await?,
+            SystemExecutionError::BlobNotFoundOnRead(contract_bytecode_blob_id)
+        );
+        txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
+        let service_bytecode_blob_id =
+            BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
+        ensure!(
+            self.context()
+                .extra()
+                .contains_blob(service_bytecode_blob_id)
+                .await?,
+            SystemExecutionError::BlobNotFoundOnRead(service_bytecode_blob_id)
+        );
+        txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use linera_base::{data_types::BlockHeight, identifiers::ApplicationId};
-    use linera_views::memory::MemoryContext;
+    use linera_base::{
+        data_types::{Blob, BlockHeight, Bytecode},
+        identifiers::ApplicationId,
+    };
+    use linera_views::context::MemoryContext;
 
     use super::*;
-    use crate::{ExecutionStateView, TestExecutionRuntimeContext};
+    use crate::{ExecutionOutcome, ExecutionStateView, TestExecutionRuntimeContext};
 
     /// Returns an execution state view and a matching operation context, for epoch 1, with root
     /// chain 0 as the admin ID and one empty committee.
@@ -1080,7 +1049,6 @@ mod tests {
             authenticated_caller_id: None,
             height: BlockHeight::from(7),
             index: Some(2),
-            next_message_index: 3,
         };
         let state = SystemExecutionState {
             description: Some(description),
@@ -1094,43 +1062,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bytecode_message_index() {
-        let (mut view, context) = new_view_and_context().await;
-        let operation = SystemOperation::PublishBytecode {
-            contract: Bytecode::new(vec![]),
-            service: Bytecode::new(vec![]),
-        };
-        let (result, new_application, _) = view
-            .system
-            .execute_operation(context, operation)
-            .await
-            .unwrap();
-        assert_eq!(new_application, None);
-        let operation_index = context
-            .index
-            .expect("Missing operation index in dummy context");
-        assert_eq!(
-            result.messages[PUBLISH_BYTECODE_MESSAGE_INDEX as usize].message,
-            SystemMessage::BytecodePublished { operation_index }
-        );
-    }
-
-    #[tokio::test]
     async fn application_message_index() {
         let (mut view, context) = new_view_and_context().await;
-        let bytecode_id = BytecodeId::new(MessageId {
-            chain_id: context.chain_id,
-            height: BlockHeight::from(5),
-            index: 0,
-        });
-        let location = BytecodeLocation {
-            certificate_hash: CryptoHash::test_hash("certificate"),
-            operation_index: 1,
-        };
-        view.system
-            .registry
-            .register_published_bytecode(bytecode_id, location)
-            .unwrap();
+        let contract = Bytecode::new(b"contract".into());
+        let service = Bytecode::new(b"service".into());
+        let contract_blob = Blob::new_contract_bytecode(contract.compress());
+        let service_blob = Blob::new_service_bytecode(service.compress());
+        let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
 
         let operation = SystemOperation::CreateApplication {
             bytecode_id,
@@ -1138,11 +1076,17 @@ mod tests {
             instantiation_argument: vec![],
             required_application_ids: vec![],
         };
-        let (result, new_application, _) = view
+        let mut txn_tracker = TransactionTracker::default();
+        view.context().extra().add_blob(contract_blob);
+        view.context().extra().add_blob(service_blob);
+        let new_application = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
+        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+            panic!("Unexpected outcome");
+        };
         assert_eq!(
             result.messages[CREATE_APPLICATION_MESSAGE_INDEX as usize].message,
             SystemMessage::ApplicationCreated
@@ -1150,7 +1094,7 @@ mod tests {
         let creation = MessageId {
             chain_id: context.chain_id,
             height: context.height,
-            index: context.next_message_index + CREATE_APPLICATION_MESSAGE_INDEX,
+            index: CREATE_APPLICATION_MESSAGE_INDEX,
         };
         let id = ApplicationId {
             bytecode_id,
@@ -1174,13 +1118,17 @@ mod tests {
             balance: Amount::ZERO,
             application_permissions: Default::default(),
         };
+        let mut txn_tracker = TransactionTracker::default();
         let operation = SystemOperation::OpenChain(config.clone());
-        let (result, new_application, _) = view
+        let new_application = view
             .system
-            .execute_operation(context, operation)
+            .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
         assert_eq!(new_application, None);
+        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+            panic!("Unexpected outcome");
+        };
         assert_eq!(
             result.messages[OPEN_CHAIN_MESSAGE_INDEX as usize].message,
             SystemMessage::OpenChain(config)

@@ -9,7 +9,7 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::{Account, FungibleTokenAbi};
 use linera_sdk::{
     base::{AccountOwner, Amount, ApplicationId, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 use state::{CrowdFunding, Status};
@@ -31,7 +31,7 @@ impl Contract for CrowdFundingContract {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = CrowdFunding::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = CrowdFunding::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CrowdFundingContract { state, runtime }
@@ -53,7 +53,7 @@ impl Contract for CrowdFundingContract {
     async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::Pledge { owner, amount } => {
-                if self.runtime.chain_id() == self.runtime.application_id().creation.chain_id {
+                if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
                     self.execute_pledge_with_account(owner, amount).await;
                 } else {
                     self.execute_pledge_with_transfer(owner, amount);
@@ -69,7 +69,7 @@ impl Contract for CrowdFundingContract {
             Message::PledgeWithAccount { owner, amount } => {
                 assert_eq!(
                     self.runtime.chain_id(),
-                    self.runtime.application_id().creation.chain_id,
+                    self.runtime.application_creator_chain_id(),
                     "Action can only be executed on the chain that created the crowd-funding \
                     campaign"
                 );
@@ -94,7 +94,7 @@ impl CrowdFundingContract {
     fn execute_pledge_with_transfer(&mut self, owner: AccountOwner, amount: Amount) {
         assert!(amount > Amount::ZERO, "Pledge is empty");
         // The campaign chain.
-        let chain_id = self.runtime.application_id().creation.chain_id;
+        let chain_id = self.runtime.application_creator_chain_id();
         // First, move the funds to the campaign chain (under the same owner).
         // TODO(#589): Simplify this when the messaging system guarantees atomic delivery
         // of all messages created in the same operation/message.

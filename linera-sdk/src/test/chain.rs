@@ -6,6 +6,7 @@
 //! This allows manipulating a test microchain.
 
 use std::{
+    borrow::Cow,
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -14,14 +15,14 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::BlockHeight,
+    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
 use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    system::{SystemChannel, SystemExecutionError, SystemMessage, SystemOperation},
-    Bytecode, ExecutionError, Message, Query, Response,
+    system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
+    ExecutionError, Query, Response,
 };
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
@@ -87,7 +88,7 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Vec<MessageId> {
+    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Certificate {
         self.try_add_block(block_builder)
             .await
             .expect("Failed to execute block.")
@@ -100,7 +101,7 @@ impl ActiveChain {
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> anyhow::Result<Vec<MessageId>> {
+    ) -> anyhow::Result<Certificate> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -112,17 +113,17 @@ impl ActiveChain {
         block_builder(&mut block);
 
         // TODO(#2066): Remove boxing once call-stack is shallower
-        let (certificate, message_ids) = Box::pin(block.try_sign()).await?;
+        let certificate = Box::pin(block.try_sign()).await?;
 
         self.validator
             .worker()
-            .fully_handle_certificate(certificate.clone(), vec![], vec![])
+            .fully_handle_certificate(certificate.clone(), vec![])
             .await
             .expect("Rejected certificate");
 
-        *tip = Some(certificate);
+        *tip = Some(certificate.clone());
 
-        Ok(message_ids)
+        Ok(certificate)
     }
 
     /// Receives all queued messages in all inboxes of this microchain.
@@ -134,13 +135,13 @@ impl ActiveChain {
         let (information, _) = self
             .validator
             .worker()
-            .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_messages())
+            .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_message_bundles())
             .await
             .expect("Failed to query chain's pending messages");
-        let messages = information.info.requested_pending_messages;
+        let messages = information.info.requested_pending_message_bundles;
 
         self.add_block(|block| {
-            block.with_raw_messages(messages);
+            block.with_incoming_bundles(messages);
         })
         .await;
     }
@@ -170,21 +171,36 @@ impl ActiveChain {
             .expect("Failed to obtain absolute application repository path");
         Self::build_bytecodes_in(&repository_path).await;
         let (contract, service) = self.find_bytecodes_in(&repository_path).await;
+        let contract_blob = Blob::new_contract_bytecode(contract);
+        let service_blob = Blob::new_service_bytecode(service);
+        let contract_blob_hash = contract_blob.id().hash;
+        let service_blob_hash = service_blob.id().hash;
 
-        let publish_messages = self
+        let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
+
+        self.validator
+            .worker()
+            .cache_recent_blob(Cow::Borrowed(&contract_blob))
+            .await;
+        self.validator
+            .worker()
+            .cache_recent_blob(Cow::Borrowed(&service_blob))
+            .await;
+
+        let certificate = self
             .add_block(|block| {
-                block.with_system_operation(SystemOperation::PublishBytecode { contract, service });
+                block.with_system_operation(SystemOperation::PublishBytecode { bytecode_id });
             })
             .await;
 
-        assert_eq!(publish_messages.len(), 1);
+        let executed_block = certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
+        assert_eq!(executed_block.messages().len(), 1);
+        assert_eq!(executed_block.messages()[0].len(), 0);
 
-        self.add_block(|block| {
-            block.with_incoming_message(publish_messages[0]);
-        })
-        .await;
-
-        BytecodeId::new(publish_messages[0]).with_abi()
+        bytecode_id.with_abi()
     }
 
     /// Compiles the crate in the `repository` path.
@@ -207,8 +223,12 @@ impl ActiveChain {
     /// Searches the Cargo manifest of the crate calling this method for binaries to use as the
     /// contract and service bytecodes.
     ///
-    /// Returns a tuple with the loaded contract and service [`Bytecode`]s.
-    async fn find_bytecodes_in(&self, repository: &Path) -> (Bytecode, Bytecode) {
+    /// Returns a tuple with the loaded contract and service [`CompressedBytecode`]s,
+    /// ready to be published.
+    async fn find_bytecodes_in(
+        &self,
+        repository: &Path,
+    ) -> (CompressedBytecode, CompressedBytecode) {
         let manifest_path = repository.join("Cargo.toml");
         let cargo_manifest =
             Manifest::from_path(manifest_path).expect("Failed to load Cargo.toml manifest");
@@ -240,14 +260,16 @@ impl ActiveChain {
         let contract_path = base_path.join(format!("{}.wasm", contract_binary));
         let service_path = base_path.join(format!("{}.wasm", service_binary));
 
-        (
-            Bytecode::load_from_file(contract_path)
-                .await
-                .expect("Failed to load contract bytecode from file"),
-            Bytecode::load_from_file(service_path)
-                .await
-                .expect("Failed to load service bytecode from file"),
-        )
+        let contract = Bytecode::load_from_file(contract_path)
+            .await
+            .expect("Failed to load contract bytecode from file");
+        let service = Bytecode::load_from_file(service_path)
+            .await
+            .expect("Failed to load service bytecode from file");
+
+        tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
+            .await
+            .expect("Failed to compress bytecodes")
     }
 
     /// Searches for the directory where the built WebAssembly binaries should be.
@@ -286,35 +308,6 @@ impl ActiveChain {
             .height()
     }
 
-    /// Subscribes this microchain to the bytecodes published on the `publisher_id` microchain.
-    pub async fn subscribe_to_published_bytecodes_from(&mut self, publisher_id: ChainId) {
-        let publisher = self.validator.get_chain(&publisher_id);
-
-        let request_messages = self
-            .add_block(|block| {
-                block.with_system_operation(SystemOperation::Subscribe {
-                    chain_id: publisher.id(),
-                    channel: SystemChannel::PublishedBytecodes,
-                });
-            })
-            .await;
-
-        assert_eq!(request_messages.len(), 1);
-
-        let accept_messages = publisher
-            .add_block(|block| {
-                block.with_incoming_message(request_messages[0]);
-            })
-            .await;
-
-        assert_eq!(accept_messages.len(), 1);
-
-        self.add_block(|block| {
-            block.with_incoming_message(accept_messages[0]);
-        })
-        .await;
-    }
-
     /// Creates an application on this microchain, using the bytecode referenced by `bytecode_id`.
     ///
     /// Returns the [`ApplicationId`] of the created application.
@@ -337,14 +330,6 @@ impl ActiveChain {
         Parameters: Serialize,
         InstantiationArgument: Serialize,
     {
-        let bytecode_location_message = if self.needs_bytecode_location(bytecode_id).await {
-            self.subscribe_to_published_bytecodes_from(bytecode_id.message_id.chain_id)
-                .await;
-            Some(self.find_bytecode_location(bytecode_id).await)
-        } else {
-            None
-        };
-
         let parameters = serde_json::to_vec(&parameters).unwrap();
         let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
 
@@ -352,12 +337,8 @@ impl ActiveChain {
             self.register_application(dependency).await;
         }
 
-        let creation_messages = self
+        let creation_certificate = self
             .add_block(|block| {
-                if let Some(message_id) = bytecode_location_message {
-                    block.with_incoming_message(message_id);
-                }
-
                 block.with_system_operation(SystemOperation::CreateApplication {
                     bytecode_id: bytecode_id.forget_abi(),
                     parameters,
@@ -367,66 +348,31 @@ impl ActiveChain {
             })
             .await;
 
-        assert_eq!(creation_messages.len(), 1);
+        let executed_block = creation_certificate
+            .value()
+            .executed_block()
+            .expect("Failed to obtain executed block from certificate");
+        assert_eq!(executed_block.messages().len(), 1);
+        let creation = MessageId {
+            chain_id: executed_block.block.chain_id,
+            height: executed_block.block.height,
+            index: CREATE_APPLICATION_MESSAGE_INDEX,
+        };
 
         ApplicationId {
             bytecode_id: bytecode_id.just_abi(),
-            creation: creation_messages[0],
+            creation,
         }
     }
 
-    /// Checks if the `bytecode_id` is missing from this microchain.
-    async fn needs_bytecode_location<Abi, Parameters, InstantiationArgument>(
-        &self,
-        bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
-    ) -> bool {
+    /// Returns whether this chain has been closed.
+    pub async fn is_closed(&self) -> bool {
         self.validator
             .worker()
-            .read_bytecode_location(self.id(), bytecode_id.forget_abi())
+            .chain_state_view(self.id())
             .await
-            .expect("Failed to check known bytecode locations")
-            .is_none()
-    }
-
-    /// Finds the message that sends the message with the bytecode location of `bytecode_id`.
-    async fn find_bytecode_location<Abi, Parameters, InstantiationArgument>(
-        &self,
-        bytecode_id: BytecodeId<Abi, Parameters, InstantiationArgument>,
-    ) -> MessageId {
-        for height in bytecode_id.message_id.height.0.. {
-            let certificate = self
-                .validator
-                .worker()
-                .read_certificate(bytecode_id.message_id.chain_id, height.into())
-                .await
-                .expect("Failed to load certificate to search for bytecode location")
-                .expect("Bytecode location not found");
-
-            let messages = certificate
-                .value()
-                .messages()
-                .expect("Unexpected certificate value");
-            let message_index = messages.iter().flatten().position(|message| {
-                matches!(
-                    &message.message,
-                    Message::System(SystemMessage::BytecodeLocations { locations })
-                        if locations.iter().any(|(id, _)| id == &bytecode_id.forget_abi())
-                )
-            });
-
-            if let Some(index) = message_index {
-                return MessageId {
-                    chain_id: bytecode_id.message_id.chain_id,
-                    height: BlockHeight(height),
-                    index: index.try_into().expect(
-                        "Incompatible `MessageId` index types in \
-                        `linera-sdk` and `linera-execution`",
-                    ),
-                };
-            }
-        }
-
-        panic!("Bytecode not found in the chain it was supposed to be published on");
+            .expect("Failed to load chain")
+            .is_closed()
     }
 
     /// Registers on this chain an application created on another chain.
@@ -434,29 +380,25 @@ impl ActiveChain {
         if self.needs_application_description(application_id).await {
             let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
 
-            let request_messages = self
+            let request_certificate = self
                 .add_block(|block| {
                     block.with_request_for_application(application_id);
                 })
                 .await;
 
-            assert_eq!(request_messages.len(), 1);
-
-            let register_messages = source_chain
+            let register_certificate = source_chain
                 .add_block(|block| {
-                    block.with_incoming_message(request_messages[0]);
+                    block.with_messages_from(&request_certificate);
                 })
                 .await;
 
-            assert_eq!(register_messages.len(), 1);
-
-            let final_messages = self
+            let final_certificate = self
                 .add_block(|block| {
-                    block.with_incoming_message(register_messages[0]);
+                    block.with_messages_from(&register_certificate);
                 })
                 .await;
 
-            assert_eq!(final_messages.len(), 0);
+            assert_eq!(final_certificate.outgoing_message_count(), 0);
         }
     }
 

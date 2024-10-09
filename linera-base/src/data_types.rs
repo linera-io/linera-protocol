@@ -4,19 +4,39 @@
 
 //! Core data-types used in the Linera protocol.
 
-use std::fmt;
+#[cfg(with_testing)]
+use std::ops;
+#[cfg(with_metrics)]
+use std::sync::LazyLock;
+use std::{
+    fmt::{self, Display},
+    fs,
+    hash::{Hash, Hasher},
+    io, iter,
+    num::ParseIntError,
+    path::Path,
+    str::FromStr,
+};
 
 use anyhow::Context as _;
 use async_graphql::InputObject;
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
+use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
-use serde::{Deserialize, Deserializer, Serialize};
+#[cfg(with_metrics)]
+use prometheus::HistogramVec;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+use crate::prometheus_util::{self, MeasureLatency};
 use crate::{
-    crypto::{BcsHashable, CryptoHash},
-    doc_scalar,
-    identifiers::{ApplicationId, BlobId, Destination, EventId, GenericApplicationId},
+    crypto::BcsHashable,
+    doc_scalar, hex_debug,
+    identifiers::{
+        ApplicationId, BlobId, BlobType, BytecodeId, Destination, EventId, GenericApplicationId,
+        MessageId, UserApplicationId,
+    },
     time::{Duration, SystemTime},
 };
 
@@ -224,7 +244,7 @@ impl From<u64> for Timestamp {
     }
 }
 
-impl fmt::Display for Timestamp {
+impl Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(date_time) = chrono::DateTime::from_timestamp(
             (self.0 / 1_000_000) as i64,
@@ -421,7 +441,7 @@ macro_rules! impl_wrapped_number {
         }
 
         #[cfg(with_testing)]
-        impl std::ops::Add for $name {
+        impl ops::Add for $name {
             type Output = Self;
 
             fn add(self, other: Self) -> Self {
@@ -430,7 +450,7 @@ macro_rules! impl_wrapped_number {
         }
 
         #[cfg(with_testing)]
-        impl std::ops::Sub for $name {
+        impl ops::Sub for $name {
             type Output = Self;
 
             fn sub(self, other: Self) -> Self {
@@ -439,7 +459,7 @@ macro_rules! impl_wrapped_number {
         }
 
         #[cfg(with_testing)]
-        impl std::ops::Mul<$wrapped> for $name {
+        impl ops::Mul<$wrapped> for $name {
             type Output = Self;
 
             fn mul(self, other: $wrapped) -> Self {
@@ -468,7 +488,7 @@ impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
 
-impl fmt::Display for Amount {
+impl Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
         let places = Amount::DECIMAL_PLACES as usize;
@@ -513,7 +533,7 @@ pub enum ParseAmountError {
     TooManyDigits,
 }
 
-impl std::str::FromStr for Amount {
+impl FromStr for Amount {
     type Err = ParseAmountError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
@@ -547,21 +567,21 @@ impl std::str::FromStr for Amount {
     }
 }
 
-impl fmt::Display for BlockHeight {
+impl Display for BlockHeight {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl std::str::FromStr for BlockHeight {
-    type Err = std::num::ParseIntError;
+impl FromStr for BlockHeight {
+    type Err = ParseIntError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
         Ok(Self(u64::from_str(src)?))
     }
 }
 
-impl fmt::Display for Round {
+impl Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Round::Fast => write!(f, "fast round"),
@@ -602,7 +622,7 @@ impl Round {
     }
 }
 
-impl<'a> std::iter::Sum<&'a Amount> for Amount {
+impl<'a> iter::Sum<&'a Amount> for Amount {
     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
         iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
     }
@@ -733,8 +753,8 @@ impl OracleResponse {
     }
 }
 
-impl fmt::Display for OracleResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for OracleResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OracleResponse::Service(bytes) => {
                 write!(f, "Service:{}", STANDARD_NO_PAD.encode(bytes))?
@@ -754,7 +774,7 @@ impl fmt::Display for OracleResponse {
     }
 }
 
-impl std::str::FromStr for OracleResponse {
+impl FromStr for OracleResponse {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -769,60 +789,301 @@ impl std::str::FromStr for OracleResponse {
             ));
         }
         if let Some(string) = s.strip_prefix("Blob:") {
-            return Ok(OracleResponse::Blob(BlobId(CryptoHash::from_str(string)?)));
+            return Ok(OracleResponse::Blob(
+                BlobId::from_str(string).context("Invalid BlobId")?,
+            ));
         }
         Err(anyhow::anyhow!("Invalid enum! Enum: {}", s))
     }
 }
 
-/// A blob of binary data.
-#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
-pub struct Blob {
-    /// Bytes of the binary blob.
+/// Description of the necessary information to run a user application.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+pub struct UserApplicationDescription {
+    /// The unique ID of the bytecode to use for the application.
+    pub bytecode_id: BytecodeId,
+    /// The unique ID of the application's creation.
+    pub creation: MessageId,
+    /// The parameters of the application.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub parameters: Vec<u8>,
+    /// Required dependencies.
+    pub required_application_ids: Vec<UserApplicationId>,
+}
+
+impl From<&UserApplicationDescription> for UserApplicationId {
+    fn from(description: &UserApplicationDescription) -> Self {
+        UserApplicationId {
+            bytecode_id: description.bytecode_id,
+            creation: description.creation,
+        }
+    }
+}
+
+/// A WebAssembly module's bytecode.
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct Bytecode {
+    /// Bytes of the bytecode.
     #[serde(with = "serde_bytes")]
     pub bytes: Vec<u8>,
 }
 
-impl Blob {
-    /// Creates a `HashedBlob` without checking that this is the correct `BlobId`!
-    pub fn with_hash_unchecked(self, blob_id: BlobId) -> HashedBlob {
-        HashedBlob {
-            id: blob_id,
-            blob: self,
-        }
+impl Bytecode {
+    /// Creates a new [`Bytecode`] instance using the provided `bytes`.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Bytecode { bytes }
     }
 
-    /// Get the `HashedBlob` from the `Blob`.
-    pub fn into_hashed(self) -> HashedBlob {
-        let id = BlobId::new(&self);
-        HashedBlob { blob: self, id }
+    /// Load bytecode from a Wasm module file.
+    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        let bytes = fs::read(path)?;
+        Ok(Bytecode { bytes })
+    }
+
+    /// Compresses the [`Bytecode`] into a [`CompressedBytecode`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn compress(&self) -> CompressedBytecode {
+        #[cfg(with_metrics)]
+        let _compression_latency = BYTECODE_COMPRESSION_LATENCY.measure_latency();
+        let compressed_bytes = zstd::stream::encode_all(&*self.bytes, 19)
+            .expect("Compressing bytes in memory should not fail");
+
+        CompressedBytecode { compressed_bytes }
     }
 }
 
-impl BcsHashable for Blob {}
+impl AsRef<[u8]> for Bytecode {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes.as_ref()
+    }
+}
 
-impl From<HashedBlob> for Blob {
-    fn from(blob: HashedBlob) -> Blob {
-        blob.blob
+impl fmt::Debug for Bytecode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("Bytecode").finish_non_exhaustive()
+    }
+}
+
+/// A type for errors happening during decompression.
+#[derive(Error, Debug)]
+pub enum DecompressionError {
+    /// Compressed bytecode is invalid, and could not be decompressed.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("Bytecode could not be decompressed")]
+    InvalidCompressedBytecode(#[source] io::Error),
+
+    /// Compressed bytecode is invalid, and could not be decompressed.
+    #[cfg(target_arch = "wasm32")]
+    #[error("Bytecode could not be decompressed")]
+    InvalidCompressedBytecode(#[from] ruzstd::frame_decoder::FrameDecoderError),
+}
+
+/// A compressed WebAssembly module's bytecode.
+#[derive(Clone, Deserialize, Hash, Serialize, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct CompressedBytecode {
+    /// Compressed bytes of the bytecode.
+    #[serde(with = "serde_bytes")]
+    pub compressed_bytes: Vec<u8>,
+}
+
+impl CompressedBytecode {
+    /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
+        #[cfg(with_metrics)]
+        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+        let bytes = zstd::stream::decode_all(&*self.compressed_bytes)
+            .map_err(DecompressionError::InvalidCompressedBytecode)?;
+
+        Ok(Bytecode { bytes })
+    }
+
+    /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
+    #[cfg(target_arch = "wasm32")]
+    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
+        use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
+
+        #[cfg(with_metrics)]
+        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+
+        let compressed_bytes = &*self.compressed_bytes;
+        let mut bytes = Vec::new();
+        let mut decoder = StreamingDecoder::new(compressed_bytes)?;
+
+        // Decode multiple frames, if present
+        // (https://github.com/KillingSpark/zstd-rs/issues/57)
+        while !decoder.get_ref().is_empty() {
+            decoder
+                .read_to_end(&mut bytes)
+                .expect("Reading from a slice in memory should not result in IO errors");
+        }
+
+        Ok(Bytecode { bytes })
+    }
+}
+
+impl fmt::Debug for CompressedBytecode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CompressedBytecode").finish_non_exhaustive()
+    }
+}
+
+/// Internal bytes of a blob.
+#[derive(Clone, Serialize, Deserialize, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[repr(transparent)]
+pub struct BlobBytes(#[serde(with = "serde_bytes")] pub Vec<u8>);
+
+impl BcsHashable for BlobBytes {}
+
+impl Hash for BlobBytes {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+/// A blob of binary data.
+#[derive(Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub enum BlobContent {
+    /// A generic data blob.
+    Data(#[serde(with = "serde_bytes")] Vec<u8>),
+    /// A blob containing contract bytecode.
+    ContractBytecode(CompressedBytecode),
+    /// A blob containing service bytecode.
+    ServiceBytecode(CompressedBytecode),
+}
+
+impl fmt::Debug for BlobContent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlobContent::Data(_) => write!(f, "BlobContent::Data"),
+            BlobContent::ContractBytecode(_) => write!(f, "BlobContent::ContractBytecode"),
+            BlobContent::ServiceBytecode(_) => write!(f, "BlobContent::ServiceBytecode"),
+        }
+    }
+}
+
+impl BlobContent {
+    /// Creates a new [`BlobContent`] from the provided bytes and [`BlobId`]. Does not check if the bytes match the ID!
+    pub fn new_with_id_unchecked(id: BlobId, bytes: Vec<u8>) -> Self {
+        match id.blob_type {
+            BlobType::Data => BlobContent::Data(bytes),
+            BlobType::ContractBytecode => BlobContent::ContractBytecode(CompressedBytecode {
+                compressed_bytes: bytes,
+            }),
+            BlobType::ServiceBytecode => BlobContent::ServiceBytecode(CompressedBytecode {
+                compressed_bytes: bytes,
+            }),
+        }
+    }
+
+    /// Creates a new data [`BlobContent`] from the provided bytes.
+    pub fn new_data(bytes: Vec<u8>) -> Self {
+        BlobContent::Data(bytes)
+    }
+
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::ContractBytecode(compressed_bytecode)
+    }
+
+    /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::ServiceBytecode(compressed_bytecode)
+    }
+
+    /// Creates a `Blob` without checking that this is the correct `BlobId`.
+    pub fn with_blob_id_unchecked(self, blob_id: BlobId) -> Blob {
+        Blob {
+            id: blob_id,
+            content: self,
+        }
+    }
+
+    /// Creates a `Blob` checking that this is the correct `BlobId`.
+    pub fn with_blob_id_checked(self, blob_id: BlobId) -> Option<Blob> {
+        match blob_id.blob_type {
+            BlobType::Data if matches!(&self, BlobContent::Data(_)) => Some(()),
+            BlobType::ContractBytecode if matches!(&self, BlobContent::ContractBytecode(_)) => {
+                Some(())
+            }
+            BlobType::ServiceBytecode if matches!(&self, BlobContent::ServiceBytecode(_)) => {
+                Some(())
+            }
+            _ => None,
+        }?;
+
+        let expected_blob_id = BlobId::from_content(&self);
+
+        if blob_id == expected_blob_id {
+            Some(self.with_blob_id_unchecked(expected_blob_id))
+        } else {
+            None
+        }
+    }
+
+    /// Gets the inner blob's bytes.
+    pub fn inner_bytes(&self) -> Vec<u8> {
+        match self {
+            BlobContent::Data(bytes) => bytes,
+            BlobContent::ContractBytecode(compressed_bytecode) => {
+                &compressed_bytecode.compressed_bytes
+            }
+            BlobContent::ServiceBytecode(compressed_bytecode) => {
+                &compressed_bytecode.compressed_bytes
+            }
+        }
+        .clone()
+    }
+}
+
+impl From<Blob> for BlobContent {
+    fn from(blob: Blob) -> BlobContent {
+        blob.content
+    }
+}
+
+impl From<BlobContent> for Blob {
+    fn from(content: BlobContent) -> Blob {
+        Self {
+            id: BlobId::from_content(&content),
+            content,
+        }
     }
 }
 
 /// A blob of binary data, with its content-addressed blob ID.
-#[derive(Eq, PartialEq, Debug, Hash, Clone, WitType, WitStore)]
-pub struct HashedBlob {
+#[derive(Debug, Hash, Clone, WitType, WitStore)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct Blob {
     /// ID of the blob.
-    pub id: BlobId,
+    id: BlobId,
     /// A blob of binary data.
-    pub blob: Blob,
+    content: BlobContent,
 }
 
-impl HashedBlob {
-    /// Loads a hashed blob from a file.
-    pub async fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
-        let blob = Blob {
-            bytes: std::fs::read(path)?,
-        };
-        Ok(blob.into_hashed())
+impl Blob {
+    /// Creates a new [`Blob`] from the provided bytes and [`BlobId`]. Does not check if the bytes match the ID!
+    pub fn new_with_id_unchecked(id: BlobId, bytes: Vec<u8>) -> Self {
+        BlobContent::new_with_id_unchecked(id, bytes).into()
+    }
+
+    /// Creates a new data [`Blob`] from the provided bytes.
+    pub fn new_data(bytes: Vec<u8>) -> Self {
+        BlobContent::new_data(bytes).into()
+    }
+
+    /// Creates a new contract bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_contract_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::new_contract_bytecode(compressed_bytecode).into()
+    }
+
+    /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
+    pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
+        BlobContent::new_service_bytecode(compressed_bytecode).into()
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
@@ -830,44 +1091,67 @@ impl HashedBlob {
         self.id
     }
 
-    /// Creates a [`HashedBlob`] from a string for testing purposes.
-    #[cfg(with_testing)]
-    pub fn test_blob(content: &str) -> Self {
-        let blob = Blob {
-            bytes: content.as_bytes().to_vec(),
-        };
-        blob.into_hashed()
-    }
-
-    /// Returns a reference to the inner `Blob`, without the hash.
-    pub fn blob(&self) -> &Blob {
-        &self.blob
+    /// Returns a reference to the inner `BlobContent`, without the hash.
+    pub fn content(&self) -> &BlobContent {
+        &self.content
     }
 
     /// Moves ownership of the blob of binary data
-    pub fn into_inner(self) -> Blob {
-        self.blob
+    pub fn into_inner_content(self) -> BlobContent {
+        self.content
+    }
+
+    /// Gets the inner blob's bytes.
+    pub fn inner_bytes(&self) -> Vec<u8> {
+        self.content.inner_bytes()
+    }
+
+    /// Loads data blob content from a file.
+    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
+        Ok(Self::new_data(fs::read(path)?))
     }
 }
 
-impl Serialize for HashedBlob {
+impl Serialize for Blob {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
-        self.blob.serialize(serializer)
+        if serializer.is_human_readable() {
+            let blob_bytes = bcs::to_bytes(&self.content).map_err(serde::ser::Error::custom)?;
+            serializer.serialize_str(&hex::encode(blob_bytes))
+        } else {
+            BlobContent::serialize(self.content(), serializer)
+        }
     }
 }
 
-impl<'a> Deserialize<'a> for HashedBlob {
+impl<'a> Deserialize<'a> for Blob {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'a>,
     {
-        Ok(Blob::deserialize(deserializer)?.into_hashed())
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let content_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let content: BlobContent =
+                bcs::from_bytes(&content_bytes).map_err(serde::de::Error::custom)?;
+
+            Ok(Blob {
+                id: BlobId::from_content(&content),
+                content,
+            })
+        } else {
+            let content = BlobContent::deserialize(deserializer)?;
+            Ok(Blob {
+                id: BlobId::from_content(&content),
+                content,
+            })
+        }
     }
 }
 
+doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(BlockHeight, "A block height to identify blocks in a chain");
 doc_scalar!(
@@ -880,11 +1164,45 @@ doc_scalar!(
     "A number to identify successive attempts to decide a value in a consensus protocol."
 );
 doc_scalar!(OracleResponse, "A record of a single oracle response.");
-doc_scalar!(Blob, "A blob of binary data.");
+doc_scalar!(BlobContent, "A blob of binary data.");
 doc_scalar!(
-    HashedBlob,
+    Blob,
     "A blob of binary data, with its content-addressed blob ID."
 );
+doc_scalar!(
+    UserApplicationDescription,
+    "Description of the necessary information to run a user application"
+);
+
+/// The time it takes to compress a bytecode.
+#[cfg(with_metrics)]
+static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "bytecode_compression_latency",
+        "Bytecode compression latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
+
+/// The time it takes to decompress a bytecode.
+#[cfg(with_metrics)]
+static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    prometheus_util::register_histogram_vec(
+        "bytecode_decompression_latency",
+        "Bytecode decompression latency",
+        &[],
+        Some(vec![
+            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0,
+        ]),
+    )
+    .expect("Histogram creation should not fail")
+});
 
 #[cfg(test)]
 mod tests {

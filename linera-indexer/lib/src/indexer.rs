@@ -11,12 +11,12 @@ use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_chain::data_types::HashedCertificateValue;
 use linera_views::{
-    common::{Context, ContextFromStore, KeyValueStore},
+    context::{Context, ViewContext},
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
-    value_splitting::DatabaseConsistencyError,
-    views::{RootView, View, ViewError},
+    store::KeyValueStore,
+    views::{RootView, View},
 };
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -38,10 +38,10 @@ pub struct StateView<C> {
 #[derive(Clone)]
 pub struct State<C>(Arc<Mutex<StateView<C>>>);
 
-type StateSchema<S> = Schema<State<ContextFromStore<(), S>>, EmptyMutation, EmptySubscription>;
+type StateSchema<S> = Schema<State<ViewContext<(), S>>, EmptyMutation, EmptySubscription>;
 
 pub struct Indexer<S> {
-    pub state: State<ContextFromStore<(), S>>,
+    pub state: State<ViewContext<(), S>>,
     pub plugins: BTreeMap<String, Box<dyn Plugin<S>>>,
 }
 
@@ -59,17 +59,15 @@ enum LatestBlock {
 impl<S> Indexer<S>
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
-    S::Error: From<bcs::Error>
-        + From<DatabaseConsistencyError>
-        + Send
-        + Sync
-        + std::error::Error
-        + 'static,
-    ViewError: From<S::Error>,
+    S::Error: Send + Sync + std::error::Error + 'static,
 {
     /// Loads the indexer using a database backend with an `indexer` prefix.
     pub async fn load(store: S) -> Result<Self, IndexerError> {
-        let context = ContextFromStore::create(store.clone(), "indexer".as_bytes().to_vec(), ())
+        let root_key = "indexer".as_bytes().to_vec();
+        let store = store
+            .clone_with_root_key(&root_key)
+            .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
+        let context = ViewContext::create_root_context(store, ())
             .await
             .map_err(|e| IndexerError::ViewError(e.into()))?;
         let state = State(Arc::new(Mutex::new(StateView::load(context).await?)));
@@ -83,7 +81,7 @@ where
     /// the indexer.
     pub async fn process_value(
         &self,
-        state: &mut StateView<ContextFromStore<(), S>>,
+        state: &mut StateView<ViewContext<(), S>>,
         value: &HashedCertificateValue,
     ) -> Result<(), IndexerError> {
         for plugin in self.plugins.values() {
@@ -213,7 +211,6 @@ pub struct HighestBlock {
 impl<C> State<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     /// Gets the plugins registered in the indexer
     pub async fn plugins(&self) -> Result<Vec<String>, IndexerError> {
@@ -241,7 +238,6 @@ where
 impl<C> State<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
 {
     pub fn schema(self) -> Schema<Self, EmptyMutation, EmptySubscription> {
         Schema::build(self, EmptyMutation, EmptySubscription).finish()

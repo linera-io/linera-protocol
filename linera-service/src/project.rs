@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::{ensure, Context, Result};
 use cargo_toml::Manifest;
+use convert_case::{Case, Casing};
 use current_platform::CURRENT_PLATFORM;
 use fs_err::File;
 use tracing::debug;
@@ -49,10 +50,10 @@ impl Project {
         Self::create_rust_toolchain(&root)?;
 
         debug!("writing state.rs");
-        Self::create_state_file(&source_directory)?;
+        Self::create_state_file(&source_directory, name)?;
 
         debug!("writing lib.rs");
-        Self::create_lib_file(&source_directory)?;
+        Self::create_lib_file(&source_directory, name)?;
 
         debug!("writing contract.rs");
         Self::create_contract_file(&source_directory, name)?;
@@ -159,31 +160,43 @@ impl Project {
         )
     }
 
-    fn create_state_file(source_directory: &Path) -> Result<()> {
+    fn create_state_file(source_directory: &Path, project_name: &str) -> Result<()> {
+        let project_name = project_name.to_case(Case::Pascal);
         let state_path = source_directory.join("state.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/state.rs.template"))
+        let file_content = format!(
+            include_str!("../template/state.rs.template"),
+            project_name = project_name
+        );
+        Self::write_string_to_file(&state_path, &file_content)
     }
 
-    fn create_lib_file(source_directory: &Path) -> Result<()> {
+    fn create_lib_file(source_directory: &Path, project_name: &str) -> Result<()> {
+        let project_name = project_name.to_case(Case::Pascal);
         let state_path = source_directory.join("lib.rs");
-        Self::write_string_to_file(&state_path, include_str!("../template/lib.rs.template"))
+        let file_content = format!(
+            include_str!("../template/lib.rs.template"),
+            project_name = project_name
+        );
+        Self::write_string_to_file(&state_path, &file_content)
     }
 
-    fn create_contract_file(source_directory: &Path, project_name: &str) -> Result<()> {
-        let project_name = project_name.replace('-', "_");
+    fn create_contract_file(source_directory: &Path, name: &str) -> Result<()> {
+        let project_name = name.to_case(Case::Pascal);
         let contract_path = source_directory.join("contract.rs");
         let contract_contents = format!(
             include_str!("../template/contract.rs.template"),
+            module_name = name.replace('-', "_"),
             project_name = project_name
         );
         Self::write_string_to_file(&contract_path, &contract_contents)
     }
 
-    fn create_service_file(source_directory: &Path, project_name: &str) -> Result<()> {
-        let project_name = project_name.replace('-', "_");
+    fn create_service_file(source_directory: &Path, name: &str) -> Result<()> {
+        let project_name = name.to_case(Case::Pascal);
         let service_path = source_directory.join("service.rs");
         let service_contents = format!(
             include_str!("../template/service.rs.template"),
+            module_name = name.replace('-', "_"),
             project_name = project_name
         );
         Self::write_string_to_file(&service_path, &service_contents)
@@ -195,7 +208,7 @@ impl Project {
         Ok(())
     }
 
-    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies.
+    /// Resolves [`linera_sdk`] and [`linera_views`] dependencies.
     fn linera_sdk_dependencies(linera_root: Option<&Path>) -> (String, String) {
         match linera_root {
             Some(path) => Self::linera_sdk_testing_dependencies(path),
@@ -203,7 +216,7 @@ impl Project {
         }
     }
 
-    /// Resolves ['linera-sdk'] and [`linera-views`] dependencies in testing mode.
+    /// Resolves [`linera_sdk`] and [`linera_views`] dependencies in testing mode.
     fn linera_sdk_testing_dependencies(linera_root: &Path) -> (String, String) {
         // We're putting the Cargo.toml file one level above the current directory.
         let linera_root = PathBuf::from("..").join(linera_root);
@@ -219,7 +232,7 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
-    /// Adds ['linera-sdk'] dependencies in production mode.
+    /// Adds [`linera_sdk`] dependencies in production mode.
     fn linera_sdk_production_dependencies() -> (String, String) {
         let version = env!("CARGO_PKG_VERSION");
         let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);

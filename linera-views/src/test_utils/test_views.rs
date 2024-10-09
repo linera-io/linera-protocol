@@ -10,9 +10,9 @@ use async_trait::async_trait;
 use crate::{
     self as linera_views,
     collection_view::CollectionView,
+    context::MemoryContext,
     log_view::LogView,
     map_view::MapView,
-    memory::MemoryContext,
     register_view::RegisterView,
     views::{ClonableView, RootView, ViewError},
 };

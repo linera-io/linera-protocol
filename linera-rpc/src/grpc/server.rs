@@ -22,7 +22,6 @@ use linera_core::{
     JoinSetExt as _, TaskHandle,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use rand::Rng;
 use tokio::{sync::oneshot, task::JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -106,7 +105,6 @@ static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLoc
 pub struct GrpcServer<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     state: WorkerState<S>,
     shard_id: ShardId,
@@ -141,11 +139,10 @@ impl<S> Layer<S> for GrpcPrometheusMetricsMiddlewareLayer {
     }
 }
 
-impl<S> Service<tonic::codegen::http::Request<tonic::transport::Body>>
-    for GrpcPrometheusMetricsMiddlewareService<S>
+impl<S, Req> Service<Req> for GrpcPrometheusMetricsMiddlewareService<S>
 where
     S::Future: Send + 'static,
-    S: Service<tonic::codegen::http::Request<tonic::transport::Body>> + std::marker::Send,
+    S: Service<Req> + std::marker::Send,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -155,10 +152,7 @@ where
         self.service.poll_ready(cx)
     }
 
-    fn call(
-        &mut self,
-        request: tonic::codegen::http::Request<tonic::transport::Body>,
-    ) -> Self::Future {
+    fn call(&mut self, request: Req) -> Self::Future {
         #[cfg(with_metrics)]
         let start = Instant::now();
         let future = self.service.call(request);
@@ -180,9 +174,8 @@ where
 impl<S> GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn spawn(
         host: String,
         port: u16,
@@ -254,7 +247,7 @@ where
 
             let reflection_service = tonic_reflection::server::Builder::configure()
                 .register_encoded_file_descriptor_set(crate::FILE_DESCRIPTOR_SET)
-                .build()?;
+                .build_v1()?;
 
             health_reporter
                 .set_serving::<ValidatorWorkerServer<Self>>()
@@ -341,7 +334,7 @@ where
     }
 
     #[instrument(skip_all, fields(nickname, %this_shard))]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn forward_cross_chain_queries(
         nickname: String,
         network: ValidatorInternalNetworkConfig,
@@ -375,8 +368,10 @@ where
 
                     for i in 0..cross_chain_max_retries {
                         // Delay increases linearly with the attempt number.
-                        tokio::time::sleep(cross_chain_sender_delay + cross_chain_retry_delay * i)
-                            .await;
+                        linera_base::time::timer::sleep(
+                            cross_chain_sender_delay + cross_chain_retry_delay * i,
+                        )
+                        .await;
 
                         let result = || async {
                             let cross_chain_request = cross_chain_request.clone().try_into()?;
@@ -438,7 +433,6 @@ where
 impl<S> ValidatorWorkerRpc for GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
     async fn handle_block_proposal(
@@ -522,15 +516,14 @@ where
         let start = Instant::now();
         let HandleCertificateRequest {
             certificate,
-            hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             wait_for_outgoing_messages,
         } = request.into_inner().try_into()?;
         let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
             .state
             .clone()
-            .handle_certificate(certificate, hashed_certificate_values, hashed_blobs, sender)
+            .handle_certificate(certificate, blobs, sender)
             .await
         {
             Ok((info, actions)) => {

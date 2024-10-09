@@ -10,8 +10,8 @@ use std::collections::BTreeSet;
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
-    Contract, ContractRuntime,
+    views::{RootView, View},
+    Contract, ContractRuntime, DataBlobHash,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 
@@ -34,7 +34,7 @@ impl Contract for NonFungibleTokenContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = NonFungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = NonFungibleToken::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         NonFungibleTokenContract { state, runtime }
@@ -51,10 +51,10 @@ impl Contract for NonFungibleTokenContract {
             Operation::Mint {
                 minter,
                 name,
-                payload,
+                blob_hash,
             } => {
                 self.check_account_authentication(minter);
-                self.mint(minter, name, payload).await;
+                self.mint(minter, name, blob_hash).await;
             }
 
             Operation::Transfer {
@@ -176,13 +176,14 @@ impl NonFungibleTokenContract {
             .expect("NFT {token_id} not found")
     }
 
-    async fn mint(&mut self, owner: AccountOwner, name: String, payload: Vec<u8>) {
+    async fn mint(&mut self, owner: AccountOwner, name: String, blob_hash: DataBlobHash) {
+        self.runtime.assert_data_blob_exists(blob_hash);
         let token_id = Nft::create_token_id(
             &self.runtime.chain_id(),
             &self.runtime.application_id().forget_abi(),
             &name,
             &owner,
-            &payload,
+            &blob_hash,
             *self.state.num_minted_nfts.get(),
         )
         .expect("Failed to serialize NFT metadata");
@@ -192,7 +193,7 @@ impl NonFungibleTokenContract {
             owner,
             name,
             minter: owner,
-            payload,
+            blob_hash,
         })
         .await;
 

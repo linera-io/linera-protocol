@@ -6,19 +6,18 @@
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
     data_types::{
-        Amount, ApplicationPermissions, BlockHeight, HashedBlob, Resources, SendMessageRequest,
-        Timestamp,
+        Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BlobId, ChainId, ChannelName, Destination, EventId, MessageId,
-        Owner, StreamName,
+        Account, ApplicationId, ChainId, ChannelName, Destination, EventId, MessageId, Owner,
+        StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
 use serde::Serialize;
 
 use super::wit::contract_system_api as wit;
-use crate::{Contract, KeyValueStore};
+use crate::{Contract, DataBlobHash, KeyValueStore, ViewStorageContext};
 
 /// The common runtime to interface with the host executing the contract.
 ///
@@ -30,6 +29,7 @@ where
 {
     application_parameters: Option<Application::Parameters>,
     application_id: Option<ApplicationId<Application::Abi>>,
+    application_creator_chain_id: Option<ChainId>,
     chain_id: Option<ChainId>,
     authenticated_signer: Option<Option<Owner>>,
     block_height: Option<BlockHeight>,
@@ -48,6 +48,7 @@ where
         ContractRuntime {
             application_parameters: None,
             application_id: None,
+            application_creator_chain_id: None,
             chain_id: None,
             authenticated_signer: None,
             block_height: None,
@@ -61,6 +62,11 @@ where
     /// Returns the key-value store to interface with storage.
     pub fn key_value_store(&self) -> KeyValueStore {
         KeyValueStore::for_contracts()
+    }
+
+    /// Returns a storage context suitable for a root view.
+    pub fn root_view_storage_context(&self) -> ViewStorageContext {
+        ViewStorageContext::new_unsafe(self.key_value_store(), Vec::new(), ())
     }
 
     /// Returns the application parameters provided when the application was created.
@@ -79,6 +85,13 @@ where
         *self
             .application_id
             .get_or_insert_with(|| ApplicationId::from(wit::get_application_id()).with_abi())
+    }
+
+    /// Returns the chain ID of the current application creator.
+    pub fn application_creator_chain_id(&mut self) -> ChainId {
+        *self
+            .application_creator_chain_id
+            .get_or_insert_with(|| wit::get_application_creator_chain_id().into())
     }
 
     /// Returns the ID of the current chain.
@@ -203,13 +216,13 @@ where
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> ChainId {
-        wit::open_chain(
+    ) -> (MessageId, ChainId) {
+        let (message_id, chain_id) = wit::open_chain(
             &chain_ownership.into(),
             &application_permissions.into(),
             balance.into(),
-        )
-        .into()
+        );
+        (message_id.into(), chain_id.into())
     }
 
     /// Calls another application.
@@ -271,9 +284,14 @@ where
         wit::assert_before(timestamp.into());
     }
 
-    /// Reads a blob with the given `BlobId` from storage.
-    pub fn read_blob(&mut self, blob_id: BlobId) -> HashedBlob {
-        wit::read_blob(blob_id.into()).into()
+    /// Reads a data blob with the given hash from storage.
+    pub fn read_data_blob(&mut self, hash: DataBlobHash) -> Vec<u8> {
+        wit::read_data_blob(hash.0.into())
+    }
+
+    /// Asserts that a data blob with the given hash exists in storage.
+    pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
+        wit::assert_data_blob_exists(hash.0.into())
     }
 
     /// Reads an event with the given ID from storage.

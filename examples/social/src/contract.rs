@@ -6,17 +6,15 @@
 mod state;
 
 use linera_sdk::{
-    base::{ChannelName, Destination, MessageId, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    base::{ChainId, ChannelName, Destination, MessageId, WithContractAbi},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
-use social::{Key, Message, Operation, OwnPost, SocialAbi};
+use social::{Comment, Key, Message, Operation, OwnPost, Post, SocialAbi};
 use state::Social;
 
 /// The channel name the application uses for cross-chain messages about new posts.
 const POSTS_CHANNEL_NAME: &[u8] = b"posts";
-/// The number of recent posts sent in each cross-chain message.
-const RECENT_POSTS: usize = 10;
 
 pub struct SocialContract {
     state: Social,
@@ -35,7 +33,7 @@ impl Contract for SocialContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = Social::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = Social::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         SocialContract { state, runtime }
@@ -50,7 +48,13 @@ impl Contract for SocialContract {
         let (destination, message) = match operation {
             Operation::Subscribe { chain_id } => (chain_id.into(), Message::Subscribe),
             Operation::Unsubscribe { chain_id } => (chain_id.into(), Message::Unsubscribe),
-            Operation::Post { text } => self.execute_post_operation(text).await,
+            Operation::Post { text, image_url } => {
+                self.execute_post_operation(text, image_url).await
+            }
+            Operation::Like { key } => self.execute_like_operation(key).await,
+            Operation::Comment { key, comment } => {
+                self.execute_comment_operation(key, comment).await
+            }
         };
 
         self.runtime.send_message(destination, message);
@@ -70,7 +74,13 @@ impl Contract for SocialContract {
                 message_id.chain_id,
                 ChannelName::from(POSTS_CHANNEL_NAME.to_vec()),
             ),
-            Message::Posts { count, posts } => self.execute_posts_message(message_id, count, posts),
+            Message::Post { index, post } => self.execute_post_message(message_id, index, post),
+            Message::Like { key } => self.execute_like_message(key).await,
+            Message::Comment {
+                key,
+                chain_id,
+                comment,
+            } => self.execute_comment_message(key, chain_id, comment).await,
         }
     }
 
@@ -80,40 +90,104 @@ impl Contract for SocialContract {
 }
 
 impl SocialContract {
-    async fn execute_post_operation(&mut self, text: String) -> (Destination, Message) {
+    async fn execute_post_operation(
+        &mut self,
+        text: String,
+        image_url: Option<String>,
+    ) -> (Destination, Message) {
         let timestamp = self.runtime.system_time();
-        self.state.own_posts.push(OwnPost { timestamp, text });
-        let count = self.state.own_posts.count();
-        let mut posts = vec![];
-        for index in (0..count).rev().take(RECENT_POSTS) {
-            let maybe_post = self
-                .state
-                .own_posts
-                .get(index)
-                .await
-                .expect("Failed to retrieve post from storage");
-            let own_post = maybe_post
-                .expect("post with valid index missing; this is a bug in the social application!");
-            posts.push(own_post);
-        }
-        let count = count as u64;
+        let post = OwnPost {
+            timestamp,
+            text,
+            image_url,
+        };
+        let index = self.state.own_posts.count() as u64;
+        self.state.own_posts.push(post.clone());
         (
             ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
-            Message::Posts { count, posts },
+            Message::Post { index, post },
         )
     }
 
-    fn execute_posts_message(&mut self, message_id: MessageId, count: u64, posts: Vec<OwnPost>) {
-        for (index, post) in (0..count).rev().zip(posts) {
-            let key = Key {
-                timestamp: post.timestamp,
-                author: message_id.chain_id,
-                index,
-            };
-            self.state
-                .received_posts
-                .insert(&key, post.text)
-                .expect("Failed to insert received post");
-        }
+    async fn execute_like_operation(&mut self, key: Key) -> (Destination, Message) {
+        (
+            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
+            Message::Like { key },
+        )
+    }
+
+    async fn execute_comment_operation(
+        &mut self,
+        key: Key,
+        comment: String,
+    ) -> (Destination, Message) {
+        let chain_id = self.runtime.chain_id();
+        (
+            ChannelName::from(POSTS_CHANNEL_NAME.to_vec()).into(),
+            Message::Comment {
+                key,
+                chain_id,
+                comment,
+            },
+        )
+    }
+
+    fn execute_post_message(&mut self, message_id: MessageId, index: u64, post: OwnPost) {
+        let key = Key {
+            timestamp: post.timestamp,
+            author: message_id.chain_id,
+            index,
+        };
+        let new_post = Post {
+            key: key.clone(),
+            text: post.text,
+            image_url: post.image_url,
+            likes: 0,
+            comments: vec![],
+        };
+
+        self.state
+            .received_posts
+            .insert(&key, new_post)
+            .expect("Failed to insert received post");
+    }
+
+    async fn execute_like_message(&mut self, key: Key) {
+        let mut post = self
+            .state
+            .received_posts
+            .get(&key)
+            .await
+            .expect("Failed to retrieve post")
+            .expect("Post not found");
+
+        post.likes += 1;
+
+        self.state
+            .received_posts
+            .insert(&key, post)
+            .expect("Failed to insert received post");
+    }
+
+    async fn execute_comment_message(&mut self, key: Key, chain_id: ChainId, comment: String) {
+        let mut post = self
+            .state
+            .received_posts
+            .get(&key)
+            .await
+            .expect("Failed to retrieve post")
+            .expect("Post not found");
+
+        let comment = Comment {
+            chain_id,
+            text: comment,
+        };
+
+        post.comments.push(comment);
+
+        self.state
+            .received_posts
+            .insert(&key, post)
+            .expect("Failed to insert received post");
     }
 }

@@ -28,7 +28,7 @@ exclude = ["examples", "scripts"]
 resolver = "2"
 
 [workspace.package]
-version = "0.12.0"
+version = "0.13.0"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
@@ -69,13 +69,15 @@ convert_case = "0.6.0"
 criterion = { version = "0.5.1", default-features = false }
 custom_debug_derive = "0.6.1"
 dashmap = "5.5.3"
-derive_more = "0.99.17"
+derive_more = "1.0.0"
 dirs = "5.0.1"
+dyn-clone = "1.0.17"
 ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
 either = "1.10.0"
 ethers = { version = "2.0.14", features = ["solc"] }
+flarch = "0.7.0"
 frunk = "0.4.2"
-fs-err = { version = "2.11.0", features = ["tokio"] }
+fs-err = "2.11.0"
 fs4 = "0.8.2"
 fs_extra = "1.3.0"
 futures = "0.3.30"
@@ -85,6 +87,8 @@ getrandom = "0.2.12"
 hex = "0.4.3"
 http = "1.1.0"
 glob = "0.3.1"
+gloo-storage = "0.3.0"
+gloo-utils = "0.2.0"
 indexed_db_futures = "0.4.1"
 insta = "1.36.1"
 is-terminal = "0.4.12"
@@ -101,11 +105,12 @@ prometheus = "0.13.3"
 proc-macro-error = "1.0.4"
 proc-macro2 = "1.0"
 proptest = { version = "1.4.0", default-features = false, features = ["alloc"] }
-prost = "0.12.3"
+prost = "0.13.2"
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false }
 rand_chacha = { version = "0.3.1", default-features = false }
 rand_distr = { version = "0.4.3", default-features = false }
+ruzstd = "0.7.1"
 k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
 pathdiff = "0.2.1"
 kube = "0.88.1"
@@ -120,6 +125,7 @@ serde_json = "1.0.114"
 serde_yaml = "0.8.26"
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
+serde-wasm-bindgen = "0.6.5"
 sha3 = "0.10.8"
 similar-asserts = "1.5.0"
 static_assertions = "1.1.0"
@@ -130,12 +136,13 @@ test-case = "3.3.1"
 test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
 test-strategy = "0.3.1"
 thiserror = "1.0.57"
-tonic = { version = "0.11", default-features = false }
-tonic-build = { version = "0.11", default-features = false }
-tonic-health = "0.11"
-tonic-reflection = "0.11"
-tonic-web = "0.11"
-tonic-web-wasm-client = "0.5.1"
+thiserror-context = "0.1.1"
+tonic = { version = "0.12", default-features = false }
+tonic-build = { version = "0.12", default-features = false }
+tonic-health = "0.12"
+tonic-reflection = "0.12"
+tonic-web = "0.12"
+tonic-web-wasm-client = "0.6.0"
 tokio = "1.36.0"
 tokio-stream = "0.1.14"
 tokio-test = "0.4.3"
@@ -145,44 +152,48 @@ tower-http = "0.5.2"
 tower = "0.4.13"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
+tracing-web = "0.1.3"
 trait-variant = "0.1.1"
 url = "2.4"
 wasm-bindgen = "0.2.92"
+wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasm-instrument = "0.4.0"
-wasmer = { package = "linera-wasmer", version = "4.3.1-linera.2", default-features = false }
-wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.3.1-linera.2" }
+wasm_thread = "0.3.0"
+wasmer = { package = "linera-wasmer", version = "4.4.0-linera.5", default-features = false }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.5", default-features = false }
 wasmparser = "0.101.1"
-wasmtime = "1.0"
+wasmtime = { version = "25.0.0", default-features = false, features = ["cranelift", "runtime", "std"] }
 wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"
 web-time = "1.1.0"
 wit-bindgen = "0.24.0"
+zstd = "0.13.2"
 
-linera-base = { version = "0.12.0", path = "./linera-base" }
-linera-chain = { version = "0.12.0", path = "./linera-chain" }
-linera-client = { version = "0.12.0", path = "./linera-client" }
-linera-core = { version = "0.12.0", path = "./linera-core", default-features = false }
-linera-ethereum = { version = "0.12.0", path = "./linera-ethereum", default-features = false }
-linera-execution = { version = "0.12.0", path = "./linera-execution", default-features = false }
-linera-indexer = { version = "0.12.0", path = "./linera-indexer/lib" }
-linera-indexer-graphql-client = { version = "0.12.0", path = "./linera-indexer/graphql-client" }
-linera-indexer-plugins = { version = "0.12.0", path = "./linera-indexer/plugins" }
-linera-rpc = { version = "0.12.0", path = "./linera-rpc" }
-linera-sdk = { version = "0.12.0", path = "./linera-sdk" }
-linera-storage = { version = "0.12.0", path = "./linera-storage", default-features = false }
-linera-storage-service = { version = "0.12.0", path = "./linera-storage-service", default-features = false }
-linera-version = { version = "0.12.0", path = "./linera-version" }
-linera-views = { version = "0.12.0", path = "./linera-views", default-features = false }
-linera-views-derive = { version = "0.12.0", path = "./linera-views-derive" }
-linera-witty = { version = "0.12.0", path = "./linera-witty" }
-linera-witty-macros = { version = "0.12.0", path = "./linera-witty-macros" }
-linera-witty-test-modules  = { version = "0.12.0", path = "./linera-witty/test-modules" }
-linera-sdk-derive = { version = "0.12.0", path = "./linera-sdk-derive" }
-linera-service = { version = "0.12.0", path = "./linera-service" }
-linera-service-graphql-client = { version = "0.12.0", path = "./linera-service-graphql-client" }
+linera-base = { version = "0.13.0", path = "./linera-base" }
+linera-chain = { version = "0.13.0", path = "./linera-chain" }
+linera-client = { version = "0.13.0", path = "./linera-client" }
+linera-core = { version = "0.13.0", path = "./linera-core", default-features = false }
+linera-ethereum = { version = "0.13.0", path = "./linera-ethereum", default-features = false }
+linera-execution = { version = "0.13.0", path = "./linera-execution", default-features = false }
+linera-indexer = { version = "0.13.0", path = "./linera-indexer/lib" }
+linera-indexer-graphql-client = { version = "0.13.0", path = "./linera-indexer/graphql-client" }
+linera-indexer-plugins = { version = "0.13.0", path = "./linera-indexer/plugins" }
+linera-rpc = { version = "0.13.0", path = "./linera-rpc" }
+linera-sdk = { version = "0.13.0", path = "./linera-sdk" }
+linera-storage = { version = "0.13.0", path = "./linera-storage", default-features = false }
+linera-storage-service = { version = "0.13.0", path = "./linera-storage-service", default-features = false }
+linera-version = { version = "0.13.0", path = "./linera-version" }
+linera-views = { version = "0.13.0", path = "./linera-views", default-features = false }
+linera-views-derive = { version = "0.13.0", path = "./linera-views-derive" }
+linera-witty = { version = "0.13.0", path = "./linera-witty" }
+linera-witty-macros = { version = "0.13.0", path = "./linera-witty-macros" }
+linera-witty-test-modules  = { version = "0.13.0", path = "./linera-witty/test-modules" }
+linera-sdk-derive = { version = "0.13.0", path = "./linera-sdk-derive" }
+linera-service = { version = "0.13.0", path = "./linera-service" }
+linera-service-graphql-client = { version = "0.13.0", path = "./linera-service-graphql-client" }
 
 counter = { path = "./examples/counter" }
 meta-counter = { path = "./examples/meta-counter" }

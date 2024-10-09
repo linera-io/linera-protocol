@@ -3,7 +3,7 @@
 
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
-    data_types::{Blob, BlockHeight},
+    data_types::{BlobContent, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
@@ -179,10 +179,7 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             content: bincode::serialize(&block_proposal.content)?,
             owner: Some(block_proposal.owner.into()),
             signature: Some(block_proposal.signature.into()),
-            hashed_certificate_values: bincode::serialize(
-                &block_proposal.hashed_certificate_values,
-            )?,
-            blobs: bincode::serialize(&block_proposal.hashed_blobs)?,
+            blobs: bincode::serialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|cert| bincode::serialize(&cert))
@@ -204,10 +201,7 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
             content,
             owner: try_proto_convert(block_proposal.owner)?,
             signature: try_proto_convert(block_proposal.signature)?,
-            hashed_certificate_values: bincode::deserialize(
-                &block_proposal.hashed_certificate_values,
-            )?,
-            hashed_blobs: bincode::deserialize(&block_proposal.blobs)?,
+            blobs: bincode::deserialize(&block_proposal.blobs)?,
             validated_block_certificate: block_proposal
                 .validated_block_certificate
                 .map(|bytes| bincode::deserialize(&bytes))
@@ -322,13 +316,11 @@ impl TryFrom<api::HandleCertificateRequest> for HandleCertificateRequest {
             Some(value.inner().chain_id().into()) == cert_request.chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
-        let values = bincode::deserialize(&cert_request.hashed_certificate_values)?;
         let blobs = bincode::deserialize(&cert_request.blobs)?;
         Ok(HandleCertificateRequest {
             certificate: certificate.try_into()?,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
-            hashed_certificate_values: values,
-            hashed_blobs: blobs,
+            blobs,
         })
     }
 }
@@ -340,8 +332,7 @@ impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
         Ok(Self {
             chain_id: Some(request.certificate.value().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
-            hashed_certificate_values: bincode::serialize(&request.hashed_certificate_values)?,
-            blobs: bincode::serialize(&request.hashed_blobs)?,
+            blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
         })
     }
@@ -386,11 +377,11 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
                 .request_owner_balance
                 .map(TryInto::try_into)
                 .transpose()?,
-            request_pending_messages: chain_info_query.request_pending_messages,
+            request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
             request_sent_certificate_hashes_in_range,
-            request_received_log_excluding_first_nth: chain_info_query
-                .request_received_log_excluding_first_nth,
+            request_received_log_excluding_first_n: chain_info_query
+                .request_received_log_excluding_first_n,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
@@ -412,11 +403,11 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
             request_owner_balance: chain_info_query.request_owner_balance.map(Into::into),
-            request_pending_messages: chain_info_query.request_pending_messages,
+            request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificate_hashes_in_range,
-            request_received_log_excluding_first_nth: chain_info_query
-                .request_received_log_excluding_first_nth,
+            request_received_log_excluding_first_n: chain_info_query
+                .request_received_log_excluding_first_n,
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout: chain_info_query.request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
@@ -546,15 +537,17 @@ impl TryFrom<api::BlobId> for BlobId {
     type Error = GrpcProtoConversionError;
 
     fn try_from(blob_id: api::BlobId) -> Result<Self, Self::Error> {
-        Ok(Self(CryptoHash::try_from(blob_id.bytes.as_slice())?))
+        Ok(bincode::deserialize(blob_id.bytes.as_slice())?)
     }
 }
 
-impl From<BlobId> for api::BlobId {
-    fn from(blob_id: BlobId) -> Self {
-        Self {
-            bytes: blob_id.0.as_bytes().to_vec(),
-        }
+impl TryFrom<BlobId> for api::BlobId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_id: BlobId) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&blob_id)?,
+        })
     }
 }
 
@@ -566,15 +559,21 @@ impl TryFrom<api::CryptoHash> for CryptoHash {
     }
 }
 
-impl From<Blob> for api::Blob {
-    fn from(blob: Blob) -> Self {
-        Self { bytes: blob.bytes }
+impl TryFrom<BlobContent> for api::BlobContent {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob: BlobContent) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&blob)?,
+        })
     }
 }
 
-impl From<api::Blob> for Blob {
-    fn from(blob: api::Blob) -> Self {
-        Self { bytes: blob.bytes }
+impl TryFrom<api::BlobContent> for BlobContent {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob: api::BlobContent) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(blob.bytes.as_slice())?)
     }
 }
 
@@ -705,7 +704,7 @@ pub mod tests {
             state_hash: None,
             requested_committees: None,
             requested_owner_balance: None,
-            requested_pending_messages: vec![],
+            requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
             requested_received_log: vec![],
@@ -736,14 +735,14 @@ pub mod tests {
             test_next_block_height: Some(BlockHeight::from(10)),
             request_committees: false,
             request_owner_balance: None,
-            request_pending_messages: false,
+            request_pending_message_bundles: false,
             request_sent_certificate_hashes_in_range: Some(
                 linera_core::data_types::BlockHeightRange {
                     start: BlockHeight::from(3),
                     limit: Some(5),
                 },
             ),
-            request_received_log_excluding_first_nth: None,
+            request_received_log_excluding_first_n: None,
             request_manager_values: false,
             request_leader_timeout: false,
             request_fallback: true,
@@ -790,17 +789,9 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let values = vec![HashedCertificateValue::new_validated(
-            BlockExecutionOutcome {
-                state_hash: CryptoHash::new(&Foo("also test".into())),
-                ..BlockExecutionOutcome::default()
-            }
-            .with(get_block()),
-        )];
         let request = HandleCertificateRequest {
             certificate,
-            hashed_certificate_values: values,
-            hashed_blobs: vec![],
+            blobs: vec![],
             wait_for_outgoing_messages: false,
         };
 
@@ -857,14 +848,7 @@ pub mod tests {
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),
-            hashed_certificate_values: vec![HashedCertificateValue::new_confirmed(
-                BlockExecutionOutcome {
-                    state_hash: CryptoHash::new(&Foo("execution state".into())),
-                    ..BlockExecutionOutcome::default()
-                }
-                .with(get_block()),
-            )],
-            hashed_blobs: vec![],
+            blobs: vec![],
             validated_block_certificate: Some(cert),
         };
 

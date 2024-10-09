@@ -3,6 +3,15 @@
 
 fn main() {
     cfg_aliases::cfg_aliases! {
+        web: { all(target_arch = "wasm32", feature = "web") },
+        with_storage: { any(
+            feature = "scylladb",
+            feature = "rocksdb",
+            feature = "dynamodb",
+            feature = "storage-service"
+        ) },
+        with_persist: { any(feature = "fs", with_indexed_db) },
+        with_indexed_db: { all(web, feature = "indexed-db") },
         with_testing: { any(test, feature = "test") },
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
     };

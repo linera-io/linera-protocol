@@ -19,8 +19,11 @@ use futures::{
 };
 use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey},
-    data_types::{Amount, ApplicationPermissions, Blob, TimeDelta, Timestamp},
-    identifiers::{ApplicationId, BlobId, BytecodeId, ChainId, Owner},
+    data_types::{
+        Amount, ApplicationPermissions, BlobBytes, Bytecode, TimeDelta, Timestamp,
+        UserApplicationDescription,
+    },
+    identifiers::{ApplicationId, BytecodeId, ChainId, Owner, UserApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
@@ -37,12 +40,10 @@ use linera_core::{
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::{AdminOperation, Recipient, SystemChannel, UserData},
-    Bytecode, Operation, Query, Response, SystemOperation, UserApplicationDescription,
-    UserApplicationId,
+    system::{AdminOperation, Recipient, SystemChannel},
+    Operation, Query, Response, SystemOperation,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error as ThisError;
@@ -63,7 +64,6 @@ pub struct Chains {
 pub struct QueryRoot<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
     port: NonZeroU16,
@@ -74,7 +74,6 @@ where
 pub struct SubscriptionRoot<P, S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
 }
@@ -83,7 +82,6 @@ where
 pub struct MutationRoot<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
     context: Arc<Mutex<C>>,
@@ -172,7 +170,6 @@ impl<P, S> SubscriptionRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
@@ -189,7 +186,6 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
 {
     async fn execute_system_operation(
         &self,
@@ -227,7 +223,7 @@ where
             let client = self.clients.try_client_lock(chain_id).await?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
-            self.context.lock().await.update_wallet(&client).await;
+            self.context.lock().await.update_wallet(&client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -244,7 +240,6 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
@@ -252,8 +247,8 @@ where
         loop {
             let client = self.clients.try_client_lock(&chain_id).await?;
             client.synchronize_from_validators().await?;
-            let result = client.process_inbox().await;
-            self.context.lock().await.update_wallet(&client).await;
+            let result = client.process_inbox_without_prepare().await;
+            self.context.lock().await.update_wallet(&client).await?;
             let (certificates, maybe_timeout) = result?;
             hashes.extend(certificates.into_iter().map(|cert| cert.hash()));
             match maybe_timeout {
@@ -271,7 +266,7 @@ where
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
         let outcome = client.process_pending_block().await?;
-        self.context.lock().await.update_wallet(&client).await;
+        self.context.lock().await.update_wallet(&client).await?;
         match outcome {
             ClientOutcome::Committed(Some(certificate)) => Ok(Some(certificate.hash())),
             ClientOutcome::Committed(None) => Ok(None),
@@ -290,18 +285,14 @@ where
         owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
-        user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |client| {
-            let user_data = user_data.clone();
-            async move {
-                let result = client
-                    .transfer(owner, amount, recipient, user_data.unwrap_or_default())
-                    .await
-                    .map_err(Error::from)
-                    .map(|outcome| outcome.map(|certificate| certificate.hash()));
-                (result, client)
-            }
+        self.apply_client_command(&chain_id, move |client| async move {
+            let result = client
+                .transfer(owner, amount, recipient)
+                .await
+                .map_err(Error::from)
+                .map(|outcome| outcome.map(|certificate| certificate.hash()));
+            (result, client)
         })
         .await
     }
@@ -309,7 +300,6 @@ where
     /// Claims `amount` units of value from the given owner's account in the remote
     /// `target` chain. Depending on its configuration, the `target` chain may refuse to
     /// process the message.
-    #[allow(clippy::too_many_arguments)]
     async fn claim(
         &self,
         chain_id: ChainId,
@@ -317,24 +307,33 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-        user_data: Option<UserData>,
     ) -> Result<CryptoHash, Error> {
-        self.apply_client_command(&chain_id, move |client| {
-            let user_data = user_data.clone();
-            async move {
-                let result = client
-                    .claim(
-                        owner,
-                        target_id,
-                        recipient,
-                        amount,
-                        user_data.unwrap_or_default(),
-                    )
-                    .await
-                    .map_err(Error::from)
-                    .map(|outcome| outcome.map(|certificate| certificate.hash()));
-                (result, client)
-            }
+        self.apply_client_command(&chain_id, move |client| async move {
+            let result = client
+                .claim(owner, target_id, recipient, amount)
+                .await
+                .map_err(Error::from)
+                .map(|outcome| outcome.map(|certificate| certificate.hash()));
+            (result, client)
+        })
+        .await
+    }
+
+    /// Test if a data blob is readable from a transaction in the current chain.
+    #[allow(clippy::too_many_arguments)]
+    // TODO(#2490): Consider removing or renaming this.
+    async fn read_data_blob(
+        &self,
+        chain_id: ChainId,
+        hash: CryptoHash,
+    ) -> Result<CryptoHash, Error> {
+        self.apply_client_command(&chain_id, move |client| async move {
+            let result = client
+                .read_data_blob(hash)
+                .await
+                .map_err(Error::from)
+                .map(|outcome| outcome.map(|certificate| certificate.hash()));
+            (result, client)
         })
         .await
     }
@@ -367,7 +366,7 @@ where
 
     /// Creates (or activates) a new chain by installing the given authentication keys.
     /// This will automatically subscribe to the future committees created by `admin_id`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn open_multi_owner_chain(
         &self,
         chain_id: ChainId,
@@ -464,7 +463,7 @@ where
     }
 
     /// Changes the authentication key of the chain.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn change_multiple_owners(
         &self,
         chain_id: ChainId,
@@ -595,18 +594,21 @@ where
         .await
     }
 
-    /// Publishes a new blob.
-    async fn publish_blob(&self, chain_id: ChainId, blob: Blob) -> Result<BlobId, Error> {
-        let hashed_blob = blob.into_hashed();
+    /// Publishes a new data blob.
+    async fn publish_data_blob(
+        &self,
+        chain_id: ChainId,
+        bytes: Vec<u8>,
+    ) -> Result<CryptoHash, Error> {
+        let hash = CryptoHash::new(&BlobBytes(bytes.clone()));
         self.apply_client_command(&chain_id, move |client| {
-            let hashed_blob = hashed_blob.clone();
+            let bytes = bytes.clone();
             async move {
-                let blob_id = hashed_blob.id;
                 let result = client
-                    .publish_blob(hashed_blob)
+                    .publish_data_blob(bytes)
                     .await
                     .map_err(Error::from)
-                    .map(|outcome| outcome.map(|_| blob_id));
+                    .map(|outcome| outcome.map(|_| hash));
                 (result, client)
             }
         })
@@ -656,7 +658,7 @@ where
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
-            self.context.lock().await.update_wallet(&client).await;
+            self.context.lock().await.update_wallet(&client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(certificate) => return Ok(certificate.hash()),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -673,7 +675,6 @@ impl<P, S> QueryRoot<P, S>
 where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
         let client = self.clients.try_client_lock(&chain_id).await?;
@@ -772,21 +773,18 @@ impl ChainStateViewExtension {
 #[derive(MergedObject)]
 struct ChainStateExtendedView<C>(ChainStateViewExtension, ReadOnlyChainStateView<C>)
 where
-    C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
+    C: linera_views::context::Context + Clone + Send + Sync + 'static,
     C::Extra: linera_execution::ExecutionRuntimeContext;
 
 /// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind an
 /// [`OwnedRwLockReadGuard`].
 pub struct ReadOnlyChainStateView<C>(OwnedRwLockReadGuard<ChainStateView<C>>)
 where
-    C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>;
+    C: linera_views::context::Context + Clone + Send + Sync + 'static;
 
 impl<C> ContainerType for ReadOnlyChainStateView<C>
 where
-    C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
+    C: linera_views::context::Context + Clone + Send + Sync + 'static,
 {
     async fn resolve_field(
         &self,
@@ -798,8 +796,7 @@ where
 
 impl<C> OutputType for ReadOnlyChainStateView<C>
 where
-    C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
+    C: linera_views::context::Context + Clone + Send + Sync + 'static,
 {
     fn type_name() -> Cow<'static, str> {
         ChainStateView::<C>::type_name()
@@ -820,8 +817,7 @@ where
 
 impl<C> ChainStateExtendedView<C>
 where
-    C: linera_views::common::Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
+    C: linera_views::context::Context + Clone + Send + Sync + 'static,
     C::Extra: linera_execution::ExecutionRuntimeContext,
 {
     fn new(view: OwnedRwLockReadGuard<ChainStateView<C>>) -> Self {
@@ -914,7 +910,6 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 pub struct NodeService<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     clients: ChainClients<P, S>,
     config: ChainListenerConfig,
@@ -927,7 +922,6 @@ where
 impl<P, S: Clone, C> Clone for NodeService<P, S, C>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -947,10 +941,9 @@ where
     <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     S: Storage + Clone + Send + Sync + 'static,
     C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-    ViewError: From<S::StoreError>,
 {
     /// Creates a new instance of the node service given a client chain and a port.
-    pub fn new(
+    pub async fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
         default_chain: Option<ChainId>,
@@ -958,7 +951,7 @@ where
         context: C,
     ) -> Self {
         Self {
-            clients: ChainClients::default(),
+            clients: ChainClients::from_clients(context.clients()).await,
             config,
             port,
             default_chain,
@@ -967,7 +960,7 @@ where
         }
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
         Schema::build(
             QueryRoot {
@@ -1147,11 +1140,11 @@ pub async fn wait_for_next_round(stream: &mut NotificationStream, timeout: Round
     let mut stream = stream.filter(|notification| match &notification.reason {
         Reason::NewBlock { height, .. } => *height >= timeout.next_block_height,
         Reason::NewRound { round, .. } => *round > timeout.current_round,
-        Reason::NewIncomingMessage { .. } => false,
+        Reason::NewIncomingBundle { .. } => false,
     });
     future::select(
         Box::pin(stream.next()),
-        Box::pin(tokio::time::sleep(
+        Box::pin(linera_base::time::timer::sleep(
             timeout.timestamp.duration_since(Timestamp::now()),
         )),
     )

@@ -8,9 +8,11 @@ use std::sync::Arc;
 use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
+    ensure,
     identifiers::Owner,
 };
-use linera_views::{common::Context, views::ViewError};
+use linera_views::{context::Context, views::ViewError};
+use serde::Serialize;
 
 use crate::{
     system::SystemExecutionError, ExecutionError, ExecutionStateView, Message, Operation,
@@ -32,6 +34,8 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
 pub struct ResourceTracker {
     /// The number of blocks created.
     pub blocks: u32,
+    /// The total size of the executed block so far.
+    pub executed_block_size: u64,
     /// The fuel used so far.
     pub fuel: u64,
     /// The number of read operations.
@@ -69,7 +73,7 @@ pub trait BalanceHolder {
 impl<Account, Tracker> ResourceController<Account, Tracker>
 where
     Account: BalanceHolder,
-    Tracker: AsMut<ResourceTracker>,
+    Tracker: AsRef<ResourceTracker> + AsMut<ResourceTracker>,
 {
     /// Obtains the balance of the account. The only possible error is an arithmetic
     /// overflow, which should not happen in practice due to final token supply.
@@ -107,6 +111,11 @@ where
     pub(crate) fn remaining_fuel(&self) -> u64 {
         self.policy
             .remaining_fuel(self.balance().unwrap_or(Amount::MAX))
+            .min(
+                self.policy
+                    .maximum_fuel_per_block
+                    .saturating_sub(self.tracker.as_ref().fuel),
+            )
     }
 
     /// Tracks the allocation of a grant.
@@ -180,10 +189,14 @@ where
     pub(crate) fn track_fuel(&mut self, fuel: u64) -> Result<(), ExecutionError> {
         self.tracker.as_mut().fuel = self
             .tracker
-            .as_mut()
+            .as_ref()
             .fuel
             .checked_add(fuel)
             .ok_or(ArithmeticError::Overflow)?;
+        ensure!(
+            self.tracker.as_ref().fuel <= self.policy.maximum_fuel_per_block,
+            ExecutionError::MaximumFuelExceeded
+        );
         self.update_balance(self.policy.fuel_price(fuel)?)
     }
 
@@ -253,6 +266,54 @@ where
     }
 }
 
+impl<Account, Tracker> ResourceController<Account, Tracker>
+where
+    Tracker: AsMut<ResourceTracker>,
+{
+    /// Tracks the extension of a sequence in an executed block.
+    ///
+    /// The sequence length is ULEB128-encoded, so extending a sequence can add an additional byte.
+    pub fn track_executed_block_size_sequence_extension(
+        &mut self,
+        old_len: usize,
+        delta: usize,
+    ) -> Result<(), ExecutionError> {
+        if delta == 0 {
+            return Ok(());
+        }
+        let new_len = old_len + delta;
+        // ULEB128 uses one byte per 7 bits of the number. It always uses at least one byte.
+        let old_size = ((usize::BITS - old_len.leading_zeros()) / 7).max(1);
+        let new_size = ((usize::BITS - new_len.leading_zeros()) / 7).max(1);
+        if new_size > old_size {
+            self.track_executed_block_size((new_size - old_size) as usize)?;
+        }
+        Ok(())
+    }
+
+    /// Tracks the serialized size of an executed block, or parts of it.
+    pub fn track_executed_block_size_of(
+        &mut self,
+        data: &impl Serialize,
+    ) -> Result<(), ExecutionError> {
+        self.track_executed_block_size(bcs::serialized_size(data)?)
+    }
+
+    /// Tracks the serialized size of an executed block, or parts of it.
+    pub fn track_executed_block_size(&mut self, size: usize) -> Result<(), ExecutionError> {
+        let tracker = self.tracker.as_mut();
+        tracker.executed_block_size = u64::try_from(size)
+            .ok()
+            .and_then(|size| tracker.executed_block_size.checked_add(size))
+            .ok_or(ExecutionError::ExecutedBlockTooLarge)?;
+        ensure!(
+            tracker.executed_block_size <= self.policy.maximum_executed_block_size,
+            ExecutionError::ExecutedBlockTooLarge
+        );
+        Ok(())
+    }
+}
+
 // The simplest `BalanceHolder` is an `Amount`.
 impl BalanceHolder for Amount {
     fn balance(&self) -> Result<Amount, ArithmeticError> {
@@ -272,6 +333,12 @@ impl BalanceHolder for Amount {
 // See https://doc.rust-lang.org/std/convert/trait.AsMut.html#reflexivity for general context.
 impl AsMut<ResourceTracker> for ResourceTracker {
     fn as_mut(&mut self) -> &mut Self {
+        self
+    }
+}
+
+impl AsRef<ResourceTracker> for ResourceTracker {
+    fn as_ref(&self) -> &Self {
         self
     }
 }
@@ -322,7 +389,6 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
         C: Context + Clone + Send + Sync + 'static,
-        ViewError: From<C::Error>,
     {
         self.with_state_and_grant(view, None).await
     }
@@ -337,7 +403,6 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
     ) -> Result<ResourceController<Sources<'a>, &mut ResourceTracker>, ViewError>
     where
         C: Context + Clone + Send + Sync + 'static,
-        ViewError: From<C::Error>,
     {
         let mut sources = Vec::new();
         // First, use the grant (e.g. for messages) and otherwise use the chain account

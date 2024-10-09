@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig},
-    rocks_db::{RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
 use crate::{
@@ -21,7 +21,7 @@ pub struct RocksDbConfig {
     #[arg(long, default_value = "./indexer.db")]
     pub storage: PathBuf,
     #[arg(long, default_value = "linera")]
-    pub table: String,
+    pub namespace: String,
     /// The maximal number of simultaneous queries to the database
     #[arg(long)]
     max_concurrent_queries: Option<usize>,
@@ -43,12 +43,20 @@ impl RocksDbRunner {
             max_stream_queries: config.client.max_stream_queries,
             cache_size: config.client.cache_size,
         };
+        let path_buf = config.client.storage.as_path().to_path_buf();
+        let path_with_guard = PathWithGuard::new(path_buf);
+        // The tests are run in single threaded mode, therefore we need
+        // to use the safe default value of SpawnBlocking.
+        let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
         let store_config = RocksDbStoreConfig {
-            path_buf: config.client.storage.as_path().to_path_buf(),
+            path_with_guard,
+            spawn_mode,
             common_config,
         };
-        let namespace = config.client.table.clone();
-        let store = RocksDbStore::maybe_create_and_connect(&store_config, &namespace).await?;
+        let namespace = config.client.namespace.clone();
+        let root_key = &[];
+        let store =
+            RocksDbStore::maybe_create_and_connect(&store_config, &namespace, root_key).await?;
         Self::new(config, store).await
     }
 }

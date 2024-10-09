@@ -6,20 +6,19 @@ use std::{
     iter::IntoIterator,
 };
 
-use anyhow::Context as _;
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, KeyPair, PublicKey},
-    data_types::{BlockHeight, HashedBlob, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
+    ensure,
     identifiers::{BlobId, ChainDescription, ChainId},
 };
 use linera_chain::data_types::Block;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
-use crate::config::GenesisConfig;
+use crate::{config::GenesisConfig, error, Error};
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
@@ -67,18 +66,21 @@ impl Wallet {
         self.chains.insert(chain.chain_id, chain);
     }
 
-    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<KeyPair, anyhow::Error> {
+    pub fn forget_keys(&mut self, chain_id: &ChainId) -> Result<KeyPair, Error> {
         let chain = self
             .chains
             .get_mut(chain_id)
-            .context(format!("Failed to get chain for chain ID: {}", chain_id))?;
-        chain.key_pair.take().context("Failed to take keypair")
+            .ok_or(error::Inner::NonexistentChain(*chain_id))?;
+        chain
+            .key_pair
+            .take()
+            .ok_or(error::Inner::NonexistentKeypair(*chain_id).into())
     }
 
-    pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, anyhow::Error> {
+    pub fn forget_chain(&mut self, chain_id: &ChainId) -> Result<UserChain, Error> {
         self.chains
             .remove(chain_id)
-            .context(format!("Failed to remove chain: {}", chain_id))
+            .ok_or(error::Inner::NonexistentChain(*chain_id).into())
     }
 
     pub fn default_chain(&self) -> Option<ChainId> {
@@ -101,7 +103,7 @@ impl Wallet {
         self.chains.len()
     }
 
-    pub fn last_chain(&mut self) -> Option<&UserChain> {
+    pub fn last_chain(&self) -> Option<&UserChain> {
         self.chains.values().last()
     }
 
@@ -133,11 +135,11 @@ impl Wallet {
         key: PublicKey,
         chain_id: ChainId,
         timestamp: Timestamp,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let key_pair = self
             .unassigned_key_pairs
             .remove(&key)
-            .context("could not assign chain to key as unassigned key was not found")?;
+            .ok_or(error::Inner::NonexistentKeypair(chain_id))?;
         let user_chain = UserChain {
             chain_id,
             key_pair: Some(key_pair),
@@ -151,12 +153,10 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
-        anyhow::ensure!(
+    pub fn set_default_chain(&mut self, chain_id: ChainId) -> Result<(), Error> {
+        ensure!(
             self.chains.contains_key(&chain_id),
-            "Chain {} cannot be assigned as the default chain since it does not exist in the \
-             wallet.",
-            &chain_id
+            error::Inner::NonexistentChain(chain_id)
         );
         self.default = Some(chain_id);
         Ok(())
@@ -166,7 +166,6 @@ impl Wallet {
     where
         P: ValidatorNodeProvider + Sync + 'static,
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
         let state = chain_client.state();
@@ -175,11 +174,11 @@ impl Wallet {
             UserChain {
                 chain_id: chain_client.chain_id(),
                 key_pair,
-                block_hash: state.block_hash,
-                next_block_height: state.next_block_height,
-                timestamp: state.timestamp,
-                pending_block: state.pending_block.clone(),
-                pending_blobs: state.pending_blobs.clone(),
+                block_hash: state.block_hash(),
+                next_block_height: state.next_block_height(),
+                timestamp: state.timestamp(),
+                pending_block: state.pending_block().clone(),
+                pending_blobs: state.pending_blobs().clone(),
             },
         );
     }
@@ -211,7 +210,7 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_block: Option<Block>,
-    pub pending_blobs: BTreeMap<BlobId, HashedBlob>,
+    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 impl UserChain {

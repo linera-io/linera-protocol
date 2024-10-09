@@ -22,15 +22,15 @@ test = [
     "linera-storage/test",
     "linera-views/test",
     "proptest",
-    "tempfile",
     "test-log",
     "test-strategy",
     "tokio/parking_lot",
 ]
-rocksdb = ["linera-views/rocksdb", "linera-storage/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-storage/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-storage/scylladb"]
-storage-service = []
+rocksdb = ["linera-views/rocksdb"]
+dynamodb = ["linera-views/dynamodb"]
+scylladb = ["linera-views/scylladb"]
+storage-service = ["linera-storage-service"]
+unstable-oracles = []
 metrics = [
     "prometheus",
     "linera-base/metrics",
@@ -45,7 +45,7 @@ web = [
     "linera-execution/web",
     "linera-storage/web",
     "linera-views/web",
-    "wasmtimer",
+    "wasm-bindgen-futures",
 ]
 
 [dependencies]
@@ -53,7 +53,6 @@ anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
-cfg-if.workspace = true
 clap.workspace = true
 dashmap.workspace = true
 futures.workspace = true
@@ -69,7 +68,6 @@ proptest = { workspace = true, optional = true }
 rand = { workspace = true, features = ["std_rng"] }
 serde.workspace = true
 serde_json.workspace = true
-tempfile = { workspace = true, optional = true }
 test-log = { workspace = true, optional = true }
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
@@ -78,10 +76,10 @@ tokio-stream.workspace = true
 tonic.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
-wasmtimer = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-linera-storage-service.workspace = true
+linera-storage-service = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

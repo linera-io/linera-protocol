@@ -45,13 +45,17 @@ pub mod views;
 use std::fmt::Debug;
 
 pub use bcs;
-use linera_base::abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi};
 pub use linera_base::{
     abi,
     data_types::{Resources, SendMessageRequest},
     ensure,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use linera_base::{
+    abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
+    crypto::CryptoHash,
+    doc_scalar,
+};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use serde_json;
 
 #[doc(hidden)]
@@ -61,8 +65,14 @@ pub use self::{
     extensions::{FromBcsBytes, ToBcsBytes},
     log::{ContractLogger, ServiceLogger},
     service::ServiceRuntime,
-    views::KeyValueStore,
+    views::{KeyValueStore, ViewStorageContext},
 };
+
+/// Hash of a data blob.
+#[derive(Eq, Hash, PartialEq, Debug, Serialize, Deserialize, Clone, Copy)]
+pub struct DataBlobHash(pub CryptoHash);
+
+doc_scalar!(DataBlobHash, "Hash of a Data Blob");
 
 /// The contract interface of a Linera application.
 ///

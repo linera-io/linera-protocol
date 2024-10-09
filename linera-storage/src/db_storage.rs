@@ -9,27 +9,29 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, HashedBlob, TimeDelta, Timestamp},
-    identifiers::{BlobId, ChainId, EventId},
+    data_types::{Blob, TimeDelta, Timestamp},
+    identifiers::{BlobId, ChainId, EventId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserApplicationId, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    committee::Epoch, BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
+    backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
-    common::{from_bytes_option, AdminKeyValueStore, ContextFromStore, KeyValueStore},
-    value_splitting::DatabaseConsistencyError,
+    context::ViewContext,
+    store::KeyValueStore,
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
+    linera_views::{random::generate_test_namespace, store::TestKeyValueStore},
     std::{cmp::Reverse, collections::BTreeMap},
 };
 #[cfg(with_metrics)]
@@ -38,7 +40,7 @@ use {
     prometheus::{HistogramVec, IntCounterVec},
 };
 
-use crate::{chain_guards::ChainGuards, ChainRuntimeContext, Storage};
+use crate::{ChainRuntimeContext, Clock, Storage};
 
 /// The metric counting how often a hashed certificate value is tested for existence from storage.
 #[cfg(with_metrics)]
@@ -229,75 +231,15 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("Histogram creation should not fail")
 });
 
-/// A storage implemented from a [`KeyValueStore`]
-pub struct DbStorageInner<Client> {
-    client: Client,
-    pub(crate) guards: ChainGuards,
+/// Main implementation of the [`Storage`] trait.
+#[derive(Clone)]
+pub struct DbStorage<Store, Clock> {
+    store: Arc<Store>,
+    clock: Clock,
+    wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    wasm_runtime: Option<WasmRuntime>,
-}
-
-impl<Client> DbStorageInner<Client>
-where
-    Client: KeyValueStore
-        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
-{
-    pub(crate) fn new(client: Client, wasm_runtime: Option<WasmRuntime>) -> Self {
-        Self {
-            client,
-            guards: ChainGuards::default(),
-            user_contracts: Arc::new(DashMap::new()),
-            user_services: Arc::new(DashMap::new()),
-            wasm_runtime,
-        }
-    }
-
-    #[cfg(with_testing)]
-    pub async fn new_for_testing(
-        store_config: Client::Config,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::recreate_and_connect(&store_config, namespace).await?;
-        let storage = Self::new(client, wasm_runtime);
-        Ok(storage)
-    }
-
-    pub async fn initialize(
-        store_config: Client::Config,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let store = Client::maybe_create_and_connect(&store_config, namespace).await?;
-        let storage = Self::new(store, wasm_runtime);
-        Ok(storage)
-    }
-
-    pub async fn make(
-        store_config: Client::Config,
-        namespace: &str,
-        wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::connect(&store_config, namespace).await?;
-        let storage = Self::new(client, wasm_runtime);
-        Ok(storage)
-    }
-}
-
-/// A DbStorage wrapping with Arc
-#[derive(Clone)]
-pub struct DbStorage<Client, Clock> {
-    pub(crate) client: Arc<DbStorageInner<Client>>,
-    pub clock: Clock,
-    pub execution_runtime_config: ExecutionRuntimeConfig,
+    execution_runtime_config: ExecutionRuntimeConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -310,14 +252,18 @@ enum BaseKey<'a> {
     Event(Cow<'a, EventId>),
 }
 
-/// A clock that can be used to get the current `Timestamp`.
-#[async_trait]
-pub trait Clock {
-    fn current_time(&self) -> Timestamp;
+/// An implementation of [`DualStoreRootKeyAssignment`] that stores the
+/// chain states into the first store.
+pub struct ChainStatesFirstAssignment;
 
-    async fn sleep(&self, delta: TimeDelta);
-
-    async fn sleep_until(&self, timestamp: Timestamp);
+impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
+    fn assigned_store(root_key: &[u8]) -> Result<StoreInUse, bcs::Error> {
+        let store = match bcs::from_bytes(root_key)? {
+            BaseKey::ChainState(_) => StoreInUse::First,
+            _ => StoreInUse::Second,
+        };
+        Ok(store)
+    }
 }
 
 /// A `Clock` implementation using the system clock.
@@ -331,7 +277,7 @@ impl Clock for WallClock {
     }
 
     async fn sleep(&self, delta: TimeDelta) {
-        tokio::time::sleep(delta.as_duration()).await
+        linera_base::time::timer::sleep(delta.as_duration()).await
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -431,18 +377,16 @@ impl TestClock {
 }
 
 #[async_trait]
-impl<Client, C> Storage for DbStorage<Client, C>
+impl<Store, C> Storage for DbStorage<Store, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    Store::Error: Send + Sync,
 {
-    type Context = ContextFromStore<ChainRuntimeContext<Self>, Client>;
-    type StoreError = <Client as KeyValueStore>::Error;
+    type Context = ViewContext<ChainRuntimeContext<Self>, Store>;
+    type Clock = C;
 
-    fn clock(&self) -> &dyn Clock {
+    fn clock(&self) -> &C {
         &self.clock
     }
 
@@ -452,25 +396,22 @@ where
     ) -> Result<ChainStateView<Self::Context>, ViewError> {
         #[cfg(with_metrics)]
         let _metric = LOAD_CHAIN_LATENCY.measure_latency();
-        tracing::trace!("Acquiring lock on {:?}", chain_id);
-        let guard = self.client.guards.guard(chain_id).await;
         let runtime_context = ChainRuntimeContext {
             storage: self.clone(),
             chain_id,
             execution_runtime_config: self.execution_runtime_config,
-            user_contracts: self.client.user_contracts.clone(),
-            user_services: self.client.user_services.clone(),
-            _chain_guard: Arc::new(guard),
+            user_contracts: self.user_contracts.clone(),
+            user_services: self.user_services.clone(),
         };
-        let client = self.client.client.clone();
-        let base_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
-        let context = ContextFromStore::create(client, base_key, runtime_context).await?;
+        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+        let store = self.store.clone_with_root_key(&root_key)?;
+        let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        let test = self.client.client.contains_key(&value_key).await?;
+        let test = self.store.contains_key(&value_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
             .with_label_values(&[])
@@ -487,7 +428,7 @@ where
             let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
             keys.push(value_key);
         }
-        let test = self.client.client.contains_keys(keys).await?;
+        let test = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER
             .with_label_values(&[])
@@ -497,7 +438,7 @@ where
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let test = self.client.client.contains_key(&blob_key).await?;
+        let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -509,7 +450,7 @@ where
             let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
             keys.push(key);
         }
-        let results = self.client.client.contains_keys(keys).await?;
+        let results = self.store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
         for (blob_id, result) in blob_ids.into_iter().zip(results) {
             if !result {
@@ -523,7 +464,7 @@ where
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let test = self.client.client.contains_key(&blob_key).await?;
+        let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -535,8 +476,7 @@ where
     ) -> Result<HashedCertificateValue, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let maybe_value = self
-            .client
-            .client
+            .store
             .read_value::<CertificateValue>(&value_key)
             .await?;
         #[cfg(with_metrics)]
@@ -547,28 +487,22 @@ where
         Ok(value.with_hash_unchecked(hash))
     }
 
-    async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob = self.client.client.read_value::<Blob>(&blob_key).await?;
+        let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob = maybe_blob.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
-        Ok(blob.with_hash_unchecked(blob_id))
+        let blob_bytes =
+            maybe_blob_bytes.ok_or_else(|| ViewError::not_found("value for blob ID", blob_id))?;
+        Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
     }
 
-    async fn read_hashed_blobs(
-        &self,
-        blob_ids: &[BlobId],
-    ) -> Result<Vec<Option<HashedBlob>>, ViewError> {
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
         let blob_keys = blob_ids
             .iter()
             .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
-        let maybe_blobs = self
-            .client
-            .client
-            .read_multi_values::<Blob>(blob_keys)
-            .await?;
+        let maybe_blob_bytes = self.store.read_multi_values::<Vec<u8>>(blob_keys).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER
             .with_label_values(&[])
@@ -576,18 +510,16 @@ where
 
         Ok(blob_ids
             .iter()
-            .zip(maybe_blobs)
-            .map(|(blob_id, maybe_blob)| maybe_blob.map(|blob| blob.with_hash_unchecked(*blob_id)))
+            .zip(maybe_blob_bytes)
+            .map(|(blob_id, maybe_blob_bytes)| {
+                maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
+            })
             .collect())
     }
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let maybe_blob_state = self
-            .client
-            .client
-            .read_value::<BlobState>(&blob_state_key)
-            .await?;
+        let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
         let blob_state = maybe_blob_state
@@ -625,9 +557,9 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError> {
+    async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+        Self::add_blob_to_batch(blob, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -676,26 +608,22 @@ where
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError> {
+    async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(blob, &mut batch)?;
         }
         self.write_batch(batch).await
     }
 
-    async fn write_hashed_certificate_values_hashed_blobs_certificate(
+    async fn write_blobs_and_certificate(
         &self,
-        values: &[HashedCertificateValue],
-        blobs: &[HashedBlob],
+        blobs: &[Blob],
         certificate: &Certificate,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
-        for value in values {
-            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
-        }
         for blob in blobs {
-            Self::add_blob_to_batch(&blob.id(), blob, &mut batch)?;
+            Self::add_blob_to_batch(blob, &mut batch)?;
         }
         Self::add_certificate_to_batch(certificate, &mut batch)?;
         self.write_batch(batch).await
@@ -705,7 +633,7 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
-        let results = self.client.client.contains_keys(keys).await?;
+        let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         Ok(results[0] && results[1])
@@ -715,16 +643,20 @@ where
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let keys = vec![cert_key, value_key];
-        let values = self.client.client.read_multi_values_bytes(keys).await;
+        let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let values = values?;
-        let cert_result = from_bytes_option::<LiteCertificate, _>(&values[0])?;
-        let value_result = from_bytes_option::<CertificateValue, _>(&values[1])?;
-        let value = value_result.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
-        let cert = cert_result.ok_or_else(|| ViewError::not_found("certificate for hash", hash))?;
+        let cert_bytes = values[0]
+            .as_ref()
+            .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
+        let value_bytes = values[1]
+            .as_ref()
+            .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
+        let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
+        let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
         Ok(cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
@@ -746,7 +678,7 @@ where
 
     async fn read_event(&self, event_id: &EventId) -> Result<Vec<u8>, ViewError> {
         let event_key = bcs::to_bytes(&BaseKey::Event(Cow::Borrowed(event_id)))?;
-        let maybe_value = self.client.client.read_value::<Vec<u8>>(&event_key).await?;
+        let maybe_value = self.store.read_value::<Vec<u8>>(&event_key).await?;
         #[cfg(with_metrics)]
         READ_EVENT_COUNTER.with_label_values(&[]).inc();
         maybe_value.ok_or_else(|| ViewError::not_found("value for event ID", event_id))
@@ -761,16 +693,15 @@ where
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
-        self.client.wasm_runtime
+        self.wasm_runtime
     }
 }
 
-impl<Client, C> DbStorage<Client, C>
+impl<Store, C> DbStorage<Store, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
     C: Clock,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,
+    Store::Error: Send + Sync,
 {
     fn add_hashed_cert_value_to_batch(
         value: &HashedCertificateValue,
@@ -785,15 +716,11 @@ where
         Ok(())
     }
 
-    fn add_blob_to_batch(
-        blob_id: &BlobId,
-        blob: &HashedBlob,
-        batch: &mut Batch,
-    ) -> Result<(), ViewError> {
+    fn add_blob_to_batch(blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
-        batch.put_key_value(blob_key.to_vec(), blob)?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
+        batch.put_key_value(blob_key.to_vec(), &blob.inner_bytes())?;
         Ok(())
     }
 
@@ -834,47 +761,77 @@ where
     }
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        self.client.client.write_batch(batch, &[]).await?;
+        self.store.write_batch(batch).await?;
         Ok(())
     }
 
-    pub fn create(storage: DbStorageInner<Client>, clock: C) -> Self {
+    fn create(store: Store, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
         Self {
-            client: Arc::new(storage),
+            store: Arc::new(store),
             clock,
+            wasm_runtime,
+            user_contracts: Arc::new(DashMap::new()),
+            user_services: Arc::new(DashMap::new()),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
 }
 
-impl<Client> DbStorage<Client, WallClock>
+impl<Store> DbStorage<Store, WallClock>
 where
-    Client: KeyValueStore
-        + AdminKeyValueStore<Error = <Client as KeyValueStore>::Error>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ViewError: From<<Client as KeyValueStore>::Error>,
-    <Client as KeyValueStore>::Error:
-        From<bcs::Error> + From<DatabaseConsistencyError> + Send + Sync + serde::ser::StdError,
+    Store: KeyValueStore + Clone + Send + Sync + 'static,
+    Store::Error: Send + Sync,
 {
     pub async fn initialize(
-        store_config: Client::Config,
+        config: Store::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let storage =
-            DbStorageInner::<Client>::initialize(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
+    ) -> Result<Self, Store::Error> {
+        let store = Store::maybe_create_and_connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, WallClock))
     }
 
     pub async fn new(
-        store_config: Client::Config,
+        config: Store::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
-    ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let storage = DbStorageInner::<Client>::make(store_config, namespace, wasm_runtime).await?;
-        Ok(Self::create(storage, WallClock))
+    ) -> Result<Self, Store::Error> {
+        let store = Store::connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, WallClock))
+    }
+}
+
+#[cfg(with_testing)]
+impl<Store> DbStorage<Store, TestClock>
+where
+    Store: TestKeyValueStore + Clone + Send + Sync + 'static,
+    Store::Error: Send + Sync,
+{
+    pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
+        let config = Store::new_test_config().await.unwrap();
+        let namespace = generate_test_namespace();
+        let root_key = &[];
+        DbStorage::<Store, TestClock>::new_for_testing(
+            config,
+            &namespace,
+            root_key,
+            wasm_runtime,
+            TestClock::new(),
+        )
+        .await
+        .unwrap()
+    }
+
+    pub async fn new_for_testing(
+        config: Store::Config,
+        namespace: &str,
+        root_key: &[u8],
+        wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
+    ) -> Result<Self, Store::Error> {
+        let store = Store::recreate_and_connect(&config, namespace, root_key).await?;
+        Ok(Self::create(store, wasm_runtime, clock))
     }
 }

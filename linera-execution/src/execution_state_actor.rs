@@ -11,22 +11,18 @@ use futures::channel::mpsc;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{self, MeasureLatency as _};
 use linera_base::{
-    data_types::{Amount, ApplicationPermissions, HashedBlob, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
     identifiers::{Account, BlobId, EventId, MessageId, Owner},
     ownership::ChainOwnership,
 };
-use linera_views::{
-    batch::Batch,
-    common::Context,
-    views::{View, ViewError},
-};
+use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 #[cfg(with_metrics)]
 use prometheus::HistogramVec;
 use reqwest::{header::CONTENT_TYPE, Client};
 
 use crate::{
-    system::{OpenChainConfig, Recipient, UserData},
+    system::{OpenChainConfig, Recipient},
     util::RespondExt,
     ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
     RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
@@ -68,7 +64,6 @@ pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
 impl<C> ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
-    ViewError: From<C::Error>,
     C::Extra: ExecutionRuntimeContext,
 {
     // TODO(#1416): Support concurrent I/O.
@@ -165,7 +160,6 @@ where
                         source.chain_id,
                         Recipient::Account(destination),
                         amount,
-                        UserData::default(),
                     )
                     .await?;
 
@@ -311,9 +305,18 @@ where
                 callback.respond(bytes);
             }
 
-            ReadBlob { blob_id, callback } => {
-                let blob = self.system.read_blob(blob_id).await?;
+            ReadBlobContent { blob_id, callback } => {
+                let blob = self
+                    .system
+                    .read_blob_content(blob_id)
+                    .await
+                    .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))?;
                 callback.respond(blob);
+            }
+
+            AssertBlobExists { blob_id, callback } => {
+                self.system.assert_blob_exists(blob_id).await?;
+                callback.respond(())
             }
 
             ReadEvent { event_id, callback } => {
@@ -451,9 +454,14 @@ pub enum ExecutionRequest {
         callback: oneshot::Sender<Vec<u8>>,
     },
 
-    ReadBlob {
+    ReadBlobContent {
         blob_id: BlobId,
-        callback: Sender<HashedBlob>,
+        callback: Sender<BlobContent>,
+    },
+
+    AssertBlobExists {
+        blob_id: BlobId,
+        callback: Sender<()>,
     },
 
     ReadEvent {
@@ -593,7 +601,7 @@ impl Debug for ExecutionRequest {
                 .field("content_type", content_type)
                 .finish_non_exhaustive(),
 
-            ExecutionRequest::ReadBlob { blob_id, .. } => formatter
+            ExecutionRequest::ReadBlobContent { blob_id, .. } => formatter
                 .debug_struct("ExecutionRequest::ReadBlob")
                 .field("blob_id", blob_id)
                 .finish_non_exhaustive(),
@@ -601,6 +609,11 @@ impl Debug for ExecutionRequest {
             ExecutionRequest::ReadEvent { event_id, .. } => formatter
                 .debug_struct("ExecutionRequest::ReadEvent")
                 .field("event_id", event_id)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::AssertBlobExists { blob_id, .. } => formatter
+                .debug_struct("ExecutionRequest::AssertBlobExists")
+                .field("blob_id", blob_id)
                 .finish_non_exhaustive(),
         }
     }

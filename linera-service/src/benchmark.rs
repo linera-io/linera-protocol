@@ -10,8 +10,8 @@ use linera_base::{
     async_graphql::InputType,
     data_types::Amount,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    time::timer::Instant,
 };
-use linera_execution::system::SystemChannel;
 use linera_sdk::abis::fungible::{self, FungibleTokenAbi, InitialState, Parameters};
 use linera_service::cli_wrappers::{
     local_net::{PathProvider, ProcessInbox},
@@ -20,7 +20,6 @@ use linera_service::cli_wrappers::{
 use port_selector::random_free_tcp_port;
 use rand::{Rng as _, SeedableRng};
 use serde_json::Value;
-use tokio::time::Instant;
 use tracing::info;
 
 #[derive(clap::Parser)]
@@ -55,7 +54,7 @@ enum Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    linera_base::tracing::init();
+    linera_base::tracing::init("benchmark");
 
     let args = Args::parse();
     match args {
@@ -108,17 +107,11 @@ async fn benchmark_with_fungible(
     .await?;
 
     info!("Starting the node services and subscribing to the publisher chain.");
-    let publisher_chain_id = publisher.default_chain().context("missing default chain")?;
     let mut services = Vec::new();
     for client in &clients {
         let free_port = random_free_tcp_port().context("no free TCP port")?;
-        let chain_id = client.default_chain().context("missing default chain")?;
         let node_service = client
             .run_node_service(free_port, ProcessInbox::Automatic)
-            .await?;
-        let channel = SystemChannel::PublishedBytecodes;
-        node_service
-            .subscribe(chain_id, publisher_chain_id, channel)
             .await?;
         services.push(node_service);
     }
@@ -242,7 +235,7 @@ async fn benchmark_with_fungible(
                             .await?,
                     );
                     for i in 0.. {
-                        tokio::time::sleep(Duration::from_secs(i)).await;
+                        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         let actual_balance =
                             app.get_amount(&AccountOwner::User(context.owner)).await;
                         if actual_balance == expected_balance {

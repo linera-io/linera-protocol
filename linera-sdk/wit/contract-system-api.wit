@@ -4,6 +4,7 @@ interface contract-system-api {
     get-chain-id: func() -> chain-id;
     get-block-height: func() -> block-height;
     get-application-id: func() -> application-id;
+    get-application-creator-chain-id: func() -> chain-id;
     application-parameters: func() -> list<u8>;
     authenticated-signer: func() -> option<owner>;
     read-system-timestamp: func() -> timestamp;
@@ -18,14 +19,15 @@ interface contract-system-api {
     transfer: func(source: option<owner>, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
     get-chain-ownership: func() -> chain-ownership;
-    open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> chain-id;
+    open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
     close-chain: func() -> result<tuple<>, close-chain-error>;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
     http-post: func(query: string, content-type: string, payload: list<u8>) -> list<u8>;
     assert-before: func(timestamp: timestamp);
-    read-blob: func(blob-id: blob-id) -> hashed-blob;
+    read-data-blob: func(hash: crypto-hash) -> list<u8>;
+    assert-data-blob-exists: func(hash: crypto-hash);
     read-event: func(event-id: event-id) -> list<u8>;
     log: func(message: string, level: log-level);
     consume-fuel: func(fuel: u64);
@@ -50,20 +52,13 @@ interface contract-system-api {
         close-chain: list<application-id>,
     }
 
-    record blob {
-        bytes: list<u8>,
-    }
-
-    record blob-id {
-        inner0: crypto-hash,
-    }
-
     record block-height {
         inner0: u64,
     }
 
     record bytecode-id {
-        message-id: message-id,
+        contract-blob-hash: crypto-hash,
+        service-blob-hash: crypto-hash,
     }
 
     record chain-id {
@@ -106,11 +101,6 @@ interface contract-system-api {
     variant generic-application-id {
         system,
         user(application-id),
-    }
-
-    record hashed-blob {
-        id: blob-id,
-        blob: blob,
     }
 
     enum log-level {

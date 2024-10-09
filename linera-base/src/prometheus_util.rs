@@ -3,12 +3,12 @@
 
 //! This module defines util functions for interacting with Prometheus (logging metrics, etc)
 
-use std::time::Instant;
-
 use prometheus::{
     histogram_opts, register_histogram_vec, register_int_counter_vec, Error, HistogramVec,
     IntCounterVec, Opts,
 };
+
+use crate::time::Instant;
 
 const LINERA_NAMESPACE: &str = "linera";
 

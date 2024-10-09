@@ -19,14 +19,12 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, PublicKey},
-    data_types::Amount,
+    data_types::{Amount, Bytecode},
     identifiers::{Account, ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
-use linera_execution::{
-    committee::ValidatorName, system::SystemChannel, Bytecode, ResourceControlPolicy,
-};
+use linera_execution::{committee::ValidatorName, system::SystemChannel, ResourceControlPolicy};
 use linera_version::VersionInfo;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
@@ -59,7 +57,7 @@ pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
-    max_pending_messages: usize,
+    max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
 }
@@ -81,7 +79,7 @@ impl ClientWrapper {
             testing_prng_seed,
             storage,
             wallet,
-            max_pending_messages: 10_000,
+            max_pending_message_bundles: 10_000,
             network,
             path_provider,
         }
@@ -154,8 +152,8 @@ impl ClientWrapper {
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
             .args([
-                "--max-pending-messages",
-                &self.max_pending_messages.to_string(),
+                "--max-pending-message-bundles",
+                &self.max_pending_message_bundles.to_string(),
             ])
             .args(["--send-timeout-ms", "500000"])
             .args(["--recv-timeout-ms", "500000"])
@@ -182,6 +180,8 @@ impl ClientWrapper {
             operation_byte,
             message,
             message_byte,
+            maximum_fuel_per_block,
+            maximum_executed_block_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
         } = policy;
@@ -205,6 +205,14 @@ impl ClientWrapper {
             .args(["--operation-price", &operation.to_string()])
             .args(["--operation-byte-price", &operation_byte.to_string()])
             .args(["--message-price", &message.to_string()])
+            .args([
+                "--maximum-fuel-per-block",
+                &maximum_fuel_per_block.to_string(),
+            ])
+            .args([
+                "--maximum-executed-block-size",
+                &maximum_executed_block_size.to_string(),
+            ])
             .args([
                 "--maximum-bytes-read-per-block",
                 &maximum_bytes_read_per_block.to_string(),
@@ -392,7 +400,7 @@ impl ClientWrapper {
             .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
                 .get(format!("http://localhost:{}/", port))
                 .send()
@@ -447,7 +455,7 @@ impl ClientWrapper {
             .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
                 .get(format!("http://localhost:{}/", port))
                 .send()
@@ -712,6 +720,33 @@ impl ClientWrapper {
         }
     }
 
+    /// Runs `linera publish-data-blob`.
+    pub async fn publish_data_blob(
+        &self,
+        path: &Path,
+        chain_id: Option<ChainId>,
+    ) -> Result<CryptoHash> {
+        let mut command = self.command().await?;
+        command.arg("publish-data-blob").arg(path);
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        let stdout = stdout.trim();
+        Ok(CryptoHash::from_str(stdout)?)
+    }
+
+    /// Runs `linera read-data-blob`.
+    pub async fn read_data_blob(&self, hash: CryptoHash, chain_id: Option<ChainId>) -> Result<()> {
+        let mut command = self.command().await?;
+        command.arg("read-data-blob").arg(hash.to_string());
+        if let Some(chain_id) = chain_id {
+            command.arg(chain_id.to_string());
+        }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     pub fn load_wallet(&self) -> Result<Wallet> {
         util::read_json(self.wallet_path())
     }
@@ -755,6 +790,15 @@ impl ClientWrapper {
             .await?
             .arg("remove-validator")
             .args(["--name", name])
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn finalize_committee(&self) -> Result<()> {
+        self.command()
+            .await?
+            .arg("finalize-committee")
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
@@ -844,6 +888,15 @@ impl ClientWrapper {
     }
 }
 
+fn truncate_query_output(input: &str) -> String {
+    let max_len = 200;
+    if input.len() < max_len {
+        input.to_string()
+    } else {
+        format!("{} ...", input.get(..max_len).unwrap())
+    }
+}
+
 /// A running node service.
 pub struct NodeService {
     port: u16,
@@ -867,10 +920,10 @@ impl NodeService {
         self.child.ensure_is_running()
     }
 
-    pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<()> {
+    pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<Vec<CryptoHash>> {
         let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
-        self.query_node(query).await?;
-        Ok(())
+        let mut data = self.query_node(query).await?;
+        Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
     pub async fn make_application<A: ContractAbi>(
@@ -910,6 +963,21 @@ impl NodeService {
             .collect()
     }
 
+    pub async fn publish_data_blob(
+        &self,
+        chain_id: &ChainId,
+        bytes: Vec<u8>,
+    ) -> Result<CryptoHash> {
+        let query = format!(
+            "mutation {{ publishDataBlob(chainId: {}, bytes: {}) }}",
+            chain_id.to_value(),
+            bytes.to_value(),
+        );
+        let data = self.query_node(query).await?;
+        serde_json::from_value(data["publishDataBlob"].clone())
+            .context("missing publishDataBlob field in response")
+    }
+
     pub async fn publish_bytecode<Abi, Parameters, InstantiationArgument>(
         &self,
         chain_id: &ChainId,
@@ -935,10 +1003,10 @@ impl NodeService {
     }
 
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
-        let n_try = 15;
+        let n_try = 5;
         let query = query.as_ref();
         for i in 0..n_try {
-            tokio::time::sleep(Duration::from_secs(i)).await;
+            linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
             let client = reqwest_client();
             let response = client
@@ -946,11 +1014,16 @@ impl NodeService {
                 .json(&json!({ "query": query }))
                 .send()
                 .await
-                .with_context(|| format!("query_node: failed to post query={}", query))?;
+                .with_context(|| {
+                    format!(
+                        "query_node: failed to post query={}",
+                        truncate_query_output(query)
+                    )
+                })?;
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
+                truncate_query_output(query),
                 response
                     .text()
                     .await
@@ -960,7 +1033,7 @@ impl NodeService {
             if let Some(errors) = value.get("errors") {
                 warn!(
                     "Query \"{}\" failed: {}",
-                    query.get(..200).unwrap_or(query),
+                    truncate_query_output(query),
                     errors
                 );
             } else {
@@ -969,7 +1042,7 @@ impl NodeService {
         }
         bail!(
             "Query \"{}\" failed after {} retries.",
-            query.get(..200).unwrap_or(query),
+            truncate_query_output(query),
             n_try
         );
     }
@@ -1246,7 +1319,12 @@ impl Faucet {
             .json(&json!({ "query": &query }))
             .send()
             .await
-            .with_context(|| format!("claim: failed to post query={}", query))?;
+            .with_context(|| {
+                format!(
+                    "claim: failed to post query={}",
+                    truncate_query_output(&query)
+                )
+            })?;
         anyhow::ensure!(
             response.status().is_success(),
             "Query \"{}\" failed: {}",
@@ -1333,32 +1411,54 @@ pub struct ApplicationWrapper<A> {
 
 impl<A> ApplicationWrapper<A> {
     pub async fn raw_query(&self, query: impl AsRef<str>) -> Result<Value> {
-        let query = query.as_ref();
-        let client = reqwest_client();
-        let response = client
-            .post(&self.uri)
-            .json(&json!({ "query": query }))
-            .send()
-            .await
-            .with_context(|| format!("raw_query: failed to post query={}", query))?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "Query \"{}\" failed: {}",
-            query.get(..200).unwrap_or(query),
-            response
-                .text()
-                .await
-                .unwrap_or_else(|error| format!("Could not get response text: {error}"))
-        );
-        let value: Value = response.json().await.context("invalid JSON")?;
-        if let Some(errors) = value.get("errors") {
-            bail!(
+        const MAX_RETRIES: usize = 5;
+
+        for i in 0.. {
+            let query = query.as_ref();
+            let client = reqwest_client();
+            let result = client
+                .post(&self.uri)
+                .json(&json!({ "query": query }))
+                .send()
+                .await;
+            let response = match result {
+                Ok(response) => response,
+                Err(error) if i < MAX_RETRIES => {
+                    warn!(
+                        "Failed to post query \"{}\": {error}; retrying",
+                        truncate_query_output(query),
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "raw_query: failed to post query={}",
+                            truncate_query_output(query)
+                        )
+                    });
+                }
+            };
+            anyhow::ensure!(
+                response.status().is_success(),
                 "Query \"{}\" failed: {}",
-                query.get(..200).unwrap_or(query),
-                errors
+                truncate_query_output(query),
+                response
+                    .text()
+                    .await
+                    .unwrap_or_else(|error| format!("Could not get response text: {error}"))
             );
+            let value: Value = response.json().await.context("invalid JSON")?;
+            if let Some(errors) = value.get("errors") {
+                bail!(
+                    "Query \"{}\" failed: {}",
+                    truncate_query_output(query),
+                    errors
+                );
+            }
+            return Ok(value["data"].clone());
         }
-        Ok(value["data"].clone())
+        unreachable!()
     }
 
     pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {

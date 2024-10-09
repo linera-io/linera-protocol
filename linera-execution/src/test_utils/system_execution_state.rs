@@ -13,8 +13,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_views::{
-    common::Context,
-    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    context::{Context, MemoryContext},
+    memory::TEST_MEMORY_MAX_STREAM_QUERIES,
+    random::generate_test_namespace,
     views::{CryptoHashView, View, ViewError},
 };
 
@@ -102,7 +103,14 @@ impl SystemExecutionState {
             application_permissions,
         } = self;
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, extra);
+        let namespace = generate_test_namespace();
+        let root_key = &[];
+        let context = MemoryContext::new_for_testing(
+            TEST_MEMORY_MAX_STREAM_QUERIES,
+            &namespace,
+            root_key,
+            extra,
+        );
         let mut view = ExecutionStateView::load(context)
             .await
             .expect("Loading from memory should work");

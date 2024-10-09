@@ -19,7 +19,7 @@ use assert_matches::assert_matches;
 use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, HashedBlob, OracleResponse},
+    data_types::{Amount, Bytecode, OracleResponse, UserApplicationDescription},
     identifiers::{
         AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
         StreamName,
@@ -28,11 +28,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{CertificateValue, EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Bytecode, Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage,
-    UserApplicationDescription, WasmRuntime,
+    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
 };
-use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde_json::json;
 use test_case::test_case;
 
@@ -92,7 +89,6 @@ async fn test_scylla_db_create_application(wasm_runtime: WasmRuntime) -> anyhow:
 async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -104,64 +100,10 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
-    let cert = creator
-        .subscribe_to_published_bytecodes(publisher.chain_id)
-        .await
-        .unwrap()
-        .unwrap();
-    publisher
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
-
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
 
-    let contract_blob = HashedBlob::load_from_file(contract_path.clone()).await?;
-    let expected_contract_blob_id = contract_blob.id();
-    let certificate = publisher
-        .publish_blob(contract_blob.clone())
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
-
-    let service_blob = HashedBlob::load_from_file(service_path.clone()).await?;
-    let expected_service_blob_id = service_blob.id();
-    let certificate = publisher.publish_blob(service_blob).await.unwrap().unwrap();
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_service_blob_id))));
-
-    // If I try to upload the contract blob again, I should get the same blob ID
-    let certificate = publisher
-        .publish_blob(contract_blob)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .outcome
-        .oracle_responses
-        .iter()
-        .any(|responses| responses.contains(&OracleResponse::Blob(expected_contract_blob_id))));
-
-    let (bytecode_id, cert) = publisher
+    let (bytecode_id, _cert) = publisher
         .publish_bytecode(
             Bytecode::load_from_file(contract_path).await?,
             Bytecode::load_from_file(service_path).await?,
@@ -170,19 +112,13 @@ where
         .unwrap()
         .unwrap();
     let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
-    // Receive our own cert to broadcast the bytecode location.
-    publisher
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
 
     creator.synchronize_from_validators().await.unwrap();
     creator.process_inbox().await.unwrap();
 
-    // No fuel was used so far, but some storage for messages and operations in three blocks.
+    // No fuel was used so far.
     let balance_after_messaging = creator.local_balance().await?;
-    assert!(balance_after_messaging < Amount::ONE);
+    assert_eq!(balance_after_messaging, Amount::ONE);
 
     let initial_value = 10_u64;
     let (application_id, _) = creator
@@ -284,7 +220,6 @@ async fn test_scylla_db_run_application_with_dependency(
 async fn run_test_run_application_with_dependency<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -324,18 +259,7 @@ where
         .await
         .unwrap();
 
-    let cert = creator
-        .subscribe_to_published_bytecodes(publisher.chain_id)
-        .await
-        .unwrap()
-        .unwrap();
-    publisher
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
-
-    let (bytecode_id1, cert1) = {
+    let (bytecode_id1, _cert1) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
         publisher
@@ -348,7 +272,7 @@ where
             .unwrap()
     };
     let bytecode_id1 = bytecode_id1.with_abi::<counter::CounterAbi, (), u64>();
-    let (bytecode_id2, cert2) = {
+    let (bytecode_id2, _cert2) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("meta_counter")?;
         publisher
@@ -362,20 +286,9 @@ where
     };
     let bytecode_id2 =
         bytecode_id2.with_abi::<meta_counter::MetaCounterAbi, ApplicationId<CounterAbi>, ()>();
-    // Receive our own certs to broadcast the bytecode locations.
-    publisher
-        .receive_certificate_and_update_validators(cert1)
-        .await
-        .unwrap();
-    publisher
-        .receive_certificate_and_update_validators(cert2)
-        .await
-        .unwrap();
-    publisher.process_inbox().await.unwrap();
 
     // Creator receives the bytecodes then creates the app.
     creator.synchronize_from_validators().await.unwrap();
-    creator.process_inbox().await.unwrap();
     let initial_value = 10_u64;
     let (application_id1, _) = creator
         .create_application(bytecode_id1, &(), &initial_value, vec![])
@@ -407,29 +320,36 @@ where
         ]
     );
 
-    let mut operation = meta_counter::Operation::increment(receiver_id, 5);
+    let query_service = cfg!(feature = "unstable-oracles");
+    let mut operation = meta_counter::Operation::increment(receiver_id, 5, query_service);
     operation.fuel_grant = 1000000;
     let cert = creator
         .execute_operation(Operation::user(application_id2, &operation)?)
         .await
         .unwrap()
         .unwrap();
-
-    receiver
-        .receive_certificate_and_update_validators(cert)
-        .await
-        .unwrap();
-    let (cert, _) = receiver.process_inbox().await.unwrap();
-    let executed_block = cert[0].value().executed_block().unwrap();
+    let executed_block = cert.value().executed_block().unwrap();
     let responses = &executed_block.outcome.oracle_responses;
     let [_, responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
     };
-    let [OracleResponse::Service(json)] = &responses[..] else {
-        panic!("Unexpected oracle responses: {:?}", responses);
-    };
-    let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
-    assert_eq!(response_json["data"], json!({"value": 0}));
+    if cfg!(feature = "unstable-oracles") {
+        let [OracleResponse::Service(json)] = &responses[..] else {
+            assert_eq!(&responses[..], &[]);
+            panic!("Unexpected oracle responses: {:?}", responses);
+        };
+        let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
+        assert_eq!(response_json["data"], json!({"value": 10}));
+    } else {
+        assert!(responses.is_empty());
+    }
+
+    receiver.synchronize_from_validators().await.unwrap();
+    receiver
+        .receive_certificate_and_update_validators(cert)
+        .await
+        .unwrap();
+    receiver.process_inbox().await.unwrap();
 
     let query = Request::new("{ value }");
     let response = receiver
@@ -457,10 +377,13 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 1);
-    assert_eq!(incoming_messages[0].action, MessageAction::Reject);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Simple);
+    let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
+    assert_eq!(incoming_bundles.len(), 1);
+    assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[0].kind,
+        MessageKind::Simple
+    );
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].len(), 0);
@@ -481,10 +404,17 @@ where
     let mut certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 1);
-    assert_eq!(incoming_messages[0].action, MessageAction::Reject);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
+    assert_eq!(incoming_bundles.len(), 1);
+    assert_eq!(incoming_bundles[0].action, MessageAction::Reject);
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[0].kind,
+        MessageKind::Simple
+    );
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[1].kind,
+        MessageKind::Tracked
+    );
     let messages = cert.value().messages().unwrap();
     assert_eq!(messages.len(), 1);
 
@@ -496,19 +426,28 @@ where
     let mut certs = creator.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
     let cert = certs.pop().unwrap();
-    let incoming_messages = &cert.value().block().unwrap().incoming_messages;
-    assert_eq!(incoming_messages.len(), 2);
+    let incoming_bundles = &cert.value().block().unwrap().incoming_bundles;
+    assert_eq!(incoming_bundles.len(), 2);
     // First message is the grant refund for the successful message sent before.
-    assert_eq!(incoming_messages[0].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[0].event.kind, MessageKind::Tracked);
+    assert_eq!(incoming_bundles[0].action, MessageAction::Accept);
+    assert_eq!(
+        incoming_bundles[0].bundle.messages[0].kind,
+        MessageKind::Tracked
+    );
     assert_matches!(
-        incoming_messages[0].event.message,
+        incoming_bundles[0].bundle.messages[0].message,
         Message::System(SystemMessage::Credit { .. })
     );
     // Second message is the bounced message.
-    assert_eq!(incoming_messages[1].action, MessageAction::Accept);
-    assert_eq!(incoming_messages[1].event.kind, MessageKind::Bouncing);
-    assert_matches!(incoming_messages[1].event.message, Message::User { .. });
+    assert_eq!(incoming_bundles[1].action, MessageAction::Accept);
+    assert_eq!(
+        incoming_bundles[1].bundle.messages[1].kind,
+        MessageKind::Bouncing
+    );
+    assert_matches!(
+        incoming_bundles[1].bundle.messages[1].message,
+        Message::User { .. }
+    );
 
     Ok(())
 }
@@ -559,19 +498,24 @@ async fn test_scylla_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow
 async fn run_test_cross_chain_message<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
+    let _admin = builder
+        .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
+        .await?;
     let sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
+        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
         .await?;
     let receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
+        .add_initial_chain(ChainDescription::Root(2), Amount::ONE)
+        .await?;
+    let receiver2 = builder
+        .add_initial_chain(ChainDescription::Root(3), Amount::ONE)
         .await?;
 
-    let (bytecode_id, pub_cert) = {
+    let (bytecode_id, _pub_cert) = {
         let bytecode_name = "fungible";
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths(bytecode_name)?;
@@ -587,15 +531,9 @@ where
     let bytecode_id = bytecode_id
         .with_abi::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>();
 
-    // Receive our own cert to broadcast the bytecode location.
-    sender
-        .receive_certificate_and_update_validators(pub_cert.clone())
-        .await
-        .unwrap();
-    sender.process_inbox().await.unwrap();
-
     let sender_owner = AccountOwner::User(Owner::from(sender.key_pair().await?.public()));
     let receiver_owner = AccountOwner::User(Owner::from(receiver.key_pair().await?.public()));
+    let receiver2_owner = AccountOwner::User(Owner::from(receiver2.key_pair().await?.public()));
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = fungible::InitialState { accounts };
@@ -647,18 +585,19 @@ where
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-            &executed_block.block.incoming_messages
+            &executed_block.block.incoming_bundles
         }
         _ => panic!("Unexpected value"),
     };
     assert!(messages.iter().any(|msg| matches!(
-        &msg.event.message,
+        &msg.bundle.messages[0].message,
         Message::System(SystemMessage::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
+        if applications.iter().any(|app| app.bytecode_id == bytecode_id.forget_abi())
     )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
+        .flat_map(|msg| &msg.bundle.messages)
+        .any(|msg| matches!(msg.message, Message::User { .. })));
 
     // Make another transfer.
     let transfer = fungible::Operation::Transfer {
@@ -683,28 +622,22 @@ where
     assert_eq!(certs.len(), 1);
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-            &executed_block.block.incoming_messages
+            &executed_block.block.incoming_bundles
         }
         _ => panic!("Unexpected value"),
     };
-    // The new block should _not_ contain another `RegisterApplications` message, because the
-    // application is already registered.
-    assert!(!messages.iter().any(|msg| matches!(
-        &msg.event.message,
-        Message::System(SystemMessage::RegisterApplications { applications })
-        if applications.iter().any(|app| app.bytecode_location.certificate_hash == pub_cert.hash())
-    )));
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
+        .flat_map(|msg| &msg.bundle.messages)
+        .any(|msg| matches!(msg.message, Message::User { .. })));
 
-    // Try another transfer in the other direction except that the amount is too large.
+    // Try another transfer except that the amount is too large.
     let transfer = fungible::Operation::Transfer {
         owner: receiver_owner,
         amount: 301.into(),
         target_account: fungible::Account {
-            chain_id: sender.chain_id(),
-            owner: sender_owner,
+            chain_id: receiver2.chain_id(),
+            owner: receiver2_owner,
         },
     };
     assert!(receiver
@@ -713,17 +646,23 @@ where
         .is_err());
     receiver.clear_pending_block();
 
-    // Try another transfer in the other direction with the correct amount.
+    // Try another transfer with the correct amount.
     let transfer = fungible::Operation::Transfer {
         owner: receiver_owner,
         amount: 300.into(),
         target_account: fungible::Account {
-            chain_id: sender.chain_id(),
-            owner: sender_owner,
+            chain_id: receiver2.chain_id(),
+            owner: receiver2_owner,
         },
     };
-    receiver
+    let certificate = receiver
         .execute_operation(Operation::user(application_id, &transfer)?)
+        .await
+        .unwrap()
+        .unwrap();
+
+    receiver2
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
 
@@ -778,7 +717,6 @@ async fn test_scylla_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyh
 async fn run_test_user_pub_sub_channels<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
@@ -790,7 +728,7 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
-    let (bytecode_id, pub_cert) = {
+    let (bytecode_id, _pub_cert) = {
         let (contract_path, service_path) =
             linera_execution::wasm_test::get_example_bytecode_paths("social")?;
         receiver
@@ -803,13 +741,6 @@ where
             .unwrap()
     };
     let bytecode_id = bytecode_id.with_abi::<social::SocialAbi, (), ()>();
-
-    // Receive our own cert to broadcast the bytecode location.
-    receiver
-        .receive_certificate_and_update_validators(pub_cert.clone())
-        .await
-        .unwrap();
-    receiver.process_inbox().await.unwrap();
 
     let (application_id, _cert) = receiver
         .create_application(bytecode_id, &(), &(), vec![])
@@ -836,8 +767,11 @@ where
     let _certs = sender.process_inbox().await.unwrap();
 
     // Make a post.
-    let text = "Please like and subscribe! No, wait, like isn't supported yet.".to_string();
-    let post = social::Operation::Post { text: text.clone() };
+    let text = "Please like and comment!.".to_string();
+    let post = social::Operation::Post {
+        text: text.clone(),
+        image_url: None,
+    };
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
@@ -854,13 +788,13 @@ where
     // There should be a message receiving the new post.
     let messages = match certs[0].value() {
         CertificateValue::ConfirmedBlock { executed_block, .. } => {
-            &executed_block.block.incoming_messages
+            &executed_block.block.incoming_bundles
         }
         _ => panic!("Unexpected value"),
     };
     assert!(messages
         .iter()
-        .any(|msg| matches!(&msg.event.message, Message::User { .. })));
+        .any(|msg| matches!(&msg.bundle.messages[0].message, Message::User { .. })));
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
     let posts = receiver
@@ -899,6 +833,7 @@ where
     // Make a post.
     let post = social::Operation::Post {
         text: "Nobody will read this!".to_string(),
+        image_url: None,
     };
     let cert = sender
         .execute_operation(Operation::user(application_id, &post)?)
@@ -929,6 +864,59 @@ where
         .unwrap(),
     );
     assert_eq!(posts, expected);
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
+    // Set a fuel limit that is enough to instantiate the application and do one increment
+    // operation, but not ten.
+    let mut builder =
+        TestBuilder::new(storage_builder, 4, 1)
+            .await?
+            .with_policy(ResourceControlPolicy {
+                maximum_fuel_per_block: 30_000,
+                ..ResourceControlPolicy::default()
+            });
+    let publisher = builder
+        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
+        .await?;
+
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
+
+    let (bytecode_id, _cert) = publisher
+        .publish_bytecode(
+            Bytecode::load_from_file(contract_path).await?,
+            Bytecode::load_from_file(service_path).await?,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let bytecode_id = bytecode_id.with_abi::<counter::CounterAbi, (), u64>();
+
+    let initial_value = 10_u64;
+    let (application_id, _) = publisher
+        .create_application(bytecode_id, &(), &initial_value, vec![])
+        .await
+        .unwrap()
+        .unwrap();
+
+    let increment = 5_u64;
+    publisher
+        .execute_operation(Operation::user(application_id, &increment)?)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(publisher
+        .execute_operations(vec![Operation::user(application_id, &increment)?; 10])
+        .await
+        .is_err());
 
     Ok(())
 }

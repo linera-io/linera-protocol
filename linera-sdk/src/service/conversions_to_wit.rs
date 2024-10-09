@@ -7,8 +7,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
     identifiers::{
-        ApplicationId, BlobId, BytecodeId, ChainId, EventId, GenericApplicationId, MessageId,
-        Owner, StreamId, StreamName,
+        ApplicationId, BytecodeId, ChainId, EventId, GenericApplicationId, MessageId, Owner,
+        StreamId, StreamName,
     },
 };
 
@@ -47,14 +47,6 @@ impl From<Owner> for wit_system_api::Owner {
     }
 }
 
-impl From<BlobId> for wit_system_api::BlobId {
-    fn from(blob_id: BlobId) -> Self {
-        wit_system_api::BlobId {
-            inner0: blob_id.0.into(),
-        }
-    }
-}
-
 impl From<BlockHeight> for wit_system_api::BlockHeight {
     fn from(block_height: BlockHeight) -> Self {
         wit_system_api::BlockHeight {
@@ -83,7 +75,8 @@ impl From<ApplicationId> for wit_system_api::ApplicationId {
 impl From<BytecodeId> for wit_system_api::BytecodeId {
     fn from(bytecode_id: BytecodeId) -> Self {
         wit_system_api::BytecodeId {
-            message_id: bytecode_id.message_id.into(),
+            contract_blob_hash: bytecode_id.contract_blob_hash.into(),
+            service_blob_hash: bytecode_id.service_blob_hash.into(),
         }
     }
 }

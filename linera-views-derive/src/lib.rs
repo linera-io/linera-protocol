@@ -64,8 +64,7 @@ fn context_and_constraints(
         });
         constraints = parse_quote! {
             where
-                #context: linera_views::common::Context + Send + Sync + Clone + 'static,
-                linera_views::views::ViewError: From<#context::Error>,
+                #context: linera_views::context::Context + Send + Sync + Clone + 'static,
         };
     }
 
@@ -131,13 +130,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
         pre_load_keys_quotes.push(quote! {
             let index = #idx_lit;
-            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            let base_key = context.derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
         });
         post_load_keys_quotes.push(quote! {
             let index = #idx_lit;
             let pos_next = pos + #g :: NUM_INIT_KEYS;
-            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            let base_key = context.derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
             let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
             pos = pos_next;
         });
@@ -149,14 +148,14 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let load_metrics = if root && cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
-            linera_views::increment_counter(
-                &linera_views::LOAD_VIEW_COUNTER,
+            linera_views::metrics::increment_counter(
+                &linera_views::metrics::LOAD_VIEW_COUNTER,
                 stringify!(#struct_name),
                 &context.base_key(),
             );
             #[cfg(not(target_arch = "wasm32"))]
-            use linera_views::prometheus_util::MeasureLatency as _;
-            let _latency = linera_views::LOAD_VIEW_LATENCY.measure_latency();
+            use linera_views::metrics::prometheus_util::MeasureLatency as _;
+            let _latency = linera_views::metrics::LOAD_VIEW_LATENCY.measure_latency();
         }
     } else {
         quote! {}
@@ -175,21 +174,21 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
-                use linera_views::common::Context as _;
+                use linera_views::context::Context as _;
                 let mut keys = Vec::new();
                 #(#pre_load_keys_quotes)*
                 Ok(keys)
             }
 
             fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::common::Context as _;
+                use linera_views::context::Context as _;
                 let mut pos = 0;
                 #(#post_load_keys_quotes)*
                 Ok(Self {#(#name_quotes),*})
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
-                use linera_views::common::Context as _;
+                use linera_views::context::Context as _;
                 #load_metrics
                 let keys = Self::pre_load(&context)?;
                 let values = context.read_multi_values_bytes(keys).await?;
@@ -244,8 +243,8 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
     let increment_counter = if cfg!(feature = "metrics") {
         quote! {
             #[cfg(not(target_arch = "wasm32"))]
-            linera_views::increment_counter(
-                &linera_views::SAVE_VIEW_COUNTER,
+            linera_views::metrics::increment_counter(
+                &linera_views::metrics::SAVE_VIEW_COUNTER,
                 stringify!(#struct_name),
                 &self.context().base_key(),
             );
@@ -260,7 +259,7 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
         #where_clause
         {
             async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-                use linera_views::{common::Context, batch::Batch, views::View};
+                use linera_views::{context::Context, batch::Batch, views::View};
                 #increment_counter
                 let mut batch = Batch::new();
                 #(#flushes)*

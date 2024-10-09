@@ -12,6 +12,7 @@ use std::{
 
 use futures::{channel::mpsc, StreamExt};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{BlockHeight, Timestamp},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, MessageId},
 };
@@ -21,7 +22,7 @@ use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal};
 use crate::{
     execution_state_actor::ExecutionRequest,
     runtime::{LoadedApplication, ResourceController, SyncRuntime},
-    ContractRuntime, RawExecutionOutcome, UserContractInstance,
+    ContractRuntime, RawExecutionOutcome, TransactionTracker, UserContractInstance,
 };
 
 /// Test if dropping [`SyncRuntime`] does not leak memory.
@@ -179,12 +180,11 @@ fn create_runtime<Application>() -> (
         BlockHeight(0),
         Timestamp::from(0),
         None,
-        0,
         None,
         execution_state_sender,
         None,
         resource_controller,
-        None,
+        TransactionTracker::new(0, Some(Vec::new())),
     );
 
     (runtime, execution_state_receiver)
@@ -206,11 +206,10 @@ fn create_dummy_application_id() -> ApplicationId {
     let chain_id = ChainDescription::Root(1).into();
 
     ApplicationId {
-        bytecode_id: BytecodeId::new(MessageId {
-            chain_id,
-            height: BlockHeight(1),
-            index: 0,
-        }),
+        bytecode_id: BytecodeId::new(
+            CryptoHash::test_hash("contract"),
+            CryptoHash::test_hash("service"),
+        ),
         creation: MessageId {
             chain_id,
             height: BlockHeight(1),

@@ -1,23 +1,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
 use linera_base::{
     data_types::Amount,
     identifiers::{Account, ChainDescription},
+    time::Duration,
 };
 use linera_core::{
     client,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
 };
-use linera_execution::system::{Recipient, UserData};
+use linera_execution::system::Recipient;
 use linera_storage::{
-    Storage, READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER,
-    WRITE_CERTIFICATE_COUNTER, WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
+    READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
+    WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
-use linera_views::{views::ViewError, LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
+use linera_views::metrics::{LOAD_VIEW_COUNTER, SAVE_VIEW_COUNTER};
 use prometheus::core::Collector;
 use recorder::BenchRecorderMeasurement;
 use tokio::runtime;
@@ -33,7 +32,6 @@ mod recorder;
 pub fn setup_claim_bench<B>() -> (ChainClient<B>, ChainClient<B>)
 where
     B: StorageBuilder + Default,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage_builder = B::default();
     // Criterion doesn't allow setup functions to be async, but it runs them inside an async
@@ -59,14 +57,13 @@ where
 pub async fn run_claim_bench<B>((chain1, chain2): (ChainClient<B>, ChainClient<B>))
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let owner1 = chain1.identity().await.unwrap();
     let amt = Amount::ONE;
 
     let account = Account::owner(chain2.chain_id(), owner1);
     let cert = chain1
-        .transfer_to_account(None, amt, account, UserData(None))
+        .transfer_to_account(None, amt, account)
         .await
         .unwrap()
         .unwrap();
@@ -83,7 +80,7 @@ where
 
     let account = Recipient::chain(chain1.chain_id());
     let cert = chain1
-        .claim(owner1, chain2.chain_id(), account, amt, UserData(None))
+        .claim(owner1, chain2.chain_id(), account, amt)
         .await
         .unwrap()
         .unwrap();

@@ -32,7 +32,13 @@ wasmtime = [
     "linera-storage/wasmtime",
     "linera-witty/wasmtime",
 ]
-test = ["linera-base/test"]
+test = [
+    "linera-base/test",
+    "linera-core/test",
+    "linera-sdk/test",
+    "linera-storage/test",
+    "linera-views/test",
+]
 
 [dependencies]
 async-graphql.workspace = true
@@ -46,6 +52,7 @@ linera-views.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 wit-bindgen.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -56,19 +63,20 @@ clap.workspace = true
 dashmap.workspace = true
 linera-base = { workspace = true, features = ["metrics"] }
 linera-chain = { workspace = true, features = ["metrics"] }
-linera-core = { workspace = true, features = ["test", "metrics", "wasmer"] }
+linera-core = { workspace = true, features = ["metrics", "wasmer"] }
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
 linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
-linera-witty = { workspace = true, features = ["test"] }
+linera-witty.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wasmtime.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+linera-sdk = { path = ".", features = ["test"] }
+tokio-test.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio-test.workspace = true
 
 [[bin]]
 name = "wit-generator"

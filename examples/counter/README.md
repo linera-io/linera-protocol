@@ -66,7 +66,9 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID`.
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
+- Navigate to the URL you get by running `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID"`.
 - To get the current value of `counter`, run the query:
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APPLICATION_ID
     query {

@@ -7,13 +7,10 @@ mod state;
 
 use std::sync::{Arc, Mutex};
 
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use hex_game::{Board, Operation, Player};
+use async_graphql::{ComplexObject, Context, EmptySubscription, Request, Response, Schema};
+use hex_game::{Operation, Player};
 use linera_sdk::{
-    base::{Owner, WithServiceAbi},
-    graphql::GraphQLMutationRoot,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 
 use self::state::HexState;
@@ -34,7 +31,7 @@ impl Service for HexService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = HexState::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = HexState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         HexService {
@@ -44,31 +41,63 @@ impl Service for HexService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema =
-            Schema::build(self.clone(), Operation::mutation_root(), EmptySubscription).finish();
+        let schema = Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .data(self.runtime.clone())
+        .finish();
         schema.execute(request).await
     }
 }
 
-#[Object]
-impl HexService {
-    async fn winner(&self) -> Option<Player> {
-        if let Some(winner) = self.state.board.get().winner() {
+#[ComplexObject]
+impl HexState {
+    async fn winner(&self, ctx: &Context<'_>) -> Option<Player> {
+        if let Some(winner) = self.board.get().winner() {
             return Some(winner);
         }
-        let active = self.state.board.get().active_player();
-        let block_time = self.runtime.lock().unwrap().system_time();
-        if self.state.clock.get().timed_out(block_time, active) {
+        let active = self.board.get().active_player();
+        let runtime = ctx
+            .data::<Arc<Mutex<ServiceRuntime<HexService>>>>()
+            .unwrap();
+        let block_time = runtime.lock().unwrap().system_time();
+        if self.clock.get().timed_out(block_time, active) {
             return Some(active.other());
         }
         None
     }
+}
 
-    async fn owners(&self) -> [Owner; 2] {
-        self.state.owners.get().unwrap()
-    }
+#[cfg(test)]
+mod tests {
+    use async_graphql::{futures_util::FutureExt, Request};
+    use linera_sdk::{util::BlockingWait, views::View, Service, ServiceRuntime};
+    use serde_json::json;
 
-    async fn board(&self) -> &Board {
-        self.state.board.get()
+    use super::*;
+
+    #[test]
+    fn query() {
+        let runtime = ServiceRuntime::<HexService>::new();
+        let state = HexState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = HexService {
+            state: Arc::new(state),
+            runtime: Arc::new(Mutex::new(runtime)),
+        };
+
+        let response = service
+            .handle_query(Request::new("{ clock { increment } }"))
+            .now_or_never()
+            .expect("Query should not await anything")
+            .data
+            .into_json()
+            .expect("Response should be JSON");
+
+        assert_eq!(response, json!({"clock" : {"increment": 0}}))
     }
 }

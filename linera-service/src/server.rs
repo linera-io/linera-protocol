@@ -5,6 +5,8 @@
 #![deny(clippy::large_futures)]
 
 use std::{
+    borrow::Cow,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -31,7 +33,7 @@ use linera_rpc::{
 use linera_service::prometheus_server;
 use linera_service::util;
 use linera_storage::Storage;
-use linera_views::{common::CommonStoreConfig, views::ViewError};
+use linera_views::store::CommonStoreConfig;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -54,7 +56,6 @@ impl ServerContext {
     ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let shard = self.server_config.internal_network.shard(shard_id);
         info!("Shard booted on {}", shard.host);
@@ -62,6 +63,7 @@ impl ServerContext {
             format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             Some(self.server_config.key.copy()),
             storage,
+            NonZeroUsize::new(400).expect("Chain worker limit should not be zero"),
         )
         .with_allow_inactive_chains(false)
         .with_allow_messages_from_deprecated_epochs(false)
@@ -78,7 +80,6 @@ impl ServerContext {
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
@@ -131,7 +132,6 @@ impl ServerContext {
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut join_set = JoinSet::new();
         let handles = FuturesUnordered::new();
@@ -182,12 +182,11 @@ impl ServerContext {
 
 #[async_trait]
 impl Runnable for ServerContext {
-    type Output = ();
+    type Output = anyhow::Result<()>;
 
-    async fn run<S>(self, storage: S) -> Result<(), anyhow::Error>
+    async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let shutdown_notifier = CancellationToken::new();
         let listen_address = self.get_listen_address();
@@ -295,14 +294,14 @@ fn make_server_config<R: CryptoRng>(
     let key = KeyPair::generate_from(rng);
     let name = ValidatorName(key.public());
     let validator = ValidatorConfig { network, name };
-    persistent::File::new(
+    Ok(persistent::File::new(
         path,
         ValidatorServerConfig {
             validator,
             key,
             internal_network,
         },
-    )
+    )?)
 }
 
 #[derive(clap::Parser)]
@@ -399,9 +398,9 @@ enum ServerCommand {
 }
 
 fn main() {
-    linera_base::tracing::init();
-
     let options = <ServerOptions as clap::Parser>::parse();
+
+    linera_base::tracing::init(&log_file_name_for(&options.command));
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -420,6 +419,29 @@ fn main() {
         .build()
         .expect("Failed to create Tokio runtime")
         .block_on(run(options))
+}
+
+/// Returns the log file name to use based on the [`ServerCommand`] that will run.
+fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
+    match command {
+        ServerCommand::Run {
+            shard,
+            server_config_path,
+            ..
+        } => {
+            let server_config: ValidatorServerConfig =
+                util::read_json(server_config_path).expect("Fail to read server config");
+            let name = &server_config.validator.name;
+
+            if let Some(shard) = shard {
+                format!("validator-{name}-shard-{shard}")
+            } else {
+                format!("validator-{name}")
+            }
+            .into()
+        }
+        ServerCommand::Generate { .. } | ServerCommand::Initialize { .. } => "server".into(),
+    }
 }
 
 async fn run(options: ServerOptions) {
@@ -471,6 +493,7 @@ async fn run(options: ServerOptions) {
             run_with_storage(full_storage_config, &genesis_config, wasm_runtime, job)
                 .boxed()
                 .await
+                .unwrap()
                 .unwrap();
         }
 
@@ -490,7 +513,9 @@ async fn run(options: ServerOptions) {
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");
-                Persist::persist(&mut server).expect("Unable to write server config file");
+                Persist::persist(&mut server)
+                    .await
+                    .expect("Unable to write server config file");
                 info!("Wrote server config {}", path.to_str().unwrap());
                 println!("{}", server.validator.name);
                 config_validators.push(Persist::into_value(server).validator);
@@ -505,6 +530,7 @@ async fn run(options: ServerOptions) {
                     )
                     .expect("Unable to open committee configuration"),
                 )
+                .await
                 .expect("Unable to write committee description");
                 info!("Wrote committee config {}", committee.to_str().unwrap());
             }

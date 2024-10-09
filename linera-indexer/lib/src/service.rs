@@ -3,8 +3,6 @@
 
 //! This module defines the service client for the indexer.
 
-use std::time::Duration;
-
 use async_tungstenite::{
     tokio::connect_async,
     tungstenite::{client::IntoClientRequest, http::HeaderValue},
@@ -15,13 +13,13 @@ use futures::{
 };
 use graphql_client::reqwest::post_graphql;
 use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder};
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, time::Duration,
+};
 use linera_chain::data_types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
-use linera_views::{
-    common::KeyValueStore, value_splitting::DatabaseConsistencyError, views::ViewError,
-};
+use linera_views::store::KeyValueStore;
 use tokio::runtime::Handle;
 use tracing::error;
 
@@ -125,20 +123,14 @@ pub struct Listener {
 
 impl Listener {
     /// Connects to the websocket of the service node for a particular chain
-    pub async fn listen<DB>(
+    pub async fn listen<S>(
         &self,
-        indexer: &Indexer<DB>,
+        indexer: &Indexer<S>,
         chain_id: ChainId,
     ) -> Result<ChainId, IndexerError>
     where
-        DB: KeyValueStore + Clone + Send + Sync + 'static,
-        DB::Error: From<bcs::Error>
-            + From<DatabaseConsistencyError>
-            + Send
-            + Sync
-            + std::error::Error
-            + 'static,
-        ViewError: From<DB::Error>,
+        S: KeyValueStore + Clone + Send + Sync + 'static,
+        S::Error: Send + Sync + std::error::Error + 'static,
     {
         let mut request = self.service.websocket().into_client_request()?;
         request.headers_mut().insert(

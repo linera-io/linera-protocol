@@ -4,7 +4,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::Blob,
+    data_types::BlobContent,
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
@@ -25,7 +25,7 @@ pub enum RpcMessage {
     Certificate(Box<HandleCertificateRequest>),
     LiteCertificate(Box<HandleLiteCertRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
-    DownloadBlob(Box<BlobId>),
+    DownloadBlobContent(Box<BlobId>),
     DownloadCertificateValue(Box<CryptoHash>),
     DownloadCertificate(Box<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
@@ -38,7 +38,7 @@ pub enum RpcMessage {
     Error(Box<NodeError>),
     VersionInfoResponse(Box<VersionInfo>),
     GenesisConfigHashResponse(Box<CryptoHash>),
-    DownloadBlobResponse(Box<Blob>),
+    DownloadBlobContentResponse(Box<BlobContent>),
     DownloadCertificateValueResponse(Box<CertificateValue>),
     DownloadCertificateResponse(Box<Certificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
@@ -67,8 +67,8 @@ impl RpcMessage {
             | VersionInfoResponse(_)
             | GenesisConfigHashQuery
             | GenesisConfigHashResponse(_)
-            | DownloadBlob(_)
-            | DownloadBlobResponse(_)
+            | DownloadBlobContent(_)
+            | DownloadBlobContentResponse(_)
             | DownloadCertificateValue(_)
             | DownloadCertificateValueResponse(_)
             | DownloadCertificate(_)
@@ -90,7 +90,7 @@ impl RpcMessage {
         match self {
             VersionInfoQuery
             | GenesisConfigHashQuery
-            | DownloadBlob(_)
+            | DownloadBlobContent(_)
             | DownloadCertificateValue(_)
             | BlobLastUsedBy(_)
             | DownloadCertificate(_) => true,
@@ -104,7 +104,7 @@ impl RpcMessage {
             | ChainInfoResponse(_)
             | VersionInfoResponse(_)
             | GenesisConfigHashResponse(_)
-            | DownloadBlobResponse(_)
+            | DownloadBlobContentResponse(_)
             | DownloadCertificateValueResponse(_)
             | BlobLastUsedByResponse(_)
             | DownloadCertificateResponse(_) => false,
@@ -136,12 +136,12 @@ impl TryFrom<RpcMessage> for VersionInfo {
     }
 }
 
-impl TryFrom<RpcMessage> for Blob {
+impl TryFrom<RpcMessage> for BlobContent {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         use RpcMessage::*;
         match message {
-            DownloadBlobResponse(blob) => Ok(*blob),
+            DownloadBlobContentResponse(blob) => Ok(*blob),
             Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
@@ -239,9 +239,9 @@ impl From<VersionInfo> for RpcMessage {
     }
 }
 
-impl From<Blob> for RpcMessage {
-    fn from(blob: Blob) -> Self {
-        RpcMessage::DownloadBlobResponse(Box::new(blob))
+impl From<BlobContent> for RpcMessage {
+    fn from(blob: BlobContent) -> Self {
+        RpcMessage::DownloadBlobContentResponse(Box::new(blob))
     }
 }
 

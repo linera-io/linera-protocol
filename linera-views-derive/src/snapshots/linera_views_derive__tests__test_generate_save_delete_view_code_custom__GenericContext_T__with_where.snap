@@ -9,7 +9,7 @@ where
     MyParam: Send + Sync + 'static,
 {
     async fn save(&mut self) -> Result<(), linera_views::views::ViewError> {
-        use linera_views::{common::Context, batch::Batch, views::View};
+        use linera_views::{context::Context, batch::Batch, views::View};
         let mut batch = Batch::new();
         self.register.flush(&mut batch)?;
         self.collection.flush(&mut batch)?;

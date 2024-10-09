@@ -23,16 +23,18 @@ pub struct Operation {
     pub recipient_id: ChainId,
     pub authenticated: bool,
     pub is_tracked: bool,
+    pub query_service: bool,
     pub fuel_grant: u64,
     pub message: Message,
 }
 
 impl Operation {
-    pub fn increment(recipient_id: ChainId, value: u64) -> Self {
+    pub fn increment(recipient_id: ChainId, value: u64, query_service: bool) -> Self {
         Operation {
             recipient_id,
             authenticated: false,
             is_tracked: false,
+            query_service,
             fuel_grant: 0,
             message: Message::Increment(value),
         }
@@ -43,6 +45,7 @@ impl Operation {
             recipient_id,
             authenticated: false,
             is_tracked: false,
+            query_service: false,
             fuel_grant: 0,
             message: Message::Fail,
         }

@@ -9,10 +9,7 @@ use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use linera_sdk::{
-    base::WithServiceAbi,
-    graphql::GraphQLMutationRoot,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 use matching_engine::{Operation, Parameters};
 
@@ -32,7 +29,7 @@ impl Service for MatchingEngineService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = MatchingEngine::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = MatchingEngine::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         MatchingEngineService {

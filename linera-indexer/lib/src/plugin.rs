@@ -8,10 +8,7 @@ use std::sync::Arc;
 use async_graphql::{EmptyMutation, EmptySubscription, ObjectType, Schema};
 use axum::Router;
 use linera_chain::data_types::HashedCertificateValue;
-use linera_views::{
-    common::{ContextFromStore, KeyValueStore},
-    views::{View, ViewError},
-};
+use linera_views::{context::ViewContext, store::KeyValueStore, views::View};
 use tokio::sync::Mutex;
 
 use crate::common::IndexerError;
@@ -21,7 +18,6 @@ pub trait Plugin<S>: Send + Sync
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
     /// Gets the name of the plugin
     fn name(&self) -> String
@@ -67,16 +63,19 @@ pub fn route<Q: ObjectType + 'static>(name: &str, query: Q, app: axum::Router) -
     .layer(tower_http::cors::CorsLayer::permissive())
 }
 
-pub async fn load<S, V: View<ContextFromStore<(), S>>>(
+pub async fn load<S, V: View<ViewContext<(), S>>>(
     store: S,
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
-    let context = ContextFromStore::create(store, name.as_bytes().to_vec(), ())
+    let root_key = name.as_bytes().to_vec();
+    let store = store
+        .clone_with_root_key(&root_key)
+        .map_err(|_e| IndexerError::CloneWithRootKeyError)?;
+    let context = ViewContext::create_root_context(store, ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;
     let plugin = V::load(context).await?;

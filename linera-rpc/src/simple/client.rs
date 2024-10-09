@@ -2,14 +2,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{future::Future, time::Duration};
+use std::future::Future;
 
 use async_trait::async_trait;
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, HashedBlob},
+    data_types::{Blob, BlobContent},
     identifiers::{BlobId, ChainId},
+    time::{timer, Duration},
 };
 use linera_chain::data_types::{
     BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
@@ -19,7 +20,6 @@ use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 use linera_version::VersionInfo;
-use tokio::time;
 
 use super::{codec, transport::TransportProtocol};
 use crate::{
@@ -51,11 +51,11 @@ impl SimpleClient {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message
-        time::timeout(self.send_timeout, stream.send(message))
+        timer::timeout(self.send_timeout, stream.send(message))
             .await
             .map_err(|timeout| codec::Error::Io(timeout.into()))??;
         // Wait for reply
-        time::timeout(self.recv_timeout, stream.next())
+        timer::timeout(self.recv_timeout, stream.next())
             .await
             .map_err(|timeout| codec::Error::Io(timeout.into()))?
             .transpose()?
@@ -100,15 +100,13 @@ impl ValidatorNode for SimpleClient {
     async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
             certificate,
-            hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             wait_for_outgoing_messages,
         };
         self.query(request.into()).await
@@ -138,8 +136,8 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::GenesisConfigHashQuery).await
     }
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
-        self.query(RpcMessage::DownloadBlob(Box::new(blob_id)))
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.query(RpcMessage::DownloadBlobContent(Box::new(blob_id)))
             .await
     }
 
@@ -167,15 +165,15 @@ impl ValidatorNode for SimpleClient {
 #[derive(Clone)]
 pub struct SimpleMassClient {
     pub network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
-    send_timeout: std::time::Duration,
-    recv_timeout: std::time::Duration,
+    send_timeout: Duration,
+    recv_timeout: Duration,
 }
 
 impl SimpleMassClient {
     pub fn new(
         network: ValidatorPublicNetworkPreConfig<TransportProtocol>,
-        send_timeout: std::time::Duration,
-        recv_timeout: std::time::Duration,
+        send_timeout: Duration,
+        recv_timeout: Duration,
     ) -> Self {
         Self {
             network,
@@ -210,7 +208,7 @@ impl mass_client::MassClient for SimpleMassClient {
                     }
                     Some(request) => request,
                 };
-                let status = time::timeout(self.send_timeout, stream.send(request)).await;
+                let status = timer::timeout(self.send_timeout, stream.send(request)).await;
                 if let Err(error) = status {
                     tracing::error!("Failed to send request: {}", error);
                     continue;
@@ -220,7 +218,7 @@ impl mass_client::MassClient for SimpleMassClient {
             if requests.len() % 5000 == 0 && requests.len() > 0 {
                 tracing::info!("In flight {} Remaining {}", in_flight, requests.len());
             }
-            match time::timeout(self.recv_timeout, stream.next()).await {
+            match timer::timeout(self.recv_timeout, stream.next()).await {
                 Ok(Some(Ok(message))) => {
                     in_flight -= 1;
                     responses.push(message);

@@ -8,8 +8,7 @@ use linera_base::{
 };
 
 use super::{
-    ApplicationRegistry, ApplicationRegistryView, BytecodeLocation, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationRegistry, ApplicationRegistryView, UserApplicationDescription, UserApplicationId,
 };
 
 fn message_id(index: u32) -> MessageId {
@@ -20,31 +19,26 @@ fn message_id(index: u32) -> MessageId {
     }
 }
 
-fn bytecode_id(index: u32) -> BytecodeId {
-    BytecodeId::new(message_id(index))
+fn bytecode_id() -> BytecodeId {
+    BytecodeId::new(
+        CryptoHash::test_hash("contract"),
+        CryptoHash::test_hash("service"),
+    )
 }
 
 fn app_id(index: u32) -> UserApplicationId {
     UserApplicationId {
-        bytecode_id: bytecode_id(0),
+        bytecode_id: bytecode_id(),
         creation: message_id(index),
     }
 }
 
 fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
     UserApplicationDescription {
-        bytecode_id: bytecode_id(0),
-        bytecode_location: location(0),
+        bytecode_id: bytecode_id(),
         creation: message_id(index),
         parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),
-    }
-}
-
-fn location(operation_index: u32) -> BytecodeLocation {
-    BytecodeLocation {
-        certificate_hash: CryptoHash::test_hash("certificate"),
-        operation_index,
     }
 }
 

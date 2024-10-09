@@ -14,9 +14,10 @@ use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
     ExecutionOutcome, ExecutionRuntimeConfig, ExecutionRuntimeContext, Operation, OperationContext,
     Query, QueryContext, RawExecutionOutcome, ResourceControlPolicy, ResourceController,
-    ResourceTracker, Response, WasmContractModule, WasmRuntime, WasmServiceModule,
+    ResourceTracker, Response, TransactionTracker, WasmContractModule, WasmRuntime,
+    WasmServiceModule,
 };
-use linera_views::views::View;
+use linera_views::{context::Context as _, views::View};
 use serde_json::json;
 use test_case::test_case;
 
@@ -24,10 +25,10 @@ use test_case::test_case;
 /// called correctly and consume the expected amount of fuel.
 ///
 /// To update the bytecode files, run `linera-execution/update_wasm_fixtures.sh`.
-#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 85_157; "wasmer"))]
-#[cfg_attr(with_wasmer, test_case(WasmRuntime::WasmerWithSanitizer, 85_597; "wasmer_with_sanitizer"))]
-#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 85_597; "wasmtime"))]
-#[cfg_attr(with_wasmtime, test_case(WasmRuntime::WasmtimeWithSanitizer, 85_597; "wasmtime_with_sanitizer"))]
+#[cfg_attr(with_wasmer, test_case(WasmRuntime::Wasmer, 90_090; "wasmer"))]
+#[cfg_attr(with_wasmer, test_case(WasmRuntime::WasmerWithSanitizer, 90_622; "wasmer_with_sanitizer"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::Wasmtime, 90_454; "wasmtime"))]
+#[cfg_attr(with_wasmtime, test_case(WasmRuntime::WasmtimeWithSanitizer, 90_454; "wasmtime_with_sanitizer"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_fuel_for_counter_wasm_application(
     wasm_runtime: WasmRuntime,
@@ -50,16 +51,16 @@ async fn test_fuel_for_counter_wasm_application(
     let contract =
         WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
     view.context()
-        .extra
+        .extra()
         .user_contracts()
-        .insert(app_id, Arc::new(contract));
+        .insert(app_id, contract.into());
 
     let service =
         WasmServiceModule::from_file("tests/fixtures/counter_service.wasm", wasm_runtime).await?;
     view.context()
-        .extra
+        .extra()
         .user_services()
-        .insert(app_id, Arc::new(service));
+        .insert(app_id, service.into());
 
     let app_id = app_id.with_abi::<CounterAbi>();
 
@@ -69,7 +70,6 @@ async fn test_fuel_for_counter_wasm_application(
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
-        next_message_index: 0,
     };
     let increments = [2_u64, 9, 7, 1000];
     let policy = ResourceControlPolicy {
@@ -88,15 +88,16 @@ async fn test_fuel_for_counter_wasm_application(
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let (outcomes, _) = view
-            .execute_operation(
-                context,
-                Timestamp::from(0),
-                Operation::user(app_id, increment).unwrap(),
-                Some(Vec::new()),
-                &mut controller,
-            )
-            .await?;
+        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+        view.execute_operation(
+            context,
+            Timestamp::from(0),
+            Operation::user(app_id, increment).unwrap(),
+            &mut txn_tracker,
+            &mut controller,
+        )
+        .await?;
+        let (outcomes, _, _) = txn_tracker.destructure().unwrap();
         assert_eq!(
             outcomes,
             vec![
@@ -124,8 +125,7 @@ async fn test_fuel_for_counter_wasm_application(
         next_block_height: BlockHeight(0),
         local_time: Timestamp::from(0),
     };
-    let (mut execution_request_receiver, mut runtime_request_sender) =
-        context.spawn_service_runtime_actor();
+    let mut service_runtime_endpoint = context.spawn_service_runtime_actor();
     let expected_value = async_graphql::Response::new(
         async_graphql::Value::from_json(json!({"value" : increments.into_iter().sum::<u64>()}))
             .unwrap(),
@@ -135,8 +135,7 @@ async fn test_fuel_for_counter_wasm_application(
         .query_application(
             context,
             Query::user(app_id, &request).unwrap(),
-            &mut execution_request_receiver,
-            &mut runtime_request_sender,
+            Some(&mut service_runtime_endpoint),
         )
         .await?
     else {

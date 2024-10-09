@@ -2,10 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::stream::{BoxStream, LocalBoxStream, Stream};
+#[cfg(not(web))]
+use futures::stream::BoxStream;
+#[cfg(web)]
+use futures::stream::LocalBoxStream as BoxStream;
+use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
-    data_types::{ArithmeticError, Blob, BlockHeight, HashedBlob},
+    data_types::{ArithmeticError, Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
@@ -14,7 +18,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    BytecodeLocation, ExecutionError, SystemExecutionError,
+    ExecutionError, SystemExecutionError,
 };
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
@@ -28,8 +32,6 @@ use crate::{
 
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = BoxStream<'static, Notification>;
-/// A pinned [`Stream`] of Notifications, without the `Send` constraint.
-pub type LocalNotificationStream = LocalBoxStream<'static, Notification>;
 
 /// Whether to wait for the delivery of outgoing cross-chain messages.
 #[derive(Debug, Default, Clone, Copy)]
@@ -40,8 +42,9 @@ pub enum CrossChainMessageDelivery {
 }
 
 /// How to communicate with a validator node.
-#[trait_variant::make(ValidatorNode: Send)]
-pub trait LocalValidatorNode {
+#[allow(async_fn_in_trait)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait ValidatorNode {
     type NotificationStream: Stream<Item = Notification> + Unpin;
 
     /// Proposes a new block.
@@ -61,8 +64,7 @@ pub trait LocalValidatorNode {
     async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -81,7 +83,7 @@ pub trait LocalValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError>;
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
     async fn download_certificate_value(
         &self,
@@ -95,9 +97,13 @@ pub trait LocalValidatorNode {
 }
 
 /// Turn an address into a validator node.
-#[allow(clippy::result_large_err)]
-pub trait LocalValidatorNodeProvider {
-    type Node: LocalValidatorNode + Clone + 'static;
+#[cfg_attr(not(web), trait_variant::make(Send))]
+#[expect(clippy::result_large_err)]
+pub trait ValidatorNodeProvider {
+    #[cfg(not(web))]
+    type Node: ValidatorNode + Send + Sync + Clone + 'static;
+    #[cfg(web)]
+    type Node: ValidatorNode + Clone + 'static;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
@@ -125,19 +131,6 @@ pub trait LocalValidatorNodeProvider {
             .collect::<Result<Vec<_>, NodeError>>()?
             .into_iter())
     }
-}
-
-pub trait ValidatorNodeProvider:
-    LocalValidatorNodeProvider<Node = <Self as ValidatorNodeProvider>::Node>
-{
-    type Node: ValidatorNode + Send + Sync + Clone + 'static;
-}
-
-impl<T: LocalValidatorNodeProvider> ValidatorNodeProvider for T
-where
-    T::Node: ValidatorNode + Send + Sync + Clone + 'static,
-{
-    type Node = <T as LocalValidatorNodeProvider>::Node;
 }
 
 /// Error type for node queries.
@@ -176,8 +169,8 @@ pub enum NodeError {
         height: BlockHeight,
     },
 
-    #[error("The following values containing application bytecode are missing: {0:?} and the following blobs are missing: {1:?}.")]
-    ApplicationBytecodesOrBlobsNotFound(Vec<BytecodeLocation>, Vec<BlobId>),
+    #[error("The following blobs are missing: {0:?}.")]
+    BlobsNotFound(Vec<BlobId>),
 
     // This error must be normalized during conversions.
     #[error("We don't have the value for the certificate.")]
@@ -216,6 +209,8 @@ pub enum NodeError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
+    #[error("Node failed to provide a 'last used by' certificate for the blob")]
+    InvalidCertificateForBlob(BlobId),
 }
 
 impl From<tonic::Status> for NodeError {
@@ -297,9 +292,7 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
-            WorkerError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids) => {
-                NodeError::ApplicationBytecodesOrBlobsNotFound(locations, blob_ids)
-            }
+            WorkerError::BlobsNotFound(blob_ids) => NodeError::BlobsNotFound(blob_ids),
             error => Self::WorkerError {
                 error: error.to_string(),
             },

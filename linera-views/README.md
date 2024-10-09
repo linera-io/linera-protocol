@@ -21,10 +21,10 @@ We provide support for the following databases:
 * `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
 * `ServiceStoreClient` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
-The corresponding trait in the code is the [`common::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.KeyValueStore.html).
-The trait decomposes into a [`common::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.ReadableKeyValueStore.html)
-and a [`common::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.WritableKeyValueStore.html).
-In addition, there is a [`common::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.AdminKeyValueStore.html)
+The corresponding trait in the code is the [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).
+The trait decomposes into a [`store::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.ReadableKeyValueStore.html)
+and a [`store::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.WritableKeyValueStore.html).
+In addition, there is a [`store::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.AdminKeyValueStore.html)
 which gives some functionalities for working with stores.
 A context is the combination of a client and a base key (of type `Vec<u8>`).
 

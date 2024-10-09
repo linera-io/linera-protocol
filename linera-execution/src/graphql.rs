@@ -9,25 +9,19 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
-use linera_views::{common::Context, map_view::MapView, views::ViewError};
+use linera_views::{context::Context, map_view::MapView};
 
 use crate::{
     committee::{Committee, Epoch, ValidatorName, ValidatorState},
     system::{Recipient, UserData},
-    Bytecode, ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
-    UserApplicationDescription,
+    ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
 };
 
-doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"
 );
 doc_scalar!(Recipient, "The recipient of a transfer");
-doc_scalar!(
-    UserApplicationDescription,
-    "Description of the necessary information to run a user application"
-);
 doc_scalar!(UserData, "Optional user message attached to a transfer");
 doc_scalar!(ValidatorName, "The identity of a validator");
 
@@ -55,10 +49,7 @@ impl Committee {
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C: Send + Sync + Context> ExecutionStateView<C>
-where
-    ViewError: From<C::Error>,
-{
+impl<C: Send + Sync + Context> ExecutionStateView<C> {
     #[graphql(derived(name = "system"))]
     async fn _system(&self) -> &SystemExecutionStateView<C> {
         &self.system
@@ -66,10 +57,7 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<C: Send + Sync + Context> SystemExecutionStateView<C>
-where
-    ViewError: From<C::Error>,
-{
+impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     #[graphql(derived(name = "description"))]
     async fn _description(&self) -> &Option<ChainDescription> {
         self.description.get()

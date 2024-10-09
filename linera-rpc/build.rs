@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .file_descriptor_set_path(out_dir.join("file_descriptor_set.bin"))
         .protoc_arg("--experimental_allow_proto3_optional")
-        .compile(&["proto/rpc.proto"], no_includes)?;
+        .compile_protos(&["proto/rpc.proto"], no_includes)?;
 
     cfg_aliases::cfg_aliases! {
         with_testing: { any(test, feature = "test") },

@@ -3,25 +3,27 @@
 
 //! Operations that don't persist any changes to the chain state.
 
+use std::borrow::Cow;
+
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp},
+    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
     ensure,
+    identifiers::{GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, HashedCertificateValue,
-        IncomingMessage, MessageAction, ProposalContent,
+        Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
+        HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
 };
-use linera_execution::{Query, Response, UserApplicationDescription, UserApplicationId};
-use linera_storage::Storage;
-use linera_views::views::{View, ViewError};
+use linera_execution::{ChannelSubscription, Query, Response};
+use linera_storage::{Clock as _, Storage};
+use linera_views::views::View;
 #[cfg(with_testing)]
 use {
-    linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::BytecodeId},
-    linera_chain::data_types::{Certificate, Event, Origin},
-    linera_execution::BytecodeLocation,
+    linera_base::{crypto::CryptoHash, data_types::BlockHeight},
+    linera_chain::data_types::{Certificate, MessageBundle, Origin},
 };
 
 use super::{check_block_epoch, ChainWorkerState};
@@ -35,13 +37,11 @@ pub struct ChainWorkerStateWithTemporaryChanges<'state, StorageClient>(
     &'state mut ChainWorkerState<StorageClient>,
 )
 where
-    StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>;
+    StorageClient: Storage + Clone + Send + Sync + 'static;
 
 impl<'state, StorageClient> ChainWorkerStateWithTemporaryChanges<'state, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to temporarily change the
     /// `state`.
@@ -69,25 +69,25 @@ where
         Ok(Some(certificate))
     }
 
-    /// Searches for an event in one of the chain's inboxes.
+    /// Searches for a bundle in one of the chain's inboxes.
     #[cfg(with_testing)]
-    pub(super) async fn find_event_in_inbox(
+    pub(super) async fn find_bundle_in_inbox(
         &mut self,
         inbox_id: Origin,
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
-    ) -> Result<Option<Event>, WorkerError> {
+    ) -> Result<Option<MessageBundle>, WorkerError> {
         self.0.ensure_is_active()?;
 
         let mut inbox = self.0.chain.inboxes.try_load_entry_mut(&inbox_id).await?;
-        let mut events = inbox.added_events.iter_mut().await?;
+        let mut bundles = inbox.added_bundles.iter_mut().await?;
 
-        Ok(events
-            .find(|event| {
-                event.certificate_hash == certificate_hash
-                    && event.height == height
-                    && event.index == index
+        Ok(bundles
+            .find(|bundle| {
+                bundle.certificate_hash == certificate_hash
+                    && bundle.height == height
+                    && bundle.messages.iter().any(|msg| msg.index == index)
             })
             .cloned())
     }
@@ -102,25 +102,8 @@ where
         let response = self
             .0
             .chain
-            .query_application(
-                local_time,
-                query,
-                &mut self.0.execution_state_receiver,
-                &mut self.0.runtime_request_sender,
-            )
+            .query_application(local_time, query, self.0.service_runtime_endpoint.as_mut())
             .await?;
-        Ok(response)
-    }
-
-    /// Returns the [`BytecodeLocation`] for the requested [`BytecodeId`], if it is known by the
-    /// chain.
-    #[cfg(with_testing)]
-    pub(super) async fn read_bytecode_location(
-        &mut self,
-        bytecode_id: BytecodeId,
-    ) -> Result<Option<BytecodeLocation>, WorkerError> {
-        self.0.ensure_is_active()?;
-        let response = self.0.chain.read_bytecode_location(bytecode_id).await?;
         Ok(response)
     }
 
@@ -139,8 +122,6 @@ where
         &mut self,
         block: Block,
     ) -> Result<(ExecutedBlock, ChainInfoResponse), WorkerError> {
-        self.0.ensure_is_active()?;
-
         let local_time = self.0.storage.clock().current_time();
         let signer = block.authenticated_signer;
 
@@ -176,8 +157,7 @@ where
                     forced_oracle_responses,
                 },
             owner,
-            hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             validated_block_certificate,
             signature: _,
         } = proposal;
@@ -224,23 +204,16 @@ where
         // Update the inboxes so that we can verify the provided hashed certificate values are
         // legitimately required.
         // Actual execution happens below, after other validity checks.
-        self.0.chain.remove_events_from_inboxes(block).await?;
+        self.0.chain.remove_bundles_from_inboxes(block).await?;
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
         self.0
-            .check_no_missing_blobs(
-                block,
-                block.published_blob_ids(),
-                hashed_certificate_values,
-                hashed_blobs,
-            )
+            .check_no_missing_blobs(block.published_blob_ids(), blobs)
             .await?;
-        // Write the values so that the bytecode is available during execution.
-        // TODO(#2199): We should not persist anything in storage before the block is confirmed.
-        self.0
-            .storage
-            .write_hashed_certificate_values(hashed_certificate_values)
-            .await?;
+        for blob in blobs {
+            self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
+        }
+
         let local_time = self.0.storage.clock().current_time();
         ensure!(
             block.timestamp.duration_since(local_time) <= self.0.config.grace_period,
@@ -278,7 +251,7 @@ where
             .get()
             .verify_counters(block, &outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
-        self.0.chain.validate_incoming_messages().await?;
+        self.0.chain.validate_incoming_bundles().await?;
         Ok(Some((outcome, local_time)))
     }
 
@@ -305,7 +278,7 @@ where
                 }
             );
         }
-        if query.request_pending_messages {
+        if query.request_pending_message_bundles {
             let mut messages = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
             let action = if *chain.execution_state.system.closed.get() {
@@ -313,17 +286,31 @@ where
             } else {
                 MessageAction::Accept
             };
+            let subscriptions = &chain.execution_state.system.subscriptions;
             for (origin, inbox) in pairs {
-                for event in inbox.added_events.elements().await? {
-                    messages.push(IncomingMessage {
+                if let Medium::Channel(ChannelFullName {
+                    application_id: GenericApplicationId::System,
+                    name,
+                }) = &origin.medium
+                {
+                    let subscription = ChannelSubscription {
+                        chain_id: origin.sender,
+                        name: name.clone(),
+                    };
+                    if !subscriptions.contains(&subscription).await? {
+                        continue; // We are not subscribed to this channel.
+                    }
+                }
+                for bundle in inbox.added_bundles.elements().await? {
+                    messages.push(IncomingBundle {
                         origin: origin.clone(),
-                        event: event.clone(),
+                        bundle: bundle.clone(),
                         action,
                     });
                 }
             }
 
-            info.requested_pending_messages = messages;
+            info.requested_pending_message_bundles = messages;
         }
         if let Some(range) = query.request_sent_certificate_hashes_in_range {
             let start: usize = range.start.try_into()?;
@@ -337,7 +324,7 @@ where
             let keys = chain.confirmed_log.read(start..end).await?;
             info.requested_sent_certificate_hashes = keys;
         }
-        if let Some(start) = query.request_received_log_excluding_first_nth {
+        if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = chain.received_log.read(start..).await?;
         }
@@ -351,7 +338,6 @@ where
 impl<StorageClient> Drop for ChainWorkerStateWithTemporaryChanges<'_, StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<StorageClient::StoreError>,
 {
     fn drop(&mut self) {
         self.0.chain.rollback();

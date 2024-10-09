@@ -7,7 +7,7 @@ mod state;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
@@ -15,8 +15,8 @@ use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use fungible::Account;
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    views::View,
+    DataBlobHash, Service, ServiceRuntime,
 };
 use non_fungible::{NftOutput, Operation, TokenId};
 
@@ -24,6 +24,7 @@ use self::state::NonFungibleToken;
 
 pub struct NonFungibleTokenService {
     state: Arc<NonFungibleToken>,
+    runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
 linera_sdk::service!(NonFungibleTokenService);
@@ -36,11 +37,12 @@ impl Service for NonFungibleTokenService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = NonFungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = NonFungibleToken::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         NonFungibleTokenService {
             state: Arc::new(state),
+            runtime: Arc::new(Mutex::new(runtime)),
         }
     }
 
@@ -48,6 +50,7 @@ impl Service for NonFungibleTokenService {
         let schema = Schema::build(
             QueryRoot {
                 non_fungible_token: self.state.clone(),
+                runtime: self.runtime.clone(),
             },
             MutationRoot,
             EmptySubscription,
@@ -59,6 +62,7 @@ impl Service for NonFungibleTokenService {
 
 struct QueryRoot {
     non_fungible_token: Arc<NonFungibleToken>,
+    runtime: Arc<Mutex<ServiceRuntime<NonFungibleTokenService>>>,
 }
 
 #[Object]
@@ -73,7 +77,14 @@ impl QueryRoot {
             .unwrap();
 
         if let Some(nft) = nft {
-            let nft_output = NftOutput::new_with_token_id(token_id, nft);
+            let payload = {
+                let mut runtime = self
+                    .runtime
+                    .try_lock()
+                    .expect("Services only run in a single thread");
+                runtime.read_data_blob(nft.blob_hash)
+            };
+            let nft_output = NftOutput::new_with_token_id(token_id, nft, payload);
             Some(nft_output)
         } else {
             None
@@ -85,7 +96,14 @@ impl QueryRoot {
         self.non_fungible_token
             .nfts
             .for_each_index_value(|_token_id, nft| {
-                let nft_output = NftOutput::new(nft);
+                let payload = {
+                    let mut runtime = self
+                        .runtime
+                        .try_lock()
+                        .expect("Services only run in a single thread");
+                    runtime.read_data_blob(nft.blob_hash)
+                };
+                let nft_output = NftOutput::new(nft, payload);
                 nfts.insert(nft_output.token_id.clone(), nft_output);
                 Ok(())
             })
@@ -143,7 +161,14 @@ impl QueryRoot {
                 .await
                 .unwrap()
                 .unwrap();
-            let nft_output = NftOutput::new(nft);
+            let payload = {
+                let mut runtime = self
+                    .runtime
+                    .try_lock()
+                    .expect("Services only run in a single thread");
+                runtime.read_data_blob(nft.blob_hash)
+            };
+            let nft_output = NftOutput::new(nft, payload);
             result.insert(nft_output.token_id.clone(), nft_output);
         }
 
@@ -155,11 +180,11 @@ struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-    async fn mint(&self, minter: AccountOwner, name: String, payload: Vec<u8>) -> Vec<u8> {
+    async fn mint(&self, minter: AccountOwner, name: String, blob_hash: DataBlobHash) -> Vec<u8> {
         bcs::to_bytes(&Operation::Mint {
             minter,
             name,
-            payload,
+            blob_hash,
         })
         .unwrap()
     }

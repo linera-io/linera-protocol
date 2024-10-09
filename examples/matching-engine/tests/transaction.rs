@@ -143,7 +143,7 @@ async fn single_transaction() {
     user_chain_b.register_application(matching_id).await;
 
     // Creating the bid orders
-    let mut orders_bids = Vec::new();
+    let mut bid_certificates = Vec::new();
     for price in [1, 2] {
         let price = Price { price };
         let order = Order::Insert {
@@ -153,18 +153,21 @@ async fn single_transaction() {
             price,
         };
         let operation = Operation::ExecuteOrder { order };
-        let order_messages = user_chain_a
+        let bid_certificate = user_chain_a
             .add_block(|block| {
                 block.with_operation(matching_id, operation);
             })
             .await;
-        assert_eq!(order_messages.len(), 3);
-        orders_bids.extend(order_messages);
+
+        assert_eq!(bid_certificate.outgoing_message_count(), 3);
+        bid_certificates.push(bid_certificate);
     }
 
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(orders_bids);
+            for certificate in &bid_certificates {
+                block.with_messages_from(certificate);
+            }
         })
         .await;
 
@@ -192,7 +195,7 @@ async fn single_transaction() {
         );
     }
 
-    let mut orders_asks = Vec::new();
+    let mut ask_certificates = Vec::new();
     for price in [4, 2] {
         let price = Price { price };
         let order = Order::Insert {
@@ -202,19 +205,21 @@ async fn single_transaction() {
             price,
         };
         let operation = Operation::ExecuteOrder { order };
-        let order_messages = user_chain_b
+        let ask_certificate = user_chain_b
             .add_block(|block| {
                 block.with_operation(matching_id, operation);
             })
             .await;
 
-        assert_eq!(order_messages.len(), 3);
-        orders_asks.extend(order_messages);
+        assert_eq!(ask_certificate.outgoing_message_count(), 3);
+        ask_certificates.push(ask_certificate);
     }
 
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(orders_asks);
+            for certificate in &ask_certificates {
+                block.with_messages_from(certificate);
+            }
         })
         .await;
 
@@ -253,15 +258,15 @@ async fn single_transaction() {
         order_id: order_ids_a[0],
     };
     let operation = Operation::ExecuteOrder { order };
-    let order_messages = user_chain_a
+    let order_certificate = user_chain_a
         .add_block(|block| {
             block.with_operation(matching_id, operation);
         })
         .await;
-    assert_eq!(order_messages.len(), 2);
+    assert_eq!(order_certificate.outgoing_message_count(), 2);
     matching_chain
         .add_block(|block| {
-            block.with_incoming_messages(order_messages);
+            block.with_messages_from(&order_certificate);
         })
         .await;
     user_chain_a.handle_received_messages().await;

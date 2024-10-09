@@ -84,21 +84,60 @@ linera service --port $PORT &
 
 ### Using GraphiQL
 
-- Navigate to `http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID`.
-- To mint an NFT, run the query:
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
+
+- Navigate to `http://localhost:8080/`.
+- To publish a blob, run the mutation:
+
+```gql,uri=http://localhost:8080/
     mutation {
-        mint(
-            minter: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            name: "nft1",
-            payload: [1, 2, 3, 4]
+        publishDataBlob(
+          chainId: "$CHAIN_1",
+          bytes: [1, 2, 3, 4]
         )
     }
 ```
-- To check that it's there, run the query:
+
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `BLOB_HASH` will be properly set for you.
+Alternatively you can set the `BLOB_HASH` variable to the hash returned by the previous query yourself.
+
+```bash
+BLOB_HASH=$(echo "$QUERY_RESULT" | jq -r '.publishDataBlob')
+```
+
+- Run `echo "http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID"` to print the URL to navigate to.
+- To mint an NFT, run the mutation:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    mutation {
+        mint(
+            minter: "User:$OWNER_1",
+            name: "nft1",
+            blobHash: "$BLOB_HASH",
+        )
+    }
+```
+
+- To check that it's assigned to the owner, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
-        nft(tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA") {
+        ownedNfts(owner: "User:$OWNER_1")
+    }
+```
+
+Set the `QUERY_RESULT` variable to have the result returned by the previous query, and `TOKEN_ID` will be properly set for you.
+Alternatively you can set the `TOKEN_ID` variable to the `tokenId` value returned by the previous query yourself.
+
+```bash
+TOKEN_ID=$(echo "$QUERY_RESULT" | jq -r '.ownedNfts[].tokenId')
+```
+
+- To check that it's there, run the query:
+
+```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
+    query {
+        nft(tokenId: "$TOKEN_ID") {
             tokenId,
             owner,
             name,
@@ -107,27 +146,25 @@ linera service --port $PORT &
         }
     }
 ```
-- To check that it's assigned to the owner, run the query:
-```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
-    query {
-        ownedNfts(owner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f")
-    }
-```
+
 - To check everything that it's there, run the query:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     query {
         nfts
     }
 ```
-- To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the query:
+
+- To transfer the NFT to user `$OWNER_2`, still on chain `$CHAIN_1`, run the mutation:
+
 ```gql,uri=http://localhost:8080/chains/$CHAIN_1/applications/$APP_ID
     mutation {
         transfer(
-            sourceOwner: "User:7136460f0c87ae46f966f898d494c4b40c4ae8c527f4d1c0b1fa0f7cff91d20f",
-            tokenId: "kSIB3o59Ut8wioJdISqZwWedPGUlHK2HapnkOLqLSRA",
+            sourceOwner: "User:$OWNER_1",
+            tokenId: "$TOKEN_ID",
             targetAccount: {
-                chainId: "e476187f6ddfeb9d588c7b45d3df334d5501d6499b3f9ad5595cae86cce16a65",
-                owner: "User:598d18f67709fe76ed6a36b75a7c9889012d30b896800dfd027ee10e1afd49a3"
+                chainId: "$CHAIN_1",
+                owner: "User:$OWNER_2"
             }
         )
     }

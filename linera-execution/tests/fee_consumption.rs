@@ -15,7 +15,7 @@ use linera_base::{
 use linera_execution::{
     test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
     ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
-    RawExecutionOutcome, ResourceControlPolicy, ResourceController,
+    RawExecutionOutcome, ResourceControlPolicy, ResourceController, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -146,8 +146,10 @@ async fn test_fee_consumption(
         operation_byte: Amount::from_tokens(23),
         message: Amount::from_tokens(29),
         message_byte: Amount::from_tokens(31),
-        maximum_bytes_read_per_block: 37,
-        maximum_bytes_written_per_block: 41,
+        maximum_fuel_per_block: 4_868_145_137,
+        maximum_executed_block_size: 37,
+        maximum_bytes_read_per_block: 41,
+        maximum_bytes_written_per_block: 43,
     };
 
     let consumed_fees = spends
@@ -190,28 +192,28 @@ async fn test_fee_consumption(
         height: BlockHeight(0),
         certificate_hash: CryptoHash::default(),
         message_id: MessageId::default(),
-        next_message_index: 0,
     };
     let mut grant = initial_grant.unwrap_or_default();
-    let (outcomes, _) = view
-        .execute_message(
-            context,
-            Timestamp::from(0),
-            Message::User {
-                application_id,
-                bytes: vec![],
-            },
-            if initial_grant.is_some() {
-                Some(&mut grant)
-            } else {
-                None
-            },
-            Some(Vec::new()),
-            &mut controller,
-        )
-        .await
-        .unwrap();
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    view.execute_message(
+        context,
+        Timestamp::from(0),
+        Message::User {
+            application_id,
+            bytes: vec![],
+        },
+        if initial_grant.is_some() {
+            Some(&mut grant)
+        } else {
+            None
+        },
+        &mut txn_tracker,
+        &mut controller,
+    )
+    .await
+    .unwrap();
 
+    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![

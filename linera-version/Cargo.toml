@@ -12,13 +12,16 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 async-graphql.workspace = true
 async-graphql-derive.workspace = true
 base64.workspace = true
 cargo_metadata.workspace = true
+fs-err.workspace = true
 glob.workspace = true
 semver.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 sha3.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -26,9 +29,12 @@ tracing.workspace = true
 [build-dependencies]
 base64.workspace = true
 cargo_metadata.workspace = true
+fs-err.workspace = true
 glob.workspace = true
 quote.workspace = true
 semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sha3.workspace = true
 thiserror.workspace = true
 

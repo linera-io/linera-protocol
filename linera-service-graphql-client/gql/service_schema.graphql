@@ -41,16 +41,6 @@ input ApplicationPermissions {
 }
 
 """
-A blob of binary data.
-"""
-scalar Blob
-
-"""
-A content-addressed blob ID i.e. the hash of the Blob
-"""
-scalar BlobId
-
-"""
 A block containing operations to apply on a given chain, as well as the
 acknowledgment of a number of incoming messages from other chains.
 * Incoming messages must be selected in the order they were
@@ -72,7 +62,7 @@ type Block {
 	A selection of incoming messages to be executed first. Successive messages of same
 	sender and height are grouped together for conciseness.
 	"""
-	incomingMessages: [IncomingMessage!]!
+	incomingBundles: [IncomingBundle!]!
 	"""
 	The operations to execute.
 	"""
@@ -127,6 +117,20 @@ A block height to identify blocks in a chain
 """
 scalar BlockHeight
 
+
+"""
+An origin and cursor of a unskippable bundle that is no longer in our inbox.
+"""
+type BundleInInbox {
+	"""
+	The origin from which we received the bundle.
+	"""
+	origin: Origin!
+	"""
+	The cursor of the bundle in the inbox.
+	"""
+	cursor: Cursor!
+}
 
 """
 A WebAssembly module's bytecode
@@ -193,27 +197,27 @@ type ChainStateExtendedView {
 	Hashes of all certified blocks for this sender.
 	This ends with `block_hash` and has length `usize::from(next_block_height)`.
 	"""
-	confirmedLog: LogView_CryptoHash_b0541e41!
+	confirmedLog: LogView_CryptoHash_5f6ab77f!
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
-	receivedLog: LogView_ChainAndHeight_de85b393!
+	receivedLog: LogView_ChainAndHeight_7af83576!
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
-	inboxes: ReentrantCollectionView_Origin_InboxStateView_2059505700!
+	inboxes: ReentrantCollectionView_Origin_InboxStateView_3699835794!
 	"""
-	A queue of unskippable events, with the timestamp when we added them to the inbox.
+	A queue of unskippable bundles, with the timestamp when we added them to the inbox.
 	"""
-	unskippable: QueueView_TimestampedInboxEntry_ce4d8b86!
+	unskippableBundles: QueueView_TimestampedBundleInInbox_5a630c55!
 	"""
-	Non-skippable events that have been removed but are still in the queue.
+	Unskippable bundles that have been removed but are still in the queue.
 	"""
-	removedUnskippable: [InboxEntry!]!
+	removedUnskippableBundles: [BundleInInbox!]!
 	"""
 	Mailboxes used to send messages, indexed by their target.
 	"""
-	outboxes: ReentrantCollectionView_Target_OutboxStateView_3775022202!
+	outboxes: ReentrantCollectionView_Target_OutboxStateView_2789119133!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
@@ -222,7 +226,7 @@ type ChainStateExtendedView {
 	"""
 	Channels able to multicast messages to subscribers.
 	"""
-	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_1259684418!
+	channels: ReentrantCollectionView_ChannelFullName_ChannelStateView_629706216!
 }
 
 """
@@ -238,9 +242,9 @@ type ChainTipState {
 	"""
 	nextBlockHeight: BlockHeight!
 	"""
-	Number of incoming messages.
+	Number of incoming message bundles.
 	"""
-	numIncomingMessages: Int!
+	numIncomingBundles: Int!
 	"""
 	Number of operations.
 	"""
@@ -257,7 +261,7 @@ type Chains {
 }
 
 """
-A channel name together with its application ID
+A channel name together with its application ID.
 """
 scalar ChannelFullName
 
@@ -275,9 +279,9 @@ type ChannelStateView {
 	"""
 	subscribers: [ChainId!]!
 	"""
-	The latest block height, if any, to be sent to future subscribers.
+	The block heights so far, to be sent to future subscribers.
 	"""
-	blockHeight: BlockHeight
+	blockHeights: LogView_BlockHeight_e824a938!
 }
 
 """
@@ -343,7 +347,7 @@ scalar Destination
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_ChannelFullName_ChannelStateView_3a04511c {
+type Entry_ChannelFullName_ChannelStateView_ef52a064 {
 	key: ChannelFullName!
 	value: ChannelStateView!
 }
@@ -351,7 +355,7 @@ type Entry_ChannelFullName_ChannelStateView_3a04511c {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_Origin_InboxStateView_79f3e1f3 {
+type Entry_Origin_InboxStateView_c4db01d6 {
 	key: Origin!
 	value: InboxStateView!
 }
@@ -359,7 +363,7 @@ type Entry_Origin_InboxStateView_79f3e1f3 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_Owner_Amount_771b9c6c {
+type Entry_Owner_Amount_202623bd {
 	key: Owner!
 	value: Amount
 }
@@ -367,7 +371,7 @@ type Entry_Owner_Amount_771b9c6c {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_Target_OutboxStateView_f3778d1a {
+type Entry_Target_OutboxStateView_50a86149 {
 	key: Target!
 	value: OutboxStateView!
 }
@@ -376,11 +380,6 @@ type Entry_Target_OutboxStateView_f3778d1a {
 A number identifying the configuration of the chain (aka the committee)
 """
 scalar Epoch
-
-"""
-A message together with non replayable information to ensure uniqueness in a particular inbox
-"""
-scalar Event
 
 """
 An event recorded in an executed block.
@@ -425,31 +424,18 @@ type HashedCertificateValue {
 
 
 """
-An origin and cursor of a unskippable message that is no longer in our inbox.
-"""
-type InboxEntry {
-	"""
-	The origin from which we received the message.
-	"""
-	origin: Origin!
-	"""
-	The cursor of the message in the inbox.
-	"""
-	cursor: Cursor!
-}
-
-"""
-The state of a inbox.
-* An inbox is used to track events received and executed locally.
-* An `Event` consists of a logical cursor `(height, index)` and some message content `message`.
-* On the surface, an inbox looks like a FIFO queue: the main APIs are `add_event` and
-`remove_event`.
-* However, events can also be removed before they are added. When this happens,
-the events removed by anticipation are tracked in a separate queue. Any event added
-later will be required to match the first removed event and so on.
-* The cursors of added events (resp. removed events) must be increasing over time.
-* Reconciliation of added and removed events is allowed to skip some added events.
-However, the opposite is not true: every removed event must be eventually added.
+The state of an inbox.
+* An inbox is used to track bundles received and executed locally.
+* A `MessageBundle` consists of a logical cursor `(height, index)` and some message
+content `messages`.
+* On the surface, an inbox looks like a FIFO queue: the main APIs are `add_bundle` and
+`remove_bundle`.
+* However, bundles can also be removed before they are added. When this happens,
+the bundles removed by anticipation are tracked in a separate queue. Any bundle added
+later will be required to match the first removed bundle and so on.
+* The cursors of added bundles (resp. removed bundles) must be increasing over time.
+* Reconciliation of added and removed bundles is allowed to skip some added bundles.
+However, the opposite is not true: every removed bundle must be eventually added.
 """
 type InboxStateView {
 	"""
@@ -461,29 +447,28 @@ type InboxStateView {
 	"""
 	nextCursorToRemove: Cursor!
 	"""
-	These events have been added and are waiting to be removed.
+	These bundles have been added and are waiting to be removed.
 	"""
-	addedEvents: QueueView_Event_fd202526!
+	addedBundles: QueueView_MessageBundle_f4399f0b!
 	"""
-	These events have been removed by anticipation and are waiting to be added.
-	At least one of `added_events` and `removed_events` should be empty.
+	These bundles have been removed by anticipation and are waiting to be added.
+	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
-	removedEvents: QueueView_Event_fd202526!
+	removedBundles: QueueView_MessageBundle_f4399f0b!
 }
 
 """
-A message received from a block of another chain.
+A bundle of cross-chain messages.
 """
-type IncomingMessage {
+type IncomingBundle {
 	"""
-	The origin of the message (chain and channel if any).
+	The origin of the messages (chain and channel if any).
 	"""
 	origin: Origin!
 	"""
-	The content of the message to be delivered to the inbox identified by
-	`origin`.
+	The messages to be delivered to the inbox identified by `origin`.
 	"""
-	event: Event!
+	bundle: MessageBundle!
 	"""
 	What to do with the message.
 	"""
@@ -496,50 +481,54 @@ A scalar that can represent any JSON Object value.
 """
 scalar JSONObject
 
-type LogView_ChainAndHeight_de85b393 {
+type LogView_BlockHeight_e824a938 {
+	entries(start: Int, end: Int): [BlockHeight!]!
+}
+
+type LogView_ChainAndHeight_7af83576 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
 
-type LogView_CryptoHash_b0541e41 {
+type LogView_CryptoHash_5f6ab77f {
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
-input MapFilters_ChannelFullName_39361e62 {
+input MapFilters_ChannelFullName_3b59bf69 {
 	keys: [ChannelFullName!]
 }
 
-input MapFilters_Origin_7201976d {
+input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
 
-input MapFilters_Owner_7b1d3281 {
+input MapFilters_Owner_6898ce22 {
 	keys: [Owner!]
 }
 
-input MapFilters_Target_6fda9ea4 {
+input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
 }
 
-input MapInput_ChannelFullName_3aa4320a {
-	filters: MapFilters_ChannelFullName_39361e62
+input MapInput_ChannelFullName_3b59bf69 {
+	filters: MapFilters_ChannelFullName_3b59bf69
 }
 
-input MapInput_Origin_08662377 {
-	filters: MapFilters_Origin_7201976d
+input MapInput_Origin_742d451b {
+	filters: MapFilters_Origin_742d451b
 }
 
-input MapInput_Owner_2b9cd89a {
-	filters: MapFilters_Owner_7b1d3281
+input MapInput_Owner_6898ce22 {
+	filters: MapFilters_Owner_6898ce22
 }
 
-input MapInput_Target_16f15470 {
-	filters: MapFilters_Target_6fda9ea4
+input MapInput_Target_7aac1e1c {
+	filters: MapFilters_Target_7aac1e1c
 }
 
-type MapView_Owner_Amount_0d73ec3f {
+type MapView_Owner_Amount_ef5edbab {
 	keys(count: Int): [Owner!]!
-	entry(key: Owner!): Entry_Owner_Amount_771b9c6c!
-	entries(input: MapInput_Owner_2b9cd89a): [Entry_Owner_Amount_771b9c6c!]!
+	entry(key: Owner!): Entry_Owner_Amount_202623bd!
+	entries(input: MapInput_Owner_6898ce22): [Entry_Owner_Amount_202623bd!]!
 }
 
 """
@@ -548,9 +537,35 @@ An message to be sent and possibly executed in the receiver's block.
 scalar Message
 
 """
-Whether an incoming message is accepted or rejected
+Whether an incoming message is accepted or rejected.
 """
 scalar MessageAction
+
+"""
+A set of messages from a single block, for a single destination.
+"""
+type MessageBundle {
+	"""
+	The block height.
+	"""
+	height: BlockHeight!
+	"""
+	The block's timestamp.
+	"""
+	timestamp: Timestamp!
+	"""
+	The confirmed block certificate hash.
+	"""
+	certificateHash: CryptoHash!
+	"""
+	The index of the transaction in the block that is sending this bundle.
+	"""
+	transactionIndex: Int!
+	"""
+	The relevant messages.
+	"""
+	messages: [PostedMessage!]!
+}
 
 """
 The kind of outgoing message being sent
@@ -570,13 +585,17 @@ type MutationRoot {
 	Transfers `amount` units of value from the given owner's account to the recipient.
 	If no owner is given, try to take the units out of the unattributed account.
 	"""
-	transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+	transfer(chainId: ChainId!, owner: Owner, recipient: Recipient!, amount: Amount!): CryptoHash!
 	"""
 	Claims `amount` units of value from the given owner's account in the remote
 	`target` chain. Depending on its configuration, the `target` chain may refuse to
 	process the message.
 	"""
-	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!, userData: UserData): CryptoHash!
+	claim(chainId: ChainId!, owner: Owner!, targetId: ChainId!, recipient: Recipient!, amount: Amount!): CryptoHash!
+	"""
+	Test if a data blob is readable from a transaction in the current chain.
+	"""
+	readDataBlob(chainId: ChainId!, hash: CryptoHash!): CryptoHash!
 	"""
 	Creates (or activates) a new chain by installing the given authentication key.
 	This will automatically subscribe to the future committees created by `admin_id`.
@@ -662,9 +681,9 @@ type MutationRoot {
 	"""
 	publishBytecode(chainId: ChainId!, contract: Bytecode!, service: Bytecode!): BytecodeId!
 	"""
-	Publishes a new blob.
+	Publishes a new data blob.
 	"""
-	publishBlob(chainId: ChainId!, blob: Blob!): BlobId!
+	publishDataBlob(chainId: ChainId!, bytes: [Int!]!): CryptoHash!
 	"""
 	Creates a new application.
 	"""
@@ -714,11 +733,11 @@ type OutboxStateView {
 	Keep sending these certified blocks of ours until they are acknowledged by
 	receivers.
 	"""
-	queue: QueueView_BlockHeight_f5d50b5f!
+	queue: QueueView_BlockHeight_e824a938!
 }
 
 """
-A message together with routing information.
+A posted message together with routing information.
 """
 type OutgoingMessage {
 	"""
@@ -738,7 +757,7 @@ type OutgoingMessage {
 	"""
 	refundGrantTo: Account
 	"""
-	The kind of event being sent.
+	The kind of message being sent.
 	"""
 	kind: MessageKind!
 	"""
@@ -751,6 +770,36 @@ type OutgoingMessage {
 The owner of a chain. This is currently the hash of the owner's public key used to verify signatures.
 """
 scalar Owner
+
+"""
+A message together with kind, authentication and grant information.
+"""
+type PostedMessage {
+	"""
+	The user authentication carried by the message, if any.
+	"""
+	authenticatedSigner: Owner
+	"""
+	A grant to pay for the message execution.
+	"""
+	grant: Amount!
+	"""
+	Where to send a refund for the unused part of the grant after execution, if any.
+	"""
+	refundGrantTo: Account
+	"""
+	The kind of message being sent.
+	"""
+	kind: MessageKind!
+	"""
+	The index of the message in the sending block.
+	"""
+	index: Int!
+	"""
+	The message itself.
+	"""
+	message: Message!
+}
 
 """
 A signature public key
@@ -769,16 +818,16 @@ type QueryRoot {
 	version: VersionInfo!
 }
 
-type QueueView_BlockHeight_f5d50b5f {
+type QueueView_BlockHeight_e824a938 {
 	entries(count: Int): [BlockHeight!]!
 }
 
-type QueueView_Event_fd202526 {
-	entries(count: Int): [Event!]!
+type QueueView_MessageBundle_f4399f0b {
+	entries(count: Int): [MessageBundle!]!
 }
 
-type QueueView_TimestampedInboxEntry_ce4d8b86 {
-	entries(count: Int): [TimestampedInboxEntry!]!
+type QueueView_TimestampedBundleInInbox_5a630c55 {
+	entries(count: Int): [TimestampedBundleInInbox!]!
 }
 
 """
@@ -786,22 +835,22 @@ The recipient of a transfer
 """
 scalar Recipient
 
-type ReentrantCollectionView_ChannelFullName_ChannelStateView_1259684418 {
+type ReentrantCollectionView_ChannelFullName_ChannelStateView_629706216 {
 	keys: [ChannelFullName!]!
-	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_3a04511c!
-	entries(input: MapInput_ChannelFullName_3aa4320a): [Entry_ChannelFullName_ChannelStateView_3a04511c!]!
+	entry(key: ChannelFullName!): Entry_ChannelFullName_ChannelStateView_ef52a064!
+	entries(input: MapInput_ChannelFullName_3b59bf69): [Entry_ChannelFullName_ChannelStateView_ef52a064!]!
 }
 
-type ReentrantCollectionView_Origin_InboxStateView_2059505700 {
+type ReentrantCollectionView_Origin_InboxStateView_3699835794 {
 	keys: [Origin!]!
-	entry(key: Origin!): Entry_Origin_InboxStateView_79f3e1f3!
-	entries(input: MapInput_Origin_08662377): [Entry_Origin_InboxStateView_79f3e1f3!]!
+	entry(key: Origin!): Entry_Origin_InboxStateView_c4db01d6!
+	entries(input: MapInput_Origin_742d451b): [Entry_Origin_InboxStateView_c4db01d6!]!
 }
 
-type ReentrantCollectionView_Target_OutboxStateView_3775022202 {
+type ReentrantCollectionView_Target_OutboxStateView_2789119133 {
 	keys: [Target!]!
-	entry(key: Target!): Entry_Target_OutboxStateView_f3778d1a!
-	entries(input: MapInput_Target_16f15470): [Entry_Target_OutboxStateView_f3778d1a!]!
+	entry(key: Target!): Entry_Target_OutboxStateView_50a86149!
+	entries(input: MapInput_Target_7aac1e1c): [Entry_Target_OutboxStateView_50a86149!]!
 }
 
 """
@@ -853,6 +902,15 @@ input ResourceControlPolicy {
 	"""
 	messageByte: Amount!
 	"""
+	The maximum amount of fuel a block can consume.
+	"""
+	maximumFuelPerBlock: Int!
+	"""
+	The maximum size of an executed block. This includes the block proposal itself as well as
+	the execution outcome.
+	"""
+	maximumExecutedBlockSize: Int!
+	"""
 	The maximum data to read per block
 	"""
 	maximumBytesReadPerBlock: Int!
@@ -897,10 +955,6 @@ enum SystemChannel {
 	Channel used to broadcast reconfigurations.
 	"""
 	ADMIN
-	"""
-	Channel used to broadcast new published bytecodes.
-	"""
-	PUBLISHED_BYTECODES
 }
 
 type SystemExecutionStateView {
@@ -911,7 +965,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
-	balances: MapView_Owner_Amount_0d73ec3f!
+	balances: MapView_Owner_Amount_ef5edbab!
 	timestamp: Timestamp!
 }
 
@@ -926,15 +980,15 @@ A timestamp, in microseconds since the Unix epoch
 scalar Timestamp
 
 """
-An origin, cursor and timestamp of a unskippable message in our inbox.
+An origin, cursor and timestamp of a unskippable bundle in our inbox.
 """
-type TimestampedInboxEntry {
+type TimestampedBundleInInbox {
 	"""
-	The origin and cursor of the message.
+	The origin and cursor of the bundle.
 	"""
-	entry: InboxEntry!
+	entry: BundleInInbox!
 	"""
-	The timestamp when the message was added to the inbox.
+	The timestamp when the bundle was added to the inbox.
 	"""
 	seen: Timestamp!
 }
@@ -943,11 +997,6 @@ type TimestampedInboxEntry {
 Description of the necessary information to run a user application
 """
 scalar UserApplicationDescription
-
-"""
-Optional user message attached to a transfer
-"""
-scalar UserData
 
 """
 The version info of a build of Linera.

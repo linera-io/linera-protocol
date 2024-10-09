@@ -1,60 +1,44 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
 use std::collections::BTreeSet;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
 
 use anyhow::Result;
-use async_lock::{Mutex, RwLock};
 use async_trait::async_trait;
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::DynamoDbStore;
+#[cfg(with_rocksdb)]
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbContext, ScyllaDbStore};
+use linera_views::scylla_db::ScyllaDbStore;
+#[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
+use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{
     batch::{
         Batch, WriteOperation,
         WriteOperation::{Delete, DeletePrefix, Put},
     },
     collection_view::HashedCollectionView,
-    common::Context,
-    key_value_store_view::{KeyValueStoreMemoryContext, KeyValueStoreView, ViewContainer},
+    context::{create_test_memory_context, Context, MemoryContext, ViewContext},
+    key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
-    lru_caching::{LruCachingMemoryContext, LruCachingStore},
+    lru_caching::{LruCachingMemoryStore, LruCachingStore},
     map_view::{ByteMapView, HashedMapView},
-    memory::{
-        create_memory_context, MemoryContext, MemoryStore, MemoryStoreMap,
-        TEST_MEMORY_MAX_STREAM_QUERIES,
-    },
+    memory::MemoryStore,
     queue_view::HashedQueueView,
+    random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
+    store::TestKeyValueStore as _,
     test_utils::{
-        self, get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
+        get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
 };
-#[cfg(with_dynamodb)]
-use linera_views::{
-    common::{AdminKeyValueStore, CommonStoreConfig},
-    dynamo_db::{
-        create_dynamo_db_common_config, DynamoDbContext, DynamoDbStore, DynamoDbStoreConfig,
-        LocalStackTestContext,
-    },
-    test_utils::generate_test_namespace,
-};
 use rand::{Rng, RngCore};
-#[cfg(with_rocksdb)]
-use {
-    linera_views::rocks_db::{create_rocks_db_test_store, RocksDbContext, RocksDbStore},
-    tempfile::TempDir,
-};
 
-#[allow(clippy::type_complexity)]
 #[derive(CryptoHashRootView)]
 pub struct StateView<C> {
     pub x1: HashedRegisterView<C, u64>,
@@ -75,7 +59,7 @@ pub struct StateView<C> {
 }
 
 #[async_trait]
-pub trait StateStore {
+pub trait StateStorage {
     type Context: Context<Extra = usize> + Clone + Send + Sync + 'static;
 
     async fn new() -> Self;
@@ -83,169 +67,131 @@ pub trait StateStore {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError>;
 }
 
-pub struct MemoryTestStore {
-    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
+pub struct MemoryTestStorage {
+    accessed_chains: BTreeSet<usize>,
+    store: MemoryStore,
 }
 
 #[async_trait]
-impl StateStore for MemoryTestStore {
+impl StateStorage for MemoryTestStorage {
     type Context = MemoryContext<usize>;
 
     async fn new() -> Self {
-        MemoryTestStore {
-            states: HashMap::new(),
-        }
-    }
-
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
-        let state = self
-            .states
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let guard = state.clone().lock_arc().await;
-        let map = Arc::new(RwLock::new(guard));
-        let store = MemoryStore {
-            map,
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-        };
-        let base_key = bcs::to_bytes(&id)?;
-        let context = MemoryContext {
+        let store = MemoryStore::new_test_store().await.unwrap();
+        MemoryTestStorage {
+            accessed_chains: BTreeSet::new(),
             store,
-            base_key,
-            extra: id,
-        };
-        StateView::load(context).await
-    }
-}
-
-pub struct KeyValueStoreTestStore {
-    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
-}
-
-#[async_trait]
-impl StateStore for KeyValueStoreTestStore {
-    type Context = KeyValueStoreMemoryContext<usize>;
-
-    async fn new() -> Self {
-        KeyValueStoreTestStore {
-            states: HashMap::new(),
-        }
-    }
-
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
-        let state = self
-            .states
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let guard = state.clone().lock_arc().await;
-        let map = Arc::new(RwLock::new(guard));
-        let store = MemoryStore {
-            map,
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-        };
-        let context = MemoryContext {
-            store,
-            base_key: Vec::new(),
-            extra: (),
-        };
-        let base_key = bcs::to_bytes(&id)?;
-        let store = ViewContainer::new(context).await?;
-        let context = KeyValueStoreMemoryContext {
-            store,
-            base_key,
-            extra: id,
-        };
-        StateView::load(context).await
-    }
-}
-
-pub struct LruMemoryStore {
-    states: HashMap<usize, Arc<Mutex<MemoryStoreMap>>>,
-}
-
-#[async_trait]
-impl StateStore for LruMemoryStore {
-    type Context = LruCachingMemoryContext<usize>;
-
-    async fn new() -> Self {
-        LruMemoryStore {
-            states: HashMap::new(),
-        }
-    }
-
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
-        let state = self
-            .states
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(BTreeMap::new())));
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let guard = state.clone().lock_arc().await;
-        let map = Arc::new(RwLock::new(guard));
-        let store = MemoryStore {
-            map,
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-        };
-        let n = 1000;
-        let store = LruCachingStore::new(store, n);
-        let base_key = bcs::to_bytes(&id)?;
-        let context = LruCachingMemoryContext {
-            store,
-            base_key,
-            extra: id,
-        };
-        StateView::load(context).await
-    }
-}
-
-#[cfg(with_rocksdb)]
-pub struct RocksDbTestStore {
-    store: RocksDbStore,
-    accessed_chains: BTreeSet<usize>,
-    _dir: TempDir,
-}
-
-#[cfg(with_rocksdb)]
-#[async_trait]
-impl StateStore for RocksDbTestStore {
-    type Context = RocksDbContext<usize>;
-
-    async fn new() -> Self {
-        let (store, dir) = create_rocks_db_test_store().await;
-        let accessed_chains = BTreeSet::new();
-        RocksDbTestStore {
-            store,
-            accessed_chains,
-            _dir: dir,
         }
     }
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
-        // TODO(#643): Actually acquire a lock.
-        tracing::trace!("Acquiring lock on {:?}", id);
         let base_key = bcs::to_bytes(&id)?;
-        let context = RocksDbContext::new(self.store.clone(), base_key, id);
+        let store = self.store.clone();
+        let context = Self::Context::new_unsafe(store, base_key, id);
+        StateView::load(context).await
+    }
+}
+
+pub struct KeyValueStoreTestStorage {
+    accessed_chains: BTreeSet<usize>,
+    store: ViewContainer<MemoryContext<()>>,
+}
+
+#[async_trait]
+impl StateStorage for KeyValueStoreTestStorage {
+    type Context = ViewContext<usize, ViewContainer<MemoryContext<()>>>;
+
+    async fn new() -> Self {
+        let context = create_test_memory_context();
+        let store = ViewContainer::new(context).await.unwrap();
+        KeyValueStoreTestStorage {
+            accessed_chains: BTreeSet::new(),
+            store,
+        }
+    }
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        self.accessed_chains.insert(id);
+        let base_key = bcs::to_bytes(&id)?;
+        let store = self.store.clone();
+        let context = Self::Context::new_unsafe(store, base_key, id);
+        StateView::load(context).await
+    }
+}
+
+pub struct LruMemoryStorage {
+    accessed_chains: BTreeSet<usize>,
+    store: LruCachingStore<MemoryStore>,
+}
+
+#[async_trait]
+impl StateStorage for LruMemoryStorage {
+    type Context = ViewContext<usize, LruCachingMemoryStore>;
+
+    async fn new() -> Self {
+        let store = MemoryStore::new_test_store().await.unwrap();
+        let cache_size = 1000;
+        let store = LruCachingStore::new(store, cache_size);
+        LruMemoryStorage {
+            accessed_chains: BTreeSet::new(),
+            store,
+        }
+    }
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        self.accessed_chains.insert(id);
+        let base_key = bcs::to_bytes(&id)?;
+        let store = self.store.clone();
+        let context = Self::Context::new_unsafe(store, base_key, id);
+        StateView::load(context).await
+    }
+}
+
+#[cfg(with_rocksdb)]
+pub struct RocksDbTestStorage {
+    store: RocksDbStore,
+    accessed_chains: BTreeSet<usize>,
+}
+
+#[cfg(with_rocksdb)]
+#[async_trait]
+impl StateStorage for RocksDbTestStorage {
+    type Context = ViewContext<usize, RocksDbStore>;
+
+    async fn new() -> Self {
+        let store = RocksDbStore::new_test_store().await.unwrap();
+        let accessed_chains = BTreeSet::new();
+        RocksDbTestStorage {
+            store,
+            accessed_chains,
+        }
+    }
+
+    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
+        self.accessed_chains.insert(id);
+        let root_key = bcs::to_bytes(&id)?;
+        let store = self.store.clone_with_root_key(&root_key)?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
 
 #[cfg(with_scylladb)]
-pub struct ScyllaDbTestStore {
+pub struct ScyllaDbTestStorage {
     store: ScyllaDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
 #[cfg(with_scylladb)]
 #[async_trait]
-impl StateStore for ScyllaDbTestStore {
-    type Context = ScyllaDbContext<usize>;
+impl StateStorage for ScyllaDbTestStorage {
+    type Context = ViewContext<usize, ScyllaDbStore>;
 
     async fn new() -> Self {
-        let store = create_scylla_db_test_store().await;
+        let store = ScyllaDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
-        ScyllaDbTestStore {
+        ScyllaDbTestStorage {
             store,
             accessed_chains,
         }
@@ -253,65 +199,38 @@ impl StateStore for ScyllaDbTestStore {
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
-        // TODO(#643): Actually acquire a lock.
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let base_key = bcs::to_bytes(&id)?;
-        let context = ScyllaDbContext::new(self.store.clone(), base_key, id);
+        let root_key = bcs::to_bytes(&id)?;
+        let store = self.store.clone_with_root_key(&root_key)?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
 
 #[cfg(with_dynamodb)]
-pub struct DynamoDbTestStore {
-    localstack: LocalStackTestContext,
-    namespace: String,
-    is_created: bool,
-    common_config: CommonStoreConfig,
+pub struct DynamoDbTestStorage {
+    store: DynamoDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
 #[cfg(with_dynamodb)]
 #[async_trait]
-impl StateStore for DynamoDbTestStore {
-    type Context = DynamoDbContext<usize>;
+impl StateStorage for DynamoDbTestStorage {
+    type Context = ViewContext<usize, DynamoDbStore>;
 
     async fn new() -> Self {
-        let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let namespace = generate_test_namespace();
-        let is_created = false;
-        let common_config = create_dynamo_db_common_config();
+        let store = DynamoDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
-        DynamoDbTestStore {
-            localstack,
-            namespace,
-            is_created,
-            common_config,
+        DynamoDbTestStorage {
+            store,
             accessed_chains,
         }
     }
 
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
-        // TODO(#643): Actually acquire a lock.
-        tracing::trace!("Acquiring lock on {:?}", id);
-        let base_key = bcs::to_bytes(&id)?;
-        let store_config = DynamoDbStoreConfig {
-            config: self.localstack.dynamo_db_config(),
-            common_config: self.common_config.clone(),
-        };
-        let namespace = &self.namespace;
-
-        let store = if self.is_created {
-            DynamoDbStore::connect(&store_config, namespace)
-                .await
-                .expect("failed to connect")
-        } else {
-            DynamoDbStore::recreate_and_connect(&store_config, namespace)
-                .await
-                .expect("failed to create from scratch")
-        };
-        let context = DynamoDbContext::new(store, base_key, id);
-        self.is_created = true;
+        let root_key = bcs::to_bytes(&id)?;
+        let store = self.store.clone_with_root_key(&root_key)?;
+        let context = ViewContext::create_root_context(store, id).await?;
         StateView::load(context).await
     }
 }
@@ -397,8 +316,8 @@ async fn test_store<S>(
     config: &TestConfig,
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let default_hash = {
         let view = store.load(1).await?;
@@ -708,7 +627,7 @@ pub struct ByteMapStateView<C> {
 
 #[tokio::test]
 async fn test_byte_map_view() -> Result<()> {
-    let context = create_memory_context();
+    let context = create_test_memory_context();
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.insert(vec![0, 1], 5);
@@ -736,11 +655,9 @@ async fn test_byte_map_view() -> Result<()> {
 #[cfg(test)]
 async fn test_views_in_lru_memory_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with lru memory", config);
-    let mut store = LruMemoryStore::new().await;
+    let mut store = LruMemoryStorage::new().await;
     test_store(&mut store, config).await?;
-    assert_eq!(store.states.len(), 1);
-    let entry = store.states.get(&1).unwrap().clone();
-    assert!(entry.lock().await.is_empty());
+    assert_eq!(store.accessed_chains.len(), 1);
     Ok(())
 }
 
@@ -755,11 +672,9 @@ async fn test_views_in_lru_memory() -> Result<()> {
 #[cfg(test)]
 async fn test_views_in_memory_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with memory", config);
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     test_store(&mut store, config).await?;
-    assert_eq!(store.states.len(), 1);
-    let entry = store.states.get(&1).unwrap().clone();
-    assert!(entry.lock().await.is_empty());
+    assert_eq!(store.accessed_chains.len(), 1);
     Ok(())
 }
 
@@ -777,7 +692,7 @@ async fn test_views_in_key_value_store_view_memory_param(config: &TestConfig) ->
         "Testing config {:?} with key_value_store_view on memory",
         config
     );
-    let mut store = KeyValueStoreTestStore::new().await;
+    let mut store = KeyValueStoreTestStorage::new().await;
     test_store(&mut store, config).await?;
     Ok(())
 }
@@ -795,11 +710,11 @@ async fn test_views_in_key_value_store_view_memory() -> Result<()> {
 async fn test_views_in_rocks_db_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with rocks_db", config);
 
-    let mut store = RocksDbTestStore::new().await;
+    let mut store = RocksDbTestStorage::new().await;
     let hash = test_store(&mut store, config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
 
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     let hash2 = test_store(&mut store, config).await?;
     assert_eq!(hash, hash2);
     Ok(())
@@ -819,11 +734,11 @@ async fn test_views_in_rocks_db() -> Result<()> {
 async fn test_views_in_scylla_db_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with scylla_db", config);
 
-    let mut store = ScyllaDbTestStore::new().await;
+    let mut store = ScyllaDbTestStorage::new().await;
     let hash = test_store(&mut store, config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
 
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     let hash2 = test_store(&mut store, config).await?;
     assert_eq!(hash, hash2);
     Ok(())
@@ -841,12 +756,12 @@ async fn test_views_in_scylla_db() -> Result<()> {
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_views_in_dynamo_db() -> Result<()> {
-    let mut store = DynamoDbTestStore::new().await;
+    let mut store = DynamoDbTestStorage::new().await;
     let config = TestConfig::default();
     let hash = test_store(&mut store, &config).await?;
     assert_eq!(store.accessed_chains.len(), 1);
 
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     let hash2 = test_store(&mut store, &config).await?;
     assert_eq!(hash, hash2);
     Ok(())
@@ -856,8 +771,8 @@ async fn test_views_in_dynamo_db() -> Result<()> {
 #[cfg(test)]
 async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     {
         let mut view = store.load(1).await?;
@@ -896,10 +811,10 @@ where
 #[cfg(with_rocksdb)]
 #[tokio::test]
 async fn test_store_rollback() -> Result<()> {
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     test_store_rollback_kernel(&mut store).await?;
 
-    let mut store = RocksDbTestStore::new().await;
+    let mut store = RocksDbTestStorage::new().await;
     test_store_rollback_kernel(&mut store).await?;
     Ok(())
 }
@@ -909,7 +824,7 @@ async fn test_collection_removal() -> Result<()> {
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_memory_context();
+    let context = create_test_memory_context();
 
     // Write a dummy entry into the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
@@ -940,7 +855,7 @@ async fn test_removal_api_first_second_condition(
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_memory_context();
+    let context = create_test_memory_context();
 
     // First add an entry `1` with value `100` and commit
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;
@@ -1008,8 +923,8 @@ async fn compute_hash_unordered_put_view<S>(
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await?;
     for key_value in key_value_vector {
@@ -1039,8 +954,8 @@ async fn compute_hash_unordered_putdelete_view<S>(
     operations: Vec<WriteOperation>,
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await?;
     for operation in operations {
@@ -1083,8 +998,8 @@ async fn compute_hash_ordered_view<S>(
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> Result<<sha3::Sha3_256 as Hasher>::Output>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut view = store.load(1).await?;
     for key_value in key_value_vector {
@@ -1114,13 +1029,13 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) -> 
         random_shuffle(rng, &mut key_value_vector_b);
         let operations = span_random_reordering_put_delete(rng, info_op.clone());
         //
-        let mut store1 = MemoryTestStore::new().await;
+        let mut store1 = MemoryTestStorage::new().await;
         unord1_hashes
             .push(compute_hash_unordered_put_view(rng, &mut store1, key_value_vector_b).await?);
-        let mut store2 = MemoryTestStore::new().await;
+        let mut store2 = MemoryTestStorage::new().await;
         unord2_hashes
             .push(compute_hash_unordered_putdelete_view(rng, &mut store2, operations).await?);
-        let mut store3 = MemoryTestStore::new().await;
+        let mut store3 = MemoryTestStorage::new().await;
         ord_hashes
             .push(compute_hash_ordered_view(rng, &mut store3, key_value_vector.clone()).await?);
     }
@@ -1143,7 +1058,7 @@ async fn compute_hash_view_iter_large() -> Result<()> {
     let n_iter = 2;
     let n = 100;
     let k = 30;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     for _ in 0..n_iter {
         compute_hash_view_iter(&mut rng, n, k).await?;
     }
@@ -1157,8 +1072,8 @@ async fn check_hash_memoization_persistence<S>(
     key_value_vector: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> Result<()>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let mut hash = {
         let view = store.load(1).await?;
@@ -1241,17 +1156,17 @@ where
 #[tokio::test]
 async fn check_hash_memoization_persistence_large() -> Result<()> {
     let n = 100;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let key_value_vector = get_random_key_values(&mut rng, n);
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await
 }
 
 #[cfg(test)]
 async fn check_large_write<S>(store: &mut S, vector: Vec<u8>) -> Result<()>
 where
-    S: StateStore,
-    ViewError: From<<<S as StateStore>::Context as Context>::Error>,
+    S: StateStorage,
+    ViewError: From<<<S as StateStorage>::Context as Context>::Error>,
 {
     let hash1 = {
         let mut view = store.load(1).await?;
@@ -1274,17 +1189,17 @@ async fn check_large_write_dynamo_db() -> Result<()> {
     // By writing 1000 elements we seriously check the Amazon journaling
     // writing system.
     let n = 1000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
-    let mut store = DynamoDbTestStore::new().await;
+    let mut store = DynamoDbTestStorage::new().await;
     check_large_write(&mut store, vector).await
 }
 
 #[tokio::test]
 async fn check_large_write_memory() -> Result<()> {
     let n = 1000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
-    let mut store = MemoryTestStore::new().await;
+    let mut store = MemoryTestStorage::new().await;
     check_large_write(&mut store, vector).await
 }

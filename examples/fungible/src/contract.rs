@@ -12,7 +12,7 @@ use fungible::{
 };
 use linera_sdk::{
     base::{AccountOwner, Amount, WithContractAbi},
-    views::{RootView, View, ViewStorageContext},
+    views::{RootView, View},
     Contract, ContractRuntime,
 };
 
@@ -35,7 +35,7 @@ impl Contract for FungibleTokenContract {
     type InstantiationArgument = InitialState;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = FungibleToken::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = FungibleToken::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         FungibleTokenContract { state, runtime }
@@ -187,7 +187,3 @@ impl FungibleTokenContract {
         }
     }
 }
-
-// Dummy ComplexObject implementation, required by the graphql(complex) attribute in state.rs.
-#[async_graphql::ComplexObject]
-impl FungibleToken {}

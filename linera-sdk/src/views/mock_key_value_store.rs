@@ -14,8 +14,8 @@ use std::{
 use futures::FutureExt as _;
 use linera_views::{
     batch::Batch,
-    common::{ReadableKeyValueStore, WritableKeyValueStore},
-    memory::{create_memory_store, MemoryStore},
+    memory::{create_test_memory_store, MemoryStore},
+    store::{ReadableKeyValueStore, WritableKeyValueStore},
 };
 
 /// A mock [`KeyValueStore`] implementation using a [`MemoryStore`].
@@ -32,7 +32,7 @@ pub(super) struct MockKeyValueStore {
 impl Default for MockKeyValueStore {
     fn default() -> Self {
         MockKeyValueStore {
-            store: create_memory_store(),
+            store: create_test_memory_store(),
             contains_key_promises: PromiseRegistry::default(),
             contains_keys_promises: PromiseRegistry::default(),
             read_multi_promises: PromiseRegistry::default(),
@@ -179,7 +179,7 @@ impl MockKeyValueStore {
     /// Writes a `batch` of operations to storage.
     pub(crate) fn write_batch(&self, batch: Batch) {
         self.store
-            .write_batch(batch, &[])
+            .write_batch(batch)
             .now_or_never()
             .expect("Memory store should never wait for anything")
             .expect("Memory store should never fail");

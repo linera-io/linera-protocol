@@ -14,7 +14,18 @@ version.workspace = true
 [features]
 test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
-web = ["getrandom/js", "rand/getrandom", "rand/std", "rand/std_rng", "web-time"]
+web = [
+    "futures",
+    "getrandom/js",
+    "rand/getrandom",
+    "rand/std",
+    "rand/std_rng",
+    "tracing-web",
+    "wasmtimer",
+    "wasm-bindgen-futures",
+    "wasm_thread",
+    "web-time",
+]
 
 [dependencies]
 anyhow.workspace = true
@@ -25,7 +36,9 @@ base64.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
+custom_debug_derive.workspace = true
 ed25519-dalek.workspace = true
+futures = { workspace = true, optional = true }
 generic-array.workspace = true
 getrandom = { workspace = true, optional = true }
 hex.workspace = true
@@ -37,21 +50,31 @@ rand.workspace = true
 serde.workspace = true
 serde-name.workspace = true
 serde_bytes.workspace = true
+serde_json.workspace = true
 sha3.workspace = true
 test-strategy = { workspace = true, optional = true }
 thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["json", "fmt", "ansi"] }
+wasm-bindgen-futures = { workspace = true, optional = true }
+wasm_thread = { workspace = true, optional = true }
+wasmtimer = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ruzstd.workspace = true
+tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true
 rand = { workspace = true, features = ["getrandom", "std", "std_rng"] }
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 prometheus.workspace = true
+port-selector.workspace = true
+zstd.workspace = true
 
 [dev-dependencies]
-custom_debug_derive.workspace = true
 linera-base = { path = ".", features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
 test-case.workspace = true

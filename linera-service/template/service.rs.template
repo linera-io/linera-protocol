@@ -2,32 +2,32 @@
 
 mod state;
 
-use self::state::Application;
+use self::state::{project_name};
 use linera_sdk::{{
     base::WithServiceAbi,
     views::{{View, ViewStorageContext}},
     Service, ServiceRuntime,
 }};
 
-pub struct ApplicationService {{
-    state: Application,
+pub struct {project_name}Service {{
+    state: {project_name},
     runtime: ServiceRuntime<Self>,
 }}
 
-linera_sdk::service!(ApplicationService);
+linera_sdk::service!({project_name}Service);
 
-impl WithServiceAbi for ApplicationService {{
-    type Abi = {project_name}::ApplicationAbi;
+impl WithServiceAbi for {project_name}Service {{
+    type Abi = {module_name}::{project_name}Abi;
 }}
 
-impl Service for ApplicationService {{
+impl Service for {project_name}Service {{
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {{
-        let state = Application::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = {project_name}::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        ApplicationService {{ state, runtime }}
+        {project_name}Service {{ state, runtime }}
     }}
 
     async fn handle_query(&self, _query: Self::Query) -> Self::QueryResponse {{

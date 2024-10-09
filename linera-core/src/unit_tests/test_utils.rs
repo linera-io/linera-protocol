@@ -3,6 +3,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -23,42 +24,31 @@ use linera_execution::{
     committee::{Committee, ValidatorName},
     ResourceControlPolicy, WasmRuntime,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
-use linera_views::{memory::TEST_MEMORY_MAX_STREAM_QUERIES, views::ViewError};
+#[cfg(feature = "dynamodb")]
+use linera_views::dynamo_db::DynamoDbStore;
+#[cfg(feature = "scylladb")]
+use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::{
+    memory::MemoryStore, random::generate_test_namespace, store::TestKeyValueStore as _,
+};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-#[cfg(feature = "dynamodb")]
-use {
-    linera_storage::DynamoDbStorage,
-    linera_views::dynamo_db::DynamoDbStoreConfig,
-    linera_views::dynamo_db::{create_dynamo_db_common_config, LocalStackTestContext},
-};
 #[cfg(feature = "rocksdb")]
 use {
-    linera_storage::RocksDbStorage,
-    linera_views::rocks_db::create_rocks_db_common_config,
-    linera_views::rocks_db::RocksDbStoreConfig,
+    linera_views::rocks_db::RocksDbStore,
     tokio::sync::{Semaphore, SemaphorePermit},
-};
-#[cfg(feature = "scylladb")]
-use {
-    linera_storage::ScyllaDbStorage, linera_views::scylla_db::create_scylla_db_common_config,
-    linera_views::scylla_db::ScyllaDbStoreConfig,
-};
-#[cfg(not(target_arch = "wasm32"))]
-use {
-    linera_storage::ServiceStorage,
-    linera_storage_service::{client::service_config_from_endpoint, storage_service_test_endpoint},
-    linera_views::test_utils::generate_test_namespace,
 };
 
 use crate::{
     client::{ChainClient, Client},
     data_types::*,
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
     },
     notifier::Notifier,
     worker::{NetworkActions, Notification, WorkerState},
@@ -84,7 +74,6 @@ pub enum FaultType {
 struct LocalValidator<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     state: WorkerState<S>,
     fault_type: FaultType,
@@ -95,7 +84,6 @@ where
 pub struct LocalValidatorClient<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     name: ValidatorName,
     client: Arc<Mutex<LocalValidator<S>>>,
@@ -104,7 +92,6 @@ where
 impl<S> ValidatorNode for LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     type NotificationStream = NotificationStream;
 
@@ -133,17 +120,11 @@ where
     async fn handle_certificate(
         &self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(
-                certificate,
-                hashed_certificate_values,
-                hashed_blobs,
-                sender,
-            )
+            validator.do_handle_certificate(certificate, blobs, sender)
         })
         .await
     }
@@ -171,9 +152,11 @@ where
         Ok(CryptoHash::test_hash("genesis config"))
     }
 
-    async fn download_blob(&self, blob_id: BlobId) -> Result<Blob, NodeError> {
-        self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
-            .await
+    async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_blob_content(blob_id, sender)
+        })
+        .await
     }
 
     async fn download_certificate_value(
@@ -204,7 +187,6 @@ where
 impl<S> LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     fn new(name: ValidatorName, state: WorkerState<S>) -> Self {
         let client = LocalValidator {
@@ -267,10 +249,7 @@ where
         let handle_block_proposal_result =
             Self::handle_block_proposal(proposal, &mut validator).await;
         let result = match handle_block_proposal_result {
-            Some(Err(
-                NodeError::ApplicationBytecodesOrBlobsNotFound(_, _)
-                | NodeError::BlobNotFoundOnRead(_),
-            )) => {
+            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
                 handle_block_proposal_result.expect("handle_block_proposal_result should be Some")
             }
             _ => match validator.fault_type {
@@ -314,8 +293,7 @@ where
         certificate: Certificate,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         notifications: &mut Vec<Notification>,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
             FaultType::DontProcessValidated if certificate.value().is_validated() => None,
@@ -328,8 +306,7 @@ where
                     .state
                     .fully_handle_certificate_with_notifications(
                         certificate,
-                        hashed_certificate_values,
-                        hashed_blobs,
+                        blobs,
                         Some(notifications),
                     )
                     .await
@@ -348,7 +325,7 @@ where
         let mut validator = client.lock().await;
         let result = async move {
             let certificate = validator.state.full_certificate(certificate).await?;
-            self.do_handle_certificate_internal(certificate, &mut validator, vec![], vec![])
+            self.do_handle_certificate_internal(certificate, &mut validator, vec![])
                 .await
         }
         .await;
@@ -359,24 +336,16 @@ where
         &self,
         certificate: Certificate,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         let mut notifications = Vec::new();
         let is_validated = certificate.value().is_validated();
-        let handle_certificate_result = Self::handle_certificate(
-            certificate,
-            validator,
-            &mut notifications,
-            hashed_certificate_values,
-            hashed_blobs,
-        )
-        .await;
+        let handle_certificate_result =
+            Self::handle_certificate(certificate, validator, &mut notifications, blobs).await;
         let result = match handle_certificate_result {
-            Some(Err(
-                NodeError::ApplicationBytecodesOrBlobsNotFound(_, _)
-                | NodeError::BlobNotFoundOnRead(_),
-            )) => handle_certificate_result.expect("handle_certificate_result should be Some"),
+            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
+                handle_certificate_result.expect("handle_certificate_result should be Some")
+            }
             _ => match validator.fault_type {
                 FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
                     if is_validated =>
@@ -404,18 +373,12 @@ where
     async fn do_handle_certificate(
         self,
         certificate: Certificate,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let mut validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(
-                certificate,
-                &mut validator,
-                hashed_certificate_values,
-                hashed_blobs,
-            )
+            .do_handle_certificate_internal(certificate, &mut validator, blobs)
             .await;
         sender.send(result)
     }
@@ -452,19 +415,19 @@ where
         sender.send(Ok(stream))
     }
 
-    async fn do_download_blob(
+    async fn do_download_blob_content(
         self,
         blob_id: BlobId,
-        sender: oneshot::Sender<Result<Blob, NodeError>>,
-    ) -> Result<(), Result<Blob, NodeError>> {
+        sender: oneshot::Sender<Result<BlobContent, NodeError>>,
+    ) -> Result<(), Result<BlobContent, NodeError>> {
         let validator = self.client.lock().await;
-        let hashed_blob = validator
+        let blob = validator
             .state
             .storage_client()
-            .read_hashed_blob(blob_id)
+            .read_blob(blob_id)
             .await
             .map_err(Into::into);
-        sender.send(hashed_blob.map(|hashed_blob| hashed_blob.blob().clone()))
+        sender.send(blob.map(|blob| blob.into_inner_content()))
     }
 
     async fn do_download_certificate_value(
@@ -520,13 +483,11 @@ where
 #[derive(Clone)]
 pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>)
 where
-    S: Storage,
-    ViewError: From<S::StoreError>;
+    S: Storage;
 
-impl<S> LocalValidatorNodeProvider for NodeProvider<S>
+impl<S> ValidatorNodeProvider for NodeProvider<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     type Node = LocalValidatorClient<S>;
 
@@ -560,7 +521,6 @@ where
 impl<S> FromIterator<LocalValidatorClient<S>> for NodeProvider<S>
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     fn from_iter<T>(iter: T) -> Self
     where
@@ -577,10 +537,7 @@ where
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
-pub struct TestBuilder<B: StorageBuilder>
-where
-    ViewError: From<<B::Storage as Storage>::StoreError>,
-{
+pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
     admin_id: ChainId,
@@ -622,7 +579,6 @@ impl GenesisStorageBuilder {
     async fn build<S>(&self, storage: S, initial_committee: Committee, admin_id: ChainId) -> S
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         for account in &self.accounts {
             storage
@@ -644,7 +600,6 @@ impl GenesisStorageBuilder {
 impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     pub async fn new(
         mut storage_builder: B,
@@ -666,9 +621,14 @@ where
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
             let name = ValidatorName(key_pair.public());
             let storage = storage_builder.build().await?;
-            let state = WorkerState::new(format!("Node {}", i), Some(key_pair), storage.clone())
-                .with_allow_inactive_chains(false)
-                .with_allow_messages_from_deprecated_epochs(false);
+            let state = WorkerState::new(
+                format!("Node {}", i),
+                Some(key_pair),
+                storage.clone(),
+                NonZeroUsize::new(100).expect("Chain worker limit should not be zero"),
+            )
+            .with_allow_inactive_chains(false)
+            .with_allow_messages_from_deprecated_epochs(false);
             let validator = LocalValidatorClient::new(name, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(name);
@@ -819,8 +779,11 @@ where
             storage,
             10,
             CrossChainMessageDelivery::NonBlocking,
+            false,
+            [chain_id],
+            format!("Client node for {:.8}", chain_id),
         ));
-        Ok(builder.create_chain(
+        Ok(builder.create_chain_client(
             chain_id,
             vec![key_pair],
             self.admin_id,
@@ -895,6 +858,15 @@ where
         }
         assert!(count >= target_count);
     }
+
+    /// Panics if any validator has a nonempty outbox for the given chain.
+    pub async fn check_that_validators_have_empty_outboxes(&self, chain_id: ChainId) {
+        for validator in &self.validator_clients {
+            let guard = validator.client.lock().await;
+            let chain = guard.state.chain_state_view(chain_id).await.unwrap();
+            assert_eq!(chain.outboxes.indices().await.unwrap(), []);
+        }
+    }
 }
 
 #[cfg(feature = "rocksdb")]
@@ -903,18 +875,29 @@ static ROCKS_DB_SEMAPHORE: Semaphore = Semaphore::const_new(5);
 
 #[derive(Default)]
 pub struct MemoryStorageBuilder {
+    namespace: String,
+    instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
 #[async_trait]
 impl StorageBuilder for MemoryStorageBuilder {
-    type Storage = MemoryStorage<TestClock>;
+    type Storage = DbStorage<MemoryStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        Ok(MemoryStorage::new_for_testing(
+        self.instance_counter += 1;
+        let config = MemoryStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
+        Ok(DbStorage::new_for_testing(
+            config,
+            &namespace,
+            root_key,
             self.wasm_runtime,
-            TEST_MEMORY_MAX_STREAM_QUERIES,
             self.clock.clone(),
         )
         .await?)
@@ -939,7 +922,8 @@ impl MemoryStorageBuilder {
 
 #[cfg(feature = "rocksdb")]
 pub struct RocksDbStorageBuilder {
-    temp_dirs: Vec<tempfile::TempDir>,
+    namespace: String,
+    instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
     _permit: SemaphorePermit<'static>,
@@ -949,7 +933,8 @@ pub struct RocksDbStorageBuilder {
 impl RocksDbStorageBuilder {
     pub async fn new() -> Self {
         RocksDbStorageBuilder {
-            temp_dirs: Vec::new(),
+            namespace: String::new(),
+            instance_counter: 0,
             wasm_runtime: None,
             clock: TestClock::default(),
             _permit: ROCKS_DB_SEMAPHORE.acquire().await.unwrap(),
@@ -970,26 +955,24 @@ impl RocksDbStorageBuilder {
 #[cfg(feature = "rocksdb")]
 #[async_trait]
 impl StorageBuilder for RocksDbStorageBuilder {
-    type Storage = RocksDbStorage<TestClock>;
+    type Storage = DbStorage<RocksDbStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        let dir = tempfile::TempDir::new()?;
-        let path_buf = dir.path().to_path_buf();
-        self.temp_dirs.push(dir);
-        let common_config = create_rocks_db_common_config();
-        let store_config = RocksDbStoreConfig {
-            path_buf,
-            common_config,
-        };
-        let namespace = generate_test_namespace();
-        let storage = RocksDbStorage::new_for_testing(
-            store_config,
+        self.instance_counter += 1;
+        let config = RocksDbStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
-        .await?;
-        Ok(storage)
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -997,16 +980,16 @@ impl StorageBuilder for RocksDbStorageBuilder {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+#[derive(Default)]
 pub struct ServiceStorageBuilder {
-    endpoint: String,
     namespace: String,
     instance_counter: usize,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage`.
     pub async fn new() -> Self {
@@ -1015,31 +998,30 @@ impl ServiceStorageBuilder {
 
     /// Creates a `ServiceStorage` with the given Wasm runtime.
     pub async fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        let endpoint = storage_service_test_endpoint().unwrap();
-        let clock = TestClock::default();
-        let namespace = generate_test_namespace();
-        Self {
-            endpoint,
-            namespace,
-            instance_counter: 0,
+        ServiceStorageBuilder {
             wasm_runtime: wasm_runtime.into(),
-            clock,
+            ..ServiceStorageBuilder::default()
         }
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 #[async_trait]
 impl StorageBuilder for ServiceStorageBuilder {
-    type Storage = ServiceStorage<TestClock>;
+    type Storage = DbStorage<ServiceStoreClient, TestClock>;
 
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
-        let store_config = service_config_from_endpoint(&self.endpoint)?;
-        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
         self.instance_counter += 1;
-        Ok(ServiceStorage::new_for_testing(
-            store_config,
+        let config = ServiceStoreClient::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
@@ -1054,8 +1036,8 @@ impl StorageBuilder for ServiceStorageBuilder {
 #[cfg(feature = "dynamodb")]
 #[derive(Default)]
 pub struct DynamoDbStorageBuilder {
+    namespace: String,
     instance_counter: usize,
-    localstack: Option<LocalStackTestContext>,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
 }
@@ -1076,29 +1058,24 @@ impl DynamoDbStorageBuilder {
 #[cfg(feature = "dynamodb")]
 #[async_trait]
 impl StorageBuilder for DynamoDbStorageBuilder {
-    type Storage = DynamoDbStorage<TestClock>;
+    type Storage = DbStorage<DynamoDbStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        if self.localstack.is_none() {
-            self.localstack = Some(LocalStackTestContext::new().await?);
-        }
-        let config = self.localstack.as_ref().unwrap().dynamo_db_config();
-        let namespace = generate_test_namespace();
-        let namespace = format!("{}_{}", namespace, self.instance_counter);
-        let common_config = create_dynamo_db_common_config();
-        let store_config = DynamoDbStoreConfig {
-            config,
-            common_config,
-        };
         self.instance_counter += 1;
-        let storage = DynamoDbStorage::new_for_testing(
-            store_config,
+        let config = DynamoDbStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
-        .await?;
-        Ok(storage)
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {
@@ -1107,27 +1084,12 @@ impl StorageBuilder for DynamoDbStorageBuilder {
 }
 
 #[cfg(feature = "scylladb")]
+#[derive(Default)]
 pub struct ScyllaDbStorageBuilder {
+    namespace: String,
     instance_counter: usize,
-    uri: String,
     wasm_runtime: Option<WasmRuntime>,
     clock: TestClock,
-}
-
-#[cfg(feature = "scylladb")]
-impl Default for ScyllaDbStorageBuilder {
-    fn default() -> Self {
-        let instance_counter = 0;
-        let uri = "localhost:9042".to_string();
-        let wasm_runtime = None;
-        let clock = TestClock::new();
-        ScyllaDbStorageBuilder {
-            instance_counter,
-            uri,
-            wasm_runtime,
-            clock,
-        }
-    }
 }
 
 #[cfg(feature = "scylladb")]
@@ -1146,25 +1108,24 @@ impl ScyllaDbStorageBuilder {
 #[cfg(feature = "scylladb")]
 #[async_trait]
 impl StorageBuilder for ScyllaDbStorageBuilder {
-    type Storage = ScyllaDbStorage<TestClock>;
+    type Storage = DbStorage<ScyllaDbStore, TestClock>;
 
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         self.instance_counter += 1;
-        let namespace = generate_test_namespace();
-        let namespace = format!("{}_{}", namespace, self.instance_counter);
-        let common_config = create_scylla_db_common_config();
-        let store_config = ScyllaDbStoreConfig {
-            uri: self.uri.clone(),
-            common_config,
-        };
-        let storage = ScyllaDbStorage::new_for_testing(
-            store_config,
+        let config = ScyllaDbStore::new_test_config().await?;
+        if self.namespace.is_empty() {
+            self.namespace = generate_test_namespace();
+        }
+        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
+        Ok(DbStorage::new_for_testing(
+            config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
-        .await?;
-        Ok(storage)
+        .await?)
     }
 
     fn clock(&self) -> &TestClock {

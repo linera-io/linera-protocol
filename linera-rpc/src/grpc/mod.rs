@@ -15,8 +15,6 @@ pub use node_provider::*;
 #[cfg(with_server)]
 pub use server::*;
 
-#[allow(clippy::derive_partial_eq_without_eq)]
-// https://github.com/hyperium/tonic/issues/1056
 pub mod api {
     tonic::include_proto!("rpc.v1");
 }
@@ -29,8 +27,8 @@ pub enum GrpcError {
     #[error("failed to communicate cross-chain queries: {0}")]
     CrossChain(#[from] tonic::Status),
 
-    #[error("failed to execute task to completion: {0}")]
-    Join(#[from] tokio::sync::oneshot::error::RecvError),
+    #[error("failed to execute task to completion")]
+    Join(#[from] futures::channel::oneshot::Canceled),
 
     #[error("failed to parse socket address: {0}")]
     SocketAddr(#[from] std::net::AddrParseError),

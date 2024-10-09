@@ -19,7 +19,7 @@ use fungible::Account;
 use gen_nft::{NftOutput, Operation, TokenId};
 use linera_sdk::{
     base::{AccountOwner, WithServiceAbi},
-    views::{View, ViewStorageContext},
+    views::View,
     Service, ServiceRuntime,
 };
 use log::info;
@@ -42,7 +42,7 @@ impl Service for GenNftService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = GenNft::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = GenNft::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         GenNftService {

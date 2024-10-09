@@ -1,39 +1,31 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::Context;
 use async_trait::async_trait;
-use colored::Colorize;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{BlockHeight, HashedBlob, Timestamp},
-    identifiers::{Account, BlobId, BytecodeId, ChainId},
+    data_types::{BlockHeight, Timestamp},
+    identifiers::{Account, ChainId},
     ownership::ChainOwnership,
+    time::{Duration, Instant},
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ChainClient, Client},
+    client::{ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
+    join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
-    JoinSetExt as _,
 };
-use linera_execution::Bytecode;
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
-use tokio::task::JoinSet;
+use thiserror_context::Context;
 use tracing::{debug, info};
 #[cfg(feature = "benchmark")]
 use {
-    futures::{stream, StreamExt as _},
+    futures::{stream, StreamExt as _, TryStreamExt as _},
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
@@ -43,7 +35,7 @@ use {
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
-        system::{OpenChainConfig, Recipient, SystemOperation, UserData, OPEN_CHAIN_MESSAGE_INDEX},
+        system::{OpenChainConfig, Recipient, SystemOperation, OPEN_CHAIN_MESSAGE_INDEX},
         Operation,
     },
     linera_rpc::{
@@ -57,37 +49,49 @@ use {
     },
     tracing::{error, trace},
 };
+#[cfg(feature = "fs")]
+use {
+    linera_base::{
+        crypto::CryptoHash,
+        data_types::{BlobBytes, Bytecode},
+        identifiers::BytecodeId,
+    },
+    std::{fs, path::PathBuf},
+};
 
+#[cfg(web)]
+use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
+#[cfg(not(web))]
+use crate::persistent::{Persist, PersistExt as _};
 use crate::{
     chain_listener,
     client_options::{ChainOwnershipConfig, ClientOptions},
     config::WalletState,
-    persistent::Persist,
-    util::wait_for_next_round,
+    error, util,
     wallet::{UserChain, Wallet},
+    Error,
 };
 
 pub struct ClientContext<Storage, W>
 where
     Storage: linera_storage::Storage,
-    ViewError: From<Storage::StoreError>,
 {
     pub wallet: WalletState<W>,
     pub client: Arc<Client<NodeProvider, Storage>>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
-    pub notification_retry_delay: Duration,
-    pub notification_retries: u32,
+    pub retry_delay: Duration,
+    pub max_retries: u32,
     pub options: ClientOptions,
-    pub chain_listeners: JoinSet<()>,
+    pub chain_listeners: JoinSet,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<<S as Storage>::StoreError>,
-    W: Persist<Target = Wallet> + Send,
+    W: Persist<Target = Wallet>,
 {
     type ValidatorNodeProvider = NodeProvider;
     type Storage = S;
@@ -100,57 +104,81 @@ where
         self.make_chain_client(chain_id)
     }
 
-    fn update_wallet_for_new_chain(
+    async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    ) {
-        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp);
-        self.save_wallet();
+    ) -> Result<(), Error> {
+        self.update_wallet_for_new_chain(chain_id, key_pair, timestamp)
+            .await?;
+        self.save_wallet().await
     }
 
-    async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
-        self.update_and_save_wallet(client).await;
+    async fn update_wallet(&mut self, client: &ChainClient<NodeProvider, S>) -> Result<(), Error> {
+        self.update_and_save_wallet(client).await
     }
 }
 
 impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
 {
-    /// Returns the [`Wallet`] as a mutable reference.
-    pub fn wallet_mut(&mut self) -> impl std::ops::DerefMut<Target = Wallet> + '_ {
-        Persist::mutate(&mut self.wallet)
+    /// Returns a reference to the wallet.
+    pub fn wallet(&self) -> &Wallet {
+        &self.wallet
     }
 
-    pub fn new(storage: S, options: ClientOptions, wallet: WalletState<W>) -> Self {
+    /// Returns the [`WalletState`] as a mutable reference.
+    pub fn wallet_mut(&mut self) -> &mut WalletState<W> {
+        &mut self.wallet
+    }
+
+    pub async fn mutate_wallet<R: Send>(
+        &mut self,
+        mutation: impl FnOnce(&mut Wallet) -> R + Send,
+    ) -> Result<R, Error> {
+        self.wallet
+            .mutate(mutation)
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
+    }
+
+    pub fn new(storage: S, options: ClientOptions, wallet: W) -> Self {
         let node_options = NodeOptions {
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
+            retry_delay: options.retry_delay,
+            max_retries: options.max_retries,
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
+        let chain_ids = wallet.chain_ids();
+        let name = match chain_ids.len() {
+            0 => "Client node".to_string(),
+            1 => format!("Client node for {:.8}", chain_ids[0]),
+            n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
+        };
         let client = Client::new(
             node_provider,
             storage,
-            options.max_pending_messages,
+            options.max_pending_message_bundles,
             delivery,
+            options.long_lived_services,
+            chain_ids,
+            name,
         );
 
         ClientContext {
             client: Arc::new(client),
-            wallet,
+            wallet: WalletState::new(wallet),
             send_timeout: options.send_timeout,
             recv_timeout: options.recv_timeout,
-            notification_retry_delay: options.notification_retry_delay,
-            notification_retries: options.notification_retries,
+            retry_delay: options.retry_delay,
+            max_retries: options.max_retries,
             options,
-            chain_listeners: JoinSet::new(),
+            chain_listeners: JoinSet::default(),
         }
     }
 
@@ -178,7 +206,7 @@ where
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        let mut chain_client = self.client.create_chain(
+        let mut chain_client = self.client.create_chain_client(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),
@@ -188,7 +216,10 @@ where
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
         );
-        chain_client.options_mut().message_policy = self.options.message_policy;
+        chain_client.options_mut().message_policy = MessagePolicy::new(
+            self.options.blanket_message_policy,
+            self.options.restrict_chain_ids_to.clone(),
+        );
         chain_client
     }
 
@@ -200,62 +231,78 @@ where
         NodeOptions {
             send_timeout: self.send_timeout,
             recv_timeout: self.recv_timeout,
-            notification_retry_delay: self.notification_retry_delay,
-            notification_retries: self.notification_retries,
+            retry_delay: self.retry_delay,
+            max_retries: self.max_retries,
         }
     }
 
-    pub fn save_wallet(&mut self) {
-        Persist::persist(&mut self.wallet).expect("Unable to write user chains");
+    pub async fn save_wallet(&mut self) -> Result<(), Error> {
+        self.wallet
+            .persist()
+            .await
+            .map_err(|e| error::Inner::Persistence(Box::new(e)).into())
     }
 
-    async fn update_wallet_from_client(&mut self, client: &ChainClient<NodeProvider, S>) {
-        self.wallet_mut().update_from_state(client).await
+    async fn update_wallet_from_client(
+        &mut self,
+        client: &ChainClient<NodeProvider, S>,
+    ) -> Result<(), Error> {
+        self.wallet.as_mut().update_from_state(client).await;
+        self.save_wallet().await?;
+        Ok(())
     }
 
-    pub async fn update_and_save_wallet(&mut self, client: &ChainClient<NodeProvider, S>) {
-        self.update_wallet_from_client(client).await;
-        self.save_wallet()
+    pub async fn update_and_save_wallet(
+        &mut self,
+        client: &ChainClient<NodeProvider, S>,
+    ) -> Result<(), Error> {
+        self.update_wallet_from_client(client).await?;
+        self.save_wallet().await
     }
 
-    /// Remembers the new private key (if any) in the wallet.
-    pub fn update_wallet_for_new_chain(
+    /// Remembers the new chain and private key (if any) in the wallet.
+    pub async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    ) {
+    ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
-            self.wallet_mut().insert(UserChain {
-                chain_id,
-                key_pair: key_pair.as_ref().map(|kp| kp.copy()),
-                block_hash: None,
-                timestamp,
-                next_block_height: BlockHeight::ZERO,
-                pending_block: None,
-                pending_blobs: BTreeMap::new(),
-            });
+            self.mutate_wallet(|w| {
+                w.insert(UserChain {
+                    chain_id,
+                    key_pair: key_pair.as_ref().map(|kp| kp.copy()),
+                    block_hash: None,
+                    timestamp,
+                    next_block_height: BlockHeight::ZERO,
+                    pending_block: None,
+                    pending_blobs: BTreeMap::new(),
+                })
+            })
+            .await?;
         }
+
+        Ok(())
     }
 
     pub async fn process_inbox(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
-    ) -> anyhow::Result<Vec<Certificate>> {
+    ) -> Result<Vec<Certificate>, Error> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
             chain_client.synchronize_from_validators().await?;
-            let result = chain_client.process_inbox().await;
-            self.update_wallet_from_client(chain_client).await;
+            let result = chain_client.process_inbox_without_prepare().await;
+            self.update_wallet_from_client(chain_client).await?;
             if result.is_err() {
-                self.save_wallet();
+                self.save_wallet().await?;
             }
             result?
         };
         certificates.extend(new_certificates);
         if maybe_timeout.is_none() {
-            self.save_wallet();
+            self.save_wallet().await?;
             return Ok(certificates);
         }
 
@@ -266,34 +313,107 @@ where
         loop {
             let (new_certificates, maybe_timeout) = {
                 let result = chain_client.process_inbox().await;
-                self.update_wallet_from_client(chain_client).await;
+                self.update_wallet_from_client(chain_client).await?;
                 if result.is_err() {
-                    self.save_wallet();
+                    self.save_wallet().await?;
                 }
                 result?
             };
             certificates.extend(new_certificates);
-            match maybe_timeout {
-                None => {
-                    self.save_wallet();
-                    return Ok(certificates);
-                }
-                Some(timestamp) => wait_for_next_round(&mut notification_stream, timestamp).await,
+            if let Some(timestamp) = maybe_timeout {
+                util::wait_for_next_round(&mut notification_stream, timestamp).await
+            } else {
+                self.save_wallet().await?;
+                return Ok(certificates);
             }
         }
     }
 
+    /// Applies the given function to the chain client.
+    ///
+    /// Updates the wallet regardless of the outcome. As long as the function returns a round
+    /// timeout, it will wait and retry.
+    pub async fn apply_client_command<E, F, Fut, T>(
+        &mut self,
+        client: &ChainClient<NodeProvider, S>,
+        mut f: F,
+    ) -> Result<T, Error>
+    where
+        F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
+        Fut: Future<Output = Result<ClientOutcome<T>, E>>,
+        Error: From<E>,
+    {
+        // Try applying f optimistically without validator notifications. Return if committed.
+        let result = f(client).await;
+        self.update_and_save_wallet(client).await?;
+        if let ClientOutcome::Committed(t) = result? {
+            return Ok(t);
+        }
+
+        // Start listening for notifications, so we learn about new rounds and blocks.
+        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
+        self.chain_listeners.spawn_task(listener);
+
+        loop {
+            // Try applying f. Return if committed.
+            let result = f(client).await;
+            self.update_and_save_wallet(client).await?;
+            let timeout = match result? {
+                ClientOutcome::Committed(t) => return Ok(t),
+                ClientOutcome::WaitForTimeout(timeout) => timeout,
+            };
+            // Otherwise wait and try again in the next round.
+            util::wait_for_next_round(&mut notification_stream, timeout).await;
+        }
+    }
+
+    pub async fn change_ownership(
+        &mut self,
+        chain_id: Option<ChainId>,
+        ownership_config: ChainOwnershipConfig,
+    ) -> Result<(), Error> {
+        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
+        let chain_client = self.make_chain_client(chain_id);
+        info!("Changing ownership for chain {}", chain_id);
+        let time_start = Instant::now();
+        let ownership = ChainOwnership::try_from(ownership_config)?;
+
+        let certificate = self
+            .apply_client_command(&chain_client, |chain_client| {
+                let ownership = ownership.clone();
+                let chain_client = chain_client.clone();
+                async move {
+                    chain_client
+                        .change_ownership(ownership)
+                        .await
+                        .map_err(Error::from)
+                        .context("Failed to change ownership")
+                }
+            })
+            .await?;
+        let time_total = time_start.elapsed();
+        info!("Operation confirmed after {} ms", time_total.as_millis());
+        debug!("{:?}", certificate);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "fs")]
+impl<S, W> ClientContext<S, W>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    W: Persist<Target = Wallet>,
+{
     pub async fn publish_bytecode(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
         contract: PathBuf,
         service: PathBuf,
-    ) -> anyhow::Result<BytecodeId> {
+    ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract).await.context(format!(
-            "failed to load contract bytecode from {:?}",
-            &contract
-        ))?;
+        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract)
+            .await
+            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
         let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
             "failed to load service bytecode from {:?}",
             &service
@@ -314,106 +434,60 @@ where
             })
             .await?;
 
-        info!("{}", "Bytecode published successfully!".green().bold());
+        info!("{}", "Bytecode published successfully!");
 
         info!("Synchronizing client and processing inbox");
-        chain_client.synchronize_from_validators().await?;
         self.process_inbox(chain_client).await?;
         Ok(bytecode_id)
     }
 
-    pub async fn publish_blob(
+    pub async fn publish_data_blob(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
         blob_path: PathBuf,
-    ) -> anyhow::Result<BlobId> {
-        info!("Loading blob file");
-        let blob = HashedBlob::load_from_file(&blob_path)
-            .await
-            .context(format!("failed to load blob from {:?}", &blob_path))?;
-        let blob_id = blob.id();
+    ) -> Result<CryptoHash, Error> {
+        info!("Loading data blob file");
+        let blob_bytes = fs::read(&blob_path).context(format!(
+            "failed to load data blob bytes from {:?}",
+            &blob_path
+        ))?;
 
-        info!("Publishing blob");
+        info!("Publishing data blob");
         self.apply_client_command(chain_client, |chain_client| {
-            let blob = blob.clone();
+            let blob_bytes = blob_bytes.clone();
             let chain_client = chain_client.clone();
             async move {
                 chain_client
-                    .publish_blob(blob)
+                    .publish_data_blob(blob_bytes)
                     .await
-                    .context("Failed to publish blob")
+                    .context("Failed to publish data blob")
             }
         })
         .await?;
 
-        info!("{}", "Blob published successfully!".green().bold());
-        Ok(blob_id)
+        info!("{}", "Data blob published successfully!");
+        Ok(CryptoHash::new(&BlobBytes(blob_bytes)))
     }
 
-    /// Applies the given function to the chain client.
-    ///
-    /// Updates the wallet regardless of the outcome. As long as the function returns a round
-    /// timeout, it will wait and retry.
-    pub async fn apply_client_command<E, F, Fut, T>(
+    // TODO(#2490): Consider removing or renaming this.
+    pub async fn read_data_blob(
         &mut self,
-        client: &ChainClient<NodeProvider, S>,
-        mut f: F,
-    ) -> anyhow::Result<T>
-    where
-        F: FnMut(&ChainClient<NodeProvider, S>) -> Fut,
-        Fut: Future<Output = Result<ClientOutcome<T>, E>>,
-        anyhow::Error: From<E>,
-    {
-        // Try applying f optimistically without validator notifications. Return if committed.
-        let result = f(client).await;
-        self.update_and_save_wallet(client).await;
-        if let ClientOutcome::Committed(t) = result? {
-            return Ok(t);
-        }
+        chain_client: &ChainClient<NodeProvider, S>,
+        hash: CryptoHash,
+    ) -> Result<(), Error> {
+        info!("Verifying data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .read_data_blob(hash)
+                    .await
+                    .context("Failed to verify data blob")
+            }
+        })
+        .await?;
 
-        // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
-        self.chain_listeners.spawn_task(listener);
-
-        loop {
-            // Try applying f. Return if committed.
-            let result = f(client).await;
-            self.update_and_save_wallet(client).await;
-            let timeout = match result? {
-                ClientOutcome::Committed(t) => return Ok(t),
-                ClientOutcome::WaitForTimeout(timeout) => timeout,
-            };
-            // Otherwise wait and try again in the next round.
-            wait_for_next_round(&mut notification_stream, timeout).await;
-        }
-    }
-
-    pub async fn change_ownership(
-        &mut self,
-        chain_id: Option<ChainId>,
-        ownership_config: ChainOwnershipConfig,
-    ) -> anyhow::Result<()> {
-        let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id);
-        info!("Changing ownership for chain {}", chain_id);
-        let time_start = Instant::now();
-        let ownership = ChainOwnership::try_from(ownership_config)?;
-
-        let certificate = self
-            .apply_client_command(&chain_client, |chain_client| {
-                let ownership = ownership.clone();
-                let chain_client = chain_client.clone();
-                async move {
-                    chain_client
-                        .change_ownership(ownership)
-                        .await
-                        .context("Failed to change ownership")
-                }
-            })
-            .await?;
-        let time_total = time_start.elapsed();
-        info!("Operation confirmed after {} ms", time_total.as_millis());
-        debug!("{:?}", certificate);
+        info!("{}", "Data blob verified successfully!");
         Ok(())
     }
 }
@@ -422,7 +496,6 @@ where
 impl<S, W> ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
     W: Persist<Target = Wallet>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
@@ -439,7 +512,7 @@ where
         &mut self,
         num_chains: usize,
         balance: Amount,
-    ) -> anyhow::Result<HashMap<ChainId, KeyPair>> {
+    ) -> Result<HashMap<ChainId, KeyPair>, Error> {
         let mut key_pairs = HashMap::new();
         for chain_id in self.wallet.own_chain_ids() {
             if key_pairs.len() == num_chains {
@@ -463,13 +536,13 @@ where
         let default_chain_id = self
             .wallet
             .default_chain()
-            .context("should have default chain")?;
+            .expect("should have default chain");
         let chain_client = self.make_chain_client(default_chain_id);
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet.generate_key_pair();
             let public_key = key_pair.public();
             let (epoch, committees) = chain_client.epoch_and_committees(default_chain_id).await?;
-            let epoch = epoch.context("missing epoch on the default chain")?;
+            let epoch = epoch.expect("default chain should be active");
             // Put at most 1000 OpenChain operations in each block.
             let num_new_chains = (num_chains - key_pairs.len()).min(1000);
             let config = OpenChainConfig {
@@ -490,22 +563,30 @@ where
             let executed_block = certificate
                 .value()
                 .executed_block()
-                .context("certificate should be confirmed block")?;
+                .expect("certificate should be confirmed block");
             let timestamp = executed_block.block.timestamp;
             for i in 0..num_new_chains {
                 let message_id = executed_block
                     .message_id_for_operation(i, OPEN_CHAIN_MESSAGE_INDEX)
-                    .context("failed to create new chain")?;
+                    .expect("failed to create new chain");
                 let chain_id = ChainId::child(message_id);
                 key_pairs.insert(chain_id, key_pair.copy());
-                self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp);
+                self.client.track_chain(chain_id);
+                self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp)
+                    .await?;
             }
         }
+        let updated_chain_client = self.make_chain_client(default_chain_id);
+        updated_chain_client
+            .retry_pending_outgoing_messages()
+            .await
+            .context("outgoing messages to create the new chains should be delivered")?;
 
         for chain_id in key_pairs.keys() {
             let child_client = self.make_chain_client(*chain_id);
             child_client.process_inbox().await?;
-            self.wallet_mut().update_from_state(&child_client).await;
+            self.wallet.as_mut().update_from_state(&child_client).await;
+            self.save_wallet().await?;
         }
         Ok(key_pairs)
     }
@@ -517,11 +598,11 @@ where
         key_pairs: &HashMap<ChainId, KeyPair>,
         application_id: ApplicationId,
         max_in_flight: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
             .default_chain()
-            .context("should have default chain")?;
+            .expect("should have default chain");
         let default_key = self
             .wallet
             .get(default_chain_id)
@@ -551,7 +632,7 @@ where
                 .await?
                 .expect("should execute block with OpenChain operations");
         }
-        self.update_wallet_from_client(&chain_client).await;
+        self.update_wallet_from_client(&chain_client).await?;
         // Make sure all chains have registered the application now.
         let futures = key_pairs
             .keys()
@@ -559,7 +640,7 @@ where
                 let chain_client = self.make_chain_client(chain_id);
                 async move {
                     for i in 0..5 {
-                        tokio::time::sleep(Duration::from_secs(i)).await;
+                        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
                         chain_client.process_inbox().await?;
                         let chain_state = chain_client.chain_state_view().await?;
                         if chain_state
@@ -570,22 +651,21 @@ where
                             .contains_key(&application_id)
                             .await?
                         {
-                            return Ok(chain_client);
+                            return Ok::<_, Error>(chain_client);
                         }
                     }
-                    anyhow::bail!("Could not instantiate application on chain {:?}", chain_id);
+                    panic!("Could not instantiate application on chain {chain_id:?}");
                 }
             })
             .collect::<Vec<_>>();
         // We have to collect the futures to avoid a higher-ranked lifetime error:
         // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
-        let results = stream::iter(futures)
+        let clients = stream::iter(futures)
             .buffer_unordered(max_in_flight)
-            .collect::<Vec<_>>()
-            .await;
-        for result in results {
-            let client = result?;
-            self.update_wallet_from_client(&client).await;
+            .try_collect::<Vec<_>>()
+            .await?;
+        for client in clients {
+            self.update_wallet_from_client(&client).await?;
         }
         Ok(())
     }
@@ -598,7 +678,7 @@ where
         fungible_application_id: Option<ApplicationId>,
     ) -> Vec<RpcMessage> {
         let mut proposals = Vec::new();
-        let mut next_recipient = self.wallet_mut().last_chain().unwrap().chain_id;
+        let mut next_recipient = self.wallet.last_chain().unwrap().chain_id;
         let amount = Amount::from(1);
         for (&chain_id, key_pair) in key_pairs {
             let public_key = key_pair.public();
@@ -614,7 +694,6 @@ where
                     owner: None,
                     recipient: Recipient::chain(next_recipient),
                     amount,
-                    user_data: UserData::default(),
                 }),
             };
             let operations = iter::repeat(operation)
@@ -624,7 +703,7 @@ where
             let block = Block {
                 epoch: Epoch::ZERO,
                 chain_id,
-                incoming_messages: Vec::new(),
+                incoming_bundles: Vec::new(),
                 operations,
                 previous_block_hash: chain.block_hash,
                 height: chain.next_block_height,
@@ -636,7 +715,6 @@ where
                 linera_base::data_types::Round::Fast,
                 block.clone(),
                 key_pair,
-                vec![],
                 vec![],
             );
             proposals.push(proposal.into());
@@ -757,18 +835,19 @@ where
         // Replay the certificates locally.
         for certificate in certificates {
             // No required certificates from other chains: This is only used with benchmark.
-            node.handle_certificate(certificate, vec![], vec![], &mut vec![])
+            node.handle_certificate(certificate, vec![], &mut vec![])
                 .await
                 .unwrap();
         }
         // Last update the wallet.
-        for chain in self.wallet_mut().chains_mut() {
+        for chain in self.wallet.as_mut().chains_mut() {
             let query = ChainInfoQuery::new(chain.chain_id);
             let info = node.handle_chain_info_query(query).await.unwrap().info;
             // We don't have private keys but that's ok.
             chain.block_hash = info.block_hash;
             chain.next_block_height = info.next_block_height;
         }
+        self.save_wallet().await.unwrap();
     }
 
     /// Creates a fungible token transfer operation.
@@ -796,7 +875,7 @@ where
     }
 
     /// Stages the execution of a block proposal.
-    pub async fn stage_block_execution(&self, block: Block) -> anyhow::Result<ExecutedBlock> {
+    pub async fn stage_block_execution(&self, block: Block) -> Result<ExecutedBlock, Error> {
         Ok(self
             .client
             .local_node()

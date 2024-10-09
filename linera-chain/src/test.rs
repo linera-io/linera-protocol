@@ -4,7 +4,7 @@
 //! Test utilities
 
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::KeyPair,
     data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{ChainId, Owner},
 };
@@ -15,8 +15,8 @@ use linera_execution::{
 };
 
 use crate::data_types::{
-    Block, BlockProposal, Certificate, Event, HashedCertificateValue, IncomingMessage,
-    MessageAction, Origin, SignatureAggregator, Vote,
+    Block, BlockProposal, Certificate, HashedCertificateValue, IncomingBundle, PostedMessage,
+    SignatureAggregator, Vote,
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -26,7 +26,7 @@ pub fn make_child_block(parent: &HashedCertificateValue) -> Block {
     Block {
         epoch: parent_value.epoch(),
         chain_id: parent_value.chain_id(),
-        incoming_messages: vec![],
+        incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
         height: parent_value.height().try_add_one().unwrap(),
@@ -40,7 +40,7 @@ pub fn make_first_block(chain_id: ChainId) -> Block {
     Block {
         epoch: Epoch::ZERO,
         chain_id,
-        incoming_messages: vec![],
+        incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: None,
         height: BlockHeight::ZERO,
@@ -61,7 +61,7 @@ pub trait BlockTestExt: Sized {
     fn with_simple_transfer(self, chain_id: ChainId, amount: Amount) -> Self;
 
     /// Returns the block with the given message appended at the end.
-    fn with_incoming_message(self, incoming_message: IncomingMessage) -> Self;
+    fn with_incoming_bundle(self, incoming_bundle: IncomingBundle) -> Self;
 
     /// Returns the block with the specified timestamp.
     fn with_timestamp(self, timestamp: impl Into<Timestamp>) -> Self;
@@ -89,7 +89,6 @@ impl BlockTestExt for Block {
             owner,
             recipient,
             amount,
-            user_data: Default::default(),
         })
     }
 
@@ -97,8 +96,8 @@ impl BlockTestExt for Block {
         self.with_transfer(None, Recipient::chain(chain_id), amount)
     }
 
-    fn with_incoming_message(mut self, incoming_message: IncomingMessage) -> Self {
-        self.incoming_messages.push(incoming_message);
+    fn with_incoming_bundle(mut self, incoming_bundle: IncomingBundle) -> Self {
+        self.incoming_bundles.push(incoming_bundle);
         self
     }
 
@@ -113,7 +112,7 @@ impl BlockTestExt for Block {
     }
 
     fn into_proposal_with_round(self, key_pair: &KeyPair, round: Round) -> BlockProposal {
-        BlockProposal::new_initial(round, self, key_pair, vec![], vec![])
+        BlockProposal::new_initial(round, self, key_pair, vec![])
     }
 }
 
@@ -141,25 +140,18 @@ impl VoteTestExt for Vote {
 
 /// Helper trait to simplify constructing messages for tests.
 pub trait MessageTestExt: Sized {
-    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingMessage;
+    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage;
 }
 
 impl<T: Into<Message>> MessageTestExt for T {
-    fn to_simple_incoming(self, sender: ChainId, height: BlockHeight) -> IncomingMessage {
-        IncomingMessage {
-            origin: Origin::chain(sender),
-            event: Event {
-                certificate_hash: CryptoHash::test_hash("certificate"),
-                height,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                timestamp: Timestamp::from(0),
-                message: self.into(),
-            },
-            action: MessageAction::Accept,
+    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage {
+        PostedMessage {
+            authenticated_signer: None,
+            grant: Amount::ZERO,
+            refund_grant_to: None,
+            kind,
+            index,
+            message: self.into(),
         }
     }
 }

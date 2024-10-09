@@ -19,8 +19,14 @@ pub mod data_types;
 mod graphql;
 pub mod identifiers;
 pub mod ownership;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod port;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
+#[cfg(not(chain))]
+pub mod task;
+pub mod time;
+#[cfg_attr(web, path = "tracing_web.rs")]
 pub mod tracing;
 #[cfg(test)]
 mod unit_tests;
@@ -28,15 +34,6 @@ mod unit_tests;
 pub use graphql::BcsHexParseError;
 #[doc(hidden)]
 pub use {async_graphql, bcs, hex};
-
-cfg_if::cfg_if! {
-    if #[cfg(web)] {
-        #[cfg(web)]
-        pub use web_time as time;
-    } else {
-        pub use std::time;
-    }
-}
 
 /// A macro for asserting that a condition is true, returning an error if it is not.
 ///

@@ -5,28 +5,19 @@
 
 #![deny(clippy::large_futures)]
 
-mod chain_guards;
 mod db_storage;
-#[cfg(with_dynamodb)]
-mod dynamo_db;
-mod memory;
-#[cfg(with_rocksdb)]
-mod rocks_db;
-#[cfg(with_scylladb)]
-mod scylla_db;
-#[cfg(not(target_arch = "wasm32"))]
-mod service;
 
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use chain_guards::ChainGuard;
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
-    data_types::{Amount, BlockHeight, HashedBlob, Timestamp},
-    identifiers::{BlobId, ChainDescription, ChainId, EventId, GenericApplicationId},
+    data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
+    identifiers::{
+        BlobId, ChainDescription, ChainId, EventId, GenericApplicationId, UserApplicationId,
+    },
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -37,59 +28,51 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemChannel,
     BlobState, ChannelSubscription, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, UserApplicationDescription, UserApplicationId, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    ExecutionRuntimeContext, UserContractCode, UserServiceCode, WasmRuntime,
 };
 use linera_views::{
-    common::Context,
+    context::Context,
     views::{CryptoHashView, RootView, ViewError},
 };
 #[cfg(with_wasm_runtime)]
 use {
-    linera_chain::data_types::CertificateValue,
-    linera_execution::{Operation, SystemOperation, WasmContractModule, WasmServiceModule},
+    linera_base::{data_types::CompressedBytecode, identifiers::BlobType},
+    linera_execution::{WasmContractModule, WasmServiceModule},
 };
 
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
+pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
     WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
-};
-#[cfg(with_dynamodb)]
-pub use crate::dynamo_db::DynamoDbStorage;
-#[cfg(with_rocksdb)]
-pub use crate::rocks_db::RocksDbStorage;
-#[cfg(with_scylladb)]
-pub use crate::scylla_db::ScyllaDbStorage;
-#[cfg(not(target_arch = "wasm32"))]
-pub use crate::service::ServiceStorage;
-pub use crate::{
-    db_storage::{Clock, DbStorage, WallClock},
-    memory::MemoryStorage,
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.
 #[async_trait]
 pub trait Storage: Sized {
     /// The low-level storage implementation in use.
-    type Context: Context<Extra = ChainRuntimeContext<Self>, Error = Self::StoreError>
-        + Clone
-        + Send
-        + Sync
-        + 'static;
+    type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + Send + Sync + 'static;
 
-    /// Alias to provide simpler trait bounds `ViewError: From<Self::StoreError>`
-    type StoreError: std::error::Error + Debug + Sync + Send;
+    /// The clock type being used.
+    type Clock: Clock;
 
     /// Returns the current wall clock time.
-    fn clock(&self) -> &dyn Clock;
+    fn clock(&self) -> &Self::Clock;
 
     /// Loads the view of a chain state.
-    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>
-    where
-        ViewError: From<Self::StoreError>;
+    ///
+    /// # Notes
+    ///
+    /// Each time this method is called, a new [`ChainStateView`] is created. If there are multiple
+    /// instances of the same chain active at any given moment, they will race to access persistent
+    /// storage. This can lead to invalid states and data corruption.
+    ///
+    /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
+    /// [`load_active_chain`][`Self::load_active_chain`] and
+    /// [`create_chain`][`Self::create_chain`].
+    async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
     /// Tests existence of a hashed certificate value with the given hash.
     async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -100,13 +83,13 @@ pub trait Storage: Sized {
         hash: Vec<CryptoHash>,
     ) -> Result<Vec<bool>, ViewError>;
 
-    /// Tests existence of a blob with the given hash.
+    /// Tests the existence of a blob with the given blob ID.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
-    /// List the missing blobs from the storage.
+    /// Lists the missing blobs from storage.
     async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError>;
 
-    /// Tests existence of a blob state with the given hash.
+    /// Tests existence of a blob state with the given blob ID.
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
     /// Reads the hashed certificate value with the given hash.
@@ -116,13 +99,10 @@ pub trait Storage: Sized {
     ) -> Result<HashedCertificateValue, ViewError>;
 
     /// Reads the blob with the given blob ID.
-    async fn read_hashed_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ViewError>;
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
-    async fn read_hashed_blobs(
-        &self,
-        blob_ids: &[BlobId],
-    ) -> Result<Vec<Option<HashedBlob>>, ViewError>;
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError>;
@@ -141,13 +121,12 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes the given blob.
-    async fn write_hashed_blob(&self, blob: &HashedBlob) -> Result<(), ViewError>;
+    async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
-    /// Writes hashed certificates, hashed blobs and certificate
-    async fn write_hashed_certificate_values_hashed_blobs_certificate(
+    /// Writes blobs and certificate
+    async fn write_blobs_and_certificate(
         &self,
-        values: &[HashedCertificateValue],
-        blobs: &[HashedBlob],
+        blobs: &[Blob],
         certificate: &Certificate,
     ) -> Result<(), ViewError>;
 
@@ -172,7 +151,7 @@ pub trait Storage: Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
-    async fn write_hashed_blobs(&self, blobs: &[HashedBlob]) -> Result<(), ViewError>;
+    async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
@@ -193,13 +172,21 @@ pub trait Storage: Sized {
     async fn write_events(&self, events: &[(EventId, &[u8])]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
+    ///
+    /// # Notes
+    ///
+    /// Each time this method is called, a new [`ChainStateView`] is created. If there are multiple
+    /// instances of the same chain active at any given moment, they will race to access persistent
+    /// storage. This can lead to invalid states and data corruption.
+    ///
+    /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
+    /// [`load_chain`][`Self::load_chain`] and [`create_chain`][`Self::create_chain`].
     async fn load_active_chain(
         &self,
         id: ChainId,
     ) -> Result<ChainStateView<Self::Context>, linera_chain::ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
-        ViewError: From<Self::StoreError>,
     {
         let chain = self.load_chain(id).await?;
         chain.ensure_is_active()?;
@@ -216,9 +203,8 @@ pub trait Storage: Sized {
     {
         let mut tasks = Vec::new();
         for key in keys {
-            // TODO: remove clone using scoped threads
             let client = self.clone();
-            tasks.push(tokio::task::spawn(async move {
+            tasks.push(linera_base::task::spawn(async move {
                 client.read_certificate(key).await
             }));
         }
@@ -231,6 +217,15 @@ pub trait Storage: Sized {
     }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
+    ///
+    /// # Notes
+    ///
+    /// This method creates a new [`ChainStateView`] instance. If there are multiple instances of
+    /// the same chain active at any given moment, they will race to access persistent storage.
+    /// This can lead to invalid states and data corruption.
+    ///
+    /// Other methods that also create [`ChainStateView`] instances that can cause conflicts are:
+    /// [`load_chain`][`Self::load_chain`] and [`load_active_chain`][`Self::load_active_chain`].
     async fn create_chain(
         &self,
         committee: Committee,
@@ -242,7 +237,6 @@ pub trait Storage: Sized {
     ) -> Result<(), ChainError>
     where
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
-        ViewError: From<Self::StoreError>,
     {
         let id = description.into();
         let mut chain = self.load_chain(id).await?;
@@ -304,14 +298,20 @@ pub trait Storage: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let SystemOperation::PublishBytecode { contract, .. } =
-            read_publish_bytecode_operation(self, application_description).await?
-        else {
-            unreachable!("unexpected bytecode operation");
+        let contract_bytecode_blob_id = BlobId::new(
+            application_description.bytecode_id.contract_blob_hash,
+            BlobType::ContractBytecode,
+        );
+        let contract_blob = self.read_blob(contract_bytecode_blob_id).await?;
+        let compressed_contract_bytecode = CompressedBytecode {
+            compressed_bytes: contract_blob.inner_bytes(),
         };
-        Ok(Arc::new(
-            WasmContractModule::new(contract, wasm_runtime).await?,
-        ))
+        let contract_bytecode =
+            linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
+                .await??;
+        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
+            .await?
+            .into())
     }
 
     #[cfg(not(with_wasm_runtime))]
@@ -337,14 +337,20 @@ pub trait Storage: Sized {
         let Some(wasm_runtime) = self.wasm_runtime() else {
             panic!("A Wasm runtime is required to load user applications.");
         };
-        let SystemOperation::PublishBytecode { service, .. } =
-            read_publish_bytecode_operation(self, application_description).await?
-        else {
-            unreachable!("unexpected bytecode operation");
+        let service_bytecode_blob_id = BlobId::new(
+            application_description.bytecode_id.service_blob_hash,
+            BlobType::ServiceBytecode,
+        );
+        let service_blob = self.read_blob(service_bytecode_blob_id).await?;
+        let compressed_service_bytecode = CompressedBytecode {
+            compressed_bytes: service_blob.inner_bytes(),
         };
-        Ok(Arc::new(
-            WasmServiceModule::new(service, wasm_runtime).await?,
-        ))
+        let service_bytecode =
+            linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
+                .await??;
+        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
+            .await?
+            .into())
     }
 
     #[cfg(not(with_wasm_runtime))]
@@ -361,40 +367,6 @@ pub trait Storage: Sized {
     }
 }
 
-#[cfg(with_wasm_runtime)]
-async fn read_publish_bytecode_operation(
-    storage: &impl Storage,
-    application_description: &UserApplicationDescription,
-) -> Result<SystemOperation, ExecutionError> {
-    let UserApplicationDescription {
-        bytecode_id,
-        bytecode_location,
-        ..
-    } = application_description;
-    let value = storage
-        .read_hashed_certificate_value(bytecode_location.certificate_hash)
-        .await
-        .map_err(|error| match error {
-            ViewError::NotFound(_) => ExecutionError::ApplicationBytecodeNotFound(Box::new(
-                application_description.clone(),
-            )),
-            _ => error.into(),
-        })?
-        .into_inner();
-    let operations = match value {
-        CertificateValue::ConfirmedBlock { executed_block, .. } => executed_block.block.operations,
-        _ => return Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
-    };
-    let index = usize::try_from(bytecode_location.operation_index)
-        .map_err(|_| linera_base::data_types::ArithmeticError::Overflow)?;
-    match operations.into_iter().nth(index) {
-        Some(Operation::System(operation @ SystemOperation::PublishBytecode { .. })) => {
-            Ok(operation)
-        }
-        _ => Err(ExecutionError::InvalidBytecodeId(*bytecode_id)),
-    }
-}
-
 #[derive(Clone)]
 pub struct ChainRuntimeContext<S> {
     storage: S,
@@ -402,7 +374,6 @@ pub struct ChainRuntimeContext<S> {
     execution_runtime_config: ExecutionRuntimeConfig,
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
-    _chain_guard: Arc<ChainGuard>,
 }
 
 #[async_trait]
@@ -454,11 +425,25 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<HashedBlob, ExecutionError> {
-        Ok(self.storage.read_hashed_blob(blob_id).await?)
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
+        Ok(self.storage.read_blob(blob_id).await?)
+    }
+
+    async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        self.storage.contains_blob(blob_id).await
     }
 
     async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
         Ok(self.storage.read_event(event_id).await?)
     }
+}
+
+/// A clock that can be used to get the current `Timestamp`.
+#[async_trait]
+pub trait Clock {
+    fn current_time(&self) -> Timestamp;
+
+    async fn sleep(&self, delta: TimeDelta);
+
+    async fn sleep_until(&self, timestamp: Timestamp);
 }

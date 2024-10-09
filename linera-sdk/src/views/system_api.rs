@@ -9,9 +9,9 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    common::{ContextFromStore, ReadableKeyValueStore, WritableKeyValueStore},
-    views::ViewError,
+    store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
+use thiserror::Error;
 
 #[cfg(with_testing)]
 use super::mock_key_value_store::MockKeyValueStore;
@@ -79,7 +79,27 @@ impl KeyValueStore {
     }
 }
 
-impl ReadableKeyValueStore<ViewError> for KeyValueStore {
+impl WithError for KeyValueStore {
+    type Error = KeyValueStoreError;
+}
+
+/// The error type for [`KeyValueStore`] operations.
+#[derive(Error, Debug)]
+pub enum KeyValueStoreError {
+    /// Key too long
+    #[error("Key too long")]
+    KeyTooLong,
+
+    /// BCS serialization error.
+    #[error("BCS error: {0}")]
+    Bcs(#[from] bcs::Error),
+}
+
+impl linera_views::store::KeyValueStoreError for KeyValueStoreError {
+    const BACKEND: &'static str = "key_value_store";
+}
+
+impl ReadableKeyValueStore for KeyValueStore {
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
@@ -90,16 +110,22 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
         1
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, ViewError> {
-        ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, KeyValueStoreError> {
+        ensure!(
+            key.len() <= Self::MAX_KEY_SIZE,
+            KeyValueStoreError::KeyTooLong
+        );
         let promise = self.wit_api.contains_key_new(key);
         yield_once().await;
         Ok(self.wit_api.contains_key_wait(promise))
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ViewError> {
+    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, KeyValueStoreError> {
         for key in &keys {
-            ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+            ensure!(
+                key.len() <= Self::MAX_KEY_SIZE,
+                KeyValueStoreError::KeyTooLong
+            );
         }
         let promise = self.wit_api.contains_keys_new(&keys);
         yield_once().await;
@@ -109,26 +135,35 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ViewError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, KeyValueStoreError> {
         for key in &keys {
-            ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+            ensure!(
+                key.len() <= Self::MAX_KEY_SIZE,
+                KeyValueStoreError::KeyTooLong
+            );
         }
         let promise = self.wit_api.read_multi_values_bytes_new(&keys);
         yield_once().await;
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ViewError> {
-        ensure!(key.len() <= Self::MAX_KEY_SIZE, ViewError::KeyTooLong);
+    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, KeyValueStoreError> {
+        ensure!(
+            key.len() <= Self::MAX_KEY_SIZE,
+            KeyValueStoreError::KeyTooLong
+        );
         let promise = self.wit_api.read_value_bytes_new(key);
         yield_once().await;
         Ok(self.wit_api.read_value_bytes_wait(promise))
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, ViewError> {
+    async fn find_keys_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Self::Keys, KeyValueStoreError> {
         ensure!(
             key_prefix.len() <= Self::MAX_KEY_SIZE,
-            ViewError::KeyTooLong
+            KeyValueStoreError::KeyTooLong
         );
         let promise = self.wit_api.find_keys_new(key_prefix);
         yield_once().await;
@@ -138,10 +173,10 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, ViewError> {
+    ) -> Result<Self::KeyValues, KeyValueStoreError> {
         ensure!(
             key_prefix.len() <= Self::MAX_KEY_SIZE,
-            ViewError::KeyTooLong
+            KeyValueStoreError::KeyTooLong
         );
         let promise = self.wit_api.find_key_values_new(key_prefix);
         yield_once().await;
@@ -149,15 +184,15 @@ impl ReadableKeyValueStore<ViewError> for KeyValueStore {
     }
 }
 
-impl WritableKeyValueStore<ViewError> for KeyValueStore {
+impl WritableKeyValueStore for KeyValueStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
-    async fn write_batch(&self, batch: Batch, _base_key: &[u8]) -> Result<(), ViewError> {
+    async fn write_batch(&self, batch: Batch) -> Result<(), KeyValueStoreError> {
         self.wit_api.write_batch(batch);
         Ok(())
     }
 
-    async fn clear_journal(&self, _base_key: &[u8]) -> Result<(), ViewError> {
+    async fn clear_journal(&self) -> Result<(), KeyValueStoreError> {
         Ok(())
     }
 }
@@ -329,20 +364,46 @@ impl WitInterface {
     }
 }
 
-impl linera_views::common::KeyValueStore for KeyValueStore {
-    type Error = ViewError;
-}
-
-/// Implementation of [`linera_views::common::Context`] to be used for data storage
+/// Implementation of [`linera_views::context::Context`] to be used for data storage
 /// by Linera applications.
-pub type ViewStorageContext = ContextFromStore<(), KeyValueStore>;
+pub type ViewStorageContext = linera_views::context::ViewContext<(), KeyValueStore>;
 
-impl From<KeyValueStore> for ViewStorageContext {
-    fn from(store: KeyValueStore) -> Self {
-        ContextFromStore {
-            store,
-            base_key: vec![],
-            extra: (),
-        }
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_key_value_store_mock() -> anyhow::Result<()> {
+        // Create a mock key-value store for testing
+        let store = KeyValueStore::mock();
+        let mock_store = store.to_mut();
+
+        // Check if key exists
+        let is_key_existing = mock_store.contains_key(b"foo").await?;
+        assert!(!is_key_existing);
+
+        // Check if keys exist
+        let is_keys_existing = mock_store
+            .contains_keys(vec![b"foo".to_vec(), b"bar".to_vec()])
+            .await?;
+        assert!(!is_keys_existing[0]);
+        assert!(!is_keys_existing[1]);
+
+        // Read and write values
+        let mut batch = Batch::new();
+        batch.put_key_value(b"foo".to_vec(), &32_u128)?;
+        batch.put_key_value(b"bar".to_vec(), &42_u128)?;
+        mock_store.write_batch(batch).await?;
+
+        let is_key_existing = mock_store.contains_key(b"foo").await?;
+        assert!(is_key_existing);
+
+        let value = mock_store.read_value(b"foo").await?;
+        assert_eq!(value, Some(32_u128));
+
+        let value = mock_store.read_value(b"bar").await?;
+        assert_eq!(value, Some(42_u128));
+
+        Ok(())
     }
 }

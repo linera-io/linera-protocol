@@ -29,7 +29,6 @@ clap.workspace = true
 linera-base.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
-port-selector.workspace = true
 prost.workspace = true
 serde.workspace = true
 thiserror.workspace = true

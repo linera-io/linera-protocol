@@ -10,6 +10,7 @@ mod wasm;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
+    num::NonZeroUsize,
     time::Duration,
 };
 
@@ -26,10 +27,10 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
-        Event, HashedCertificateValue, IncomingMessage, LiteVote, Medium, MessageAction, Origin,
-        OutgoingMessage, SignatureAggregator,
+        HashedCertificateValue, IncomingBundle, LiteVote, Medium, MessageAction, MessageBundle,
+        Origin, OutgoingMessage, PostedMessage, SignatureAggregator,
     },
-    test::{make_child_block, make_first_block, BlockTestExt, VoteTestExt},
+    test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -41,10 +42,13 @@ use linera_execution::{
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
     SystemExecutionError, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
-use linera_storage::{MemoryStorage, Storage, TestClock};
+use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
-    views::{CryptoHashView, RootView, ViewError},
+    context::MemoryContext,
+    memory::MemoryStore,
+    random::generate_test_namespace,
+    store::TestKeyValueStore as _,
+    views::{CryptoHashView, RootView},
 };
 use test_case::test_case;
 use test_log::test;
@@ -61,7 +65,7 @@ use crate::{
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
         Notification,
-        Reason::{self, NewBlock, NewIncomingMessage},
+        Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
 };
@@ -71,17 +75,26 @@ const TEST_GRACE_PERIOD_MICROS: u64 = 500_000;
 
 /// Instantiates the protocol with a single validator. Returns the corresponding committee
 /// and the (non-sharded, in-memory) "worker" that we can interact with.
-fn init_worker<S>(storage: S, is_client: bool) -> (Committee, WorkerState<S>)
+fn init_worker<S>(
+    storage: S,
+    is_client: bool,
+    has_long_lived_services: bool,
+) -> (Committee, WorkerState<S>)
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     let key_pair = KeyPair::generate();
     let committee = Committee::make_simple(vec![ValidatorName(key_pair.public())]);
-    let worker = WorkerState::new("Single validator node".to_string(), Some(key_pair), storage)
-        .with_allow_inactive_chains(is_client)
-        .with_allow_messages_from_deprecated_epochs(is_client)
-        .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
+    let worker = WorkerState::new(
+        "Single validator node".to_string(),
+        Some(key_pair),
+        storage,
+        NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
+    )
+    .with_allow_inactive_chains(is_client)
+    .with_allow_messages_from_deprecated_epochs(is_client)
+    .with_long_lived_services(has_long_lived_services)
+    .with_grace_period(Duration::from_micros(TEST_GRACE_PERIOD_MICROS));
     (committee, worker)
 }
 
@@ -90,9 +103,10 @@ async fn init_worker_with_chains<S, I>(storage: S, balances: I) -> (Committee, W
 where
     I: IntoIterator<Item = (ChainDescription, PublicKey, Amount)>,
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
-    let (committee, worker) = init_worker(storage, /* is_client */ false);
+    let (committee, worker) = init_worker(
+        storage, /* is_client */ false, /* has_long_lived_services */ false,
+    );
     for (description, pubk, balance) in balances {
         worker
             .storage
@@ -119,7 +133,6 @@ async fn init_worker_with_chain<S>(
 ) -> (Committee, WorkerState<S>)
 where
     S: Storage + Clone + Send + Sync + 'static,
-    ViewError: From<S::StoreError>,
 {
     init_worker_with_chains(storage, [(description, owner, balance)]).await
 }
@@ -131,7 +144,6 @@ fn make_certificate<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     make_certificate_with_round(committee, worker, value, Round::Fast)
 }
@@ -144,7 +156,6 @@ fn make_certificate_with_round<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     let vote = LiteVote::new(
         value.lite(),
@@ -158,13 +169,13 @@ where
         .unwrap()
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_simple_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
     target_id: ChainId,
     amount: Amount,
-    incoming_messages: Vec<IncomingMessage>,
+    incoming_bundles: Vec<IncomingBundle>,
     committee: &Committee,
     balance: Amount,
     worker: &WorkerState<S>,
@@ -172,7 +183,6 @@ async fn make_simple_transfer_certificate<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     make_transfer_certificate_for_epoch(
         chain_description,
@@ -180,7 +190,7 @@ where
         None,
         Recipient::chain(target_id),
         amount,
-        incoming_messages,
+        incoming_bundles,
         Epoch::ZERO,
         committee,
         balance,
@@ -191,14 +201,14 @@ where
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
     source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<IncomingMessage>,
+    incoming_bundles: Vec<IncomingBundle>,
     committee: &Committee,
     balance: Amount,
     balances: BTreeMap<Owner, Amount>,
@@ -207,7 +217,6 @@ async fn make_transfer_certificate<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     make_transfer_certificate_for_epoch(
         chain_description,
@@ -215,7 +224,7 @@ where
         source,
         recipient,
         amount,
-        incoming_messages,
+        incoming_bundles,
         Epoch::ZERO,
         committee,
         balance,
@@ -226,14 +235,14 @@ where
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
     source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
-    incoming_messages: Vec<IncomingMessage>,
+    incoming_bundles: Vec<IncomingBundle>,
     epoch: Epoch,
     committee: &Committee,
     balance: Amount,
@@ -243,7 +252,6 @@ async fn make_transfer_certificate_for_epoch<S>(
 ) -> Certificate
 where
     S: Storage,
-    ViewError: From<S::StoreError>,
 {
     let chain_id = chain_description.into();
     let system_state = SystemExecutionState {
@@ -258,29 +266,35 @@ where
         Some(cert) => make_child_block(&cert.value),
     };
 
-    let mut messages = incoming_messages
+    let mut messages = incoming_bundles
         .iter()
-        .map(|incoming_message| {
-            if matches!(incoming_message.action, MessageAction::Reject)
-                && matches!(incoming_message.event.kind, MessageKind::Tracked)
-            {
-                vec![OutgoingMessage {
-                    authenticated_signer: incoming_message.event.authenticated_signer,
-                    destination: Destination::Recipient(incoming_message.origin.sender),
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Bouncing,
-                    message: incoming_message.event.message.clone(),
-                }]
-            } else {
-                Vec::new()
-            }
+        .flat_map(|incoming_bundle| {
+            incoming_bundle
+                .bundle
+                .messages
+                .iter()
+                .map(|posted_message| {
+                    if matches!(incoming_bundle.action, MessageAction::Reject)
+                        && matches!(posted_message.kind, MessageKind::Tracked)
+                    {
+                        vec![OutgoingMessage {
+                            authenticated_signer: posted_message.authenticated_signer,
+                            destination: Destination::Recipient(incoming_bundle.origin.sender),
+                            grant: Amount::ZERO,
+                            refund_grant_to: None,
+                            kind: MessageKind::Bouncing,
+                            message: posted_message.message.clone(),
+                        }]
+                    } else {
+                        Vec::new()
+                    }
+                })
         })
         .collect::<Vec<_>>();
 
     let block = Block {
         epoch,
-        incoming_messages,
+        incoming_bundles,
         authenticated_signer: source,
         ..block_template
     }
@@ -299,7 +313,7 @@ where
         }
         Recipient::Burn => messages.push(Vec::new()),
     }
-    let tx_count = block.operations.len() + block.incoming_messages.len();
+    let tx_count = block.operations.len() + block.incoming_bundles.len();
     let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
     let events = iter::repeat_with(Vec::new).take(tx_count).collect();
     let state_hash = system_state.into_hash().await;
@@ -382,7 +396,7 @@ fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> Cro
     CrossChainRequest::UpdateRecipient {
         sender,
         recipient,
-        bundle_vecs: vec![(Medium::Direct, bundles)],
+        bundle_vecs: vec![(Medium::Direct, bundles.collect())],
     }
 }
 
@@ -394,7 +408,6 @@ fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> Cro
 async fn test_handle_block_proposal_bad_signature<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -440,7 +453,6 @@ where
 async fn test_handle_block_proposal_zero_amount<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -491,7 +503,6 @@ where
 async fn test_handle_block_proposal_ticks<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -538,7 +549,7 @@ where
         make_certificate(&committee, &worker, value)
     };
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
 
     {
@@ -562,7 +573,6 @@ where
 async fn test_handle_block_proposal_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -605,7 +615,6 @@ where
 async fn test_handle_block_proposal_with_chaining<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -653,7 +662,7 @@ where
     assert!(chain.manager.get().pending().is_some());
     drop(chain);
     worker
-        .handle_certificate(certificate0, vec![], vec![], None)
+        .handle_certificate(certificate0, vec![], None)
         .await?;
     worker.handle_block_proposal(block_proposal1).await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
@@ -672,12 +681,11 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_handle_block_proposal_with_incoming_messages<B>(
+async fn test_handle_block_proposal_with_incoming_bundles<B>(
     mut storage_builder: B,
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -759,7 +767,7 @@ where
     // Missing earlier blocks
     assert_matches!(
         worker
-            .handle_certificate(certificate1.clone(), vec![], vec![], None)
+            .handle_certificate(certificate1.clone(), vec![], None)
             .await,
         Err(WorkerError::MissingEarlierBlocks { .. })
     );
@@ -770,14 +778,12 @@ where
         .fully_handle_certificate_with_notifications(
             certificate0.clone(),
             vec![],
-            vec![],
             Some(&mut notifications),
         )
         .await?;
     worker
         .fully_handle_certificate_with_notifications(
             certificate1.clone(),
-            vec![],
             vec![],
             Some(&mut notifications),
         )
@@ -794,7 +800,7 @@ where
             },
             Notification {
                 chain_id: ChainId::root(2),
-                reason: NewIncomingMessage {
+                reason: NewIncomingBundle {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(0)
                 }
@@ -808,7 +814,7 @@ where
             },
             Notification {
                 chain_id: ChainId::root(2),
-                reason: NewIncomingMessage {
+                reason: NewIncomingBundle {
                     origin: Origin::chain(ChainId::root(1)),
                     height: BlockHeight(1)
                 }
@@ -838,48 +844,42 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(5))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::ONE),
+                    transaction_index: 0,
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)), // wrong amount
+                    transaction_index: 0,
+                    messages: vec![
+                        system_credit_message(Amount::from_tokens(2)) // wrong amount
+                            .to_posted(0, MessageKind::Tracked),
+                    ],
                 },
                 action: MessageAction::Accept,
             })
@@ -894,18 +894,15 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(1, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -920,48 +917,40 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(3)),
+                    transaction_index: 0,
+                    messages: vec![system_credit_message(Amount::from_tokens(3))
+                        .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::ONE),
+                    transaction_index: 0,
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(1, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -976,18 +965,16 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::ONE)
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::ZERO,
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::ONE),
+                    transaction_index: 0,
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
                 },
                 action: MessageAction::Accept,
             })
@@ -1017,39 +1004,33 @@ where
             ),
         );
         worker
-            .handle_certificate(certificate.clone(), vec![], vec![], None)
+            .handle_certificate(certificate.clone(), vec![], None)
             .await?;
 
         // Then receive the next two messages.
         let block_proposal = make_child_block(&certificate.value)
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate0.value.hash(),
                     height: BlockHeight::from(0),
-                    index: 1,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(2)),
+                    transaction_index: 1,
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(1, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
-            .with_incoming_message(IncomingMessage {
+            .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.value.hash(),
                     height: BlockHeight::from(1),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: system_credit_message(Amount::from_tokens(3)),
+                    transaction_index: 0,
+                    messages: vec![system_credit_message(Amount::from_tokens(3))
+                        .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1067,7 +1048,6 @@ where
 async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -1115,7 +1095,6 @@ where
 async fn test_handle_block_proposal<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -1151,7 +1130,6 @@ where
 async fn test_handle_block_proposal_replay<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (_, worker) = init_worker_with_chains(
@@ -1193,7 +1171,6 @@ where
 async fn test_handle_certificate_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1219,7 +1196,7 @@ where
     .await;
     assert_matches!(
         worker
-            .fully_handle_certificate(certificate, vec![], vec![])
+            .fully_handle_certificate(certificate, vec![])
             .await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})
     );
@@ -1234,7 +1211,6 @@ where
 async fn test_handle_certificate_with_open_chain<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1268,25 +1244,22 @@ where
         subscriptions,
         ..SystemExecutionState::new(epoch, description, admin_id)
     };
-    let open_chain_message = IncomingMessage {
+    let open_chain_message = IncomingBundle {
         origin: Origin::chain(ChainId::root(3)),
-        event: Event {
+        bundle: MessageBundle {
             certificate_hash: CryptoHash::test_hash("certificate"),
             height: BlockHeight::ZERO,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Protected,
             timestamp: Timestamp::from(0),
-            message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
+            transaction_index: 0,
+            messages: vec![Message::System(SystemMessage::OpenChain(OpenChainConfig {
                 ownership,
                 admin_id,
                 epoch,
                 committees,
                 balance,
                 application_permissions: Default::default(),
-            })),
+            }))
+            .to_posted(0, MessageKind::Protected)],
         },
         action: MessageAction::Accept,
     };
@@ -1297,11 +1270,11 @@ where
             state_hash: state.into_hash().await,
             oracle_responses: vec![Vec::new()],
         }
-        .with(make_first_block(chain_id).with_incoming_message(open_chain_message)),
+        .with(make_first_block(chain_id).with_incoming_bundle(open_chain_message)),
     );
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
-        .fully_handle_certificate(certificate, vec![], vec![])
+        .fully_handle_certificate(certificate, vec![])
         .await?
         .info;
     assert_eq!(info.next_block_height, BlockHeight::from(1));
@@ -1316,7 +1289,6 @@ where
 async fn test_handle_certificate_wrong_owner<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1343,9 +1315,7 @@ where
     // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
     // compute the hash of the execution state.
     assert_matches!(
-        worker
-            .fully_handle_certificate(certificate, vec![], vec![])
-            .await,
+        worker.fully_handle_certificate(certificate, vec![]).await,
         Err(WorkerError::IncorrectOutcome { .. })
     );
     Ok(())
@@ -1359,7 +1329,6 @@ where
 async fn test_handle_certificate_bad_block_height<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1392,11 +1361,9 @@ where
     .await;
     // Replays are ignored.
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
-    worker
-        .fully_handle_certificate(certificate, vec![], vec![])
-        .await?;
+    worker.fully_handle_certificate(certificate, vec![]).await?;
     Ok(())
 }
 
@@ -1405,12 +1372,11 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_handle_certificate_with_anticipated_incoming_message<B>(
+async fn test_handle_certificate_with_anticipated_incoming_bundle<B>(
     mut storage_builder: B,
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1435,18 +1401,15 @@ where
         &key_pair,
         ChainId::root(2),
         Amount::from_tokens(1000),
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(3)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: CryptoHash::test_hash("certificate"),
                 height: BlockHeight::ZERO,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: system_credit_message(Amount::from_tokens(995)),
+                transaction_index: 0,
+                messages: vec![system_credit_message(Amount::from_tokens(995))
+                    .to_posted(0, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         }],
@@ -1457,7 +1420,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1472,28 +1435,31 @@ where
         .await?
         .expect("Missing inbox for `ChainId::root(3)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::ZERO, inbox.next_block_height_to_receive()?);
-    assert_eq!(inbox.added_events.count(), 0);
+    assert_eq!(inbox.added_bundles.count(), 0);
     assert_matches!(
         inbox
-            .removed_events
+            .removed_bundles
             .front()
             .await?
             .unwrap(),
-        Event {
+        MessageBundle {
             certificate_hash,
             height,
-            index: 0,
-            authenticated_signer: None,
-            grant: Amount::ZERO,
-            refund_grant_to: None,
-            kind: MessageKind::Tracked,
             timestamp,
-            message: Message::System(SystemMessage::Credit { amount, .. }),
+            transaction_index: 0,
+            messages,
         } if certificate_hash == CryptoHash::test_hash("certificate")
             && height == BlockHeight::ZERO
             && timestamp == Timestamp::from(0)
-            && amount == Amount::from_tokens(995),
-        "Unexpected event",
+            && matches!(messages[..], [PostedMessage {
+                authenticated_signer: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Tracked,
+                index: 0,
+                message: Message::System(SystemMessage::Credit { amount, .. }),
+            }] if amount == Amount::from_tokens(995)),
+        "Unexpected bundle",
     );
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
@@ -1512,7 +1478,6 @@ async fn test_handle_certificate_receiver_balance_overflow<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1545,7 +1510,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
     let new_sender_chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(new_sender_chain.is_active());
@@ -1581,7 +1546,6 @@ async fn test_handle_certificate_receiver_equal_sender<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let key_pair = KeyPair::generate();
@@ -1602,7 +1566,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1614,22 +1578,25 @@ where
         .expect("Missing inbox for `ChainId::root(1)` in `ChainId::root(1)`");
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
-        inbox.added_events.front().await?.unwrap(),
-        Event {
+        inbox.added_bundles.front().await?.unwrap(),
+        MessageBundle {
             certificate_hash,
             height,
-            index: 0,
+            timestamp,
+            transaction_index: 0,
+            messages,
+        } if certificate_hash == certificate.hash()
+        && height == BlockHeight::ZERO
+        && timestamp == Timestamp::from(0)
+        && matches!(messages[..], [PostedMessage {
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            timestamp,
+            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
-        } if certificate_hash == certificate.hash()
-            && height == BlockHeight::ZERO
-            && timestamp == Timestamp::from(0)
-            && amount == Amount::ONE,
-        "Unexpected event",
+        }] if amount == Amount::ONE),
+        "Unexpected bundle",
     );
     assert_eq!(
         BlockHeight::from(1),
@@ -1648,7 +1615,6 @@ where
 async fn test_handle_cross_chain_request<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1687,25 +1653,28 @@ where
     assert_eq!(BlockHeight::from(1), inbox.next_block_height_to_receive()?);
     assert_matches!(
         inbox
-            .added_events
+            .added_bundles
             .front()
             .await?
             .unwrap(),
-        Event {
+        MessageBundle {
             certificate_hash,
             height,
-            index: 0,
+            timestamp,
+            transaction_index: 0,
+            messages,
+        } if certificate_hash == certificate.hash()
+        && height == BlockHeight::ZERO
+        && timestamp == Timestamp::from(0)
+        && matches!(messages[..], [PostedMessage {
             authenticated_signer: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            timestamp,
+            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
-        } if certificate_hash == certificate.hash()
-            && height == BlockHeight::ZERO
-            && timestamp == Timestamp::from(0)
-            && amount == Amount::from_tokens(10),
-        "Unexpected event",
+        }] if amount == Amount::from_tokens(10)),
+        "Unexpected bundle",
     );
     assert_eq!(chain.confirmed_log.count(), 0);
     assert_eq!(None, chain.tip_state.get().block_hash);
@@ -1723,11 +1692,12 @@ async fn test_handle_cross_chain_request_no_recipient_chain<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker(storage, /* is_client */ false);
+    let (committee, worker) = init_worker(
+        storage, /* is_client */ false, /* has_long_lived_services */ false,
+    );
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1761,11 +1731,12 @@ async fn test_handle_cross_chain_request_no_recipient_chain_on_client<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let sender_key_pair = KeyPair::generate();
-    let (committee, worker) = init_worker(storage, /* is_client */ true);
+    let (committee, worker) = init_worker(
+        storage, /* is_client */ true, /* has_long_lived_services */ false,
+    );
     let certificate = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -1790,7 +1761,7 @@ where
         actions.notifications,
         vec![Notification {
             chain_id: ChainId::root(2),
-            reason: Reason::NewIncomingMessage {
+            reason: Reason::NewIncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 height: BlockHeight::ZERO,
             }
@@ -1811,7 +1782,6 @@ async fn test_handle_certificate_to_active_recipient<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let recipient_key_pair = KeyPair::generate();
@@ -1864,7 +1834,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -1888,18 +1858,15 @@ where
         &recipient_key_pair,
         ChainId::root(3),
         Amount::ONE,
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(1)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
                 height: BlockHeight::ZERO,
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: system_credit_message(Amount::from_tokens(5)),
+                transaction_index: 0,
+                messages: vec![system_credit_message(Amount::from_tokens(5))
+                    .to_posted(0, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         }],
@@ -1910,7 +1877,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
 
     assert_eq!(
@@ -1945,7 +1912,7 @@ where
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_nth(0);
+    let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_n(0);
     let (response, _actions) = worker.handle_chain_info_query(query).await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
@@ -1968,7 +1935,6 @@ async fn test_handle_certificate_to_inactive_recipient<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -1994,7 +1960,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -2015,7 +1981,6 @@ async fn test_handle_certificate_with_rejected_transfer<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let sender_key_pair = KeyPair::generate();
     let sender = Owner::from(sender_key_pair.public());
@@ -2066,7 +2031,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate00.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate00.clone(), vec![])
         .await?;
 
     let certificate01 = make_transfer_certificate(
@@ -2075,22 +2040,19 @@ where
         None,
         Recipient::Burn,
         Amount::ONE,
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(1)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: certificate00.hash(),
                 height: BlockHeight::from(0),
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Tracked,
                 timestamp: Timestamp::from(0),
-                message: Message::System(SystemMessage::Credit {
+                transaction_index: 0,
+                messages: vec![Message::System(SystemMessage::Credit {
                     source: None,
                     target: Some(sender),
                     amount: Amount::from_tokens(5),
-                }),
+                })
+                .to_posted(0, MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         }],
@@ -2103,13 +2065,13 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate01.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate01.clone(), vec![])
         .await?;
 
     {
         let chain = worker.chain_state_view(ChainId::root(1)).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_messages().await?;
+        chain.validate_incoming_bundles().await?;
     }
 
     // Then, make two transfers to the recipient.
@@ -2129,7 +2091,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await?;
 
     let certificate2 = make_transfer_certificate(
@@ -2148,7 +2110,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate2.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate2.clone(), vec![])
         .await?;
 
     // Reject the first transfer and try to use the money of the second one.
@@ -2159,41 +2121,35 @@ where
         Recipient::Burn,
         Amount::ONE,
         vec![
-            IncomingMessage {
+            IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(2),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
+                    transaction_index: 0,
+                    messages: vec![Message::System(SystemMessage::Credit {
                         source: Some(sender),
                         target: Some(recipient),
                         amount: Amount::from_tokens(3),
-                    }),
+                    })
+                    .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Reject,
             },
-            IncomingMessage {
+            IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
-                event: Event {
+                bundle: MessageBundle {
                     certificate_hash: certificate2.hash(),
                     height: BlockHeight::from(3),
-                    index: 0,
-                    authenticated_signer: None,
-                    grant: Amount::ZERO,
-                    refund_grant_to: None,
-                    kind: MessageKind::Tracked,
                     timestamp: Timestamp::from(0),
-                    message: Message::System(SystemMessage::Credit {
+                    transaction_index: 0,
+                    messages: vec![Message::System(SystemMessage::Credit {
                         source: Some(sender),
                         target: Some(recipient),
                         amount: Amount::from_tokens(2),
-                    }),
+                    })
+                    .to_posted(0, MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             },
@@ -2207,13 +2163,13 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate.clone(), vec![])
         .await?;
 
     {
         let chain = worker.chain_state_view(ChainId::root(2)).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_messages().await?;
+        chain.validate_incoming_bundles().await?;
     }
 
     // Process the bounced message and try to use the refund.
@@ -2223,22 +2179,19 @@ where
         Some(sender),
         Recipient::Burn,
         Amount::from_tokens(3),
-        vec![IncomingMessage {
+        vec![IncomingBundle {
             origin: Origin::chain(ChainId::root(2)),
-            event: Event {
+            bundle: MessageBundle {
                 certificate_hash: certificate.hash(),
                 height: BlockHeight::from(0),
-                index: 0,
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Bouncing,
                 timestamp: Timestamp::from(0),
-                message: Message::System(SystemMessage::Credit {
+                transaction_index: 0,
+                messages: vec![Message::System(SystemMessage::Credit {
                     source: Some(sender),
                     target: Some(recipient),
                     amount: Amount::from_tokens(3),
-                }),
+                })
+                .to_posted(0, MessageKind::Bouncing)],
             },
             action: MessageAction::Accept,
         }],
@@ -2251,13 +2204,13 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate3.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate3.clone(), vec![])
         .await?;
 
     {
         let chain = worker.chain_state_view(ChainId::root(1)).await?;
         assert!(chain.is_active());
-        chain.validate_incoming_messages().await?;
+        chain.validate_incoming_bundles().await?;
     }
     Ok(())
 }
@@ -2272,7 +2225,6 @@ async fn run_test_chain_creation_with_committee_creation<B>(
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
@@ -2297,16 +2249,12 @@ where
     };
     let admin_channel_origin = Origin::channel(admin_id, admin_channel_full_name.clone());
     // Have the admin chain create a user chain.
-    let user_id = ChainId::child(MessageId {
-        chain_id: admin_id,
-        height: BlockHeight::ZERO,
-        index: 0,
-    });
     let user_description = ChainDescription::Child(MessageId {
         chain_id: admin_id,
         height: BlockHeight::ZERO,
         index: 0,
     });
+    let user_id = ChainId::from(user_description);
     let certificate0 = make_certificate(
         &committee,
         &worker,
@@ -2358,12 +2306,12 @@ where
         ),
     );
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await?;
     {
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_messages().await?;
+        admin_chain.validate_incoming_bundles().await?;
         assert_eq!(
             BlockHeight::from(1),
             admin_chain.tip_state.get().next_block_height
@@ -2373,8 +2321,8 @@ where
             *admin_chain.execution_state.system.admin_id.get(),
             Some(admin_id)
         );
-        // The root chain has no subscribers yet.
-        assert!(!admin_chain
+        // The new chain is subscribed to the admin chain.
+        assert!(admin_chain
             .channels
             .indices()
             .await?
@@ -2392,9 +2340,9 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    vec![channel_admin_message(SystemMessage::SetCommittees {
+                    vec![channel_admin_message(SystemMessage::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committees: committees2.clone(),
+                        committee: committee.clone(),
                     })],
                     vec![direct_credit_message(user_id, Amount::from_tokens(2))],
                 ],
@@ -2420,69 +2368,20 @@ where
         ),
     );
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await?;
 
-    // Have the admin chain accept the subscription now.
-    let certificate2 = make_certificate(
-        &committee,
-        &worker,
-        HashedCertificateValue::new_confirmed(
-            BlockExecutionOutcome {
-                messages: vec![vec![direct_outgoing_message(
-                    user_id,
-                    MessageKind::Protected,
-                    SystemMessage::Notify { id: user_id },
-                )]],
-                events: vec![Vec::new()],
-                state_hash: SystemExecutionState {
-                    // The root chain knows both committees at the end.
-                    committees: committees2.clone(),
-                    ownership: ChainOwnership::single(key_pair.public()),
-                    ..SystemExecutionState::new(Epoch::from(1), ChainDescription::Root(0), admin_id)
-                }
-                .into_hash()
-                .await,
-                oracle_responses: vec![Vec::new()],
-            }
-            .with(
-                make_child_block(&certificate1.value)
-                    .with_epoch(1)
-                    .with_incoming_message(IncomingMessage {
-                        origin: Origin::chain(admin_id),
-                        event: Event {
-                            certificate_hash: certificate0.value.hash(),
-                            height: BlockHeight::ZERO,
-                            index: 1,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
-                            timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::Subscribe {
-                                id: user_id,
-                                subscription: admin_channel_subscription.clone(),
-                            }),
-                        },
-                        action: MessageAction::Accept,
-                    }),
-            ),
-        ),
-    );
-    worker
-        .fully_handle_certificate(certificate2.clone(), vec![], vec![])
-        .await?;
     {
-        // The root chain has 1 subscribers.
+        // The root chain has 1 subscriber.
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_messages().await?;
+        admin_chain.validate_incoming_bundles().await?;
         assert_eq!(
             admin_chain
                 .channels
                 .try_load_entry(&admin_channel_full_name)
                 .await?
-                .expect("Missing channel for admin channel in `ChainId::root(1)`")
+                .expect("Missing channel for admin channel in `ChainId::root(0)`")
                 .subscribers
                 .indices()
                 .await?
@@ -2512,44 +2411,34 @@ where
                 .len(),
             1
         );
-        user_chain.validate_incoming_messages().await?;
+        user_chain.validate_incoming_bundles().await?;
         matches!(
-            user_chain
+            &user_chain
                 .inboxes
                 .try_load_entry(&Origin::chain(admin_id))
                 .await?
                 .expect("Missing inbox for admin chain in user chain")
-                .added_events
+                .added_bundles
                 .read_front(10)
                 .await?[..],
-            [
-                Event {
-                    message: Message::System(SystemMessage::OpenChain(_)),
-                    ..
-                },
-                Event {
-                    message: Message::System(SystemMessage::Credit { .. }),
-                    ..
-                },
-                Event {
-                    message: Message::System(SystemMessage::Notify { .. }),
-                    ..
-                }
-            ]
+            [bundle1, bundle2]
+            if matches!(bundle1.messages[..], [PostedMessage {
+                 message: Message::System(SystemMessage::OpenChain(_)), ..
+            }]) && matches!(bundle2.messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::Credit { .. }), ..
+            }])
         );
         let channel_inbox = user_chain
             .inboxes
             .try_load_entry(&admin_channel_origin)
             .await?
             .expect("Missing inbox for admin channel in user chain");
-        matches!(
-            channel_inbox.added_events.read_front(10).await?[..],
-            [Event {
-                message: Message::System(SystemMessage::SetCommittees { .. }),
-                ..
-            }]
+        matches!(&channel_inbox.added_bundles.read_front(10).await?[..], [bundle]
+            if matches!(bundle.messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::CreateCommittee { .. }), ..
+            }])
         );
-        assert_eq!(channel_inbox.removed_events.count(), 0);
+        assert_eq!(channel_inbox.removed_bundles.count(), 0);
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
     }
     // Make the child receive the pending messages.
@@ -2558,8 +2447,8 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![Vec::new(); 4],
-                events: vec![Vec::new(); 4],
+                messages: vec![Vec::new(); 3],
+                events: vec![Vec::new(); 3],
                 state_hash: SystemExecutionState {
                     subscriptions: [ChannelSubscription {
                         chain_id: admin_id,
@@ -2575,77 +2464,55 @@ where
                 }
                 .into_hash()
                 .await,
-                oracle_responses: vec![Vec::new(); 4],
+                oracle_responses: vec![Vec::new(); 3],
             }
             .with(
                 make_first_block(user_id)
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate0.value.hash(),
                             height: BlockHeight::from(0),
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
                             timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::OpenChain(OpenChainConfig {
-                                ownership: ChainOwnership::single(key_pair.public()),
-                                epoch: Epoch::from(0),
-                                committees: committees.clone(),
-                                admin_id,
-                                balance: Amount::ZERO,
-                                application_permissions: Default::default(),
-                            })),
+                            transaction_index: 0,
+                            messages: vec![Message::System(SystemMessage::OpenChain(
+                                OpenChainConfig {
+                                    ownership: ChainOwnership::single(key_pair.public()),
+                                    epoch: Epoch::from(0),
+                                    committees: committees.clone(),
+                                    admin_id,
+                                    balance: Amount::ZERO,
+                                    application_permissions: Default::default(),
+                                },
+                            ))
+                            .to_posted(0, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
                     })
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: admin_channel_origin.clone(),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate1.value.hash(),
                             height: BlockHeight::from(1),
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
                             timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::SetCommittees {
+                            transaction_index: 0,
+                            messages: vec![Message::System(SystemMessage::CreateCommittee {
                                 epoch: Epoch::from(1),
-                                committees: committees2.clone(),
-                            }),
+                                committee: committee.clone(),
+                            })
+                            .to_posted(0, MessageKind::Protected)],
                         },
                         action: MessageAction::Accept,
                     })
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate1.value.hash(),
                             height: BlockHeight::from(1),
-                            index: 1,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Tracked,
                             timestamp: Timestamp::from(0),
-                            message: system_credit_message(Amount::from_tokens(2)),
-                        },
-                        action: MessageAction::Accept,
-                    })
-                    .with_incoming_message(IncomingMessage {
-                        origin: Origin::chain(admin_id),
-                        event: Event {
-                            certificate_hash: certificate2.value.hash(),
-                            height: BlockHeight::from(2),
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Protected,
-                            timestamp: Timestamp::from(0),
-                            message: Message::System(SystemMessage::Notify { id: user_id }),
+                            transaction_index: 1,
+                            messages: vec![system_credit_message(Amount::from_tokens(2))
+                                .to_posted(1, MessageKind::Tracked)],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -2653,7 +2520,7 @@ where
         ),
     );
     worker
-        .fully_handle_certificate(certificate3, vec![], vec![])
+        .fully_handle_certificate(certificate3, vec![])
         .await?;
     {
         let user_chain = worker.chain_state_view(user_id).await?;
@@ -2677,16 +2544,16 @@ where
             1
         );
         assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
-        user_chain.validate_incoming_messages().await?;
+        user_chain.validate_incoming_bundles().await?;
         {
             let inbox = user_chain
                 .inboxes
                 .try_load_entry(&Origin::chain(admin_id))
                 .await?
                 .expect("Missing inbox for admin chain in user chain");
-            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(3));
-            assert_eq!(inbox.added_events.count(), 0);
-            assert_eq!(inbox.removed_events.count(), 0);
+            assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
+            assert_eq!(inbox.added_bundles.count(), 0);
+            assert_eq!(inbox.removed_bundles.count(), 0);
         }
         {
             let inbox = user_chain
@@ -2695,8 +2562,8 @@ where
                 .await?
                 .expect("Missing inbox for admin channel in user chain");
             assert_eq!(inbox.next_block_height_to_receive()?, BlockHeight(2));
-            assert_eq!(inbox.added_events.count(), 0);
-            assert_eq!(inbox.removed_events.count(), 0);
+            assert_eq!(inbox.added_bundles.count(), 0);
+            assert_eq!(inbox.removed_bundles.count(), 0);
         }
         Ok(())
     }
@@ -2710,7 +2577,6 @@ where
 async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
@@ -2762,10 +2628,12 @@ where
         &worker,
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
-                messages: vec![vec![channel_admin_message(SystemMessage::SetCommittees {
-                    epoch: Epoch::from(1),
-                    committees: committees2.clone(),
-                })]],
+                messages: vec![vec![channel_admin_message(
+                    SystemMessage::CreateCommittee {
+                        epoch: Epoch::from(1),
+                        committee: committee.clone(),
+                    },
+                )]],
                 events: vec![Vec::new()],
                 state_hash: SystemExecutionState {
                     committees: committees2.clone(),
@@ -2787,12 +2655,12 @@ where
         ),
     );
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await?;
 
     // Try to execute the transfer.
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await?;
 
     // The transfer was started..
@@ -2816,18 +2684,18 @@ where
     assert!(admin_chain.is_active());
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
-        admin_chain
+        &admin_chain
             .inboxes
             .try_load_entry(&Origin::chain(user_id))
             .await?
             .expect("Missing inbox for user chain in admin chain")
-            .added_events
+            .added_bundles
             .read_front(10)
             .await?[..],
-        [Event {
+        [bundle] if matches!(bundle.messages[..], [PostedMessage {
             message: Message::System(SystemMessage::Credit { .. }),
             ..
-        }]
+        }])
     );
     Ok(())
 }
@@ -2840,7 +2708,6 @@ where
 async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let key_pair0 = KeyPair::generate();
     let key_pair1 = KeyPair::generate();
@@ -2883,10 +2750,6 @@ where
         ),
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
-    let committees2 = BTreeMap::from_iter([
-        (Epoch::ZERO, committee.clone()),
-        (Epoch::from(1), committee.clone()),
-    ]);
     let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let certificate1 = make_certificate(
         &committee,
@@ -2894,13 +2757,12 @@ where
         HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![
-                    vec![channel_admin_message(SystemMessage::SetCommittees {
+                    vec![channel_admin_message(SystemMessage::CreateCommittee {
                         epoch: Epoch::from(1),
-                        committees: committees2.clone(),
+                        committee: committee.clone(),
                     })],
-                    vec![channel_admin_message(SystemMessage::SetCommittees {
-                        epoch: Epoch::from(1),
-                        committees: committees3.clone(),
+                    vec![channel_admin_message(SystemMessage::RemoveCommittee {
+                        epoch: Epoch::from(0),
                     })],
                 ],
                 events: vec![Vec::new(); 2],
@@ -2926,12 +2788,12 @@ where
         ),
     );
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate1.clone(), vec![])
         .await?;
 
     // Try to execute the transfer from the user chain to the admin chain.
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await?;
 
     {
@@ -2978,18 +2840,15 @@ where
             .with(
                 make_child_block(&certificate1.value)
                     .with_epoch(1)
-                    .with_incoming_message(IncomingMessage {
+                    .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(user_id),
-                        event: Event {
+                        bundle: MessageBundle {
                             certificate_hash: certificate0.value.hash(),
                             height: BlockHeight::ZERO,
-                            index: 0,
-                            authenticated_signer: None,
-                            grant: Amount::ZERO,
-                            refund_grant_to: None,
-                            kind: MessageKind::Tracked,
                             timestamp: Timestamp::from(0),
-                            message: system_credit_message(Amount::ONE),
+                            transaction_index: 0,
+                            messages: vec![system_credit_message(Amount::ONE)
+                                .to_posted(0, MessageKind::Tracked)],
                         },
                         action: MessageAction::Accept,
                     }),
@@ -2997,7 +2856,7 @@ where
         ),
     );
     worker
-        .fully_handle_certificate(certificate2.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate2.clone(), vec![])
         .await?;
 
     {
@@ -3005,7 +2864,7 @@ where
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
         assert_matches!(
-            admin_chain.validate_incoming_messages().await,
+            admin_chain.validate_incoming_bundles().await,
             Err(ChainError::MissingCrossChainUpdate { .. })
         );
     }
@@ -3013,14 +2872,14 @@ where
     // Try again to execute the transfer from the user chain to the admin chain.
     // This time, the epoch verification should be overruled.
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![], vec![])
+        .fully_handle_certificate(certificate0.clone(), vec![])
         .await?;
 
     {
         // The admin chain has no more anticipated messages.
         let admin_chain = worker.chain_state_view(admin_id).await?;
         assert!(admin_chain.is_active());
-        admin_chain.validate_incoming_messages().await?;
+        admin_chain.validate_incoming_bundles().await?;
     }
     Ok(())
 }
@@ -3028,10 +2887,18 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Make a committee and worker (only used for signing certificates)
-    let store =
-        MemoryStorage::new_for_testing(None, TEST_MEMORY_MAX_STREAM_QUERIES, TestClock::new())
-            .await?;
-    let (committee, worker) = init_worker(store, true);
+    let store_config = MemoryStore::new_test_config().await?;
+    let namespace = generate_test_namespace();
+    let root_key = &[];
+    let store = DbStorage::<MemoryStore, _>::new_for_testing(
+        store_config,
+        &namespace,
+        root_key,
+        None,
+        TestClock::new(),
+    )
+    .await?;
+    let (committee, worker) = init_worker(store, true, false);
     let committees = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
 
     let key_pair0 = KeyPair::generate();
@@ -3099,13 +2966,30 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         Some(&certificate2),
     )
     .await;
-    let bundles0 = certificate0.message_bundles_for(&Medium::Direct, id1);
-    let bundles1 = certificate1.message_bundles_for(&Medium::Direct, id1);
-    let bundles2 = certificate2.message_bundles_for(&Medium::Direct, id1);
-    let bundles3 = certificate3.message_bundles_for(&Medium::Direct, id1);
+    let bundles0 = certificate0
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
+    let bundles1 = certificate1
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
+    let bundles2 = certificate2
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
+    let bundles3 = certificate3
+        .message_bundles_for(&Medium::Direct, id1)
+        .collect::<Vec<_>>();
     let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
     let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
     let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
+
+    fn without_epochs<'a>(
+        bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
+    ) -> Vec<MessageBundle> {
+        bundles
+            .into_iter()
+            .map(|(_, bundle)| bundle.clone())
+            .collect()
+    }
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
@@ -3121,7 +3005,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles01.clone()
         )?,
-        bundles01.clone()
+        without_epochs(&bundles01)
     );
     // Received heights is removing prefixes.
     assert_eq!(
@@ -3132,7 +3016,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles01.clone()
         )?,
-        bundles1.clone()
+        without_epochs(&bundles1)
     );
     assert_eq!(
         helper.select_message_bundles(
@@ -3181,7 +3065,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles0123.clone()
         )?,
-        bundles012.clone()
+        without_epochs(&bundles012)
     );
     // Received heights is still removing prefixes.
     assert_eq!(
@@ -3192,7 +3076,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             None,
             bundles012.clone()
         )?,
-        Vec::from_iter(bundles1.iter().cloned().chain(bundles2.iter().cloned()))
+        without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
@@ -3203,7 +3087,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             Some(BlockHeight::from(1)),
             bundles01.clone()
         )?,
-        bundles1.clone()
+        without_epochs(&bundles1)
     );
     assert_eq!(
         helper.select_message_bundles(
@@ -3213,7 +3097,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             Some(BlockHeight::from(1)),
             bundles01.clone()
         )?,
-        bundles01.clone()
+        without_epochs(&bundles01)
     );
     Ok(())
 }
@@ -3226,7 +3110,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 async fn test_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3247,7 +3130,7 @@ where
     let value0 = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate(certificate0, vec![], vec![])
+        .fully_handle_certificate(certificate0, vec![])
         .await?;
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
@@ -3287,7 +3170,7 @@ where
         .unwrap()
         .into_certificate();
     let (response, _) = worker
-        .handle_certificate(certificate_timeout, vec![], vec![], None)
+        .handle_certificate(certificate_timeout, vec![], None)
         .await?;
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
 
@@ -3309,7 +3192,7 @@ where
     let vote = response.info.manager.pending.clone().unwrap();
     let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
     let (response, _) = worker
-        .handle_certificate(certificate1.clone(), vec![], vec![], None)
+        .handle_certificate(certificate1.clone(), vec![], None)
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     let value = HashedCertificateValue::new_confirmed(executed_block1.clone());
@@ -3323,7 +3206,7 @@ where
         Round::SingleLeader(4),
     );
     let (response, _) = worker
-        .handle_certificate(certificate_timeout, vec![], vec![], None)
+        .handle_certificate(certificate_timeout, vec![], None)
         .await?;
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(5));
@@ -3338,9 +3221,7 @@ where
     let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
-    worker
-        .handle_certificate(certificate, vec![], vec![], None)
-        .await?;
+    worker.handle_certificate(certificate, vec![], None).await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
@@ -3365,7 +3246,6 @@ where
         certificate2.clone(),
         &key_pairs[1],
         Vec::new(),
-        Vec::new(),
     );
     let lite_value2 = value2.lite();
     let (_, _) = worker.handle_block_proposal(proposal).await?;
@@ -3386,7 +3266,7 @@ where
         Round::SingleLeader(5),
     );
     let (response, _) = worker
-        .handle_certificate(certificate_timeout, vec![], vec![], None)
+        .handle_certificate(certificate_timeout, vec![], None)
         .await?;
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(6));
@@ -3402,7 +3282,7 @@ where
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout, Round::SingleLeader(7));
     let (response, _) = worker
-        .handle_certificate(certificate_timeout, vec![], vec![], None)
+        .handle_certificate(certificate_timeout, vec![], None)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::SingleLeader(8));
 
@@ -3412,7 +3292,7 @@ where
         make_certificate_with_round(&committee, &worker, value1, Round::SingleLeader(7));
     let worker = worker.with_key_pair(None).await; // Forget validator keys.
     worker
-        .handle_certificate(certificate.clone(), vec![], vec![], None)
+        .handle_certificate(certificate.clone(), vec![], None)
         .await?;
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
@@ -3430,7 +3310,6 @@ where
 async fn test_round_types<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3454,7 +3333,7 @@ where
     let value0 = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate(certificate0, vec![], vec![])
+        .fully_handle_certificate(certificate0, vec![])
         .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
@@ -3493,7 +3372,7 @@ where
         .unwrap()
         .into_certificate();
     let (response, _) = worker
-        .handle_certificate(certificate_timeout, vec![], vec![], None)
+        .handle_certificate(certificate_timeout, vec![], None)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
@@ -3518,7 +3397,6 @@ where
 async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3542,7 +3420,7 @@ where
     let value0 = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate(certificate0, vec![], vec![])
+        .fully_handle_certificate(certificate0, vec![])
         .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
@@ -3569,7 +3447,7 @@ where
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
     let (response, _) = worker
-        .handle_certificate(certificate_timeout, vec![], vec![], None)
+        .handle_certificate(certificate_timeout, vec![], None)
         .await?;
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
@@ -3598,7 +3476,6 @@ where
         certificate2.clone(),
         &key_pairs[1],
         Vec::new(),
-        Vec::new(),
     );
     let lite_value2 = value2.lite();
     let (_, _) = worker.handle_block_proposal(proposal).await?;
@@ -3622,7 +3499,6 @@ where
 async fn test_fallback<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     let storage = storage_builder.build().await?;
     let clock = storage_builder.clock();
@@ -3651,9 +3527,7 @@ where
     let (executed_block, _) = worker.stage_block_execution(block).await?;
     let value = HashedCertificateValue::new_confirmed(executed_block);
     let certificate = make_certificate(&committee, &worker, value);
-    worker
-        .fully_handle_certificate(certificate, vec![], vec![])
-        .await?;
+    worker.fully_handle_certificate(certificate, vec![]).await?;
 
     // The message only just arrived: No fallback mode.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
@@ -3668,9 +3542,7 @@ where
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
     let certificate = make_certificate_with_round(&committee, &worker, value, round);
-    worker
-        .fully_handle_certificate(certificate, vec![], vec![])
-        .await?;
+    worker.fully_handle_certificate(certificate, vec![]).await?;
 
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
@@ -3694,7 +3566,6 @@ where
 async fn test_long_lived_service<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     const NUM_QUERIES: usize = 5;
 
@@ -3705,13 +3576,23 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::ZERO;
 
-    let (_committee, worker) = init_worker_with_chain(
+    let (committee, worker) = init_worker(
         storage.clone(),
-        chain_description,
-        key_pair.public(),
-        balance,
-    )
-    .await;
+        /* is_client */ false,
+        /* has_long_lived_services */ true,
+    );
+    worker
+        .storage
+        .create_chain(
+            committee,
+            ChainId::root(0),
+            chain_description,
+            key_pair.public(),
+            balance,
+            Timestamp::from(0),
+        )
+        .await
+        .unwrap();
 
     let mut applications;
     {
@@ -3754,10 +3635,10 @@ where
         );
     }
 
-    // TODO(#2249): Split the assertion in two
     drop(worker);
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    linera_base::time::timer::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
+    application.assert_no_active_instances();
 
     Ok(())
 }
@@ -3774,7 +3655,6 @@ where
 async fn test_new_block_causes_service_restart<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
-    ViewError: From<<B::Storage as Storage>::StoreError>,
 {
     const NUM_QUERIES: usize = 2;
     const BLOCK_TIMESTAMP: u64 = 10;
@@ -3786,13 +3666,23 @@ where
     let key_pair = KeyPair::generate();
     let balance = Amount::ZERO;
 
-    let (committee, worker) = init_worker_with_chain(
+    let (committee, worker) = init_worker(
         storage.clone(),
-        chain_description,
-        key_pair.public(),
-        balance,
-    )
-    .await;
+        /* is_client */ false,
+        /* has_long_lived_services */ true,
+    );
+    worker
+        .storage
+        .create_chain(
+            committee.clone(),
+            ChainId::root(0),
+            chain_description,
+            key_pair.public(),
+            balance,
+            Timestamp::from(0),
+        )
+        .await
+        .unwrap();
 
     let mut applications;
     {
@@ -3894,9 +3784,7 @@ where
         .with(block),
     );
     let certificate = make_certificate(&committee, &worker, value);
-    worker
-        .handle_certificate(certificate, vec![], vec![], None)
-        .await?;
+    worker.handle_certificate(certificate, vec![], None).await?;
 
     for query_context in query_contexts_after_new_block.clone() {
         application.expect_call(ExpectedCall::handle_query(
@@ -3917,10 +3805,10 @@ where
         );
     }
 
-    // TODO(#2249): Split the assertion in two
     drop(worker);
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    linera_base::time::timer::sleep(Duration::from_millis(10)).await;
     application.assert_no_more_expected_calls();
+    application.assert_no_active_instances();
 
     Ok(())
 }

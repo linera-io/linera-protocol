@@ -5,7 +5,7 @@ use std::{borrow::Cow, collections::BTreeSet};
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, HashedBlob, Timestamp},
+    data_types::{Blob, BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{
@@ -38,11 +38,11 @@ async fn test_insert_single_certificate_value() {
     assert_eq!(cache.keys::<BTreeSet<_>>().await, BTreeSet::from([hash]));
 }
 
-/// Tests inserting a hashed blob in the cache.
+/// Tests inserting a blob in the cache.
 #[tokio::test]
-async fn test_insert_single_hashed_blob() {
-    let cache = ValueCache::<BlobId, HashedBlob>::default();
-    let value = create_dummy_hashed_blob(0);
+async fn test_insert_single_blob() {
+    let cache = ValueCache::<BlobId, Blob>::default();
+    let value = create_dummy_blob(0);
     let blob_id = value.id();
 
     assert!(cache.insert(Cow::Borrowed(&value)).await);
@@ -73,11 +73,11 @@ async fn test_insert_many_certificate_values_individually() {
     );
 }
 
-/// Tests inserting many hashed blobs in the cache, one-by-one.
+/// Tests inserting many blobs in the cache, one-by-one.
 #[tokio::test]
-async fn test_insert_many_hashed_blobs_individually() {
-    let cache = ValueCache::<BlobId, HashedBlob>::default();
-    let blobs = create_dummy_hashed_blobs();
+async fn test_insert_many_blobs_individually() {
+    let cache = ValueCache::<BlobId, Blob>::default();
+    let blobs = create_dummy_blobs();
 
     for blob in &blobs {
         assert!(cache.insert(Cow::Borrowed(blob)).await);
@@ -90,7 +90,7 @@ async fn test_insert_many_hashed_blobs_individually() {
 
     assert_eq!(
         cache.keys::<BTreeSet<_>>().await,
-        BTreeSet::from_iter(blobs.iter().map(HashedBlob::id))
+        BTreeSet::from_iter(blobs.iter().map(Blob::id))
     );
 }
 
@@ -507,11 +507,11 @@ where
     heights.into_iter().map(create_dummy_certificate_value)
 }
 
-/// Creates multiple dummy [`HashedBlob`]s to use in the tests.
-fn create_dummy_hashed_blobs() -> Vec<HashedBlob> {
+/// Creates multiple dummy [`Blob`]s to use in the tests.
+fn create_dummy_blobs() -> Vec<Blob> {
     let mut blobs = Vec::new();
     for i in 0..DEFAULT_VALUE_CACHE_SIZE {
-        blobs.push(create_dummy_hashed_blob(i));
+        blobs.push(create_dummy_blob(i));
     }
     blobs
 }
@@ -526,9 +526,9 @@ fn create_dummy_certificate_value(height: impl Into<BlockHeight>) -> HashedCerti
     .into()
 }
 
-/// Creates a new dummy [`HashedBlob`] to use in the tests.
-fn create_dummy_hashed_blob(id: usize) -> HashedBlob {
-    HashedBlob::test_blob(&format!("test{}", id))
+/// Creates a new dummy data [`Blob`] to use in the tests.
+fn create_dummy_blob(id: usize) -> Blob {
+    Blob::new_data(format!("test{}", id).as_bytes().to_vec())
 }
 
 /// Creates a dummy [`HashedCertificateValue::ValidatedBlock`] to use in the tests.
@@ -538,7 +538,7 @@ fn create_dummy_validated_block_value() -> HashedCertificateValue {
             block: Block {
                 chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
                 epoch: Epoch::ZERO,
-                incoming_messages: vec![],
+                incoming_bundles: vec![],
                 operations: vec![],
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),

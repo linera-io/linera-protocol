@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
 use dashmap::DashMap;
+use linera_base::time::Duration;
 
 use super::{transport, GrpcError};
 

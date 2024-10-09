@@ -28,6 +28,10 @@ You may also see any lint errors in the console.
 
 Formats the project using `prettier`.
 
+### `npm run compile`
+
+Generates necessary graphql types `codegen.ts`
+
 ### `npm run build`
 
 Builds the app for production to the `build` folder.\

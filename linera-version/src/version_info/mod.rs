@@ -74,10 +74,6 @@ impl VersionInfo {
         STRING.as_str()
     }
 
-    fn api_hashes(&self) -> (&Hash, &Hash, &Hash) {
-        (&self.rpc_hash, &self.graphql_hash, &self.wit_hash)
-    }
-
     /// Whether this version is known to be (remote!) API-compatible with `other`.
     /// Note that this relation _is not_ symmetric.
     /// It also may give false negatives.

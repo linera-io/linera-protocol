@@ -10,10 +10,7 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use ethereum_tracker::Operation;
 use linera_sdk::{
-    base::WithServiceAbi,
-    graphql::GraphQLMutationRoot,
-    views::{View, ViewStorageContext},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 
 use self::state::EthereumTracker;
@@ -33,7 +30,7 @@ impl Service for EthereumTrackerService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = EthereumTracker::load(ViewStorageContext::from(runtime.key_value_store()))
+        let state = EthereumTracker::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         EthereumTrackerService {

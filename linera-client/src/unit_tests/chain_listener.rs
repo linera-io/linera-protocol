@@ -18,24 +18,23 @@ use linera_core::{
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
-use linera_execution::{
-    system::{Recipient, UserData},
-    ResourceControlPolicy,
-};
+use linera_execution::{system::Recipient, ResourceControlPolicy};
 use linera_rpc::{
     config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
     simple::TransportProtocol,
 };
-use linera_storage::{MemoryStorage, TestClock};
+use linera_storage::{DbStorage, TestClock};
+use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
 
 use crate::{
-    chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
+    chain_listener::{self, ChainClients, ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig},
     wallet::{UserChain, Wallet},
+    Error,
 };
 
-type TestStorage = MemoryStorage<TestClock>;
+type TestStorage = DbStorage<MemoryStore, TestClock>;
 type TestProvider = NodeProvider<TestStorage>;
 
 struct ClientContext {
@@ -43,7 +42,8 @@ struct ClientContext {
     client: Arc<Client<TestProvider, TestStorage>>,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl chain_listener::ClientContext for ClientContext {
     type ValidatorNodeProvider = TestProvider;
     type Storage = TestStorage;
@@ -63,7 +63,7 @@ impl chain_listener::ClientContext for ClientContext {
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.create_chain(
+        self.client.create_chain_client(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),
@@ -75,12 +75,12 @@ impl chain_listener::ClientContext for ClientContext {
         )
     }
 
-    fn update_wallet_for_new_chain(
+    async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
-    ) {
+    ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.wallet.insert(UserChain {
                 chain_id,
@@ -92,10 +92,16 @@ impl chain_listener::ClientContext for ClientContext {
                 pending_blobs: BTreeMap::new(),
             });
         }
+
+        Ok(())
     }
 
-    async fn update_wallet(&mut self, client: &ChainClient<TestProvider, TestStorage>) {
+    async fn update_wallet(
+        &mut self,
+        client: &ChainClient<TestProvider, TestStorage>,
+    ) -> Result<(), Error> {
         self.wallet.update_from_state(client).await;
+        Ok(())
     }
 }
 
@@ -150,13 +156,19 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             storage.clone(),
             10,
             delivery,
+            false,
+            [chain_id0],
+            format!("Client node for {:.8}", chain_id0),
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);
     let public_key = key_pair.public();
-    context.update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time());
+    context
+        .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
+        .await?;
+    let chain_clients = ChainClients::from_clients(context.clients()).await;
     let context = Arc::new(Mutex::new(context));
-    let listener = ChainListener::new(config, Default::default());
+    let listener = ChainListener::new(config, chain_clients);
     listener.run(context, storage).await;
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will
@@ -174,9 +186,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Recipient::chain(chain_id0);
-    client1
-        .transfer(None, Amount::ONE, recipient0, UserData::default())
-        .await?;
+    client1.transfer(None, Amount::ONE, recipient0).await?;
     for i in 0.. {
         client0.synchronize_from_validators().boxed().await?;
         let balance = client0.local_balance().await?;

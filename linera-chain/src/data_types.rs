@@ -2,21 +2,22 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, fmt};
 
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
-    data_types::{Amount, BlockHeight, HashedBlob, OracleResponse, Round, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure,
     identifiers::{
-        Account, BlobId, ChainId, ChannelName, Destination, GenericApplicationId, MessageId, Owner,
-        StreamId,
+        Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
+        MessageId, Owner, StreamId,
     },
 };
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
-    BytecodeLocation, Message, MessageKind, Operation, SystemOperation,
+    system::OpenChainConfig,
+    Message, MessageKind, Operation, SystemOperation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
@@ -41,7 +42,7 @@ pub struct Block {
     pub epoch: Epoch,
     /// A selection of incoming messages to be executed first. Successive messages of same
     /// sender and height are grouped together for conciseness.
-    pub incoming_messages: Vec<IncomingMessage>,
+    pub incoming_bundles: Vec<IncomingBundle>,
     /// The operations to execute.
     pub operations: Vec<Operation>,
     /// The block height.
@@ -60,23 +61,18 @@ pub struct Block {
 }
 
 impl Block {
-    /// Returns all bytecode locations referred to in this block's incoming messages.
-    pub fn bytecode_locations(&self) -> HashSet<BytecodeLocation> {
-        let mut locations = HashSet::new();
-        for message in &self.incoming_messages {
-            if let Message::System(sys_message) = &message.event.message {
-                locations.extend(sys_message.bytecode_locations(message.event.certificate_hash));
-            }
-        }
-        locations
-    }
-
     /// Returns all the published blob IDs in this block's operations.
     pub fn published_blob_ids(&self) -> HashSet<BlobId> {
         let mut blob_ids = HashSet::new();
         for operation in &self.operations {
-            if let Operation::System(SystemOperation::PublishBlob { blob_id }) = operation {
-                blob_ids.insert(blob_id.to_owned());
+            if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
+                blob_ids.insert(BlobId::new(*blob_hash, BlobType::Data));
+            }
+            if let Operation::System(SystemOperation::PublishBytecode { bytecode_id }) = operation {
+                blob_ids.extend([
+                    BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode),
+                    BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode),
+                ]);
             }
         }
 
@@ -88,10 +84,58 @@ impl Block {
     pub fn has_only_rejected_messages(&self) -> bool {
         self.operations.is_empty()
             && self
-                .incoming_messages
+                .incoming_bundles
                 .iter()
                 .all(|message| message.action == MessageAction::Reject)
     }
+
+    /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
+    pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
+        self.incoming_bundles
+            .iter()
+            .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
+    }
+
+    /// Returns the number of incoming messages.
+    pub fn message_count(&self) -> usize {
+        self.incoming_bundles
+            .iter()
+            .map(|im| im.bundle.messages.len())
+            .sum()
+    }
+
+    /// Returns an iterator over all transactions, by index.
+    pub fn transactions(&self) -> impl Iterator<Item = (u32, Transaction<'_>)> {
+        let bundles = self
+            .incoming_bundles
+            .iter()
+            .map(Transaction::ReceiveMessages);
+        let operations = self.operations.iter().map(Transaction::ExecuteOperation);
+        (0u32..).zip(bundles.chain(operations))
+    }
+
+    /// If the block's first message is `OpenChain`, returns the bundle, the message and
+    /// the configuration for the new chain.
+    pub fn starts_with_open_chain_message(
+        &self,
+    ) -> Option<(&IncomingBundle, &PostedMessage, &OpenChainConfig)> {
+        let in_bundle = self.incoming_bundles.first()?;
+        if in_bundle.action != MessageAction::Accept {
+            return None;
+        }
+        let posted_message = in_bundle.bundle.messages.first()?;
+        let config = posted_message.message.matches_open_chain()?;
+        Some((in_bundle, posted_message, config))
+    }
+}
+
+/// A transaction in a block: incoming messages or an operation.
+#[derive(Debug, Clone)]
+pub enum Transaction<'a> {
+    /// Receive a bundle of incoming messages.
+    ReceiveMessages(&'a IncomingBundle),
+    /// Execute an operation.
+    ExecuteOperation(&'a Operation),
 }
 
 /// A chain ID with a block height.
@@ -101,16 +145,41 @@ pub struct ChainAndHeight {
     pub height: BlockHeight,
 }
 
-/// A message received from a block of another chain.
+impl ChainAndHeight {
+    /// Returns the ID of the `index`-th message sent by the block at that height.
+    pub fn to_message_id(&self, index: u32) -> MessageId {
+        MessageId {
+            chain_id: self.chain_id,
+            height: self.height,
+            index,
+        }
+    }
+}
+
+/// A bundle of cross-chain messages.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct IncomingMessage {
-    /// The origin of the message (chain and channel if any).
+pub struct IncomingBundle {
+    /// The origin of the messages (chain and channel if any).
     pub origin: Origin,
-    /// The content of the message to be delivered to the inbox identified by
-    /// `origin`.
-    pub event: Event,
+    /// The messages to be delivered to the inbox identified by `origin`.
+    pub bundle: MessageBundle,
     /// What to do with the message.
     pub action: MessageAction,
+}
+
+impl IncomingBundle {
+    /// Returns an iterator over all posted messages in this bundle, together with their ID.
+    pub fn messages_and_ids(&self) -> impl Iterator<Item = (MessageId, &PostedMessage)> {
+        let chain_and_height = ChainAndHeight {
+            chain_id: self.origin.sender,
+            height: self.bundle.height,
+        };
+        let messages = self.bundle.messages.iter();
+        messages.map(move |posted_message| {
+            let message_id = chain_and_height.to_message_id(posted_message.index);
+            (message_id, posted_message)
+        })
+    }
 }
 
 /// What to do with a message picked from the inbox.
@@ -120,41 +189,6 @@ pub enum MessageAction {
     Accept,
     /// Do not execute the incoming message.
     Reject,
-}
-
-impl IncomingMessage {
-    /// Returns the ID identifying this message.
-    pub fn id(&self) -> MessageId {
-        MessageId {
-            chain_id: self.origin.sender,
-            height: self.event.height,
-            index: self.event.index,
-        }
-    }
-}
-
-/// A message together with non replayable information to ensure uniqueness in a
-/// particular inbox.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct Event {
-    /// The hash of the certificate that created the event.
-    pub certificate_hash: CryptoHash,
-    /// The height of the block that created the event.
-    pub height: BlockHeight,
-    /// The index of the message.
-    pub index: u32,
-    /// The authenticated signer for the operation that created the event, if any.
-    pub authenticated_signer: Option<Owner>,
-    /// A grant to pay for the message execution.
-    pub grant: Amount,
-    /// Where to send a refund for the unused part of the grant after execution, if any.
-    pub refund_grant_to: Option<Account>,
-    /// The kind of event being delivered.
-    pub kind: MessageKind,
-    /// The timestamp of the block that caused the message.
-    pub timestamp: Timestamp,
-    /// The message of the event (i.e. the actual payload of a message).
-    pub message: Message,
 }
 
 /// The origin of a message, relative to a particular application. Used to identify each inbox.
@@ -176,19 +210,18 @@ pub struct Target {
 }
 
 /// A set of messages from a single block, for a single destination.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct MessageBundle {
     /// The block height.
     pub height: BlockHeight,
-    /// The block's epoch.
-    pub epoch: Epoch,
     /// The block's timestamp.
     pub timestamp: Timestamp,
     /// The confirmed block certificate hash.
-    pub hash: CryptoHash,
-    /// The relevant messages, with their index.
-    pub messages: Vec<(u32, OutgoingMessage)>,
+    pub certificate_hash: CryptoHash,
+    /// The index of the transaction in the block that is sending this bundle.
+    pub transaction_index: u32,
+    /// The relevant messages.
+    pub messages: Vec<PostedMessage>,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -198,6 +231,16 @@ pub struct ChannelFullName {
     pub application_id: GenericApplicationId,
     /// The name of the channel.
     pub name: ChannelName,
+}
+
+impl fmt::Display for ChannelFullName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = hex::encode(&self.name);
+        match self.application_id {
+            GenericApplicationId::System => write!(f, "system channel {name}"),
+            GenericApplicationId::User(app_id) => write!(f, "user channel {name} for app {app_id}"),
+        }
+    }
 }
 
 /// The origin of a message coming from a particular chain. Used to identify each inbox.
@@ -218,12 +261,11 @@ pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
     pub signature: Signature,
-    pub hashed_certificate_values: Vec<HashedCertificateValue>,
-    pub hashed_blobs: Vec<HashedBlob>,
+    pub blobs: Vec<Blob>,
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
 
-/// A message together with routing information.
+/// A posted message together with routing information.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct OutgoingMessage {
     /// The destination of the message.
@@ -234,8 +276,25 @@ pub struct OutgoingMessage {
     pub grant: Amount,
     /// Where to send a refund for the unused part of the grant after execution, if any.
     pub refund_grant_to: Option<Account>,
-    /// The kind of event being sent.
+    /// The kind of message being sent.
     pub kind: MessageKind,
+    /// The message itself.
+    pub message: Message,
+}
+
+/// A message together with kind, authentication and grant information.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct PostedMessage {
+    /// The user authentication carried by the message, if any.
+    pub authenticated_signer: Option<Owner>,
+    /// A grant to pay for the message execution.
+    pub grant: Amount,
+    /// Where to send a refund for the unused part of the grant after execution, if any.
+    pub refund_grant_to: Option<Account>,
+    /// The kind of message being sent.
+    pub kind: MessageKind,
+    /// The index of the message in the sending block.
+    pub index: u32,
     /// The message itself.
     pub message: Message,
 }
@@ -256,6 +315,26 @@ impl OutgoingMessage {
                     name,
                 }),
             ) => *application_id == self.message.application_id() && name == dest_name,
+        }
+    }
+
+    /// Returns the posted message, i.e. the outgoing message without the destination.
+    pub fn into_posted(self, index: u32) -> PostedMessage {
+        let OutgoingMessage {
+            destination: _,
+            authenticated_signer,
+            grant,
+            refund_grant_to,
+            kind,
+            message,
+        } = self;
+        PostedMessage {
+            authenticated_signer,
+            grant,
+            refund_grant_to,
+            kind,
+            index,
+            message,
         }
     }
 }
@@ -511,6 +590,15 @@ pub struct Certificate {
     signatures: Vec<(ValidatorName, Signature)>,
 }
 
+impl fmt::Display for Origin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.medium {
+            Medium::Direct => write!(f, "{:.8} (direct)", self.sender),
+            Medium::Channel(full_name) => write!(f, "{:.8} via {full_name:.8}", self.sender),
+        }
+    }
+}
+
 impl Origin {
     pub fn chain(sender: ChainId) -> Self {
         Self {
@@ -678,7 +766,38 @@ impl CertificateValue {
     }
 }
 
-impl Event {
+impl MessageBundle {
+    pub fn is_skippable(&self) -> bool {
+        self.messages.iter().all(PostedMessage::is_skippable)
+    }
+
+    pub fn is_tracked(&self) -> bool {
+        let mut tracked = false;
+        for posted_message in &self.messages {
+            match posted_message.kind {
+                MessageKind::Simple | MessageKind::Bouncing => {}
+                MessageKind::Protected => return false,
+                MessageKind::Tracked => tracked = true,
+            }
+        }
+        tracked
+    }
+
+    pub fn is_protected(&self) -> bool {
+        self.messages.iter().any(PostedMessage::is_protected)
+    }
+
+    /// Returns whether this bundle must be added to the inbox.
+    ///
+    /// If this is `false`, it gets handled immediately and should never be received in a block.
+    pub fn goes_to_inbox(&self) -> bool {
+        self.messages
+            .iter()
+            .any(|posted_message| posted_message.message.goes_to_inbox())
+    }
+}
+
+impl PostedMessage {
     pub fn is_skippable(&self) -> bool {
         use MessageKind::*;
         match self.kind {
@@ -713,7 +832,7 @@ impl ExecutedBlock {
         message_index: u32,
     ) -> Option<MessageId> {
         let block = &self.block;
-        let transaction_index = block.incoming_messages.len().checked_add(operation_index)?;
+        let transaction_index = block.incoming_bundles.len().checked_add(operation_index)?;
         if message_index
             >= u32::try_from(self.outcome.messages.get(transaction_index)?.len()).ok()?
         {
@@ -862,13 +981,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(
-        round: Round,
-        block: Block,
-        secret: &KeyPair,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
-    ) -> Self {
+    pub fn new_initial(round: Round, block: Block, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -879,8 +992,7 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             validated_block_certificate: None,
         }
     }
@@ -889,8 +1001,7 @@ impl BlockProposal {
         round: Round,
         validated_block_certificate: Certificate,
         secret: &KeyPair,
-        hashed_certificate_values: Vec<HashedCertificateValue>,
-        hashed_blobs: Vec<HashedBlob>,
+        blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let CertificateValue::ValidatedBlock { executed_block } =
@@ -908,8 +1019,7 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            hashed_certificate_values,
-            hashed_blobs,
+            blobs,
             validated_block_certificate: Some(lite_cert),
         }
     }
@@ -1109,38 +1219,49 @@ impl Certificate {
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the
     /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for(&self, medium: &Medium, recipient: ChainId) -> Vec<MessageBundle> {
-        let Some(executed_block) = self.value().executed_block() else {
-            return Vec::new();
-        };
-        let mut bundles = Vec::new();
+    pub fn message_bundles_for<'a>(
+        &'a self,
+        medium: &'a Medium,
+        recipient: ChainId,
+    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let mut index = 0u32;
-        for block_messages in executed_block.messages().iter() {
-            let messages = (index..)
-                .zip(block_messages)
-                .filter(|(_, message)| message.has_destination(medium, recipient))
-                .map(|(idx, message)| (idx, message.clone()))
-                .collect::<Vec<_>>();
-            index += block_messages.len() as u32;
-            if !messages.is_empty() {
-                bundles.push(MessageBundle {
-                    height: executed_block.block.height,
-                    epoch: executed_block.block.epoch,
-                    timestamp: executed_block.block.timestamp,
-                    hash: self.hash(),
-                    messages,
-                });
-            }
-        }
-        bundles
+        let maybe_executed_block = self.value().executed_block().into_iter();
+        maybe_executed_block.flat_map(move |executed_block| {
+            (0u32..).zip(executed_block.messages()).filter_map(
+                move |(transaction_index, txn_messages)| {
+                    let messages = (index..)
+                        .zip(txn_messages)
+                        .filter(|(_, message)| message.has_destination(medium, recipient))
+                        .map(|(idx, message)| message.clone().into_posted(idx))
+                        .collect::<Vec<_>>();
+                    index += txn_messages.len() as u32;
+                    (!messages.is_empty()).then(|| {
+                        let bundle = MessageBundle {
+                            height: executed_block.block.height,
+                            timestamp: executed_block.block.timestamp,
+                            certificate_hash: self.hash(),
+                            transaction_index,
+                            messages,
+                        };
+                        (executed_block.block.epoch, bundle)
+                    })
+                },
+            )
+        })
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
         self.value()
             .executed_block()
-            .map_or(false, |executed_block| {
-                executed_block.requires_blob(blob_id)
-            })
+            .is_some_and(|executed_block| executed_block.requires_blob(blob_id))
+    }
+
+    #[cfg(with_testing)]
+    pub fn outgoing_message_count(&self) -> usize {
+        let Some(executed_block) = self.value().executed_block() else {
+            return 0;
+        };
+        executed_block.messages().iter().map(Vec::len).sum()
     }
 }
 
@@ -1184,15 +1305,11 @@ impl BcsHashable for CertificateValue {}
 
 doc_scalar!(
     MessageAction,
-    "Whether an incoming message is accepted or rejected"
+    "Whether an incoming message is accepted or rejected."
 );
 doc_scalar!(
     ChannelFullName,
-    "A channel name together with its application ID"
-);
-doc_scalar!(
-    Event,
-    "A message together with non replayable information to ensure uniqueness in a particular inbox"
+    "A channel name together with its application ID."
 );
 doc_scalar!(
     Medium,

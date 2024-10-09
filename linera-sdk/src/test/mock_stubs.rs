@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
-use linera_views::memory::MemoryContext;
+use linera_views::context::MemoryContext;
 use serde::Serialize;
 
 /// A helpful error message to explain why the mock API isn't available.

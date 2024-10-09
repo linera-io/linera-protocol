@@ -24,6 +24,7 @@ use std::sync::Arc;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
+use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::{self, MeasureLatency};
 #[cfg(with_metrics)]
@@ -40,8 +41,8 @@ pub use self::{
     system_api::{ContractSystemApi, ServiceSystemApi, SystemApiData, ViewSystemApi},
 };
 use crate::{
-    Bytecode, ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle,
-    UserContractInstance, UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
+    ContractSyncRuntimeHandle, ExecutionError, ServiceSyncRuntimeHandle, UserContractInstance,
+    UserContractModule, UserServiceInstance, UserServiceModule, WasmRuntime,
 };
 
 #[cfg(with_metrics)]

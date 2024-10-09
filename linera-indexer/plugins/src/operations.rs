@@ -16,9 +16,10 @@ use linera_indexer::{
     plugin::{load, route, sdl, Plugin},
 };
 use linera_views::{
-    common::{Context, ContextFromStore, KeyValueStore},
+    context::{Context, ViewContext},
     map_view::MapView,
-    views::{RootView, ViewError},
+    store::KeyValueStore,
+    views::RootView,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -70,7 +71,6 @@ pub enum OperationKeyKind {
 impl<C> Operations<C>
 where
     C: Context + Send + Sync + 'static + Clone,
-    ViewError: From<C::Error>,
 {
     /// Registers an operation and update count and last entries for this chain ID
     async fn register_operation(
@@ -110,11 +110,10 @@ static NAME: &str = "operations";
 
 /// Implements `Plugin`
 #[async_trait::async_trait]
-impl<S> Plugin<S> for OperationsPlugin<ContextFromStore<(), S>>
+impl<S> Plugin<S> for OperationsPlugin<ViewContext<(), S>>
 where
     S: KeyValueStore + Clone + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
-    ViewError: From<S::Error>,
 {
     fn name(&self) -> String {
         NAME.to_string()
@@ -164,7 +163,6 @@ where
 impl<C> OperationsPlugin<C>
 where
     C: Context + Send + Sync + 'static + Clone,
-    ViewError: From<C::Error>,
 {
     /// Gets the operation associated to its hash
     pub async fn operation(

@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter::IntoIterator, path::Path};
+use std::{
+    iter::IntoIterator,
+    ops::{Deref, DerefMut},
+};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash, CryptoRng, KeyPair, PublicKey},
@@ -15,13 +18,28 @@ use linera_execution::{
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("chain error: {0}")]
+    Chain(#[from] linera_chain::ChainError),
+    #[error("persistence error: {0}")]
+    Persistence(Box<dyn std::error::Error + Send + Sync>),
+}
+
 use crate::{
-    persistent::{self, Persist},
+    persistent, util,
     wallet::{UserChain, Wallet},
 };
+
+util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
+#[cfg(feature = "fs")]
+util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -39,6 +57,11 @@ pub struct ValidatorServerConfig {
     pub key: KeyPair,
     pub internal_network: ValidatorInternalNetworkConfig,
 }
+
+#[cfg(web)]
+use crate::persistent::{LocalPersist as Persist, LocalPersistExt as _};
+#[cfg(not(web))]
+use crate::persistent::{Persist, PersistExt as _};
 
 /// The (public) configuration for all validators.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -72,51 +95,78 @@ pub struct WalletState<W> {
     prng: Box<dyn CryptoRng>,
 }
 
-impl<W: std::ops::Deref> std::ops::Deref for WalletState<W> {
-    type Target = W::Target;
+impl<W: Persist<Target = Wallet>> WalletState<W> {
+    pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(
+        &mut self,
+        chains: Chains,
+    ) -> Result<(), Error> {
+        self.wallet.as_mut().extend(chains);
+        W::persist(&mut self.wallet)
+            .await
+            .map_err(|e| Error::Persistence(Box::new(e)))
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.wallet
+impl<W: Deref> Deref for WalletState<W> {
+    type Target = W::Target;
+    fn deref(&self) -> &W::Target {
+        self.wallet.deref()
+    }
+}
+
+impl<W: DerefMut> DerefMut for WalletState<W> {
+    fn deref_mut(&mut self) -> &mut W::Target {
+        self.wallet.deref_mut()
     }
 }
 
 impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
-    type Error = anyhow::Error;
+    type Error = W::Error;
 
-    fn persist(this: &mut Self) -> anyhow::Result<()> {
-        Persist::mutate(&mut this.wallet).refresh_prng_seed(&mut this.prng);
+    fn as_mut(&mut self) -> &mut Wallet {
+        self.wallet.as_mut()
+    }
+
+    async fn persist(&mut self) -> Result<(), W::Error> {
+        self.wallet
+            .mutate(|w| w.refresh_prng_seed(&mut self.prng))
+            .await?;
         tracing::debug!("Persisted user chains");
         Ok(())
     }
 
-    fn as_mut(this: &mut Self) -> &mut Wallet {
-        Persist::as_mut(&mut this.wallet)
-    }
-
-    fn into_value(this: Self) -> Wallet {
-        Persist::into_value(this.wallet)
+    fn into_value(self) -> Wallet {
+        self.wallet.into_value()
     }
 }
 
-impl<W: Persist<Target = Wallet>> Extend<UserChain> for WalletState<W> {
-    fn extend<Chains: IntoIterator<Item = UserChain>>(&mut self, chains: Chains) {
-        Persist::mutate(self).extend(chains);
-    }
-}
-
+#[cfg(feature = "fs")]
 impl WalletState<persistent::File<Wallet>> {
-    pub fn create(path: &Path, wallet: Wallet) -> Result<Self, anyhow::Error> {
+    pub fn create_from_file(path: &std::path::Path, wallet: Wallet) -> Result<Self, Error> {
         Ok(Self::new(persistent::File::read_or_create(path, || {
             Ok(wallet)
         })?))
     }
 
-    pub fn from_file(path: &Path) -> Result<Self, anyhow::Error> {
+    pub fn read_from_file(path: &std::path::Path) -> Result<Self, Error> {
         Ok(Self::new(persistent::File::read(path)?))
     }
 }
 
-impl<W: Persist<Target = Wallet>> WalletState<W> {
+#[cfg(with_indexed_db)]
+impl WalletState<persistent::IndexedDb<Wallet>> {
+    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error> {
+        Ok(Self::new(
+            persistent::IndexedDb::read_or_create(key, wallet).await?,
+        ))
+    }
+
+    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error> {
+        Ok(persistent::IndexedDb::read(key).await?.map(Self::new))
+    }
+}
+
+impl<W: Deref<Target = Wallet>> WalletState<W> {
     pub fn new(wallet: W) -> Self {
         Self {
             prng: wallet.make_prng(),
@@ -159,10 +209,9 @@ impl GenesisConfig {
         }
     }
 
-    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), anyhow::Error>
+    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let committee = self.create_committee();
         for (chain_number, (public_key, balance)) in (0..).zip(&self.chains) {

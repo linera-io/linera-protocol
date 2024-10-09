@@ -9,8 +9,8 @@ use linera_base::command::resolve_binary;
 #[cfg(with_metrics)]
 use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
-    common::{CommonStoreConfig, MIN_VIEW_TAG},
-    value_splitting::DatabaseConsistencyError,
+    store::{CommonStoreConfig, KeyValueStoreError},
+    views::MIN_VIEW_TAG,
 };
 use thiserror::Error;
 use tonic::Status;
@@ -65,22 +65,17 @@ pub enum ServiceStoreError {
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
 
+    /// Var error
+    #[error(transparent)]
+    VarError(#[from] std::env::VarError),
+
     /// An error occurred during BCS serialization
     #[error("An error occurred during BCS serialization")]
     Serialization(#[from] bcs::Error),
-
-    /// The database is not consistent
-    #[error(transparent)]
-    DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 }
 
-impl From<ServiceStoreError> for linera_views::views::ViewError {
-    fn from(error: ServiceStoreError) -> Self {
-        Self::StoreError {
-            backend: "service".to_string(),
-            error: error.to_string(),
-        }
-    }
+impl KeyValueStoreError for ServiceStoreError {
+    const BACKEND: &'static str = "service";
 }
 
 #[cfg(with_testing)]
@@ -92,9 +87,17 @@ pub fn create_shared_store_common_config() -> CommonStoreConfig {
     }
 }
 
+pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
+    Ok(std::env::var("LINERA_STORAGE_SERVICE")?)
+}
+
 #[cfg(with_metrics)]
 pub(crate) static STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
     LazyLock::new(|| KeyValueStoreMetrics::new("storage service".to_string()));
+
+#[cfg(with_metrics)]
+pub(crate) static LRU_STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("storage service lru caching".to_string()));
 
 #[derive(Debug, Clone)]
 pub struct ServiceStoreConfig {

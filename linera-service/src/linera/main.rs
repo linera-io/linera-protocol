@@ -5,7 +5,10 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    borrow::Cow, collections::HashMap, env, num::NonZeroUsize, path::PathBuf, sync::Arc,
+    time::Instant,
+};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -29,16 +32,14 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
-    client::ChainClientError,
     data_types::{ChainInfoQuery, ClientOutcome},
-    local_node::LocalNodeClient,
-    node::LocalValidatorNodeProvider,
+    local_node::{LocalNodeClient, RemoteNode},
+    node::ValidatorNodeProvider,
     worker::{Reason, WorkerState},
     JoinSetExt as _,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName, ValidatorState},
-    system::{SystemChannel, UserData},
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
@@ -49,7 +50,6 @@ use linera_service::{
     util, wallet,
 };
 use linera_storage::Storage;
-use linera_views::views::ViewError;
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, info, warn, Instrument as _};
@@ -64,6 +64,8 @@ use {
     std::collections::HashSet,
     tracing::error,
 };
+
+use crate::persistent::PersistExt as _;
 
 #[cfg(feature = "benchmark")]
 fn deserialize_response(response: RpcMessage) -> Option<ChainInfoResponse> {
@@ -97,15 +99,14 @@ fn read_json(string: Option<String>, path: Option<PathBuf>) -> anyhow::Result<Ve
 
 #[async_trait]
 impl Runnable for Job {
-    type Output = ();
+    type Output = anyhow::Result<()>;
 
     async fn run<S>(self, storage: S) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let Job(options) = self;
-        let wallet = options.wallet()?;
+        let wallet = options.wallet().await?;
         let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
         let command = options.command;
 
@@ -126,9 +127,8 @@ impl Runnable for Job {
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
                         async move {
-                            let data = UserData::default();
                             chain_client
-                                .transfer_to_account(sender.owner, amount, recipient, data)
+                                .transfer_to_account(sender.owner, amount, recipient)
                                 .await
                         }
                     })
@@ -175,7 +175,9 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context
+                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -223,7 +225,9 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context.update_wallet_for_new_chain(id, key_pair, timestamp);
+                context
+                    .update_wallet_for_new_chain(id, key_pair, timestamp)
+                    .await?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
@@ -280,78 +284,6 @@ impl Runnable for Job {
                 debug!("{:?}", certificate);
             }
 
-            Subscribe {
-                subscriber,
-                publisher,
-                channel,
-            } => {
-                let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(subscriber);
-                let time_start = Instant::now();
-                info!("Subscribing");
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let chain_client = chain_client.clone();
-                        async move {
-                            match channel {
-                                SystemChannel::Admin => {
-                                    chain_client.subscribe_to_new_committees().await
-                                }
-                                SystemChannel::PublishedBytecodes => {
-                                    let publisher = publisher.ok_or_else(|| {
-                                        ChainClientError::InternalError("Incorrect chain ID")
-                                    })?;
-                                    chain_client
-                                        .subscribe_to_published_bytecodes(publisher)
-                                        .await
-                                }
-                            }
-                        }
-                    })
-                    .await
-                    .context("Failed to subscribe")?;
-                let time_total = time_start.elapsed();
-                info!("Subscription confirmed after {} ms", time_total.as_millis());
-                debug!("{:?}", certificate);
-            }
-
-            Unsubscribe {
-                subscriber,
-                publisher,
-                channel,
-            } => {
-                let subscriber = subscriber.unwrap_or_else(|| context.default_chain());
-                let chain_client = context.make_chain_client(subscriber);
-                let time_start = Instant::now();
-                let certificate = context
-                    .apply_client_command(&chain_client, |chain_client| {
-                        let chain_client = chain_client.clone();
-                        async move {
-                            let chain_client = chain_client.clone();
-                            match channel {
-                                SystemChannel::Admin => {
-                                    info!("Unsubscribing from admin channel");
-                                    chain_client.unsubscribe_from_new_committees().await
-                                }
-                                SystemChannel::PublishedBytecodes => {
-                                    let publisher = publisher.ok_or_else(|| {
-                                        ChainClientError::InternalError("Incorrect chain ID")
-                                    })?;
-                                    info!("Unsubscribing from publisher {}", publisher);
-                                    chain_client
-                                        .unsubscribe_from_published_bytecodes(publisher)
-                                        .await
-                                }
-                            }
-                        }
-                    })
-                    .await
-                    .context("Failed to unsubscribe")?;
-                let time_total = time_start.elapsed();
-                info!("Unsubscribed in {} ms", time_total.as_millis());
-                debug!("{:?}", certificate);
-            }
-
             LocalBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
@@ -370,7 +302,8 @@ impl Runnable for Job {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id);
                 info!(
-                    "Evaluating the local balance of {} by staging execution of known incoming messages", account
+                    "Evaluating the local balance of {account} by staging execution of known \
+                    incoming messages"
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
@@ -393,7 +326,7 @@ impl Runnable for Job {
                     Some(owner) => chain_client.query_owner_balance(owner).await,
                     None => chain_client.query_balance().await,
                 };
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
@@ -406,7 +339,7 @@ impl Runnable for Job {
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(
                     "Synchronized chain information in {} ms",
@@ -472,7 +405,7 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let result = chain_client.local_committee().await;
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
                 let time_total = time_start.elapsed();
                 info!("Validators obtained after {} ms", time_total.as_millis());
@@ -505,7 +438,6 @@ impl Runnable for Job {
                 info!("Starting operations to change validator set");
                 let time_start = Instant::now();
 
-                // Make sure genesis chains are subscribed to the admin chain.
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
@@ -592,6 +524,8 @@ impl Runnable for Job {
                                     operation_byte,
                                     message,
                                     message_byte,
+                                    maximum_fuel_per_block,
+                                    maximum_executed_block_size,
                                     maximum_bytes_read_per_block,
                                     maximum_bytes_written_per_block,
                                 } => {
@@ -628,6 +562,15 @@ impl Runnable for Job {
                                     if let Some(message_byte) = message_byte {
                                         policy.message_byte = message_byte;
                                     }
+                                    if let Some(maximum_fuel_per_block) = maximum_fuel_per_block {
+                                        policy.maximum_fuel_per_block = maximum_fuel_per_block;
+                                    }
+                                    if let Some(maximum_executed_block_size) =
+                                        maximum_executed_block_size
+                                    {
+                                        policy.maximum_executed_block_size =
+                                            maximum_executed_block_size;
+                                    }
                                     if let Some(maximum_bytes_read_per_block) =
                                         maximum_bytes_read_per_block
                                     {
@@ -640,49 +583,8 @@ impl Runnable for Job {
                                         policy.maximum_bytes_written_per_block =
                                             maximum_bytes_written_per_block;
                                     }
-                                    info!(
-                                        "ResourceControlPolicy:\n\
-                            {:.2} base cost per block\n\
-                            {:.2} cost per fuel unit\n\
-                            {:.2} cost per read operation\n\
-                            {:.2} cost per write operation\n\
-                            {:.2} cost per byte read\n\
-                            {:.2} cost per byte written\n\
-                            {:.2} cost per byte stored\n\
-                            {:.2} per operation\n\
-                            {:.2} per byte in the argument of an operation\n\
-                            {:.2} per outgoing messages\n\
-                            {:.2} per byte in the argument of an outgoing messages\n\
-                            {:.2} maximum number bytes read per block\n\
-                            {:.2} maximum number bytes written per block",
-                                        policy.block,
-                                        policy.fuel_unit,
-                                        policy.read_operation,
-                                        policy.write_operation,
-                                        policy.byte_read,
-                                        policy.byte_written,
-                                        policy.byte_stored,
-                                        policy.operation,
-                                        policy.operation_byte,
-                                        policy.message,
-                                        policy.message_byte,
-                                        policy.maximum_bytes_read_per_block,
-                                        policy.maximum_bytes_written_per_block
-                                    );
-                                    if block.is_none()
-                                        && fuel_unit.is_none()
-                                        && read_operation.is_none()
-                                        && write_operation.is_none()
-                                        && byte_read.is_none()
-                                        && byte_written.is_none()
-                                        && byte_stored.is_none()
-                                        && operation.is_none()
-                                        && operation_byte.is_none()
-                                        && message.is_none()
-                                        && message_byte.is_none()
-                                        && maximum_bytes_read_per_block.is_none()
-                                        && maximum_bytes_written_per_block.is_none()
-                                    {
+                                    info!("{policy}");
+                                    if committee.policy() == &policy {
                                         return Ok(ClientOutcome::Committed(None));
                                     }
                                 }
@@ -700,9 +602,20 @@ impl Runnable for Job {
                 let Some(certificate) = maybe_certificate else {
                     return Ok(());
                 };
+                info!("Created new committee:\n{:?}", certificate);
+
+                let time_total = time_start.elapsed();
+                info!("Operations confirmed after {} ms", time_total.as_millis());
+            }
+
+            FinalizeCommittee => {
+                info!("Starting operations to remove old committees");
+                let time_start = Instant::now();
+
+                let chain_client = context.make_chain_client(context.wallet.genesis_admin_chain());
 
                 // Remove the old committee.
-                info!("Finalizing committee:\n{:?}", certificate);
+                info!("Finalizing current committee");
                 context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
@@ -710,7 +623,7 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to finalize committee")?;
-                context.save_wallet();
+                context.save_wallet().await?;
 
                 let time_total = time_start.elapsed();
                 info!("Operations confirmed after {} ms", time_total.as_millis());
@@ -789,8 +702,7 @@ impl Runnable for Job {
                     .map(|certificate| {
                         HandleCertificateRequest {
                             certificate: certificate.clone(),
-                            hashed_certificate_values: vec![],
-                            hashed_blobs: vec![],
+                            blobs: vec![],
                             wait_for_outgoing_messages: true,
                         }
                         .into()
@@ -817,7 +729,7 @@ impl Runnable for Job {
 
                 info!("Updating local state of user chains");
                 context.update_wallet_from_certificates(certificates).await;
-                context.save_wallet();
+                context.save_wallet().await?;
             }
 
             Watch { chain_id, raw } => {
@@ -829,7 +741,7 @@ impl Runnable for Job {
                 join_set.spawn_task(listener);
                 while let Some(notification) = notifications.next().await {
                     if let Reason::NewBlock { .. } = notification.reason {
-                        context.update_and_save_wallet(&chain_client).await;
+                        context.update_and_save_wallet(&chain_client).await?;
                     }
                     if raw {
                         println!("{}", serde_json::to_string(&notification)?);
@@ -840,7 +752,7 @@ impl Runnable for Job {
 
             Service { config, port } => {
                 let default_chain = context.wallet().default_chain();
-                let service = NodeService::new(config, port, default_chain, storage, context);
+                let service = NodeService::new(config, port, default_chain, storage, context).await;
                 service.run().await?;
             }
 
@@ -849,10 +761,10 @@ impl Runnable for Job {
                 port,
                 amount,
                 limit_rate_until,
+                config,
             } => {
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Starting faucet service using chain {}", chain_id);
-                let chain_client = context.make_chain_client(chain_id);
                 let end_timestamp = limit_rate_until
                     .map(|et| {
                         let micros = u64::try_from(et.timestamp_micros())
@@ -863,11 +775,13 @@ impl Runnable for Job {
                 let genesis_config = Arc::new(context.wallet().genesis_config().clone());
                 let faucet = FaucetService::new(
                     port,
-                    chain_client,
+                    chain_id,
                     context,
                     amount,
                     end_timestamp,
                     genesis_config,
+                    config,
+                    storage,
                 )
                 .await?;
                 faucet.run().await?;
@@ -886,21 +800,29 @@ impl Runnable for Job {
                     .publish_bytecode(&chain_client, contract, service)
                     .await?;
                 println!("{}", bytecode_id);
-                info!("{}", "Bytecode published successfully!".green().bold());
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
-            PublishBlob {
+            PublishDataBlob {
                 blob_path,
                 publisher,
             } => {
                 let start_time = Instant::now();
                 let publisher = publisher.unwrap_or_else(|| context.default_chain());
-                info!("Publishing blob on chain {}", publisher);
+                info!("Publishing data blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher);
-                let blob_id = context.publish_blob(&chain_client, blob_path).await?;
-                println!("{}", blob_id);
-                info!("{}", "Blob published successfully!".green().bold());
+                let hash = context.publish_data_blob(&chain_client, blob_path).await?;
+                println!("{}", hash);
+                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+            }
+
+            // TODO(#2490): Consider removing or renaming this.
+            ReadDataBlob { hash, reader } => {
+                let start_time = Instant::now();
+                let reader = reader.unwrap_or_else(|| context.default_chain());
+                info!("Verifying data blob on chain {}", reader);
+                let chain_client = context.make_chain_client(reader);
+                context.read_data_blob(&chain_client, hash).await?;
                 info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
             }
 
@@ -921,7 +843,6 @@ impl Runnable for Job {
                 let argument = read_json(json_argument, json_argument_path)?;
 
                 info!("Synchronizing");
-                chain_client.synchronize_from_validators().await?;
                 let chain_client = chain_client;
                 context.process_inbox(&chain_client).await?;
 
@@ -1034,7 +955,7 @@ impl Runnable for Job {
                 )
                 .await?;
                 println!("{}", chain_id);
-                context.save_wallet();
+                context.save_wallet().await?;
             }
 
             Project(project_command) => match project_command {
@@ -1104,7 +1025,7 @@ impl Runnable for Job {
                         info!("Please try again at {}", timeout.timestamp)
                     }
                 }
-                context.update_and_save_wallet(&chain_client).await;
+                context.update_and_save_wallet(&chain_client).await?;
             }
 
             Wallet(WalletCommand::Init {
@@ -1120,7 +1041,10 @@ impl Runnable for Job {
                     Owner::from(&public_key),
                     faucet_url,
                 );
-                context.wallet_mut().add_unassigned_key_pair(key_pair);
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                    .await?;
                 let faucet = cli_wrappers::Faucet::new(faucet_url);
                 let outcome = faucet.claim(&public_key).await?;
                 let validators = faucet.current_validators().await?;
@@ -1141,7 +1065,10 @@ impl Runnable for Job {
                     .into_iter()
                     .chain([admin_id, outcome.chain_id]);
                 Self::print_peg_certificate_hash(storage, chains, &context).await?;
-                context.wallet_mut().set_default_chain(outcome.chain_id)?;
+                context
+                    .wallet_mut()
+                    .mutate(|w| w.set_default_chain(outcome.chain_id))
+                    .await??;
             }
 
             CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) | HelpMarkdown => {
@@ -1163,11 +1090,16 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
-        let state = WorkerState::new("Local node".to_string(), None, storage)
-            .with_allow_inactive_chains(true)
-            .with_allow_messages_from_deprecated_epochs(true);
+        let state = WorkerState::new(
+            "Local node".to_string(),
+            None,
+            storage,
+            NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
+        )
+        .with_tracked_chains([message_id.chain_id, chain_id])
+        .with_allow_inactive_chains(true)
+        .with_allow_messages_from_deprecated_epochs(true);
         let node_client = LocalNodeClient::new(state);
 
         // Take the latest committee we know of.
@@ -1177,6 +1109,7 @@ impl Job {
             context
                 .make_node_provider()
                 .make_nodes_from_list(validators)?
+                .map(|(name, node)| RemoteNode { name, node })
                 .collect()
         } else {
             let info = node_client.handle_chain_info_query(query).await?;
@@ -1186,6 +1119,7 @@ impl Job {
             context
                 .make_node_provider()
                 .make_nodes(committee)?
+                .map(|(name, node)| RemoteNode { name, node })
                 .collect()
         };
 
@@ -1223,7 +1157,10 @@ impl Job {
         );
         context
             .wallet_mut()
-            .assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+            .mutate(|w| {
+                w.assign_new_chain_to_key(public_key, chain_id, executed_block.block.timestamp)
+            })
+            .await?
             .context("could not assign the new chain")?;
         Ok(())
     }
@@ -1238,7 +1175,6 @@ impl Job {
     ) -> anyhow::Result<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
-        ViewError: From<S::StoreError>,
     {
         let mut chains = HashMap::new();
         for chain_id in chain_ids {
@@ -1290,9 +1226,9 @@ impl Job {
 }
 
 fn main() -> anyhow::Result<()> {
-    linera_base::tracing::init();
-
     let options = ClientOptions::init()?;
+
+    linera_base::tracing::init(&log_file_name_for(&options.command));
 
     let mut runtime = if options.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -1306,7 +1242,7 @@ fn main() -> anyhow::Result<()> {
         builder
     };
 
-    let span = tracing::info_span!("run");
+    let span = tracing::info_span!("linera::main");
     if let Some(wallet_id) = options.with_wallet {
         span.record("wallet_id", wallet_id);
     }
@@ -1316,6 +1252,48 @@ fn main() -> anyhow::Result<()> {
         .build()
         .expect("Failed to create Tokio runtime")
         .block_on(run(&options).instrument(span))
+}
+
+/// Returns the log file name to use based on the [`ClientCommand`] that will run.
+fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
+    match command {
+        ClientCommand::HelpMarkdown
+        | ClientCommand::Transfer { .. }
+        | ClientCommand::OpenChain { .. }
+        | ClientCommand::OpenMultiOwnerChain { .. }
+        | ClientCommand::ChangeOwnership { .. }
+        | ClientCommand::ChangeApplicationPermissions { .. }
+        | ClientCommand::CloseChain { .. }
+        | ClientCommand::LocalBalance { .. }
+        | ClientCommand::QueryBalance { .. }
+        | ClientCommand::SyncBalance { .. }
+        | ClientCommand::Sync { .. }
+        | ClientCommand::ProcessInbox { .. }
+        | ClientCommand::QueryValidator { .. }
+        | ClientCommand::QueryValidators { .. }
+        | ClientCommand::SetValidator { .. }
+        | ClientCommand::RemoveValidator { .. }
+        | ClientCommand::ResourceControlPolicy { .. }
+        | ClientCommand::FinalizeCommittee
+        | ClientCommand::CreateGenesisConfig { .. }
+        | ClientCommand::PublishBytecode { .. }
+        | ClientCommand::PublishDataBlob { .. }
+        | ClientCommand::ReadDataBlob { .. }
+        | ClientCommand::CreateApplication { .. }
+        | ClientCommand::PublishAndCreate { .. }
+        | ClientCommand::RequestApplication { .. }
+        | ClientCommand::Keygen { .. }
+        | ClientCommand::Assign { .. }
+        | ClientCommand::Wallet { .. }
+        | ClientCommand::RetryPendingBlock { .. } => "client".into(),
+        #[cfg(feature = "benchmark")]
+        ClientCommand::Benchmark { .. } => "benchmark".into(),
+        ClientCommand::Net { .. } => "net".into(),
+        ClientCommand::Project { .. } => "project".into(),
+        ClientCommand::Watch { .. } => "watch".into(),
+        ClientCommand::Service { port, .. } => format!("service-{port}").into(),
+        ClientCommand::Faucet { .. } => "faucet".into(),
+    }
 }
 
 async fn run(options: &ClientOptions) -> anyhow::Result<()> {
@@ -1343,6 +1321,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             operation_byte_price,
             message_price,
             message_byte_price,
+            maximum_fuel_per_block,
+            maximum_executed_block_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
             testing_prng_seed,
@@ -1350,14 +1330,11 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
         } => {
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
-            let maximum_bytes_read_per_block = match *maximum_bytes_read_per_block {
-                Some(value) => value,
-                None => u64::MAX,
-            };
-            let maximum_bytes_written_per_block = match *maximum_bytes_written_per_block {
-                Some(value) => value,
-                None => u64::MAX,
-            };
+            let maximum_fuel_per_block = maximum_fuel_per_block.unwrap_or(u64::MAX);
+            let maximum_bytes_read_per_block = maximum_bytes_read_per_block.unwrap_or(u64::MAX);
+            let maximum_bytes_written_per_block =
+                maximum_bytes_written_per_block.unwrap_or(u64::MAX);
+            let maximum_executed_block_size = maximum_executed_block_size.unwrap_or(u64::MAX);
             let policy = ResourceControlPolicy {
                 block: *block_price,
                 fuel_unit: *fuel_unit_price,
@@ -1370,6 +1347,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 operation: *operation_price,
                 message_byte: *message_byte_price,
                 message: *message_price,
+                maximum_fuel_per_block,
+                maximum_executed_block_size,
                 maximum_bytes_read_per_block,
                 maximum_bytes_written_per_block,
             };
@@ -1389,7 +1368,6 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 genesis_config_path,
                 GenesisConfig::new(committee_config, admin_id, timestamp, policy, network_name),
             )?;
-            let mut genesis_config_ref = Persist::mutate(&mut genesis_config);
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
             for i in 0..*num_other_initial_chains {
@@ -1398,14 +1376,15 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);
                 // Public "genesis" state.
                 let key = chain.key_pair.as_ref().unwrap().public();
-                genesis_config_ref.chains.push((key, *initial_funding));
+                genesis_config.chains.push((key, *initial_funding));
                 // Private keys.
                 chains.push(chain);
             }
-            drop(genesis_config_ref);
+            genesis_config.persist().await?;
             options
-                .create_wallet(Persist::into_value(genesis_config), *testing_prng_seed)?
-                .extend(chains);
+                .create_wallet(genesis_config.into_value(), *testing_prng_seed)?
+                .mutate(|wallet| wallet.extend(chains))
+                .await?;
             options.initialize_storage().boxed().await?;
             Ok(())
         }
@@ -1421,15 +1400,17 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 Ok(project.test().await?)
             }
             ProjectCommand::PublishAndCreate { .. } => {
-                options.run_with_storage(Job(options.clone())).await
+                options.run_with_storage(Job(options.clone())).await?
             }
         },
 
         ClientCommand::Keygen => {
-            let mut wallet = options.wallet()?;
+            let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
-            Persist::mutate(&mut wallet).add_unassigned_key_pair(key_pair);
+            wallet
+                .mutate(|w| w.add_unassigned_key_pair(key_pair))
+                .await?;
             println!("{}", public);
             Ok(())
         }
@@ -1443,10 +1424,11 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 validators,
                 shards,
                 testing_prng_seed,
-                table_name: _,
                 policy_config,
                 kubernetes: true,
                 binaries,
+                path: _,
+                storage_config_namespace: _,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
@@ -1469,8 +1451,9 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 validators,
                 shards,
                 testing_prng_seed,
-                table_name,
                 policy_config,
+                path,
+                storage_config_namespace,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1480,8 +1463,9 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     *validators,
                     *shards,
                     *testing_prng_seed,
-                    table_name,
                     policy_config.into_policy(),
+                    path,
+                    storage_config_namespace,
                 )
                 .boxed()
                 .await
@@ -1500,22 +1484,34 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id } => {
-                wallet::pretty_print(&*options.wallet()?, *chain_id);
+                wallet::pretty_print(&*options.wallet().await?, *chain_id);
                 Ok(())
             }
 
             WalletCommand::SetDefault { chain_id } => {
-                Persist::mutate(&mut options.wallet()?).set_default_chain(*chain_id)?;
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|w| w.set_default_chain(*chain_id))
+                    .await??;
                 Ok(())
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
-                Persist::mutate(&mut options.wallet()?).forget_keys(chain_id)?;
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|w| w.forget_keys(chain_id))
+                    .await??;
                 Ok(())
             }
 
             WalletCommand::ForgetChain { chain_id } => {
-                Persist::mutate(&mut options.wallet()?).forget_chain(chain_id)?;
+                options
+                    .wallet()
+                    .await?
+                    .mutate(|w| w.forget_chain(chain_id))
+                    .await??;
                 Ok(())
             }
 
@@ -1556,24 +1552,28 @@ Make sure to use a Linera client compatible with this network.
                     (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
                 };
                 let timestamp = genesis_config.timestamp;
-                let mut wallet = options.create_wallet(genesis_config, *testing_prng_seed)?;
-                wallet.extend(
-                    with_other_chains
-                        .iter()
-                        .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                );
+                options
+                    .create_wallet(genesis_config, *testing_prng_seed)?
+                    .mutate(|wallet| {
+                        wallet.extend(
+                            with_other_chains
+                                .iter()
+                                .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
+                        )
+                    })
+                    .await?;
                 options.initialize_storage().boxed().await?;
                 if *with_new_chain {
                     ensure!(
                         faucet.is_some(),
                         "Using --with-new-chain requires --faucet to be set"
                     );
-                    options.run_with_storage(Job(options.clone())).await?;
+                    options.run_with_storage(Job(options.clone())).await??;
                 }
                 Ok(())
             }
         },
 
-        _ => options.run_with_storage(Job(options.clone())).await,
+        _ => options.run_with_storage(Job(options.clone())).await?,
     }
 }

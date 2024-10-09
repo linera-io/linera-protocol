@@ -23,10 +23,10 @@ We provide support for the following databases:
 * `ScyllaDbStore` is a cloud-based Cassandra-compatible database.
 * `ServiceStoreClient` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
-The corresponding trait in the code is the [`common::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.KeyValueStore.html).
-The trait decomposes into a [`common::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.ReadableKeyValueStore.html)
-and a [`common::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.WritableKeyValueStore.html).
-In addition, there is a [`common::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/common/trait.AdminKeyValueStore.html)
+The corresponding trait in the code is the [`crate::store::KeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.KeyValueStore.html).
+The trait decomposes into a [`store::ReadableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.ReadableKeyValueStore.html)
+and a [`store::WritableKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.WritableKeyValueStore.html).
+In addition, there is a [`store::AdminKeyValueStore`](https://docs.rs/linera-views/latest/linera_views/store/trait.AdminKeyValueStore.html)
 which gives some functionalities for working with stores.
 A context is the combination of a client and a base key (of type `Vec<u8>`).
 
@@ -59,130 +59,56 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 #![deny(missing_docs)]
 #![deny(clippy::large_futures)]
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
-
-#[cfg(with_metrics)]
-pub use linera_base::prometheus_util;
-#[cfg(with_metrics)]
-use prometheus::IntCounterVec;
-
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
-/// The definitions used for the `KeyValueStore` and `Context`.
+/// The `KeyValueStore` trait and related definitions.
+pub mod store;
+
+/// The `Context` trait and related definitions.
+pub mod context;
+
+/// Common definitions used for views and backends.
 pub mod common;
 
-/// The code to turn a `DirectKeyValueStore` into a `KeyValueStore` by adding journaling.
-pub mod journaling;
-
-/// The code for encapsulating one key_value store into another that does metric
-#[cfg(with_metrics)]
-pub mod metering;
-
-/// The code for handling big values by splitting them into several small ones.
-pub mod value_splitting;
-
-/// The definition of the `View` and related traits.
+/// Elementary data-structures implementing the [`views::View`] trait.
 pub mod views;
 
-/// The `RegisterView` implements a register for a single value.
-pub mod register_view;
+/// Backend implementing the [`crate::store::KeyValueStore`] trait.
+pub mod backends;
 
-/// The `LogView` implements a log list that can be pushed.
-pub mod log_view;
+/// Support for metrics.
+#[cfg(with_metrics)]
+pub mod metrics;
 
-/// The `QueueView` implements a queue that can push on the back and delete on the front.
-pub mod queue_view;
-
-/// The `MapView` implements a map with ordered keys.
-pub mod map_view;
-
-/// The `SetView` implements a set with ordered entries.
-pub mod set_view;
-
+/// GraphQL implementations.
 mod graphql;
 
-/// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
-pub mod collection_view;
-
-/// Helper definitions for in-memory storage.
-pub mod memory;
-
-/// The LRU (least recently used) caching.
-pub mod lru_caching;
-
-/// The `ReentrantCollectionView` implements a map structure whose keys are ordered and the values are views with concurrent access.
-pub mod reentrant_collection_view;
-
-/// The implementation of a key-value store view.
-pub mod key_value_store_view;
-
-/// Wrapping a view to compute a hash.
-pub mod hashable_wrapper;
-
-/// A storage backend for views based on ScyllaDB
-#[cfg(with_scylladb)]
-pub mod scylla_db;
-
-/// A storage backend for views based on RocksDB
-#[cfg(with_rocksdb)]
-pub mod rocks_db;
-
-/// A storage backend for views based on DynamoDB
-#[cfg(with_dynamodb)]
-pub mod dynamo_db;
-
-/// A storage backend for views in the browser based on IndexedDB
-#[cfg(with_indexeddb)]
-pub mod indexed_db;
+/// Functions for random generation
+#[cfg(with_testing)]
+pub mod random;
 
 /// Helper types for tests.
 #[cfg(with_testing)]
 pub mod test_utils;
 
+#[cfg(with_dynamodb)]
+pub use backends::dynamo_db;
+#[cfg(with_indexeddb)]
+pub use backends::indexed_db;
+#[cfg(with_metrics)]
+pub use backends::metering;
+#[cfg(with_rocksdb)]
+pub use backends::rocks_db;
+#[cfg(with_scylladb)]
+pub use backends::scylla_db;
+pub use backends::{journaling, lru_caching, memory, value_splitting};
+pub use views::{
+    bucket_queue_view, collection_view, hashable_wrapper, key_value_store_view, log_view, map_view,
+    queue_view, reentrant_collection_view, register_view, set_view,
+};
 /// Re-exports used by the derive macros of this library.
 #[doc(hidden)]
 pub use {
     async_lock, async_trait::async_trait, futures, generic_array, linera_base::crypto, serde, sha3,
 };
-
-/// Increments the metrics counter with the given name, with the struct and base key as labels.
-#[cfg(with_metrics)]
-pub fn increment_counter(counter: &LazyLock<IntCounterVec>, struct_name: &str, base_key: &[u8]) {
-    let base_key = hex::encode(base_key);
-    let labels = [struct_name, &base_key];
-    counter.with_label_values(&labels).inc();
-}
-
-/// The metric tracking the latency of the loading of views.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static LOAD_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new(|| {
-    use prometheus::register_histogram_vec;
-    register_histogram_vec!("load_view_latency", "Load view latency", &[])
-        .expect("Load view latency should not fail")
-});
-
-/// The metric counting how often a view is read from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static LOAD_VIEW_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "load_view",
-        "The metric counting how often a view is read from storage",
-        &["type", "base_key"],
-    )
-    .expect("Counter creation should not fail")
-});
-/// The metric counting how often a view is written from storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static SAVE_VIEW_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "save_view",
-        "The metric counting how often a view is written from storage",
-        &["type", "base_key"],
-    )
-    .expect("Counter creation should not fail")
-});
