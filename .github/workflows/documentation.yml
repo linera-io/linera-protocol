@@ -71,7 +71,7 @@ jobs:
     - name: Checkout docs.rs tool repository
       run: |
         cd ${{ runner.temp }}
-        git clone https://github.com/rust-lang/docs.rs docsrs
+        git clone https://github.com/ma2bd/docs.rs docsrs
         cd docsrs
         git submodule update --init
     - uses: actions-rust-lang/setup-rust-toolchain@v1
