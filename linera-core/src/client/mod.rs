@@ -268,6 +268,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 ));
             }
             dashmap::mapref::entry::Entry::Occupied(e) => {
+                // TODO(#2600): Find a better way to handle this case.
                 let state = e.get();
                 let owners = known_key_pairs
                     .into_iter()
