@@ -5,17 +5,3 @@ linera-version --no-verify
 linera-witty-macros
 linera-witty
 linera-base
-linera-views-derive
-linera-views
-linera-execution
-linera-chain
-linera-storage-service
-linera-storage
-linera-core
-linera-ethereum
-linera-sdk-derive
-linera-sdk
-linera-rpc
-linera-client
-linera-service
-linera-service-graphql-client
