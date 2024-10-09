@@ -379,9 +379,13 @@ impl SyncRuntimeInternal<UserContractInstance> {
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
+            #[cfg(web)]
+            hash_map::Entry::Vacant(_) => {
+                drop(this);
+                panic!("dynamically loading contracts is not currently supported on the Web");
+            }
+            #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
-                assert!(!cfg!(web), "dynamically loading contracts is not currently supported on the Web");
-
                 let (code, description) = self
                     .execution_state_sender
                     .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
@@ -493,6 +497,12 @@ impl SyncRuntimeInternal<UserServiceInstance> {
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
+            #[cfg(web)]
+            hash_map::Entry::Vacant(_) => {
+                drop(this);
+                panic!("dynamically loading services is not currently supported on the Web");
+            }
+            #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
                 let (code, description) = self
                     .execution_state_sender

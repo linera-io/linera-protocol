@@ -103,7 +103,9 @@ where
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
+            #[cfg(not(web))]
             LoadContract { id, callback } => callback.respond(self.load_contract(id).await?),
+            #[cfg(not(web))]
             LoadService { id, callback } => callback.respond(self.load_service(id).await?),
 
             ChainBalance { callback } => {
@@ -335,11 +337,13 @@ where
 
 /// Requests to the execution state.
 pub enum ExecutionRequest {
+    #[cfg(not(web))]
     LoadContract {
         id: UserApplicationId,
         callback: Sender<(UserContractCode, UserApplicationDescription)>,
     },
 
+    #[cfg(not(web))]
     LoadService {
         id: UserApplicationId,
         callback: Sender<(UserServiceCode, UserApplicationDescription)>,
@@ -467,11 +471,13 @@ pub enum ExecutionRequest {
 impl Debug for ExecutionRequest {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {
+            #[cfg(not(web))]
             ExecutionRequest::LoadContract { id, .. } => formatter
                 .debug_struct("ExecutionRequest::LoadContract")
                 .field("id", id)
                 .finish_non_exhaustive(),
 
+            #[cfg(not(web))]
             ExecutionRequest::LoadService { id, .. } => formatter
                 .debug_struct("ExecutionRequest::LoadService")
                 .field("id", id)
