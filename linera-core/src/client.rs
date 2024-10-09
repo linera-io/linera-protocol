@@ -183,20 +183,31 @@ impl<P, S: Storage + Clone> Client<P, S> {
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
 
-        let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) else {
-            panic!("Inserting already-existing chain {chain_id}");
+        match self.chains.entry(chain_id) {
+            dashmap::mapref::entry::Entry::Vacant(e) => {
+                e.insert(ChainState {
+                    known_key_pairs,
+                    admin_id,
+                    block_hash,
+                    timestamp,
+                    next_block_height,
+                    pending_block,
+                    pending_blobs,
+                    received_certificate_trackers: HashMap::new(),
+                    preparing_block: Arc::default(),
+                });
+            }
+            dashmap::mapref::entry::Entry::Occupied(e) => {
+                let state = e.get();
+                assert!(state.known_key_pairs.keys().eq(known_key_pairs.keys()));
+                assert_eq!(state.admin_id, admin_id);
+                assert_eq!(state.block_hash, block_hash);
+                assert_eq!(state.timestamp, timestamp);
+                assert_eq!(state.next_block_height, next_block_height);
+                assert_eq!(state.pending_block, pending_block);
+                assert_eq!(state.pending_blobs, pending_blobs);
+            }
         };
-        e.insert(ChainState {
-            known_key_pairs,
-            admin_id,
-            block_hash,
-            timestamp,
-            next_block_height,
-            pending_block,
-            pending_blobs,
-            received_certificate_trackers: HashMap::new(),
-            preparing_block: Arc::default(),
-        });
 
         ChainClient {
             client: self.clone(),
