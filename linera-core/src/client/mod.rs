@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -255,18 +255,33 @@ impl<P, S: Storage + Clone> Client<P, S> {
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClient<P, S> {
-        let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) else {
-            panic!("Inserting already-existing chain {chain_id}");
+        match self.chains.entry(chain_id) {
+            dashmap::mapref::entry::Entry::Vacant(e) => {
+                e.insert(ChainState::new(
+                    known_key_pairs,
+                    admin_id,
+                    block_hash,
+                    timestamp,
+                    next_block_height,
+                    pending_block,
+                    pending_blobs,
+                ));
+            }
+            dashmap::mapref::entry::Entry::Occupied(e) => {
+                let state = e.get();
+                let owners = known_key_pairs
+                    .into_iter()
+                    .map(|kp| Owner::from(kp.public()))
+                    .collect::<BTreeSet<_>>();
+                assert!(state.known_key_pairs().keys().eq(&owners));
+                assert_eq!(state.admin_id(), admin_id);
+                assert_eq!(state.block_hash(), block_hash);
+                assert_eq!(state.timestamp(), timestamp);
+                assert_eq!(state.next_block_height(), next_block_height);
+                assert_eq!(state.pending_block(), &pending_block);
+                assert!(state.pending_blobs().keys().eq(pending_blobs.keys()));
+            }
         };
-        e.insert(ChainState::new(
-            known_key_pairs,
-            admin_id,
-            block_hash,
-            timestamp,
-            next_block_height,
-            pending_block,
-            pending_blobs,
-        ));
 
         ChainClient {
             client: self.clone(),
