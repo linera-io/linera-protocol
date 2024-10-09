@@ -76,7 +76,7 @@ jobs:
         git submodule update --init
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        toolchain: stable,nightly
+        toolchain: nightly
     - name: Build documentation using docs.rs
       run: |
         cd ${{ runner.temp }}/docsrs
