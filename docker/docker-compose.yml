@@ -7,7 +7,11 @@ services:
       - linera-scylla-data:/var/lib/scylla
     environment:
       SCYLLA_AUTO_CONF: 1
-      SCYLLA_ENABLE_EXPERIMENTAL: 1
+    command:
+      - "--developer-mode"
+      - "0"
+      - "--overprovisioned"
+      - "1"
   proxy:
     image: linera
     container_name: proxy
