@@ -87,8 +87,8 @@ jobs:
         cargo test --locked -p linera-execution --features wasmtime
     - name: Run the benchmark test
       run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
-        cargo test --locked -p linera-service --features benchmark benchmark
+        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
+        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
     - name: Run Wasm application tests
       run: |
         cd examples
