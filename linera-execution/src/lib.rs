@@ -4,6 +4,8 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
+#![cfg_attr(web, feature(trait_upcasting))]
+
 #![deny(clippy::large_futures)]
 
 mod applications;
@@ -23,7 +25,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -109,7 +111,7 @@ pub trait Post: dyn_convert::DynInto<JsValue> {}
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 // TODO: remove `Send` and `Sync` from here
-pub trait UserContractModule: dyn_clone::DynClone + Post + Send + Sync {
+pub trait UserContractModule: dyn_clone::DynClone + Any + Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -125,7 +127,7 @@ impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone + Post + Send + Sync {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -152,23 +154,30 @@ impl UserContractCode {
     }
 }
 
+#[cfg(not(web))]
+impl<T: Send + Sync> Post for T { }
+
 #[cfg(web)]
 const _: () = {
     // TODO: add a vtable pointer into the JsValue rather than assuming the implementor
 
+    impl<T: dyn_convert::DynInto<JsValue>> Post for T { }
+
     impl Into<JsValue> for UserContractCode {
         fn into(self) -> JsValue {
-            self.0.downcast::<WasmContractModule>()
-                .expect("we only support Wasm modules on the Web for now")
-                .into()
+            let module: WasmContractModule = *(self.0 as Box<dyn Any>)
+                .downcast()
+                .expect("we only support Wasm modules on the Web for now");
+            module.into()
         }
     }
 
     impl Into<JsValue> for UserServiceCode {
         fn into(self) -> JsValue {
-            self.0.downcast::<WasmServiceModule>()
-                .expect("we only support Wasm modules on the Web for now")
-                .into()
+            let module: WasmServiceModule = *(self.0 as Box<dyn Any>)
+                .downcast()
+                .expect("we only support Wasm modules on the Web for now");
+            module.into()
         }
     }
 

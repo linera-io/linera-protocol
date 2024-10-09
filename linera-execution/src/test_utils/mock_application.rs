@@ -25,6 +25,7 @@ use crate::{
 ///
 /// Should be configured with any expected calls, and can then be used to create a
 /// [`MockApplicationInstance`] that implements [`UserContract`] and [`UserService`].
+#[cfg_attr(web, js_sys::wasm_bindgen::prelude::wasm_bindgen)]
 #[derive(Clone, Default)]
 pub struct MockApplication {
     expected_calls: Arc<Mutex<VecDeque<ExpectedCall>>>,

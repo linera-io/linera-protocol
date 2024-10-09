@@ -241,6 +241,29 @@ const _: () = {
             }
         }
     }
+
+    impl TryFrom<JsValue> for WasmContractModule {
+        type Error = JsValue;
+
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            // XXX: currently `Wasmer` is the only backend enabled on the Web.
+            #[cfg(with_wasmer)] {
+                Ok(Self::Wasmer { module: value.dyn_into::<js_sys::WebAssembly::Module>()?.into(), engine: Default::default() })
+            }
+
+            #[cfg(not(with_wasmer))]
+            Err(value)
+        }
+    }
+
+    impl From<WasmContractModule> for JsValue {
+        fn from(module: WasmContractModule) -> JsValue {
+            match module {
+                #[cfg(with_wasmer)]
+                WasmContractModule::Wasmer { module, engine: _ } => ::wasmer::Module::clone(&module).clone().into(),
+            }
+        }
+    }
 };
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
