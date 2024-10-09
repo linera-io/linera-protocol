@@ -215,7 +215,7 @@ where
 
                 runtime.run_action(application_id, chain_id, action)
             }
-        });
+        }).await;
 
         contract_runtime_task.send(code)?;
 
@@ -223,7 +223,7 @@ where
             self.handle_request(request).await?;
         }
 
-        let (controller, txn_tracker_moved) = execution_outcomes_future.await??;
+        let (controller, txn_tracker_moved) = contract_runtime_task.join().await?;
         *txn_tracker = txn_tracker_moved;
         resource_controller
             .with_state_and_grant(self, grant)
@@ -512,12 +512,12 @@ where
             let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
             runtime.preload_service(application_id, code, description)?;
             runtime.run_query(application_id, query)
-        });
+        }).await;
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }
 
-        let response = execution_outcomes_future.await??;
+        let response = execution_task.join().await?;
         Ok(response)
     }
 

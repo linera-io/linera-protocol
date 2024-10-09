@@ -375,7 +375,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Loads a contract instance, initializing it with this runtime if needed.
     fn load_contract_instance(
         &mut self,
-        this: Arc<Mutex<Self>>,
+        this: SyncRuntimeHandle<UserContractInstance>,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserContractInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
@@ -387,7 +387,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntimeHandle(this))?;
+                let instance = code.instantiate(this)?;
 
                 self.applications_to_finalize.push(id);
                 Ok(entry
@@ -401,7 +401,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
     /// Configures the runtime for executing a call to a different contract.
     fn prepare_for_call(
         &mut self,
-        this: Arc<Mutex<Self>>,
+        this: ContractSyncRuntimeHandle,
         authenticated: bool,
         callee_id: UserApplicationId,
     ) -> Result<(Arc<Mutex<UserContractInstance>>, OperationContext), ExecutionError> {
@@ -489,7 +489,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
     /// Initializes a service instance with this runtime.
     fn load_service_instance(
         &mut self,
-        this: Arc<Mutex<Self>>,
+        this: ServiceSyncRuntimeHandle,
         id: UserApplicationId,
     ) -> Result<LoadedApplication<UserServiceInstance>, ExecutionError> {
         match self.loaded_applications.entry(id) {
@@ -499,7 +499,7 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                     .send_request(|callback| ExecutionRequest::LoadService { id, callback })?
                     .recv_response()?;
 
-                let instance = code.instantiate(SyncRuntimeHandle(this))?;
+                let instance = code.instantiate(this)?;
                 Ok(entry
                     .insert(LoadedApplication::new(instance, description))
                     .clone())
@@ -1131,11 +1131,8 @@ impl ContractSyncRuntime {
         closure: impl FnOnce(&mut UserContractInstance) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecutionError> {
         let contract = {
-            let cloned_runtime = self.0.clone().expect(
-                "`SyncRuntime` should not be used after its `inner` contents have been moved out",
-            );
             let mut runtime = self.inner();
-            let application = runtime.load_contract_instance(cloned_runtime.0, application_id)?;
+            let application = runtime.load_contract_instance(self.clone(), application_id)?;
 
             let status = ApplicationStatus {
                 caller_id: None,
@@ -1286,10 +1283,9 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         callee_id: UserApplicationId,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
-        let cloned_self = self.clone().0;
         let (contract, context) =
             self.inner()
-                .prepare_for_call(cloned_self, authenticated, callee_id)?;
+                .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
         let value = contract
             .try_lock()
@@ -1485,11 +1481,10 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
         let (query_context, service) = {
-            let cloned_self = self.clone().0;
             let mut this = self.inner();
 
             // Load the application.
-            let application = this.load_service_instance(cloned_self, queried_id)?;
+            let application = this.load_service_instance(self.clone(), queried_id)?;
             // Make the call to user code.
             let query_context = QueryContext {
                 chain_id: this.chain_id,

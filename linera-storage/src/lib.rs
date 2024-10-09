@@ -48,7 +48,8 @@ pub use crate::db_storage::{
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait Storage: Sized {
     /// The low-level storage implementation in use.
     type Context: Context<Extra = ChainRuntimeContext<Self>> + Clone + Send + Sync + 'static;
@@ -299,8 +300,8 @@ pub trait Storage: Sized {
             compressed_bytes: contract_blob.inner_bytes(),
         };
         let contract_bytecode =
-            linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
-                .await??;
+            linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(move |_| async move { compressed_contract_bytecode.decompress() }).await
+                .join().await?;
         Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
             .await?
             .into())
@@ -338,8 +339,8 @@ pub trait Storage: Sized {
             compressed_bytes: service_blob.inner_bytes(),
         };
         let service_bytecode =
-            linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
-                .await??;
+            linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(move |_| async move { compressed_service_bytecode.decompress() })
+                .await.join().await?;
         Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
             .await?
             .into())
@@ -368,7 +369,8 @@ pub struct ChainRuntimeContext<S> {
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl<S> ExecutionRuntimeContext for ChainRuntimeContext<S>
 where
     S: Storage + Send + Sync,
@@ -427,7 +429,8 @@ where
 }
 
 /// A clock that can be used to get the current `Timestamp`.
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait Clock {
     fn current_time(&self) -> Timestamp;
 

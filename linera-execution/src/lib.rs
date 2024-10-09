@@ -200,8 +200,6 @@ pub enum ExecutionError {
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
-    JoinError(#[from] linera_base::task::Error),
-    #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
@@ -332,7 +330,8 @@ pub struct ExecutionRuntimeConfig {}
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 

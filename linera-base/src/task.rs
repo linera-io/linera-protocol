@@ -12,14 +12,13 @@ use tokio::sync::mpsc;
 mod implementation {
     use super::*;
 
-    /// The type of errors that can result from awaiting a task to completion.
-    pub type Error = tokio::task::JoinError;
+    /// A type that satisfies the send/receive bounds, but can never be sent or received.
+    pub type NoInput = std::convert::Infallible;
+
     /// The type of a future awaiting another task.
     pub type NonBlockingFuture<R> = tokio::task::JoinHandle<R>;
     /// The type of a future awaiting another thread.
     pub type BlockingFuture<R> = tokio::task::JoinHandle<R>;
-    /// A channel that can be used to send messages to the spawned task.
-    pub type InputSender<T> = mpsc::UnboundedSender<T>;
     /// The stream of inputs available to the spawned task.
     pub type InputReceiver<T> = tokio_stream::wrappers::UnboundedReceiverStream<T>;
     /// The type of errors that can result from sending a message to the spawned task.
@@ -32,22 +31,33 @@ mod implementation {
         tokio::task::spawn(future)
     }
 
-    /// Spawns a blocking task on a new thread.
-    pub fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(
-        future: F,
-    ) -> BlockingFuture<R> {
-        tokio::task::spawn_blocking(future)
+    /// A new task running in a different thread.
+    pub struct Blocking<Input = NoInput, Output = ()> {
+        sender: mpsc::UnboundedSender<Input>,
+        join_handle: tokio::task::JoinHandle<Output>,
     }
 
-    /// Spawns a blocking task on a new Web Worker with a stream of input messages.
-    pub fn spawn_blocking_with_input<T: Send + 'static, F: Future<Output: Send + 'static>>(
-        task: impl FnOnce(InputReceiver<T>) -> F + Send + 'static,
-    ) -> (InputSender<T>, BlockingFuture<F::Output>) {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        (
-            sender,
-            tokio::task::spawn_blocking(|| futures::executor::block_on(task(receiver.into()))),
-        )
+    impl<Input: Send + 'static, Output: Send + 'static> Blocking<Input, Output> {
+        /// Spawns a blocking task on a new thread with a stream of input messages.
+        pub async fn spawn<F: Future<Output = Output>>(
+            work: impl FnOnce(InputReceiver<Input>) -> F + Send + 'static,
+        ) -> Self {
+            let (sender, receiver) = mpsc::unbounded_channel();
+            Self {
+                sender,
+                join_handle: tokio::task::spawn_blocking(|| futures::executor::block_on(work(receiver.into()))),
+            }
+        }
+
+        /// Waits for the task to complete and returns its output.
+        pub async fn join(self) -> Output {
+            self.join_handle.await.expect("task shouldn't be cancelled")
+        }
+
+        /// Sends a message to the task.
+        pub fn send(&self, message: Input) -> Result<(), SendError<Input>> {
+            self.sender.send(message)
+        }
     }
 }
 
@@ -57,7 +67,6 @@ mod implementation {
     use futures::{channel::oneshot, future, stream, StreamExt as _};
     use wasm_bindgen::prelude::*;
     use web_sys::js_sys;
-    use std::rc::Rc;
 
     use super::*;
 
@@ -78,47 +87,26 @@ mod implementation {
     }
 
     /// The type of errors that can result from sending a message to the spawned task.
-    pub struct SendError<T> {
-        value: JsValue,
-        _phantom: std::marker::PhantomData<T>,
-    }
+    pub struct SendError<T>(T);
 
     impl<T> std::fmt::Debug for SendError<T> {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            std::fmt::Debug::fmt(&self.value, f)
+            f.debug_struct("SendError").finish_non_exhaustive()
         }
     }
 
-    impl<T> From<JsValue> for SendError<T> {
-        fn from(value: JsValue) -> Self {
-            Self {
-                value,
-                _phantom: Default::default(),
-            }
+    impl<T> std::fmt::Display for SendError<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "send error")
         }
     }
 
-    /// A channel that can be used to send messages to the spawned task.
-    pub struct InputSender<T> {
-        worker: Rc<web_sys::Worker>,
-        _phantom: std::marker::PhantomData<fn(T)>,
-    }
+    impl<T> std::error::Error for SendError<T> { }
 
-    impl<T> From<Rc<web_sys::Worker>> for InputSender<T> {
-        fn from(worker: Rc<web_sys::Worker>) -> Self {
-            Self {
-                worker,
-                _phantom: Default::default(),
-            }
-        }
-    }
-
-    impl<T: Into<JsValue>> InputSender<T> {
-        /// Send a message to the task using
-        /// [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage).
-        pub fn send(&self, message: T) -> Result<(), SendError<T>> {
-            self.worker.post_message(&message.into()).map_err(Into::into)
-        }
+    /// A new task running in a different thread.
+    pub struct Blocking<Input = NoInput, Output = ()> {
+        join_handle: wasm_thread::JoinHandle<Output>,
+        _phantom: std::marker::PhantomData<fn(Input)>,
     }
 
     /// The stream of inputs available to the spawned task.
@@ -132,12 +120,8 @@ mod implementation {
         future::ready(T::try_from(value).ok())
     }
 
-    /// The type of errors that can result from awaiting a task to completion.
-    pub type Error = oneshot::Canceled;
     /// The type of a future awaiting another task.
     pub type NonblockingFuture<R> = oneshot::Receiver<R>;
-    /// The type of a future awaiting another thread.
-    pub type BlockingFuture<R> = oneshot::Receiver<R>;
 
     /// Spawns a new task on the current thread.
     pub fn spawn<F: Future + 'static>(future: F) -> NonblockingFuture<F::Output> {
@@ -148,34 +132,49 @@ mod implementation {
         recv
     }
 
-    /// Spawns a blocking task on a new Web Worker.
-    pub fn spawn_blocking<R: Send + 'static, F: FnOnce() -> R + Send + 'static>(
-        task: F,
-    ) -> BlockingFuture<R> {
-        let (send, recv) = oneshot::channel();
-        wasm_thread::spawn(move || {
-            let _ = send.send(task());
-        });
-        recv
-    }
+    impl<Input, Output> Blocking<Input, Output> {
+        /// Spawns a blocking task on a new Web Worker with a stream of input messages.
+        pub async fn spawn<F: Future<Output = Output>>(
+            work: impl FnOnce(InputReceiver<Input>) -> F + Send + 'static,
+        ) -> Self
+        where
+          Input: Into<JsValue> + TryFrom<JsValue>,
+          Output: Send + 'static,
+        {
+            let (ready_sender, ready_receiver) = oneshot::channel();
+            let join_handle = wasm_thread::Builder::new().spawn(|| async move {
+                let (input_sender, input_receiver) = mpsc::unbounded_channel::<JsValue>();
+                let input_receiver = tokio_stream::wrappers::UnboundedReceiverStream::new(input_receiver);
+                let onmessage = wasm_bindgen::closure::Closure::<dyn FnMut(JsValue) -> Result<(), JsError>>::new(move |v: JsValue| -> Result<(), JsError> {
+                    input_sender.send(v)?;
+                    Ok(())
+                });
+                js_sys::global().dyn_into::<web_sys::DedicatedWorkerGlobalScope>().unwrap().set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+                onmessage.forget(); // doesn't truly forget it, but lets the JS GC take care of it
+                ready_sender.send(()).unwrap();
+                work(input_receiver.filter_map(convert_or_discard::<JsValue, Input>)).await
+            }).expect("should successfully start Web Worker");
+            ready_receiver.await.expect("should successfully initialize the worker thread");
+            Self {
+                join_handle,
+                _phantom: Default::default(),
+            }
+        }
 
-    /// Spawns a blocking task on a new Web Worker with a stream of input messages.
-    pub fn spawn_blocking_with_input<T: Into<JsValue> + TryFrom<JsValue, Error: std::error::Error>, F: Future<Output: Send + 'static>>(
-        task: impl FnOnce(InputReceiver<T>) -> F + Send + 'static,
-    ) -> (InputSender<T>, BlockingFuture<F::Output>) {
-        let (done_sender, done_receiver) = oneshot::channel();
-        let (worker, _join_handle) = wasm_thread::Builder::new().spawn(|| async move {
-            let (input_sender, input_receiver) = mpsc::unbounded_channel::<JsValue>();
-            let input_receiver = tokio_stream::wrappers::UnboundedReceiverStream::new(input_receiver);
-            let onmessage = wasm_bindgen::closure::Closure::<dyn FnMut(JsValue) -> Result<(), JsError>>::new(move |v: JsValue| -> Result<(), JsError> {
-                input_sender.send(v)?;
-                Ok(())
-            });
-            js_sys::global().dyn_into::<web_sys::DedicatedWorkerGlobalScope>().unwrap().set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-            onmessage.forget(); // doesn't truly forget it, but lets the JS GC take care of it
-            let _ = done_sender.send(task(input_receiver.filter_map(convert_or_discard::<JsValue, T>)).await);
-        }).unwrap();
-        (worker.into(), done_receiver)
+        /// Sends a message to the task using
+        /// [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage).
+        pub fn send(&self, message: Input) -> Result<(), SendError<Input>>
+        where Input: Into<JsValue> + TryFrom<JsValue> + Clone {
+            self.join_handle.thread().post_message(&message.clone().into()).map_err(|_| SendError(message))
+        }
+
+        /// Waits for the task to complete and returns its output.
+        pub async fn join(self) -> Output {
+            match self.join_handle.join_async().await {
+                Ok(output) => output,
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        }
     }
 }
 

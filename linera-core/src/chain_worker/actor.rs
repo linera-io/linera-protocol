@@ -133,7 +133,7 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     worker: ChainWorkerState<StorageClient>,
-    service_runtime_thread: Option<linera_base::task::BlockingFuture<()>>,
+    service_runtime_thread: Option<linera_base::task::Blocking>,
 }
 
 impl<StorageClient> ChainWorkerActor<StorageClient>
@@ -152,7 +152,7 @@ where
     ) -> Result<Self, WorkerError> {
         let (service_runtime_thread, service_runtime_endpoint) = {
             if config.long_lived_services {
-                let (thread, endpoint) = Self::spawn_service_runtime_actor(chain_id);
+                let (thread, endpoint) = Self::spawn_service_runtime_actor(chain_id).await;
                 (Some(thread), Some(endpoint))
             } else {
                 (None, None)
@@ -179,10 +179,10 @@ where
     /// Spawns a blocking task to execute the service runtime actor.
     ///
     /// Returns the task handle and the endpoints to interact with the actor.
-    fn spawn_service_runtime_actor(
+    async fn spawn_service_runtime_actor(
         chain_id: ChainId,
     ) -> (
-        linera_base::task::BlockingFuture<()>,
+        linera_base::task::Blocking,
         ServiceRuntimeEndpoint,
     ) {
         let context = QueryContext {
@@ -195,9 +195,9 @@ where
             futures::channel::mpsc::unbounded();
         let (runtime_request_sender, runtime_request_receiver) = std::sync::mpsc::channel();
 
-        let service_runtime_thread = linera_base::task::spawn_blocking(move || {
+        let service_runtime_thread = linera_base::task::Blocking::spawn(move |_| async move {
             ServiceSyncRuntime::new(execution_state_sender, context).run(runtime_request_receiver)
-        });
+        }).await;
 
         let endpoint = ServiceRuntimeEndpoint {
             incoming_execution_requests,
@@ -317,8 +317,8 @@ where
         if let Some(thread) = self.service_runtime_thread {
             drop(self.worker);
             thread
+                .join()
                 .await
-                .expect("Service runtime thread should not panic");
         }
 
         trace!("`ChainWorkerActor` finished");
