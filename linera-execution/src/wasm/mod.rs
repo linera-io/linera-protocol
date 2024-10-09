@@ -20,8 +20,6 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
-use std::sync::Arc;
-
 use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use {
@@ -80,7 +78,7 @@ pub enum WasmContractModule {
         module: ::wasmer::Module,
     },
     #[cfg(with_wasmtime)]
-    Wasmtime { module: Arc<::wasmtime::Module> },
+    Wasmtime { module: ::wasmtime::Module },
 }
 
 impl WasmContractModule {
@@ -152,9 +150,9 @@ impl UserContractModule for WasmContractModule {
 #[derive(Clone)]
 pub enum WasmServiceModule {
     #[cfg(with_wasmer)]
-    Wasmer { module: Arc<::wasmer::Module> },
+    Wasmer { module: ::wasmer::Module },
     #[cfg(with_wasmtime)]
-    Wasmtime { module: Arc<::wasmtime::Module> },
+    Wasmtime { module: ::wasmtime::Module },
 }
 
 impl WasmServiceModule {
@@ -227,7 +225,7 @@ const _: () = {
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
             // XXX: currently `Wasmer` is the only backend enabled on the Web.
             #[cfg(with_wasmer)] {
-                Ok(Self::Wasmer { module: Arc::new(value.dyn_into::<js_sys::WebAssembly::Module>()?.into()) })
+                Ok(Self::Wasmer { module: value.dyn_into::<js_sys::WebAssembly::Module>()?.into() })
             }
 
             #[cfg(not(with_wasmer))]
@@ -239,7 +237,7 @@ const _: () = {
         fn from(module: WasmServiceModule) -> JsValue {
             match module {
                 #[cfg(with_wasmer)]
-                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&*module).clone().into(),
+                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&module).clone().into(),
             }
         }
     }

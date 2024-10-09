@@ -88,9 +88,11 @@ const MAX_EVENT_KEY_LEN: usize = 64;
 const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
+#[derive(Clone)]
 pub struct UserContractCode(Box<dyn UserContractModule>);
 
 /// An implementation of [`UserServiceModule`].
+#[derive(Clone)]
 pub struct UserServiceCode(Box<dyn UserServiceModule>);
 
 /// An implementation of [`UserContract`].

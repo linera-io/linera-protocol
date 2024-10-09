@@ -7,8 +7,6 @@
 //! estimate the total memory usage by the cache, since it's currently not possible to determine
 //! the size of a generic `Module`.
 
-use std::sync::Arc;
-
 use linera_base::data_types::Bytecode;
 use lru::LruCache;
 
@@ -19,7 +17,7 @@ const DEFAULT_MAX_CACHE_SIZE: u64 = 512 /* MiB */ * 1024 /* KiB */ * 1024 /* byt
 ///
 /// The cache prioritizes entries based on their [`Metadata`].
 pub struct ModuleCache<Module> {
-    modules: LruCache<Bytecode, Arc<Module>>,
+    modules: LruCache<Bytecode, Module>,
     total_size: u64,
     max_size: u64,
 }
@@ -34,30 +32,30 @@ impl<Module> Default for ModuleCache<Module> {
     }
 }
 
-impl<Module> ModuleCache<Module> {
+impl<Module: Clone> ModuleCache<Module> {
     /// Returns a `Module` for the requested `bytecode`, creating it with `module_builder` and
     /// adding it to the cache if it doesn't already exist in the cache.
     pub fn get_or_insert_with<E>(
         &mut self,
         bytecode: Bytecode,
         module_builder: impl FnOnce(Bytecode) -> Result<Module, E>,
-    ) -> Result<Arc<Module>, E> {
+    ) -> Result<Module, E> {
         if let Some(module) = self.get(&bytecode) {
             Ok(module)
         } else {
-            let module = Arc::new(module_builder(bytecode.clone())?);
+            let module = module_builder(bytecode.clone())?;
             self.insert(bytecode, module.clone());
             Ok(module)
         }
     }
 
     /// Returns a `Module` for the requested `bytecode` if it's in the cache.
-    pub fn get(&mut self, bytecode: &Bytecode) -> Option<Arc<Module>> {
+    pub fn get(&mut self, bytecode: &Bytecode) -> Option<Module> {
         self.modules.get(bytecode).cloned()
     }
 
     /// Inserts a `bytecode` and its compiled `module` in the cache.
-    pub fn insert(&mut self, bytecode: Bytecode, module: Arc<Module>) {
+    pub fn insert(&mut self, bytecode: Bytecode, module: Module) {
         let bytecode_size = bytecode.as_ref().len() as u64;
 
         if self.total_size + bytecode_size > self.max_size {
