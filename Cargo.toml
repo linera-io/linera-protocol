@@ -72,7 +72,7 @@ dashmap = "5.5.3"
 derive_more = "1.0.0"
 dirs = "5.0.1"
 dyn-clone = "1.0.17"
-ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["batch", "serde"] }
 either = "1.10.0"
 ethers = { version = "2.0.14", features = ["solc"] }
 flarch = "0.7.0"
