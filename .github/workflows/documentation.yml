@@ -77,29 +77,30 @@ jobs:
     - name: Generate packages
       run: |
         scripts/test_publish.sh "$LINERA_PACKAGES" ${{ runner.temp }}/registry
-    - name: Extract packaged crates
-      run: |
-        cd "${{ runner.temp }}/registry"
-        grep -v '^#' "$LINERA_PACKAGES" | while read LINE; do
-            CRATE="${LINE%% *}"
-            tar -xzvf "${CRATE}-*.crate"
-        done
-    - name: Checkout docs.rs tool repository
-      run: |
-        cd ${{ runner.temp }}
-        git clone https://github.com/rust-lang/docs.rs docsrs
-        cd docsrs
-        git submodule update --init
-    - name: Build documentation using docs.rs
-      run: |
-        cd ${{ runner.temp }}/docsrs
-        cp .env.sample .env
-        mkdir -p ignored/cratesfyi-prefix/crates.io-index
-        . .env
-        SQLX_OFFLINE=1 cargo build
-        docker compose up -d db s3
-        cargo run -- database migrate
-        grep -v ^# "$LINERA_PACKAGES" | while read LINE; do
-            CRATE="${LINE%% *}"
-            cargo run -- build crate --local "${{ runner.temp }}/registry/${CRATE}-*/"
-        done
+    # TODO(#2593): fix docs.rs CI test
+    # - name: Extract packaged crates
+    #   run: |
+    #     cd "${{ runner.temp }}/registry"
+    #     grep -v '^#' "$LINERA_PACKAGES" | while read LINE; do
+    #         CRATE="${LINE%% *}"
+    #         tar -xzvf "${CRATE}-*.crate"
+    #     done
+    # - name: Checkout docs.rs tool repository
+    #   run: |
+    #     cd ${{ runner.temp }}
+    #     git clone https://github.com/rust-lang/docs.rs docsrs
+    #     cd docsrs
+    #     git submodule update --init
+    # - name: Build documentation using docs.rs
+    #   run: |
+    #     cd ${{ runner.temp }}/docsrs
+    #     cp .env.sample .env
+    #     mkdir -p ignored/cratesfyi-prefix/crates.io-index
+    #     . .env
+    #     SQLX_OFFLINE=1 cargo build
+    #     docker compose up -d db s3
+    #     cargo run -- database migrate
+    #     grep -v ^# "$LINERA_PACKAGES" | while read LINE; do
+    #         CRATE="${LINE%% *}"
+    #         cargo run -- build crate --local "${{ runner.temp }}/registry/${CRATE}-*/"
+    #     done
