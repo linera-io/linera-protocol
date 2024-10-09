@@ -465,11 +465,13 @@ pub enum ExecutionRequest {
 impl Debug for ExecutionRequest {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {
+            #[cfg(not(web))]
             ExecutionRequest::LoadContract { id, .. } => formatter
                 .debug_struct("ExecutionRequest::LoadContract")
                 .field("id", id)
                 .finish_non_exhaustive(),
 
+            #[cfg(not(web))]
             ExecutionRequest::LoadService { id, .. } => formatter
                 .debug_struct("ExecutionRequest::LoadService")
                 .field("id", id)
