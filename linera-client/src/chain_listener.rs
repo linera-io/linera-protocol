@@ -274,17 +274,19 @@ where
                 let key_pair = owners
                     .iter()
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
-                context_guard
-                    .update_wallet_for_new_chain(new_id, key_pair, timestamp)
-                    .await?;
-                Self::run_with_chain_id(
-                    new_id,
-                    clients.clone(),
-                    context.clone(),
-                    storage.clone(),
-                    config.clone(),
-                    listening.clone(),
-                );
+                if key_pair.is_some() {
+                    context_guard
+                        .update_wallet_for_new_chain(new_id, key_pair, timestamp)
+                        .await?;
+                    Self::run_with_chain_id(
+                        new_id,
+                        clients.clone(),
+                        context.clone(),
+                        storage.clone(),
+                        config.clone(),
+                        listening.clone(),
+                    );
+                }
             }
         }
         Ok(())
