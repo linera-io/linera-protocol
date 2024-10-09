@@ -27,6 +27,7 @@ members = [
 exclude = ["examples", "scripts"]
 resolver = "2"
 
+# TODO(#2585): The next two lines must stay together for CI scripts.
 [workspace.package]
 version = "0.13.0"
 authors = ["Linera <contact@linera.io>"]

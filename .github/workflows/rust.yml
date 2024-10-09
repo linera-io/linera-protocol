@@ -3,16 +3,6 @@ name: Rust
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches:
-      - "**"
-    paths-ignore:
-      - 'CONTRIBUTING.md'
-      - 'INSTALL.md'
-      - 'docker/**'
-      - 'docker_scylla/**'
-      - 'configuration/**'
-      - 'kubernetes/**'
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
