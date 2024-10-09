@@ -8521,6 +8521,7 @@ dependencies = [
 [[package]]
 name = "wasm_thread"
 version = "0.3.0"
+source = "git+https://github.com/Twey/wasm_thread?branch=post-message#a55041aa3c854eb7aa2caa10b15d8ba377bde9eb"
 dependencies = [
  "futures",
  "js-sys",

@@ -235,5 +235,6 @@ git = "https://github.com/Twey/rust-indexed-db"
 branch = "no-uuid-wasm-bindgen"
 
 [patch.crates-io.wasm_thread]
-path = "../wasm_thread"
+git = "https://github.com/Twey/wasm_thread"
+branch = "post-message"
 
