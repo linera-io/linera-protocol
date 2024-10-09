@@ -40,8 +40,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: nightly, 1.81.0
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
@@ -76,6 +74,9 @@ jobs:
         git clone https://github.com/rust-lang/docs.rs docsrs
         cd docsrs
         git submodule update --init
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable,nightly
     - name: Build documentation using docs.rs
       run: |
         cd ${{ runner.temp }}/docsrs
