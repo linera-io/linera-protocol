@@ -18,6 +18,12 @@ pub struct ChainClients<P, S>(pub Arc<Mutex<ClientMapInner<P, S>>>)
 where
     S: Storage;
 
+impl<P, S: Storage> Default for ChainClients<P, S> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
 impl<P, S> Clone for ChainClients<P, S>
 where
     S: Storage,
