@@ -226,6 +226,7 @@ async fn benchmark_with_fungible(
                     if expected_balance == Amount::ZERO {
                         return Ok(()); // No transfers: The app won't be registered on this chain.
                     }
+                    node_service.process_inbox(&context.default_chain).await?;
                     let app = FungibleApp(
                         node_service
                             .make_application(
