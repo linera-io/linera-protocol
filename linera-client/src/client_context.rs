@@ -471,6 +471,7 @@ where
             let chain_client = self.make_chain_client(chain_id);
             self.process_inbox(&chain_client).await.unwrap();
             chain_client.update_validators().await.unwrap();
+            self.update_wallet_from_client(&chain_client).await;
         }
     }
 
@@ -543,6 +544,7 @@ where
                 self.update_wallet_for_new_chain(chain_id, Some(key_pair.copy()), timestamp);
             }
         }
+        self.update_wallet_from_client(&chain_client).await;
         let updated_chain_client = self.make_chain_client(default_chain_id);
         updated_chain_client
             .retry_pending_outgoing_messages()
