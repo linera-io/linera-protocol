@@ -10,6 +10,7 @@ on:
       - 'docker/Dockerfile'
       - 'docker/docker-compose.yml'
       - 'docker/compose.sh'
+      - 'docker/docker-compose.yml'
       - 'Cargo.toml'
       - '.github/workflows/docker.yml'
   workflow_dispatch:
