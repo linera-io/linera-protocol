@@ -12,8 +12,8 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["test-strategy", "proptest"]
 metrics = ["prometheus"]
+test = ["test-strategy", "proptest"]
 web = [
     "getrandom/js",
     "rand/getrandom",
