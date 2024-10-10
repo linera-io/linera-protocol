@@ -383,13 +383,13 @@ where
         caller: &mut Caller,
         method: http::Method,
         query: String,
-        content_type: String,
+        headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .perform_http_request(method, &query, content_type, payload)
+            .perform_http_request(method, &query, headers, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -597,13 +597,13 @@ where
         caller: &mut Caller,
         method: http::Method,
         query: String,
-        content_type: String,
+        headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .perform_http_request(method, &query, content_type, payload)
+            .perform_http_request(method, &query, headers, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

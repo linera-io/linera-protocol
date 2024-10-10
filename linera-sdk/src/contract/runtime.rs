@@ -316,10 +316,10 @@ where
         &mut self,
         method: http::Method,
         url: &str,
-        content_type: &str,
+        headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
     ) -> Vec<u8> {
-        wit::perform_http_request(method.into(), url, content_type, &payload)
+        wit::perform_http_request(method.into(), url, &headers, &payload)
     }
 
     /// Panics if the current time at block validation is `>= timestamp`. Note that block

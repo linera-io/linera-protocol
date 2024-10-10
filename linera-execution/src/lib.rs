@@ -275,6 +275,11 @@ pub enum ExecutionError {
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+
+    #[error("Invalid HTTP header name used for HTTP request")]
+    InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
+    #[error("Invalid HTTP header value used for HTTP request")]
+    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
 }
 
 impl From<ViewError> for ExecutionError {
@@ -611,7 +616,7 @@ pub trait BaseRuntime {
         &mut self,
         method: http::Method,
         url: &str,
-        content_type: String,
+        headers: Vec<(String, Vec<u8>)>,
         payload: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
