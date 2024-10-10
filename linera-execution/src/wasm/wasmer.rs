@@ -109,7 +109,10 @@ where
     Runtime: ServiceRuntime + WriteBatch + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
-    pub fn prepare(service_module: &wasmer::Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
+    pub fn prepare(
+        service_module: &wasmer::Module,
+        runtime: Runtime,
+    ) -> Result<Self, WasmExecutionError> {
         let system_api_data = SystemApiData::new(runtime);
         let mut instance_builder = InstanceBuilder::new(SERVICE_ENGINE.clone(), system_api_data);
 
@@ -266,7 +269,9 @@ impl CachedContractModule {
     }
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
-    pub fn create_execution_instance(&self) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {
+    pub fn create_execution_instance(
+        &self,
+    ) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {
         #[cfg(web)]
         {
             Ok((wasmer::Engine::default(), self.0.clone()))
@@ -277,9 +282,7 @@ impl CachedContractModule {
             let engine = wasmer::Engine::default();
             let store = wasmer::Store::new(engine.clone());
             let bytes = self.0.serialize()?;
-            let module = unsafe {
-                wasmer::Module::deserialize(&store, bytes)
-            }?;
+            let module = unsafe { wasmer::Module::deserialize(&store, bytes) }?;
             Ok((engine, module))
         }
     }

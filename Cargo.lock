@@ -4419,7 +4419,6 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
- "bytes",
  "cfg-if",
  "cfg_aliases",
  "clap",
@@ -8521,7 +8520,7 @@ dependencies = [
 [[package]]
 name = "wasm_thread"
 version = "0.3.0"
-source = "git+https://github.com/Twey/wasm_thread?branch=post-message#a55041aa3c854eb7aa2caa10b15d8ba377bde9eb"
+source = "git+https://github.com/Twey/wasm_thread?branch=post-message#f4bc74d7095f007b6767338531bceb1ba559e000"
 dependencies = [
  "futures",
  "js-sys",

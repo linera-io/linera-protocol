@@ -17,7 +17,6 @@ fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []
 wasmer = [
-    "bytes",
     "dep:wasmer",
     "linera-witty/wasmer",
     "wasm-encoder",
@@ -37,7 +36,6 @@ anyhow.workspace = true
 async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
-bytes = { workspace = true, optional = true }
 cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true

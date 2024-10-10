@@ -45,7 +45,9 @@ mod implementation {
             let (sender, receiver) = mpsc::unbounded_channel();
             Self {
                 sender,
-                join_handle: tokio::task::spawn_blocking(|| futures::executor::block_on(work(receiver.into()))),
+                join_handle: tokio::task::spawn_blocking(|| {
+                    futures::executor::block_on(work(receiver.into()))
+                }),
             }
         }
 
@@ -63,15 +65,15 @@ mod implementation {
 
 #[cfg(web)]
 mod implementation {
-    use std::convert::TryFrom;
     use futures::{channel::oneshot, future, stream, StreamExt as _};
+    use std::convert::TryFrom;
     use wasm_bindgen::prelude::*;
     use web_sys::js_sys;
 
     use super::*;
 
     /// A type that satisfies the send/receive bounds, but can never be sent or received.
-    pub enum NoInput { }
+    pub enum NoInput {}
 
     impl TryFrom<JsValue> for NoInput {
         type Error = JsValue;
@@ -82,7 +84,7 @@ mod implementation {
 
     impl Into<JsValue> for NoInput {
         fn into(self) -> JsValue {
-            match self { }
+            match self {}
         }
     }
 
@@ -101,7 +103,7 @@ mod implementation {
         }
     }
 
-    impl<T> std::error::Error for SendError<T> { }
+    impl<T> std::error::Error for SendError<T> {}
 
     /// A new task running in a different thread.
     pub struct Blocking<Input = NoInput, Output = ()> {
@@ -138,23 +140,35 @@ mod implementation {
             work: impl FnOnce(InputReceiver<Input>) -> F + Send + 'static,
         ) -> Self
         where
-          Input: Into<JsValue> + TryFrom<JsValue>,
-          Output: Send + 'static,
+            Input: Into<JsValue> + TryFrom<JsValue>,
+            Output: Send + 'static,
         {
             let (ready_sender, ready_receiver) = oneshot::channel();
-            let join_handle = wasm_thread::Builder::new().spawn(|| async move {
-                let (input_sender, input_receiver) = mpsc::unbounded_channel::<JsValue>();
-                let input_receiver = tokio_stream::wrappers::UnboundedReceiverStream::new(input_receiver);
-                let onmessage = wasm_bindgen::closure::Closure::<dyn FnMut(JsValue) -> Result<(), JsError>>::new(move |v: JsValue| -> Result<(), JsError> {
-                    input_sender.send(v)?;
-                    Ok(())
-                });
-                js_sys::global().dyn_into::<web_sys::DedicatedWorkerGlobalScope>().unwrap().set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-                onmessage.forget(); // doesn't truly forget it, but lets the JS GC take care of it
-                ready_sender.send(()).unwrap();
-                work(input_receiver.filter_map(convert_or_discard::<JsValue, Input>)).await
-            }).expect("should successfully start Web Worker");
-            ready_receiver.await.expect("should successfully initialize the worker thread");
+            let join_handle = wasm_thread::Builder::new()
+                .spawn(|| async move {
+                    let (input_sender, input_receiver) = mpsc::unbounded_channel::<JsValue>();
+                    let input_receiver =
+                        tokio_stream::wrappers::UnboundedReceiverStream::new(input_receiver);
+                    let onmessage = wasm_bindgen::closure::Closure::<
+                        dyn FnMut(JsValue) -> Result<(), JsError>,
+                    >::new(
+                        move |v: JsValue| -> Result<(), JsError> {
+                            input_sender.send(v)?;
+                            Ok(())
+                        },
+                    );
+                    js_sys::global()
+                        .dyn_into::<web_sys::DedicatedWorkerGlobalScope>()
+                        .unwrap()
+                        .set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+                    onmessage.forget(); // doesn't truly forget it, but lets the JS GC take care of it
+                    ready_sender.send(()).unwrap();
+                    work(input_receiver.filter_map(convert_or_discard::<JsValue, Input>)).await
+                })
+                .expect("should successfully start Web Worker");
+            ready_receiver
+                .await
+                .expect("should successfully initialize the worker thread");
             Self {
                 join_handle,
                 _phantom: Default::default(),
@@ -164,8 +178,13 @@ mod implementation {
         /// Sends a message to the task using
         /// [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage).
         pub fn send(&self, message: Input) -> Result<(), SendError<Input>>
-        where Input: Into<JsValue> + TryFrom<JsValue> + Clone {
-            self.join_handle.thread().post_message(&message.clone().into()).map_err(|_| SendError(message))
+        where
+            Input: Into<JsValue> + TryFrom<JsValue> + Clone,
+        {
+            self.join_handle
+                .thread()
+                .post_message(&message.clone().into())
+                .map_err(|_| SendError(message))
         }
 
         /// Waits for the task to complete and returns its output.

@@ -21,17 +21,17 @@ mod wasmer;
 mod wasmtime;
 
 use linera_base::data_types::Bytecode;
-#[cfg(with_metrics)]
-use {
-    std::sync::LazyLock,
-    linera_base::prometheus_util::{self, MeasureLatency},
-    prometheus::HistogramVec,
-};
 use thiserror::Error;
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    prometheus::HistogramVec,
+    std::sync::LazyLock,
+};
 
 use self::sanitizer::sanitize;
 pub use self::{
@@ -215,17 +215,18 @@ impl UserServiceModule for WasmServiceModule {
 
 #[cfg(web)]
 const _: () = {
-    use {
-        js_sys::wasm_bindgen::{JsValue, JsCast as _},
-    };
+    use js_sys::wasm_bindgen::{JsCast as _, JsValue};
 
     impl TryFrom<JsValue> for WasmServiceModule {
         type Error = JsValue;
 
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
             // XXX: currently `Wasmer` is the only backend enabled on the Web.
-            #[cfg(with_wasmer)] {
-                Ok(Self::Wasmer { module: value.dyn_into::<js_sys::WebAssembly::Module>()?.into() })
+            #[cfg(with_wasmer)]
+            {
+                Ok(Self::Wasmer {
+                    module: value.dyn_into::<js_sys::WebAssembly::Module>()?.into(),
+                })
             }
 
             #[cfg(not(with_wasmer))]
@@ -237,7 +238,9 @@ const _: () = {
         fn from(module: WasmServiceModule) -> JsValue {
             match module {
                 #[cfg(with_wasmer)]
-                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&module).clone().into(),
+                WasmServiceModule::Wasmer { module } => {
+                    ::wasmer::Module::clone(&module).clone().into()
+                }
             }
         }
     }
@@ -247,8 +250,12 @@ const _: () = {
 
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
             // XXX: currently `Wasmer` is the only backend enabled on the Web.
-            #[cfg(with_wasmer)] {
-                Ok(Self::Wasmer { module: value.dyn_into::<js_sys::WebAssembly::Module>()?.into(), engine: Default::default() })
+            #[cfg(with_wasmer)]
+            {
+                Ok(Self::Wasmer {
+                    module: value.dyn_into::<js_sys::WebAssembly::Module>()?.into(),
+                    engine: Default::default(),
+                })
             }
 
             #[cfg(not(with_wasmer))]
@@ -260,7 +267,9 @@ const _: () = {
         fn from(module: WasmContractModule) -> JsValue {
             match module {
                 #[cfg(with_wasmer)]
-                WasmContractModule::Wasmer { module, engine: _ } => ::wasmer::Module::clone(&module).clone().into(),
+                WasmContractModule::Wasmer { module, engine: _ } => {
+                    ::wasmer::Module::clone(&module).clone().into()
+                }
             }
         }
     }

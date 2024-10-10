@@ -5,7 +5,6 @@
 //! Linera chain.
 
 #![cfg_attr(web, feature(trait_upcasting))]
-
 #![deny(clippy::large_futures)]
 
 mod applications;
@@ -52,11 +51,6 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
-#[cfg(web)]
-use {
-    js_sys::wasm_bindgen,
-    wasm_bindgen::JsValue,
-};
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
 use crate::runtime::ContractSyncRuntime;
@@ -83,6 +77,8 @@ pub use crate::{
     },
     transaction_tracker::TransactionTracker,
 };
+#[cfg(web)]
+use {js_sys::wasm_bindgen, wasm_bindgen::JsValue};
 
 /// The maximum length of an event key in bytes.
 const MAX_EVENT_KEY_LEN: usize = 64;
@@ -143,25 +139,31 @@ impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
 dyn_clone::clone_trait_object!(UserServiceModule);
 
 impl UserServiceCode {
-    fn instantiate(&self, runtime: ServiceSyncRuntimeHandle) -> Result<UserServiceInstance, ExecutionError> {
+    fn instantiate(
+        &self,
+        runtime: ServiceSyncRuntimeHandle,
+    ) -> Result<UserServiceInstance, ExecutionError> {
         self.0.instantiate(runtime)
     }
 }
 
 impl UserContractCode {
-    fn instantiate(&self, runtime: ContractSyncRuntimeHandle) -> Result<UserContractInstance, ExecutionError> {
+    fn instantiate(
+        &self,
+        runtime: ContractSyncRuntimeHandle,
+    ) -> Result<UserContractInstance, ExecutionError> {
         self.0.instantiate(runtime)
     }
 }
 
 #[cfg(not(web))]
-impl<T: Send + Sync> Post for T { }
+impl<T: Send + Sync> Post for T {}
 
 #[cfg(web)]
 const _: () = {
     // TODO: add a vtable pointer into the JsValue rather than assuming the implementor
 
-    impl<T: dyn_convert::DynInto<JsValue>> Post for T { }
+    impl<T: dyn_convert::DynInto<JsValue>> Post for T {}
 
     impl Into<JsValue> for UserContractCode {
         fn into(self) -> JsValue {

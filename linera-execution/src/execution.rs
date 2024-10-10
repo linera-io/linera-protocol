@@ -215,7 +215,8 @@ where
 
                 runtime.run_action(application_id, chain_id, action)
             }
-        }).await;
+        })
+        .await;
 
         contract_runtime_task.send(code)?;
 
@@ -508,11 +509,14 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
         let (code, description) = self.load_service(application_id).await?;
-        let execution_task = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(move |_| async move {
-            let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
-            runtime.preload_service(application_id, code, description)?;
-            runtime.run_query(application_id, query)
-        }).await;
+        let execution_task = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
+            move |_| async move {
+                let mut runtime = ServiceSyncRuntime::new(execution_state_sender, context);
+                runtime.preload_service(application_id, code, description)?;
+                runtime.run_query(application_id, query)
+            },
+        )
+        .await;
         while let Some(request) = execution_state_receiver.next().await {
             self.handle_request(request).await?;
         }

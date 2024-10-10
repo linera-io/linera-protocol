@@ -181,10 +181,7 @@ where
     /// Returns the task handle and the endpoints to interact with the actor.
     async fn spawn_service_runtime_actor(
         chain_id: ChainId,
-    ) -> (
-        linera_base::task::Blocking,
-        ServiceRuntimeEndpoint,
-    ) {
+    ) -> (linera_base::task::Blocking, ServiceRuntimeEndpoint) {
         let context = QueryContext {
             chain_id,
             next_block_height: BlockHeight(0),
@@ -197,7 +194,8 @@ where
 
         let service_runtime_thread = linera_base::task::Blocking::spawn(move |_| async move {
             ServiceSyncRuntime::new(execution_state_sender, context).run(runtime_request_receiver)
-        }).await;
+        })
+        .await;
 
         let endpoint = ServiceRuntimeEndpoint {
             incoming_execution_requests,
@@ -316,9 +314,7 @@ where
 
         if let Some(thread) = self.service_runtime_thread {
             drop(self.worker);
-            thread
-                .join()
-                .await
+            thread.join().await
         }
 
         trace!("`ChainWorkerActor` finished");

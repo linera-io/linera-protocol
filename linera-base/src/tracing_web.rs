@@ -4,7 +4,8 @@
 //! This module provides unified handling for tracing subscribers within Linera binaries.
 
 use tracing_subscriber::{
-    prelude::__tracing_subscriber_SubscriberExt as _, util::SubscriberInitExt as _, filter::LevelFilter, Layer as _,
+    filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt as _,
+    util::SubscriberInitExt as _, Layer as _,
 };
 
 /// Initializes tracing for the browser, sending messages to the developer console and

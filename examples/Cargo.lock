@@ -3433,7 +3433,6 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
- "bytes",
  "cfg-if",
  "cfg_aliases",
  "clap",
