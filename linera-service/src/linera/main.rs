@@ -1430,7 +1430,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 kubernetes: true,
                 binaries,
                 path: _,
-                storage_config_namespace: _,
+                storage: _,
             } => {
                 net_up_utils::handle_net_up_kubernetes(
                     *extra_wallets,
@@ -1455,7 +1455,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 testing_prng_seed,
                 policy_config,
                 path,
-                storage_config_namespace,
+                storage,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -1467,7 +1467,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     *testing_prng_seed,
                     policy_config.into_policy(),
                     path,
-                    storage_config_namespace,
+                    storage,
                 )
                 .boxed()
                 .await
