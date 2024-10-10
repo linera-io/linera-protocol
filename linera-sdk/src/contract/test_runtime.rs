@@ -60,7 +60,7 @@ where
     events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
-    expected_post_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
+    expected_http_requests: VecDeque<(String, Vec<u8>, Vec<u8>)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls:
@@ -109,7 +109,7 @@ where
             events: Vec::new(),
             claim_requests: Vec::new(),
             expected_service_queries: VecDeque::new(),
-            expected_post_requests: VecDeque::new(),
+            expected_http_requests: VecDeque::new(),
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
@@ -809,9 +809,9 @@ where
             .push_back((application_id.forget_abi(), query, response));
     }
 
-    /// Adds an expected `http_post` call, and the response it should return in the test.
-    pub fn add_expected_post_request(&mut self, url: String, payload: Vec<u8>, response: Vec<u8>) {
-        self.expected_post_requests
+    /// Adds an expected `http_request` call, and the response it should return in the test.
+    pub fn add_expected_http_request(&mut self, url: String, payload: Vec<u8>, response: Vec<u8>) {
+        self.expected_http_requests
             .push_back((url, payload, response));
     }
 
@@ -859,8 +859,8 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_post(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
-        let maybe_request = self.expected_post_requests.pop_front();
+    pub fn http_request(&mut self, url: &str, payload: Vec<u8>) -> Vec<u8> {
+        let maybe_request = self.expected_http_requests.pop_front();
         let (expected_url, expected_payload, response) =
             maybe_request.expect("Unexpected POST request");
         assert_eq!(*url, expected_url);

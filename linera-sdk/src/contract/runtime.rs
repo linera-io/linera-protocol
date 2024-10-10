@@ -311,8 +311,8 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_post(&mut self, url: &str, content_type: &str, payload: Vec<u8>) -> Vec<u8> {
-        wit::http_post(url, content_type, &payload)
+    pub fn http_request(&mut self, url: &str, content_type: &str, payload: Vec<u8>) -> Vec<u8> {
+        wit::perform_http_request(url, content_type, &payload)
     }
 
     /// Panics if the current time at block validation is `>= timestamp`. Note that block

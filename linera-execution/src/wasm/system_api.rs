@@ -378,7 +378,7 @@ where
     }
 
     /// Makes a POST request to the given URL and returns the response body.
-    fn http_post(
+    fn perform_http_request(
         caller: &mut Caller,
         query: String,
         content_type: String,
@@ -387,7 +387,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .http_post(&query, content_type, payload)
+            .perform_http_request(&query, content_type, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -591,7 +591,7 @@ where
     }
 
     /// Makes a POST request to the given URL and returns the response body.
-    fn http_post(
+    fn perform_http_request(
         caller: &mut Caller,
         query: String,
         content_type: String,
@@ -600,7 +600,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .http_post(&query, content_type, payload)
+            .perform_http_request(&query, content_type, payload)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
