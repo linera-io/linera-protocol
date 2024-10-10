@@ -105,12 +105,12 @@ impl ChainListener {
     }
 
     /// Runs the chain listener.
-    pub async fn run<C, P, S>(self, context: Arc<Mutex<C>>, storage: S)
+    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: C::Storage)
     where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        P: ValidatorNodeProvider + Send + Sync + 'static,
-        <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
+        C: ClientContext + Send + 'static,
+        C::Storage: Clone + Send + Sync + 'static,
+        C::ValidatorNodeProvider: Send + Sync + 'static,
+        <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
         for chain_id in chain_ids {
@@ -125,17 +125,17 @@ impl ChainListener {
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
-    fn run_with_chain_id<C, P, S>(
+    fn run_with_chain_id<C>(
         chain_id: ChainId,
         context: Arc<Mutex<C>>,
-        storage: S,
+        storage: C::Storage,
         config: ChainListenerConfig,
         listening: Arc<Mutex<HashSet<ChainId>>>,
     ) where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        P: ValidatorNodeProvider + Send + Sync + 'static,
-        <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
+        C: ClientContext + Send + 'static,
+        C::Storage: Clone + Send + Sync + 'static,
+        C::ValidatorNodeProvider: Send + Sync + 'static,
+        <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let _handle = linera_base::task::spawn(
             async move {
@@ -150,18 +150,18 @@ impl ChainListener {
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
-    async fn run_client_stream<C, P, S>(
+    async fn run_client_stream<C>(
         chain_id: ChainId,
         context: Arc<Mutex<C>>,
-        storage: S,
+        storage: C::Storage,
         config: ChainListenerConfig,
         listening: Arc<Mutex<HashSet<ChainId>>>,
     ) -> Result<(), Error>
     where
-        C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
-        S: Storage + Clone + Send + Sync + 'static,
-        P: ValidatorNodeProvider + Send + Sync + 'static,
-        <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
+        C: ClientContext + Send + 'static,
+        C::Storage: Clone + Send + Sync + 'static,
+        C::ValidatorNodeProvider: Send + Sync + 'static,
+        <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let mut guard = listening.lock().await;
         if guard.contains(&chain_id) {
