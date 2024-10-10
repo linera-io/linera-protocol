@@ -31,7 +31,7 @@ use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
 
 use crate::{
-    chain_listener::{self, ChainClients, ChainListener, ChainListenerConfig, ClientContext as _},
+    chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig, ValidatorConfig},
     wallet::{UserChain, Wallet},
     Error,
@@ -55,7 +55,10 @@ impl chain_listener::ClientContext for ClientContext {
         &self.wallet
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<TestProvider, TestStorage> {
+    fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainClient<TestProvider, TestStorage>, Error> {
         let chain = self
             .wallet
             .get(chain_id)
@@ -66,7 +69,7 @@ impl chain_listener::ClientContext for ClientContext {
             .map(|kp| kp.copy())
             .into_iter()
             .collect();
-        self.client.create_chain_client(
+        Ok(self.client.create_chain_client(
             chain_id,
             known_key_pairs,
             self.wallet.genesis_admin_chain(),
@@ -75,7 +78,7 @@ impl chain_listener::ClientContext for ClientContext {
             chain.next_block_height,
             chain.pending_block.clone(),
             chain.pending_blobs.clone(),
-        )
+        ))
     }
 
     async fn update_wallet_for_new_chain(
@@ -169,9 +172,8 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     context
         .update_wallet_for_new_chain(chain_id0, Some(key_pair), clock.current_time())
         .await?;
-    let chain_clients = ChainClients::from_clients(context.clients()).await;
     let context = Arc::new(Mutex::new(context));
-    let listener = ChainListener::new(config, chain_clients);
+    let listener = ChainListener::new(config);
     listener.run(context, storage).await;
 
     // Transfer ownership of chain 0 to the chain listener and some other key. The listener will

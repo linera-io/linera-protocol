@@ -28,14 +28,11 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
-use linera_client::{
-    chain_clients::ChainClients,
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
-};
+use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
-    node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    node::NotificationStream,
     worker::{Notification, Reason},
 };
 use linera_execution::{
@@ -61,29 +58,19 @@ pub struct Chains {
 }
 
 /// Our root GraphQL query type.
-pub struct QueryRoot<P, S>
-where
-    S: Storage,
-{
-    clients: ChainClients<P, S>,
+pub struct QueryRoot<C> {
+    context: Arc<Mutex<C>>,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
 }
 
 /// Our root GraphQL subscription type.
-pub struct SubscriptionRoot<P, S>
-where
-    S: Storage,
-{
-    clients: ChainClients<P, S>,
+pub struct SubscriptionRoot<C> {
+    context: Arc<Mutex<C>>,
 }
 
 /// Our root GraphQL mutation type.
-pub struct MutationRoot<P, S, C>
-where
-    S: Storage,
-{
-    clients: ChainClients<P, S>,
+pub struct MutationRoot<C> {
     context: Arc<Mutex<C>>,
 }
 
@@ -166,26 +153,23 @@ impl IntoResponse for NodeServiceError {
 }
 
 #[Subscription]
-impl<P, S> SubscriptionRoot<P, S>
+impl<C> SubscriptionRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
         &self,
         chain_id: ChainId,
     ) -> Result<impl Stream<Item = Notification>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         Ok(client.subscribe().await?)
     }
 }
 
-impl<P, S, C> MutationRoot<P, S, C>
+impl<C> MutationRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    C: ClientContext,
 {
     async fn execute_system_operation(
         &self,
@@ -216,11 +200,16 @@ where
         mut f: F,
     ) -> Result<T, Error>
     where
-        F: FnMut(ChainClient<P, S>) -> Fut,
-        Fut: Future<Output = (Result<ClientOutcome<T>, Error>, ChainClient<P, S>)>,
+        F: FnMut(ChainClient<C::ValidatorNodeProvider, C::Storage>) -> Fut,
+        Fut: Future<
+            Output = (
+                Result<ClientOutcome<T>, Error>,
+                ChainClient<C::ValidatorNodeProvider, C::Storage>,
+            ),
+        >,
     {
         loop {
-            let client = self.clients.try_client_lock(chain_id).await?;
+            let client = self.context.lock().await.make_chain_client(*chain_id)?;
             let mut stream = client.subscribe().await?;
             let (result, client) = f(client).await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -235,17 +224,15 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<P, S, C> MutationRoot<P, S, C>
+impl<C> MutationRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    C: ClientContext,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
         let mut hashes = Vec::new();
         loop {
-            let client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.context.lock().await.make_chain_client(chain_id)?;
             client.synchronize_from_validators().await?;
             let result = client.process_inbox_without_prepare().await;
             self.context.lock().await.update_wallet(&client).await?;
@@ -264,7 +251,7 @@ where
 
     /// Retries the pending block that was unsuccessfully proposed earlier.
     async fn retry_pending_block(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let outcome = client.process_pending_block().await?;
         self.context.lock().await.update_wallet(&client).await?;
         match outcome {
@@ -669,7 +656,7 @@ where
         target_chain_id: Option<ChainId>,
     ) -> Result<CryptoHash, Error> {
         loop {
-            let client = self.clients.try_client_lock(&chain_id).await?;
+            let client = self.context.lock().await.make_chain_client(chain_id)?;
             let result = client
                 .request_application(application_id, target_chain_id)
                 .await;
@@ -686,19 +673,21 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<P, S> QueryRoot<P, S>
+impl<C> QueryRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
-    async fn chain(&self, chain_id: ChainId) -> Result<ChainStateExtendedView<S::Context>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+    async fn chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainStateExtendedView<<C::Storage as Storage>::Context>, Error> {
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let view = client.chain_state_view().await?;
         Ok(ChainStateExtendedView::new(view))
     }
 
     async fn applications(&self, chain_id: ChainId) -> Result<Vec<ApplicationOverview>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let applications = client
             .chain_state_view()
             .await?
@@ -716,7 +705,7 @@ where
 
     async fn chains(&self) -> Result<Chains, Error> {
         Ok(Chains {
-            list: self.clients.0.lock().await.keys().cloned().collect(),
+            list: self.context.lock().await.wallet().chain_ids(),
             default: self.default_chain,
         })
     }
@@ -726,7 +715,7 @@ where
         hash: Option<CryptoHash>,
         chain_id: ChainId,
     ) -> Result<Option<HashedCertificateValue>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
             None => {
@@ -748,7 +737,7 @@ where
         chain_id: ChainId,
         limit: Option<u32>,
     ) -> Result<Vec<HashedCertificateValue>, Error> {
-        let client = self.clients.try_client_lock(&chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
             Some(from) => Some(from),
@@ -922,51 +911,45 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
-pub struct NodeService<P, S, C>
+pub struct NodeService<C>
 where
-    S: Storage,
+    C: ClientContext,
 {
-    clients: ChainClients<P, S>,
     config: ChainListenerConfig,
     port: NonZeroU16,
     default_chain: Option<ChainId>,
-    storage: S,
+    storage: C::Storage,
     context: Arc<Mutex<C>>,
 }
 
-impl<P, S: Clone, C> Clone for NodeService<P, S, C>
+impl<C> Clone for NodeService<C>
 where
-    S: Storage,
+    C: ClientContext,
 {
     fn clone(&self) -> Self {
         Self {
-            clients: self.clients.clone(),
             config: self.config.clone(),
             port: self.port,
             default_chain: self.default_chain,
             storage: self.storage.clone(),
-            context: self.context.clone(),
+            context: Arc::clone(&self.context),
         }
     }
 }
 
-impl<P, S, C> NodeService<P, S, C>
+impl<C> NodeService<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    C: ClientContext,
 {
     /// Creates a new instance of the node service given a client chain and a port.
     pub async fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
         default_chain: Option<ChainId>,
-        storage: S,
+        storage: C::Storage,
         context: C,
     ) -> Self {
         Self {
-            clients: ChainClients::from_clients(context.clients()).await,
             config,
             port,
             default_chain,
@@ -975,20 +958,18 @@ where
         }
     }
 
-    #[expect(clippy::type_complexity)]
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, SubscriptionRoot<P, S>> {
+    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
         Schema::build(
             QueryRoot {
-                clients: self.clients.clone(),
+                context: Arc::clone(&self.context),
                 port: self.port,
                 default_chain: self.default_chain,
             },
             MutationRoot {
-                clients: self.clients.clone(),
-                context: self.context.clone(),
+                context: Arc::clone(&self.context),
             },
             SubscriptionRoot {
-                clients: self.clients.clone(),
+                context: Arc::clone(&self.context),
             },
         )
         .finish()
@@ -1016,8 +997,8 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config, self.clients.clone())
-            .run(self.context.clone(), self.storage.clone())
+        ChainListener::new(self.config)
+            .run(Arc::clone(&self.context), self.storage.clone())
             .await;
         let serve_fut = axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,
@@ -1040,11 +1021,14 @@ where
             application_id,
             bytes,
         };
-        let Some(client) = self.clients.client_lock(&chain_id).await else {
-            return Err(NodeServiceError::UnknownChainId {
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
                 chain_id: chain_id.to_string(),
-            });
-        };
+            })?;
         let response = client.query_application(query).await?;
         let user_response_bytes = match response {
             Response::System(_) => unreachable!("cannot get a system response for a user query"),
@@ -1085,12 +1069,15 @@ where
             })
             .collect::<Vec<_>>();
 
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
         let hash = loop {
-            let Some(client) = self.clients.client_lock(&chain_id).await else {
-                return Err(NodeServiceError::UnknownChainId {
-                    chain_id: chain_id.to_string(),
-                });
-            };
             let timeout = match client.execute_operations(operations.clone()).await? {
                 ClientOutcome::Committed(certificate) => break certificate.value.hash(),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
@@ -1098,7 +1085,6 @@ where
             let mut stream = client.subscribe().await.map_err(|_| {
                 ChainClientError::InternalError("Could not subscribe to the local node.")
             })?;
-            drop(client);
             wait_for_next_round(&mut stream, timeout).await;
         };
         Ok(async_graphql::Response::new(hash.to_value()))
