@@ -100,7 +100,7 @@ where
         &self.wallet
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
         self.make_chain_client(chain_id)
     }
 
@@ -195,11 +195,11 @@ where
             .expect("No chain specified in wallet with no default chain")
     }
 
-    fn make_chain_client(&self, chain_id: ChainId) -> ChainClient<NodeProvider, S> {
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ChainClient<NodeProvider, S>, Error> {
         let chain = self
             .wallet
             .get(chain_id)
-            .unwrap_or_else(|| panic!("Unknown chain: {}", chain_id));
+            .ok_or_else(|| error::Inner::NonexistentChain(chain_id))?;
         let known_key_pairs = chain
             .key_pair
             .as_ref()
@@ -220,7 +220,7 @@ where
             self.options.blanket_message_policy,
             self.options.restrict_chain_ids_to.clone(),
         );
-        chain_client
+        Ok(chain_client)
     }
 
     pub fn make_node_provider(&self) -> NodeProvider {
@@ -373,7 +373,7 @@ where
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id);
+        let chain_client = self.make_chain_client(chain_id)?;
         info!("Changing ownership for chain {}", chain_id);
         let time_start = Instant::now();
         let ownership = ChainOwnership::try_from(ownership_config)?;
@@ -500,7 +500,9 @@ where
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
         for chain_id in self.wallet.own_chain_ids() {
-            let chain_client = self.make_chain_client(chain_id);
+            let chain_client = self
+                .make_chain_client(chain_id)
+                .expect("chains in the wallet must exist");
             self.process_inbox(&chain_client).await.unwrap();
             chain_client.update_validators().await.unwrap();
             self.update_wallet_from_client(&chain_client).await.unwrap();
@@ -526,7 +528,7 @@ where
             else {
                 continue;
             };
-            let chain_client = self.make_chain_client(chain_id);
+            let chain_client = self.make_chain_client(chain_id)?;
             let ownership = chain_client.chain_info().await?.manager.ownership;
             if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
                 continue;
@@ -538,7 +540,7 @@ where
             .wallet
             .default_chain()
             .expect("should have default chain");
-        let chain_client = self.make_chain_client(default_chain_id);
+        let chain_client = self.make_chain_client(default_chain_id)?;
         while key_pairs.len() < num_chains {
             let key_pair = self.wallet.generate_key_pair();
             let public_key = key_pair.public();
@@ -578,14 +580,14 @@ where
             }
         }
         self.update_wallet_from_client(&chain_client).await?;
-        let updated_chain_client = self.make_chain_client(default_chain_id);
+        let updated_chain_client = self.make_chain_client(default_chain_id)?;
         updated_chain_client
             .retry_pending_outgoing_messages()
             .await
             .context("outgoing messages to create the new chains should be delivered")?;
 
         for chain_id in key_pairs.keys() {
-            let child_client = self.make_chain_client(*chain_id);
+            let child_client = self.make_chain_client(*chain_id)?;
             child_client.process_inbox().await?;
             self.wallet.as_mut().update_from_state(&child_client).await;
             self.save_wallet().await?;
@@ -626,7 +628,7 @@ where
                 )
             })
             .collect();
-        let chain_client = self.make_chain_client(default_chain_id);
+        let chain_client = self.make_chain_client(default_chain_id)?;
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
@@ -639,7 +641,9 @@ where
         let futures = key_pairs
             .keys()
             .map(|&chain_id| {
-                let chain_client = self.make_chain_client(chain_id);
+                let chain_client = self
+                    .make_chain_client(chain_id)
+                    .expect("chain should have been created");
                 async move {
                     for i in 0..5 {
                         linera_base::time::timer::sleep(Duration::from_secs(i)).await;

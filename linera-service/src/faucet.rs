@@ -14,7 +14,6 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_client::{
-    chain_clients::ChainClients,
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
 };
@@ -35,21 +34,14 @@ use crate::util;
 mod tests;
 
 /// The root GraphQL query type.
-pub struct QueryRoot<P, S>
-where
-    S: Storage,
-{
+pub struct QueryRoot<C> {
+    context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
-    clients: ChainClients<P, S>,
     chain_id: ChainId,
 }
 
 /// The root GraphQL mutation type.
-pub struct MutationRoot<P, S, C>
-where
-    S: Storage,
-{
-    clients: ChainClients<P, S>,
+pub struct MutationRoot<C> {
     chain_id: ChainId,
     context: Arc<Mutex<C>>,
     amount: Amount,
@@ -76,10 +68,11 @@ pub struct Validator {
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<P, S> QueryRoot<P, S>
+impl<C> QueryRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    S: Storage + Clone + Send + Sync + 'static,
+    C: ClientContext + Send + 'static,
+    C::ValidatorNodeProvider: Send + Sync + 'static,
+    C::Storage: Clone + Send + Sync + 'static,
 {
     /// Returns the version information on this faucet service.
     async fn version(&self) -> linera_version::VersionInfo {
@@ -93,7 +86,7 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
-        let client = self.clients.try_client_lock(&self.chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
         let committee = client.local_committee().await?;
         Ok(committee
             .validators()
@@ -107,12 +100,11 @@ where
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
-impl<P, S, C> MutationRoot<P, S, C>
+impl<C> MutationRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    <P as ValidatorNodeProvider>::Node: Sync,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    C: ClientContext + Send + 'static,
+    C::ValidatorNodeProvider: Send + Sync + 'static,
+    C::Storage: Clone + Send + Sync + 'static,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -120,15 +112,14 @@ where
     }
 }
 
-impl<P, S, C> MutationRoot<P, S, C>
+impl<C> MutationRoot<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    <P as ValidatorNodeProvider>::Node: Sync,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    C: ClientContext + Send + 'static,
+    C::ValidatorNodeProvider: Send + Sync + 'static,
+    C::Storage: Clone + Send + Sync + 'static,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
-        let client = self.clients.try_client_lock(&self.chain_id).await?;
+        let client = self.context.lock().await.make_chain_client(self.chain_id)?;
 
         if self.start_timestamp < self.end_timestamp {
             let local_time = client.storage_client().clock().current_time();
@@ -178,10 +169,7 @@ where
     }
 }
 
-impl<P, S, C> MutationRoot<P, S, C>
-where
-    S: Storage,
-{
+impl<C> MutationRoot<C> {
     /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
     fn multiply(a: u128, b: u64) -> [u64; 3] {
         let lower = u128::from(u64::MAX);
@@ -194,16 +182,15 @@ where
 }
 
 /// A GraphQL interface to request a new chain with tokens.
-pub struct FaucetService<P, S, C>
+pub struct FaucetService<C>
 where
-    S: Storage,
+    C: ClientContext,
 {
-    clients: ChainClients<P, S>,
     chain_id: ChainId,
     context: Arc<Mutex<C>>,
     genesis_config: Arc<GenesisConfig>,
     config: ChainListenerConfig,
-    storage: S,
+    storage: C::Storage,
     port: NonZeroU16,
     amount: Amount,
     end_timestamp: Timestamp,
@@ -211,13 +198,13 @@ where
     start_balance: Amount,
 }
 
-impl<P, S: Clone, C> Clone for FaucetService<P, S, C>
+impl<C> Clone for FaucetService<C>
 where
-    S: Storage,
+    C: ClientContext,
+    C::Storage: Clone,
 {
     fn clone(&self) -> Self {
         Self {
-            clients: self.clients.clone(),
             chain_id: self.chain_id,
             context: self.context.clone(),
             genesis_config: self.genesis_config.clone(),
@@ -232,12 +219,12 @@ where
     }
 }
 
-impl<P, S, C> FaucetService<P, S, C>
+impl<C> FaucetService<C>
 where
-    P: ValidatorNodeProvider + Send + Sync + Clone + 'static,
-    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
-    S: Storage + Clone + Send + Sync + 'static,
-    C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+    C: ClientContext + Send + 'static,
+    C::ValidatorNodeProvider: Send + Sync + 'static,
+    <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
+    C::Storage: Clone + Send + Sync + 'static,
 {
     /// Creates a new instance of the faucet service.
     #[allow(clippy::too_many_arguments)]
@@ -249,16 +236,14 @@ where
         end_timestamp: Timestamp,
         genesis_config: Arc<GenesisConfig>,
         config: ChainListenerConfig,
-        storage: S,
+        storage: C::Storage,
     ) -> anyhow::Result<Self> {
-        let clients = ChainClients::<P, S>::from_clients(context.clients()).await;
+        let client = context.make_chain_client(chain_id)?;
         let context = Arc::new(Mutex::new(context));
-        let client = clients.try_client_lock(&chain_id).await?;
         let start_timestamp = client.storage_client().clock().current_time();
         client.process_inbox().await?;
         let start_balance = client.local_balance().await?;
         Ok(Self {
-            clients,
             chain_id,
             context,
             genesis_config,
@@ -272,9 +257,8 @@ where
         })
     }
 
-    pub fn schema(&self) -> Schema<QueryRoot<P, S>, MutationRoot<P, S, C>, EmptySubscription> {
+    pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
         let mutation_root = MutationRoot {
-            clients: self.clients.clone(),
             chain_id: self.chain_id,
             context: self.context.clone(),
             amount: self.amount,
@@ -284,7 +268,7 @@ where
         };
         let query_root = QueryRoot {
             genesis_config: self.genesis_config.clone(),
-            clients: self.clients.clone(),
+            context: self.context.clone(),
             chain_id: self.chain_id,
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
@@ -304,7 +288,7 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        ChainListener::new(self.config.clone(), self.clients.clone())
+        ChainListener::new(self.config.clone())
             .run(self.context.clone(), self.storage.clone())
             .await;
 

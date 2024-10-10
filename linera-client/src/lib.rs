@@ -6,7 +6,6 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-pub mod chain_clients;
 pub mod chain_listener;
 pub mod client_context;
 pub mod client_options;

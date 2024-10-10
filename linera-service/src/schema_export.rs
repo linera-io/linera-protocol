@@ -138,7 +138,7 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S> {
+    fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<P, S>, Error> {
         unimplemented!()
     }
 
@@ -155,8 +155,10 @@ impl<P: ValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
         Ok(())
     }
 
-    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
-        vec![]
+    fn clients(
+        &self,
+    ) -> Result<Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>>, Error> {
+        Ok(vec![])
     }
 }
 
@@ -171,10 +173,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("storage");
     let config = ChainListenerConfig::default();
-    let context = DummyContext {
+    let context = DummyContext::<DummyValidatorNodeProvider, _> {
         _phantom: std::marker::PhantomData,
     };
-    let service = NodeService::<DummyValidatorNodeProvider, _, _>::new(
+    let service = NodeService::new(
         config,
         std::num::NonZeroU16::new(8080).unwrap(),
         None,

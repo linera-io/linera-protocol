@@ -24,7 +24,7 @@ use linera_execution::{Message, SystemMessage};
 use linera_storage::{Clock as _, Storage};
 use tracing::{debug, error, info, warn, Instrument as _};
 
-use crate::{chain_clients::ChainClients, wallet::Wallet, Error};
+use crate::{wallet::Wallet, Error};
 
 #[cfg(test)]
 #[path = "unit_tests/chain_listener.rs"]
@@ -57,6 +57,9 @@ pub struct ChainListenerConfig {
     pub delay_after_ms: u64,
 }
 
+type ContextChainClient<C> =
+    ChainClient<<C as ClientContext>::ValidatorNodeProvider, <C as ClientContext>::Storage>;
+
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ClientContext {
@@ -65,10 +68,7 @@ pub trait ClientContext {
 
     fn wallet(&self) -> &Wallet;
 
-    fn make_chain_client(
-        &self,
-        chain_id: ChainId,
-    ) -> ChainClient<Self::ValidatorNodeProvider, Self::Storage>;
+    fn make_chain_client(&self, chain_id: ChainId) -> Result<ContextChainClient<Self>, Error>;
 
     async fn update_wallet_for_new_chain(
         &mut self,
@@ -77,56 +77,45 @@ pub trait ClientContext {
         timestamp: Timestamp,
     ) -> Result<(), Error>;
 
-    async fn update_wallet(
-        &mut self,
-        client: &ChainClient<Self::ValidatorNodeProvider, Self::Storage>,
-    ) -> Result<(), Error>;
+    async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
 
-    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
+    fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
         let mut clients = vec![];
         for chain_id in &self.wallet().chain_ids() {
-            clients.push(self.make_chain_client(*chain_id));
+            clients.push(self.make_chain_client(*chain_id)?);
         }
-        clients
+        Ok(clients)
     }
 }
 
 /// A `ChainListener` is a process that listens to notifications from validators and reacts
 /// appropriately.
-pub struct ChainListener<P, S>
-where
-    S: Storage,
-{
+pub struct ChainListener {
     config: ChainListenerConfig,
-    clients: ChainClients<P, S>,
     listening: Arc<Mutex<HashSet<ChainId>>>,
 }
 
-impl<P, S> ChainListener<P, S>
-where
-    P: ValidatorNodeProvider + Send + Sync + 'static,
-    <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
-    S: Storage + Clone + Send + Sync + 'static,
-{
+impl ChainListener {
     /// Creates a new chain listener given client chains.
-    pub fn new(config: ChainListenerConfig, clients: ChainClients<P, S>) -> Self {
+    pub fn new(config: ChainListenerConfig) -> Self {
         Self {
             config,
-            clients,
             listening: Default::default(),
         }
     }
 
     /// Runs the chain listener.
-    pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: S)
+    pub async fn run<C, P, S>(self, context: Arc<Mutex<C>>, storage: S)
     where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
+        P: ValidatorNodeProvider + Send + Sync + 'static,
+        <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
         for chain_id in chain_ids {
             Self::run_with_chain_id(
                 chain_id,
-                self.clients.clone(),
                 context.clone(),
                 storage.clone(),
                 self.config.clone(),
@@ -136,21 +125,22 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
-    fn run_with_chain_id<C>(
+    fn run_with_chain_id<C, P, S>(
         chain_id: ChainId,
-        clients: ChainClients<P, S>,
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
         listening: Arc<Mutex<HashSet<ChainId>>>,
     ) where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
+        P: ValidatorNodeProvider + Send + Sync + 'static,
+        <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let _handle = linera_base::task::spawn(
             async move {
                 if let Err(err) =
-                    Self::run_client_stream(chain_id, clients, context, storage, config, listening)
-                        .await
+                    Self::run_client_stream(chain_id, context, storage, config, listening).await
                 {
                     error!("Stream for chain {} failed: {}", chain_id, err);
                 }
@@ -160,9 +150,8 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
-    async fn run_client_stream<C>(
+    async fn run_client_stream<C, P, S>(
         chain_id: ChainId,
-        clients: ChainClients<P, S>,
         context: Arc<Mutex<C>>,
         storage: S,
         config: ChainListenerConfig,
@@ -170,6 +159,9 @@ where
     ) -> Result<(), Error>
     where
         C: ClientContext<ValidatorNodeProvider = P, Storage = S> + Send + 'static,
+        S: Storage + Clone + Send + Sync + 'static,
+        P: ValidatorNodeProvider + Send + Sync + 'static,
+        <<P as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let mut guard = listening.lock().await;
         if guard.contains(&chain_id) {
@@ -178,11 +170,11 @@ where
             // chain, and then process the OpenChain message in the parent.
             return Ok(());
         }
-        // If the client is not present, we can request it.
-        let client = clients.request_client(chain_id, context.clone()).await;
-        let (listener, _listen_handle, mut local_stream) = client.listen().await?;
         guard.insert(chain_id);
         drop(guard);
+        // If the client is not present, we can request it.
+        let client = context.lock().await.make_chain_client(chain_id)?;
+        let (listener, _listen_handle, mut local_stream) = client.listen().await?;
         client.synchronize_from_validators().await?;
         drop(linera_base::task::spawn(listener.in_current_span()));
         let mut timeout = storage.clock().current_time();
@@ -280,7 +272,6 @@ where
                         .await?;
                     Self::run_with_chain_id(
                         new_id,
-                        clients.clone(),
                         context.clone(),
                         storage.clone(),
                         config.clone(),
