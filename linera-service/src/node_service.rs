@@ -155,8 +155,7 @@ impl IntoResponse for NodeServiceError {
 #[Subscription]
 impl<C> SubscriptionRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Subscribes to notifications from the specified chain.
     async fn notifications(
@@ -170,8 +169,7 @@ where
 
 impl<C> MutationRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     async fn execute_system_operation(
         &self,
@@ -228,8 +226,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> MutationRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
     async fn process_inbox(&self, chain_id: ChainId) -> Result<Vec<CryptoHash>, Error> {
@@ -663,8 +660,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> QueryRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     async fn chain(
         &self,
@@ -902,8 +898,7 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     config: ChainListenerConfig,
     port: NonZeroU16,
@@ -914,8 +909,7 @@ where
 
 impl<C> Clone for NodeService<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     fn clone(&self) -> Self {
         Self {
@@ -930,8 +924,7 @@ where
 
 impl<C> NodeService<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Creates a new instance of the node service given a client chain and a port.
     pub async fn new(

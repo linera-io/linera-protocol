@@ -67,8 +67,7 @@ pub struct Validator {
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> QueryRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Returns the version information on this faucet service.
     async fn version(&self) -> linera_version::VersionInfo {
@@ -98,8 +97,7 @@ where
 #[async_graphql::Object(cache_control(no_cache))]
 impl<C> MutationRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
     async fn claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -109,8 +107,7 @@ where
 
 impl<C> MutationRoot<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
         let client = self.context.lock().await.make_chain_client(self.chain_id)?;
@@ -195,7 +192,6 @@ where
 impl<C> Clone for FaucetService<C>
 where
     C: ClientContext,
-    C::Storage: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -215,8 +211,7 @@ where
 
 impl<C> FaucetService<C>
 where
-    C: ClientContext + Send + 'static,
-    C::Storage: Clone + Send + Sync + 'static,
+    C: ClientContext,
 {
     /// Creates a new instance of the faucet service.
     #[allow(clippy::too_many_arguments)]

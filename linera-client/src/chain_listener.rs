@@ -60,11 +60,11 @@ pub struct ChainListenerConfig {
 type ContextChainClient<C> =
     ChainClient<<C as ClientContext>::ValidatorNodeProvider, <C as ClientContext>::Storage>;
 
-#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(not(web), async_trait, trait_variant::make(Send))]
 #[cfg_attr(web, async_trait(?Send))]
-pub trait ClientContext {
-    type ValidatorNodeProvider: ValidatorNodeProvider;
-    type Storage: Storage;
+pub trait ClientContext: 'static {
+    type ValidatorNodeProvider: ValidatorNodeProvider + Sync;
+    type Storage: Storage + Clone + Send + Sync + 'static;
 
     fn wallet(&self) -> &Wallet;
 
@@ -107,8 +107,7 @@ impl ChainListener {
     /// Runs the chain listener.
     pub async fn run<C>(self, context: Arc<Mutex<C>>, storage: C::Storage)
     where
-        C: ClientContext + Send + 'static,
-        C::Storage: Clone + Send + Sync + 'static,
+        C: ClientContext,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
         for chain_id in chain_ids {
@@ -130,8 +129,7 @@ impl ChainListener {
         config: ChainListenerConfig,
         listening: Arc<Mutex<HashSet<ChainId>>>,
     ) where
-        C: ClientContext + Send + 'static,
-        C::Storage: Clone + Send + Sync + 'static,
+        C: ClientContext,
     {
         let _handle = linera_base::task::spawn(
             async move {
@@ -154,8 +152,7 @@ impl ChainListener {
         listening: Arc<Mutex<HashSet<ChainId>>>,
     ) -> Result<(), Error>
     where
-        C: ClientContext + Send + 'static,
-        C::Storage: Clone + Send + Sync + 'static,
+        C: ClientContext,
     {
         let mut guard = listening.lock().await;
         if guard.contains(&chain_id) {

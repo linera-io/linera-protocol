@@ -128,7 +128,7 @@ struct DummyContext<P, S> {
 }
 
 #[async_trait]
-impl<P: ValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
+impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static> ClientContext
     for DummyContext<P, S>
 {
     type ValidatorNodeProvider = P;

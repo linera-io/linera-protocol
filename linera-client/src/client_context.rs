@@ -91,7 +91,7 @@ where
 impl<S, W> chain_listener::ClientContext for ClientContext<S, W>
 where
     S: Storage + Clone + Send + Sync + 'static,
-    W: Persist<Target = Wallet>,
+    W: Persist<Target = Wallet> + 'static,
 {
     type ValidatorNodeProvider = NodeProvider;
     type Storage = S;
