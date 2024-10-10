@@ -4373,6 +4373,7 @@ dependencies = [
  "prometheus",
  "proptest",
  "rand",
+ "reqwest 0.11.27",
  "ruzstd",
  "secp256k1",
  "serde",
