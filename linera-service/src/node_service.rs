@@ -929,7 +929,7 @@ where
             port: self.port,
             default_chain: self.default_chain,
             storage: self.storage.clone(),
-            context: self.context.clone(),
+            context: Arc::clone(&self.context),
         }
     }
 }
@@ -961,15 +961,15 @@ where
     pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, SubscriptionRoot<C>> {
         Schema::build(
             QueryRoot {
-                context: self.context.clone(),
+                context: Arc::clone(&self.context),
                 port: self.port,
                 default_chain: self.default_chain,
             },
             MutationRoot {
-                context: self.context.clone(),
+                context: Arc::clone(&self.context),
             },
             SubscriptionRoot {
-                context: self.context.clone(),
+                context: Arc::clone(&self.context),
             },
         )
         .finish()
@@ -998,7 +998,7 @@ where
         info!("GraphiQL IDE: http://localhost:{}", port);
 
         ChainListener::new(self.config)
-            .run(self.context.clone(), self.storage.clone())
+            .run(Arc::clone(&self.context), self.storage.clone())
             .await;
         let serve_fut = axum::serve(
             tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await?,

@@ -206,8 +206,8 @@ where
     fn clone(&self) -> Self {
         Self {
             chain_id: self.chain_id,
-            context: self.context.clone(),
-            genesis_config: self.genesis_config.clone(),
+            context: Arc::clone(&self.context),
+            genesis_config: Arc::clone(&self.genesis_config),
             config: self.config.clone(),
             storage: self.storage.clone(),
             port: self.port,
@@ -260,15 +260,15 @@ where
     pub fn schema(&self) -> Schema<QueryRoot<C>, MutationRoot<C>, EmptySubscription> {
         let mutation_root = MutationRoot {
             chain_id: self.chain_id,
-            context: self.context.clone(),
+            context: Arc::clone(&self.context),
             amount: self.amount,
             end_timestamp: self.end_timestamp,
             start_timestamp: self.start_timestamp,
             start_balance: self.start_balance,
         };
         let query_root = QueryRoot {
-            genesis_config: self.genesis_config.clone(),
-            context: self.context.clone(),
+            genesis_config: Arc::clone(&self.genesis_config),
+            context: Arc::clone(&self.context),
             chain_id: self.chain_id,
         };
         Schema::build(query_root, mutation_root, EmptySubscription).finish()
@@ -289,7 +289,7 @@ where
         info!("GraphiQL IDE: http://localhost:{}", port);
 
         ChainListener::new(self.config.clone())
-            .run(self.context.clone(), self.storage.clone())
+            .run(Arc::clone(&self.context), self.storage.clone())
             .await;
 
         axum::serve(
