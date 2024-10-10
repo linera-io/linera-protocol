@@ -45,7 +45,7 @@ derive_more = { workspace = true, features = ["display"] }
 dyn-clone.workspace = true
 futures.workspace = true
 js-sys = { workspace = true, optional = true }
-linera-base.workspace = true
+linera-base = { workspace = true, features = ["reqwest"] }
 linera-views.workspace = true
 linera-views-derive.workspace = true
 linera-witty = { workspace = true, features = ["log", "macros"] }

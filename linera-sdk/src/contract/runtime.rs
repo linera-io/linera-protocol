@@ -8,6 +8,7 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
+    http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
@@ -304,15 +305,21 @@ where
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 
-    /// Makes a POST request to the given URL as an oracle and returns the answer, if any.
+    /// Makes an HTTP request to the given URL as an oracle and returns the answer, if any.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
     /// the same response, otherwise most block proposals will fail.
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_request(&mut self, url: &str, content_type: &str, payload: Vec<u8>) -> Vec<u8> {
-        wit::perform_http_request(url, content_type, &payload)
+    pub fn http_request(
+        &mut self,
+        method: http::Method,
+        url: &str,
+        content_type: &str,
+        payload: Vec<u8>,
+    ) -> Vec<u8> {
+        wit::perform_http_request(method.into(), url, content_type, &payload)
     }
 
     /// Panics if the current time at block validation is `>= timestamp`. Note that block

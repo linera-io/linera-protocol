@@ -39,7 +39,7 @@ use linera_base::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, DecompressionError,
         Resources, SendMessageRequest, Timestamp, UserApplicationDescription,
     },
-    doc_scalar, hex_debug,
+    doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
         Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
@@ -606,9 +606,10 @@ pub trait BaseRuntime {
         promise: &Self::FindKeyValuesByPrefix,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ExecutionError>;
 
-    /// Makes a POST request to the given URL and returns the answer, if any.
+    /// Makes an HTTP request to the given URL and returns the answer, if any.
     fn perform_http_request(
         &mut self,
+        method: http::Method,
         url: &str,
         content_type: String,
         payload: Vec<u8>,

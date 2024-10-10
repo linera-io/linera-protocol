@@ -9,6 +9,7 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, TimeDelta,
         Timestamp,
     },
+    http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
         MessageId, Owner, StreamName,
@@ -177,6 +178,22 @@ impl From<Resources> for wit_system_api::Resources {
             messages: resources.messages,
             message_size: resources.message_size,
             storage_size_delta: resources.storage_size_delta,
+        }
+    }
+}
+
+impl From<http::Method> for wit_system_api::HttpMethod {
+    fn from(method: http::Method) -> Self {
+        match method {
+            http::Method::Get => wit_system_api::HttpMethod::Get,
+            http::Method::Post => wit_system_api::HttpMethod::Post,
+            http::Method::Put => wit_system_api::HttpMethod::Put,
+            http::Method::Delete => wit_system_api::HttpMethod::Delete,
+            http::Method::Head => wit_system_api::HttpMethod::Head,
+            http::Method::Options => wit_system_api::HttpMethod::Options,
+            http::Method::Connect => wit_system_api::HttpMethod::Connect,
+            http::Method::Patch => wit_system_api::HttpMethod::Patch,
+            http::Method::Trace => wit_system_api::HttpMethod::Trace,
         }
     }
 }
