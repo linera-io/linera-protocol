@@ -4060,12 +4060,15 @@ dependencies = [
  "test-strategy",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm_thread",
  "wasmtimer",
+ "web-sys",
  "web-time",
  "zstd",
 ]
@@ -4228,7 +4231,6 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "bcs",
- "bytes",
  "cfg-if",
  "cfg_aliases",
  "clap",
@@ -4238,6 +4240,7 @@ dependencies = [
  "derive_more 1.0.0",
  "dyn-clone",
  "futures",
+ "js-sys",
  "linera-base",
  "linera-execution",
  "linera-views",
@@ -8270,12 +8273,12 @@ dependencies = [
 [[package]]
 name = "wasm_thread"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22bc95de7e96023c115820c1b87504cdd316ed958d2dfb97dca502cc6e5772a1"
+source = "git+https://github.com/Twey/wasm_thread?branch=post-message#f4bc74d7095f007b6767338531bceb1ba559e000"
 dependencies = [
  "futures",
  "js-sys",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

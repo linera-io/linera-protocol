@@ -4,10 +4,13 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
+#![cfg_attr(web, feature(trait_upcasting))]
 #![deny(clippy::large_futures)]
 
 mod applications;
 pub mod committee;
+#[cfg(web)]
+mod dyn_convert;
 mod execution;
 mod execution_state_actor;
 mod graphql;
@@ -21,7 +24,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -74,6 +77,8 @@ pub use crate::{
     },
     transaction_tracker::TransactionTracker,
 };
+#[cfg(web)]
+use {js_sys::wasm_bindgen, wasm_bindgen::JsValue};
 
 /// The maximum length of an event key in bytes.
 const MAX_EVENT_KEY_LEN: usize = 64;
@@ -81,10 +86,12 @@ const MAX_EVENT_KEY_LEN: usize = 64;
 const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
-pub type UserContractCode = Box<dyn UserContractModule + Send + Sync>;
+#[derive(Clone)]
+pub struct UserContractCode(Box<dyn UserContractModule>);
 
 /// An implementation of [`UserServiceModule`].
-pub type UserServiceCode = Box<dyn UserServiceModule + Send + Sync>;
+#[derive(Clone)]
+pub struct UserServiceCode(Box<dyn UserServiceModule>);
 
 /// An implementation of [`UserContract`].
 pub type UserContractInstance = Box<dyn UserContract>;
@@ -92,8 +99,15 @@ pub type UserContractInstance = Box<dyn UserContract>;
 /// An implementation of [`UserService`].
 pub type UserServiceInstance = Box<dyn UserService>;
 
+#[cfg(not(web))]
+pub trait Post: Send + Sync {}
+
+#[cfg(web)]
+pub trait Post: dyn_convert::DynInto<JsValue> {}
+
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone {
+// TODO: remove `Send` and `Sync` from here
+pub trait UserContractModule: dyn_clone::DynClone + Any + Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -102,14 +116,14 @@ pub trait UserContractModule: dyn_clone::DynClone {
 
 impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode {
     fn from(module: T) -> Self {
-        Box::new(module)
+        Self(Box::new(module))
     }
 }
 
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -118,11 +132,71 @@ pub trait UserServiceModule: dyn_clone::DynClone {
 
 impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
     fn from(module: T) -> Self {
-        Box::new(module)
+        Self(Box::new(module))
     }
 }
 
 dyn_clone::clone_trait_object!(UserServiceModule);
+
+impl UserServiceCode {
+    fn instantiate(
+        &self,
+        runtime: ServiceSyncRuntimeHandle,
+    ) -> Result<UserServiceInstance, ExecutionError> {
+        self.0.instantiate(runtime)
+    }
+}
+
+impl UserContractCode {
+    fn instantiate(
+        &self,
+        runtime: ContractSyncRuntimeHandle,
+    ) -> Result<UserContractInstance, ExecutionError> {
+        self.0.instantiate(runtime)
+    }
+}
+
+#[cfg(not(web))]
+impl<T: Send + Sync> Post for T {}
+
+#[cfg(web)]
+const _: () = {
+    // TODO: add a vtable pointer into the JsValue rather than assuming the implementor
+
+    impl<T: dyn_convert::DynInto<JsValue>> Post for T {}
+
+    impl Into<JsValue> for UserContractCode {
+        fn into(self) -> JsValue {
+            let module: WasmContractModule = *(self.0 as Box<dyn Any>)
+                .downcast()
+                .expect("we only support Wasm modules on the Web for now");
+            module.into()
+        }
+    }
+
+    impl Into<JsValue> for UserServiceCode {
+        fn into(self) -> JsValue {
+            let module: WasmServiceModule = *(self.0 as Box<dyn Any>)
+                .downcast()
+                .expect("we only support Wasm modules on the Web for now");
+            module.into()
+        }
+    }
+
+    impl TryFrom<JsValue> for UserContractCode {
+        type Error = JsValue;
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            WasmContractModule::try_from(value).map(Into::into)
+        }
+    }
+
+    impl TryFrom<JsValue> for UserServiceCode {
+        type Error = JsValue;
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            WasmServiceModule::try_from(value).map(Into::into)
+        }
+    }
+};
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
@@ -138,8 +212,6 @@ pub enum ExecutionError {
     #[cfg(any(with_wasmer, with_wasmtime))]
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
-    #[error(transparent)]
-    JoinError(#[from] linera_base::task::Error),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
@@ -205,6 +277,10 @@ pub enum ExecutionError {
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]
     UnstableOracle,
+    #[error("Failed to send contract code to worker thread: {0:?}")]
+    ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
+    #[error("Failed to send service code to worker thread: {0:?}")]
+    ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -267,7 +343,8 @@ pub struct ExecutionRuntimeConfig {}
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
