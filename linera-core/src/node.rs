@@ -97,9 +97,9 @@ pub trait ValidatorNode {
 }
 
 /// Turn an address into a validator node.
-#[cfg_attr(not(web), trait_variant::make(Send))]
+#[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 #[expect(clippy::result_large_err)]
-pub trait ValidatorNodeProvider {
+pub trait ValidatorNodeProvider: 'static {
     #[cfg(not(web))]
     type Node: ValidatorNode + Send + Sync + Clone + 'static;
     #[cfg(web)]

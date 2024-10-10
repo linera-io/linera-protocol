@@ -156,7 +156,6 @@ impl IntoResponse for NodeServiceError {
 impl<C> SubscriptionRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     /// Subscribes to notifications from the specified chain.
@@ -172,7 +171,6 @@ where
 impl<C> MutationRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     async fn execute_system_operation(
@@ -231,7 +229,6 @@ where
 impl<C> MutationRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     /// Processes the inbox and returns the lists of certificate hashes that were created, if any.
@@ -667,7 +664,6 @@ where
 impl<C> QueryRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     async fn chain(
@@ -907,7 +903,6 @@ fn bytes_from_list(list: &[async_graphql::Value]) -> Option<Vec<u8>> {
 pub struct NodeService<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     config: ChainListenerConfig,
@@ -920,7 +915,6 @@ where
 impl<C> Clone for NodeService<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
@@ -937,7 +931,6 @@ where
 impl<C> NodeService<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     C::Storage: Clone + Send + Sync + 'static,
 {

@@ -71,7 +71,6 @@ pub struct Validator {
 impl<C> QueryRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     /// Returns the version information on this faucet service.
@@ -103,7 +102,6 @@ where
 impl<C> MutationRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
@@ -115,7 +113,6 @@ where
 impl<C> MutationRoot<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     C::Storage: Clone + Send + Sync + 'static,
 {
     async fn do_claim(&self, public_key: PublicKey) -> Result<ClaimOutcome, Error> {
@@ -222,7 +219,6 @@ where
 impl<C> FaucetService<C>
 where
     C: ClientContext + Send + 'static,
-    C::ValidatorNodeProvider: Send + Sync + 'static,
     <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     C::Storage: Clone + Send + Sync + 'static,
 {

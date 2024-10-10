@@ -109,7 +109,6 @@ impl ChainListener {
     where
         C: ClientContext + Send + 'static,
         C::Storage: Clone + Send + Sync + 'static,
-        C::ValidatorNodeProvider: Send + Sync + 'static,
         <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
@@ -134,7 +133,6 @@ impl ChainListener {
     ) where
         C: ClientContext + Send + 'static,
         C::Storage: Clone + Send + Sync + 'static,
-        C::ValidatorNodeProvider: Send + Sync + 'static,
         <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let _handle = linera_base::task::spawn(
@@ -160,7 +158,6 @@ impl ChainListener {
     where
         C: ClientContext + Send + 'static,
         C::Storage: Clone + Send + Sync + 'static,
-        C::ValidatorNodeProvider: Send + Sync + 'static,
         <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let mut guard = listening.lock().await;
