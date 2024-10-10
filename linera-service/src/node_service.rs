@@ -32,7 +32,7 @@ use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientCo
 use linera_core::{
     client::{ChainClient, ChainClientError},
     data_types::{ClientOutcome, RoundTimeout},
-    node::{NotificationStream, ValidatorNode, ValidatorNodeProvider},
+    node::NotificationStream,
     worker::{Notification, Reason},
 };
 use linera_execution::{
@@ -931,7 +931,6 @@ where
 impl<C> NodeService<C>
 where
     C: ClientContext + Send + 'static,
-    <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     C::Storage: Clone + Send + Sync + 'static,
 {
     /// Creates a new instance of the node service given a client chain and a port.
@@ -1014,8 +1013,14 @@ where
             application_id,
             bytes,
         };
-        let client = self.context.lock().await.make_chain_client(chain_id)
-            .map_err(|_| NodeServiceError::UnknownChainId { chain_id: chain_id.to_string() })?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
         let response = client.query_application(query).await?;
         let user_response_bytes = match response {
             Response::System(_) => unreachable!("cannot get a system response for a user query"),
@@ -1056,8 +1061,14 @@ where
             })
             .collect::<Vec<_>>();
 
-        let client = self.context.lock().await.make_chain_client(chain_id)
-            .map_err(|_| NodeServiceError::UnknownChainId { chain_id: chain_id.to_string() })?;
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .map_err(|_| NodeServiceError::UnknownChainId {
+                chain_id: chain_id.to_string(),
+            })?;
         let hash = loop {
             let timeout = match client.execute_operations(operations.clone()).await? {
                 ClientOutcome::Committed(certificate) => break certificate.value.hash(),

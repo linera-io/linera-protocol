@@ -17,7 +17,7 @@ use linera_base::{
 use linera_chain::data_types::OutgoingMessage;
 use linera_core::{
     client::{ChainClient, ChainClientError},
-    node::{ValidatorNode, ValidatorNodeProvider},
+    node::ValidatorNodeProvider,
     worker::Reason,
 };
 use linera_execution::{Message, SystemMessage};
@@ -109,7 +109,6 @@ impl ChainListener {
     where
         C: ClientContext + Send + 'static,
         C::Storage: Clone + Send + Sync + 'static,
-        <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let chain_ids = context.lock().await.wallet().chain_ids();
         for chain_id in chain_ids {
@@ -133,7 +132,6 @@ impl ChainListener {
     ) where
         C: ClientContext + Send + 'static,
         C::Storage: Clone + Send + Sync + 'static,
-        <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let _handle = linera_base::task::spawn(
             async move {
@@ -158,7 +156,6 @@ impl ChainListener {
     where
         C: ClientContext + Send + 'static,
         C::Storage: Clone + Send + Sync + 'static,
-        <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     {
         let mut guard = listening.lock().await;
         if guard.contains(&chain_id) {

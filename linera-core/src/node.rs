@@ -45,6 +45,9 @@ pub enum CrossChainMessageDelivery {
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ValidatorNode {
+    #[cfg(not(web))]
+    type NotificationStream: Stream<Item = Notification> + Unpin + Send;
+    #[cfg(web)]
     type NotificationStream: Stream<Item = Notification> + Unpin;
 
     /// Proposes a new block.

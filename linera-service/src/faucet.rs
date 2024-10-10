@@ -17,10 +17,7 @@ use linera_client::{
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext},
     config::GenesisConfig,
 };
-use linera_core::{
-    data_types::ClientOutcome,
-    node::{ValidatorNode, ValidatorNodeProvider},
-};
+use linera_core::data_types::ClientOutcome;
 use linera_execution::committee::ValidatorName;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
@@ -219,7 +216,6 @@ where
 impl<C> FaucetService<C>
 where
     C: ClientContext + Send + 'static,
-    <<C::ValidatorNodeProvider as ValidatorNodeProvider>::Node as ValidatorNode>::NotificationStream: Send,
     C::Storage: Clone + Send + Sync + 'static,
 {
     /// Creates a new instance of the faucet service.
