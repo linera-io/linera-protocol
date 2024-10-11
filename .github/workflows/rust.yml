@@ -88,6 +88,7 @@ jobs:
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
     - name: Run the remote-net tests
       run: |
+        cargo build --bin linera
         cargo run --bin linera -- faucet --amount 1000 --port 8079 &
         LINERA_FAUCET_URL=http://localhost:8079 cargo test -p linera-service remote_net_grpc --features remote-net
     - name: Check that the WIT files are up-to-date
