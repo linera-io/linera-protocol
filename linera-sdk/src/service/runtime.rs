@@ -8,7 +8,7 @@ use std::cell::Cell;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{ApplicationId, ChainId, EventId, Owner},
 };
 
 use super::wit::service_system_api as wit;
@@ -158,5 +158,10 @@ where
     /// Asserts that a data blob with the given hash exists in storage.
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         wit::assert_data_blob_exists(hash.0.into())
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(event_id: EventId) -> Vec<u8> {
+        wit::read_event(&event_id.into())
     }
 }

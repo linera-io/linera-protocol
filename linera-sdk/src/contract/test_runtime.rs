@@ -14,7 +14,8 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, StreamName,
+        Account, ApplicationId, ChainId, ChannelName, Destination, EventId, MessageId, Owner,
+        StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -54,6 +55,7 @@ where
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls:
         VecDeque<(ChainOwnership, ApplicationPermissions, Amount, MessageId)>,
+    expected_read_event_requests: VecDeque<(EventId, Vec<u8>)>,
     key_value_store: KeyValueStore,
 }
 
@@ -99,6 +101,7 @@ where
             expected_read_data_blob_requests: VecDeque::new(),
             expected_assert_data_blob_exists_requests: VecDeque::new(),
             expected_open_chain_calls: VecDeque::new(),
+            expected_read_event_requests: VecDeque::new(),
             key_value_store: KeyValueStore::mock().to_mut(),
         }
     }
@@ -682,7 +685,7 @@ where
     }
 
     /// Adds an expected `read_data_blob` call, and the response it should return in the test.
-    pub fn add_expected_read_data_blob_requests(&mut self, hash: DataBlobHash, response: Vec<u8>) {
+    pub fn add_expected_read_data_blob_request(&mut self, hash: DataBlobHash, response: Vec<u8>) {
         self.expected_read_data_blob_requests
             .push_back((hash, response));
     }
@@ -695,6 +698,12 @@ where
     ) {
         self.expected_assert_data_blob_exists_requests
             .push_back((hash, response));
+    }
+
+    /// Adds an expected `read_event` call, and the response it should return in the test.
+    pub fn add_expected_read_event_request(&mut self, event_id: EventId, event_value: Vec<u8>) {
+        self.expected_read_event_requests
+            .push_back((event_id, event_value));
     }
 
     /// Queries our application service as an oracle and returns the response.
@@ -758,6 +767,14 @@ where
             maybe_request.expect("Unexpected assert_data_blob_exists request");
         assert_eq!(hash, expected_blob_hash);
         response.expect("Blob does not exist!");
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(&mut self, event_id: EventId) -> Vec<u8> {
+        let maybe_event = self.expected_read_event_requests.pop_front();
+        let (expected_event_id, event_value) = maybe_event.expect("Unexpected read_event request");
+        assert_eq!(event_id, expected_event_id);
+        event_value
     }
 }
 

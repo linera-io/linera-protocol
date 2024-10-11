@@ -6,7 +6,9 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName},
+    identifiers::{
+        Account, ApplicationId, ChainId, ChannelName, EventId, MessageId, Owner, StreamName,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -380,6 +382,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Reads an event from storage.
+    fn read_event(caller: &mut Caller, event_id: EventId) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_event(event_id)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Logs a `message` with the provided information `level`.
     fn log(_caller: &mut Caller, message: String, level: log::Level) -> Result<(), RuntimeError> {
         match level {
@@ -569,6 +580,15 @@ where
             .user_data_mut()
             .runtime
             .assert_data_blob_exists(&hash)
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
+    /// Reads an event from storage.
+    fn read_event(caller: &mut Caller, event_id: EventId) -> Result<Vec<u8>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .read_event(event_id)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

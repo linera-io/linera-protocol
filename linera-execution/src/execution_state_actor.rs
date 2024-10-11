@@ -12,7 +12,7 @@ use futures::channel::mpsc;
 use linera_base::prometheus_util::{self, MeasureLatency as _};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
-    identifiers::{Account, BlobId, MessageId, Owner},
+    identifiers::{Account, BlobId, EventId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -318,6 +318,16 @@ where
                 self.system.assert_blob_exists(blob_id).await?;
                 callback.respond(())
             }
+
+            ReadEvent { event_id, callback } => {
+                let blob = self
+                    .context()
+                    .extra()
+                    .get_event(&event_id)
+                    .await
+                    .map_err(|_| ExecutionError::EventNotFound(Box::new(event_id)))?;
+                callback.respond(blob);
+            }
         }
 
         Ok(())
@@ -452,6 +462,11 @@ pub enum ExecutionRequest {
     AssertBlobExists {
         blob_id: BlobId,
         callback: Sender<()>,
+    },
+
+    ReadEvent {
+        event_id: EventId,
+        callback: oneshot::Sender<Vec<u8>>,
     },
 }
 
@@ -589,6 +604,11 @@ impl Debug for ExecutionRequest {
             ExecutionRequest::ReadBlobContent { blob_id, .. } => formatter
                 .debug_struct("ExecutionRequest::ReadBlob")
                 .field("blob_id", blob_id)
+                .finish_non_exhaustive(),
+
+            ExecutionRequest::ReadEvent { event_id, .. } => formatter
+                .debug_struct("ExecutionRequest::ReadEvent")
+                .field("event_id", event_id)
                 .finish_non_exhaustive(),
 
             ExecutionRequest::AssertBlobExists { blob_id, .. } => formatter

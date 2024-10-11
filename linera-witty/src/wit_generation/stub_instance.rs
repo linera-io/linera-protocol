@@ -30,11 +30,13 @@ impl<UserData> Default for StubInstance<UserData> {
 impl<UserData> Instance for StubInstance<UserData> {
     type Runtime = StubRuntime;
     type UserData = UserData;
-    type UserDataReference<'a> = &'a UserData
+    type UserDataReference<'a>
+        = &'a UserData
     where
         Self::UserData: 'a,
         Self: 'a;
-    type UserDataMutReference<'a> = &'a mut UserData
+    type UserDataMutReference<'a>
+        = &'a mut UserData
     where
         Self::UserData: 'a,
         Self: 'a;

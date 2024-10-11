@@ -49,7 +49,8 @@ pub trait ResultStorage {
 }
 
 impl ResultStorage for () {
-    type OutputFor<HostResults> = <HostResults::Layout as Layout>::Flat
+    type OutputFor<HostResults>
+        = <HostResults::Layout as Layout>::Flat
     where
         HostResults: WitStore;
 
@@ -68,7 +69,8 @@ impl ResultStorage for () {
 }
 
 impl ResultStorage for GuestPointer {
-    type OutputFor<HostResults> = HNil
+    type OutputFor<HostResults>
+        = HNil
     where
         HostResults: WitStore;
 

@@ -15,7 +15,9 @@ use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
-    identifiers::{BlobId, ChainDescription, ChainId, GenericApplicationId, UserApplicationId},
+    identifiers::{
+        BlobId, ChainDescription, ChainId, EventId, GenericApplicationId, UserApplicationId,
+    },
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -162,6 +164,12 @@ pub trait Storage: Sized {
 
     /// Writes a vector of certificates.
     async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
+
+    /// Reads the event with the given ID.
+    async fn read_event(&self, event_id: &EventId) -> Result<Vec<u8>, ViewError>;
+
+    /// Writes a vector of events.
+    async fn write_events(&self, events: &[(EventId, &[u8])]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     ///
@@ -423,6 +431,10 @@ where
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
+    }
+
+    async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
+        Ok(self.storage.read_event(event_id).await?)
     }
 }
 

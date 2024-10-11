@@ -20,11 +20,13 @@ where
 {
     type Runtime = I::Runtime;
     type UserData = I::UserData;
-    type UserDataReference<'a> = I::UserDataReference<'a>
+    type UserDataReference<'a>
+        = I::UserDataReference<'a>
     where
         Self::UserData: 'a,
         Self: 'a;
-    type UserDataMutReference<'a> = I::UserDataMutReference<'a>
+    type UserDataMutReference<'a>
+        = I::UserDataMutReference<'a>
     where
         Self::UserData: 'a,
         Self: 'a;
