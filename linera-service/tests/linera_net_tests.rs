@@ -2912,7 +2912,7 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Result<()> {
+async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::command::CommandExt;
     use tokio::process::Command;
 

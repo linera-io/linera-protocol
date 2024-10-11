@@ -38,7 +38,7 @@ features = ["js-default"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wasmer]
 workspace = true
 optional = true
-features = ["sys-default", "singlepass"]
+features = ["singlepass"]
 
 [dev-dependencies]
 assert_matches.workspace = true

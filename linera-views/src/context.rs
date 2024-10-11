@@ -270,7 +270,7 @@ pub type MemoryContext<E> = ViewContext<E, MemoryStore>;
 /// Provides a `MemoryContext<()>` that can be used for tests.
 #[cfg(with_testing)]
 pub fn create_test_memory_context() -> MemoryContext<()> {
-    let namespace = crate::test_utils::generate_test_namespace();
+    let namespace = crate::random::generate_test_namespace();
     let root_key = &[];
     MemoryContext::new_for_testing(
         crate::memory::TEST_MEMORY_MAX_STREAM_QUERIES,

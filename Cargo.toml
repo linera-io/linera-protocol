@@ -72,7 +72,7 @@ dashmap = "5.5.3"
 derive_more = "1.0.0"
 dirs = "5.0.1"
 dyn-clone = "1.0.17"
-ed25519-dalek = { version = "2.1.1", features = ["batch", "serde"] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["batch", "serde"] }
 either = "1.10.0"
 ethers = { version = "2.0.14", features = ["solc"] }
 flarch = "0.7.0"
@@ -161,10 +161,10 @@ wasm-bindgen-test = "0.3.42"
 wasm-encoder = "0.24.1"
 wasm-instrument = "0.4.0"
 wasm_thread = "0.3.0"
-wasmer = { package = "linera-wasmer", version = "4.3.6-linera.4", default-features = false }
-wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.3.6-linera.4" }
+wasmer = { package = "linera-wasmer", version = "4.4.0-linera.5", default-features = false }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.5", default-features = false }
 wasmparser = "0.101.1"
-wasmtime = "25.0.0"
+wasmtime = { version = "25.0.0", default-features = false, features = ["cranelift", "runtime", "std"] }
 wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"

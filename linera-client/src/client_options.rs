@@ -464,6 +464,9 @@ pub enum ClientCommand {
         name: ValidatorName,
     },
 
+    /// Deprecates all committees except the last one.
+    FinalizeCommittee,
+
     /// View or update the resource control policy
     ResourceControlPolicy {
         /// Set the base price for creating a block.

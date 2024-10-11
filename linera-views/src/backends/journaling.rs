@@ -180,10 +180,6 @@ where
 {
     type Config = K::Config;
 
-    async fn new_test_config() -> Result<K::Config, Self::Error> {
-        K::new_test_config().await
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,

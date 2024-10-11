@@ -12,7 +12,9 @@ use std::{
 use thiserror::Error;
 
 #[cfg(with_testing)]
-use crate::test_utils::generate_test_namespace;
+use crate::random::generate_test_namespace;
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
@@ -306,16 +308,6 @@ impl MemoryStore {
 impl AdminKeyValueStore for MemoryStore {
     type Config = MemoryStoreConfig;
 
-    async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
-        let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            cache_size: 1000,
-        };
-        Ok(MemoryStoreConfig { common_config })
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -375,15 +367,17 @@ impl AdminKeyValueStore for MemoryStore {
     }
 }
 
-/// Creates a default memory test config
-pub fn create_memory_store_test_config() -> MemoryStoreConfig {
-    let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
-    let common_config = CommonStoreConfig {
-        max_concurrent_queries: None,
-        max_stream_queries,
-        cache_size: 1000,
-    };
-    MemoryStoreConfig { common_config }
+#[cfg(with_testing)]
+impl TestKeyValueStore for MemoryStore {
+    async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
+        let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: None,
+            max_stream_queries,
+            cache_size: 1000,
+        };
+        Ok(MemoryStoreConfig { common_config })
+    }
 }
 
 /// Creates a test memory store for working.

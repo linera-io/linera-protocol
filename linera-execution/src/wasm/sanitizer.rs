@@ -404,7 +404,7 @@ impl<'bytecode> Sanitizer<'bytecode> {
     }
 }
 
-#[cfg(all(test, with_wasmer))]
+#[cfg(test)]
 mod tests {
     use linera_base::data_types::Bytecode;
 

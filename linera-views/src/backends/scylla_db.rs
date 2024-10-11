@@ -31,18 +31,18 @@ use thiserror::Error;
 
 #[cfg(with_metrics)]
 use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
-#[cfg(with_testing)]
-use crate::test_utils::generate_test_namespace;
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, TEST_CACHE_SIZE},
+    lru_caching::LruCachingStore,
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
     },
 };
+#[cfg(with_testing)]
+use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
 
 /// The client for ScyllaDb.
 /// * The session allows to pass queries
@@ -365,9 +365,11 @@ impl ScyllaDbClient {
 }
 
 /// We limit the number of connections that can be done for tests.
+#[cfg(with_testing)]
 const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
 /// The number of connections in the stream is limited for tests.
+#[cfg(with_testing)]
 const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 /// The maximal size of an operation on ScyllaDB seems to be 16M
@@ -554,12 +556,6 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
     type Config = ScyllaDbStoreConfig;
-
-    async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
-        let uri = create_scylla_db_test_uri();
-        let common_config = create_scylla_db_common_config();
-        Ok(ScyllaDbStoreConfig { uri, common_config })
-    }
 
     async fn connect(
         config: &Self::Config,
@@ -855,10 +851,6 @@ impl WritableKeyValueStore for ScyllaDbStore {
 impl AdminKeyValueStore for ScyllaDbStore {
     type Config = ScyllaDbStoreConfig;
 
-    async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::new_test_config().await
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -896,6 +888,19 @@ impl AdminKeyValueStore for ScyllaDbStore {
     }
 }
 
+#[cfg(with_testing)]
+impl TestKeyValueStore for ScyllaDbStore {
+    async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
+        let uri = "localhost:9042".to_string();
+        let common_config = CommonStoreConfig {
+            max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
+            max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
+            cache_size: TEST_CACHE_SIZE,
+        };
+        Ok(ScyllaDbStoreConfig { uri, common_config })
+    }
+}
+
 impl ScyllaDbStore {
     #[cfg(with_metrics)]
     fn inner(&self) -> &ScyllaDbStoreInternal {
@@ -916,29 +921,4 @@ impl ScyllaDbStore {
         let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
         Self { store }
     }
-}
-
-/// Creates the common initialization for RocksDB.
-pub fn create_scylla_db_common_config() -> CommonStoreConfig {
-    CommonStoreConfig {
-        max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
-        max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
-        cache_size: TEST_CACHE_SIZE,
-    }
-}
-
-/// Creates the URI used for the tests.
-pub fn create_scylla_db_test_uri() -> String {
-    "localhost:9042".to_string()
-}
-
-/// Creates a ScyllaDB test store.
-#[cfg(with_testing)]
-pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
-    let config = ScyllaDbStore::new_test_config().await.expect("config");
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    ScyllaDbStore::recreate_and_connect(&config, &namespace, root_key)
-        .await
-        .expect("store")
 }

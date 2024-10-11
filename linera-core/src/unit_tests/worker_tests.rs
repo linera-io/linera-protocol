@@ -45,8 +45,9 @@ use linera_execution::{
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
     context::MemoryContext,
-    memory::{create_memory_store_test_config, MemoryStore},
-    test_utils::generate_test_namespace,
+    memory::MemoryStore,
+    random::generate_test_namespace,
+    store::TestKeyValueStore as _,
     views::{CryptoHashView, RootView},
 };
 use test_case::test_case;
@@ -2886,7 +2887,7 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // Make a committee and worker (only used for signing certificates)
-    let store_config = create_memory_store_test_config();
+    let store_config = MemoryStore::new_test_config().await?;
     let namespace = generate_test_namespace();
     let root_key = &[];
     let store = DbStorage::<MemoryStore, _>::new_for_testing(

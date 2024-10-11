@@ -24,7 +24,7 @@ use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "scylladb", with_testing))]
-use linera_views::scylla_db::create_scylla_db_test_uri;
+use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
 use tonic_health::pb::{
@@ -57,14 +57,14 @@ pub async fn get_node_port() -> u16 {
 }
 
 #[cfg(with_testing)]
-async fn make_testing_config(database: Database) -> StorageConfig {
+async fn make_testing_config(database: Database) -> Result<StorageConfig> {
     match database {
         Database::Service => {
             #[cfg(feature = "storage-service")]
             {
                 let endpoint = storage_service_test_endpoint()
                     .expect("Reading LINERA_STORAGE_SERVICE environment variable");
-                StorageConfig::Service { endpoint }
+                Ok(StorageConfig::Service { endpoint })
             }
             #[cfg(not(feature = "storage-service"))]
             panic!("Database::Service is selected without the feature storage_service");
@@ -73,7 +73,7 @@ async fn make_testing_config(database: Database) -> StorageConfig {
             #[cfg(feature = "dynamodb")]
             {
                 let use_localstack = true;
-                StorageConfig::DynamoDb { use_localstack }
+                Ok(StorageConfig::DynamoDb { use_localstack })
             }
             #[cfg(not(feature = "dynamodb"))]
             panic!("Database::DynamoDb is selected without the feature aws");
@@ -81,8 +81,8 @@ async fn make_testing_config(database: Database) -> StorageConfig {
         Database::ScyllaDb => {
             #[cfg(feature = "scylladb")]
             {
-                let uri = create_scylla_db_test_uri();
-                StorageConfig::ScyllaDb { uri }
+                let config = ScyllaDbStore::new_test_config().await?;
+                Ok(StorageConfig::ScyllaDb { uri: config.uri })
             }
             #[cfg(not(feature = "scylladb"))]
             panic!("Database::ScyllaDb is selected without the feature sctlladb");
@@ -100,11 +100,11 @@ pub enum StorageConfigBuilder {
 
 impl StorageConfigBuilder {
     #[allow(unused_variables)]
-    pub async fn build(self, database: Database) -> StorageConfig {
+    pub async fn build(self, database: Database) -> Result<StorageConfig> {
         match self {
             #[cfg(with_testing)]
             StorageConfigBuilder::TestConfig => make_testing_config(database).await,
-            StorageConfigBuilder::ExistingConfig { storage_config } => storage_config,
+            StorageConfigBuilder::ExistingConfig { storage_config } => Ok(storage_config),
         }
     }
 }
@@ -251,7 +251,7 @@ impl LocalNetConfig {
             initial_amount: Amount::from_tokens(1_000_000),
             policy: ResourceControlPolicy::devnet(),
             testing_prng_seed: Some(37),
-            namespace: linera_views::test_utils::generate_test_namespace(),
+            namespace: linera_views::random::generate_test_namespace(),
             num_initial_validators: 4,
             num_shards,
             storage_config_builder,
@@ -265,7 +265,7 @@ impl LineraNetConfig for LocalNetConfig {
     type Net = LocalNet;
 
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)> {
-        let server_config = self.storage_config_builder.build(self.database).await;
+        let server_config = self.storage_config_builder.build(self.database).await?;
         let mut net = LocalNet::new(
             self.network,
             self.testing_prng_seed,

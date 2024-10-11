@@ -5,11 +5,13 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use async_trait::async_trait;
+#[cfg(with_dynamodb)]
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::{create_rocks_db_test_store, RocksDbStore};
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::{create_scylla_db_test_store, ScyllaDbStore};
-#[cfg(any(with_dynamodb, with_rocksdb, with_scylladb))]
+use linera_views::scylla_db::ScyllaDbStore;
+#[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
 use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{
     batch::{
@@ -22,23 +24,18 @@ use linera_views::{
     log_view::HashedLogView,
     lru_caching::{LruCachingMemoryStore, LruCachingStore},
     map_view::{ByteMapView, HashedMapView},
-    memory::{create_test_memory_store, MemoryStore},
+    memory::MemoryStore,
     queue_view::HashedQueueView,
+    random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
+    store::TestKeyValueStore as _,
     test_utils::{
-        self, get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
+        get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
         random_shuffle, span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
-};
-#[cfg(with_dynamodb)]
-use linera_views::{
-    dynamo_db::{
-        create_dynamo_db_common_config, DynamoDbStore, DynamoDbStoreConfig, LocalStackTestContext,
-    },
-    test_utils::generate_test_namespace,
 };
 use rand::{Rng, RngCore};
 
@@ -80,7 +77,7 @@ impl StateStorage for MemoryTestStorage {
     type Context = MemoryContext<usize>;
 
     async fn new() -> Self {
-        let store = create_test_memory_store();
+        let store = MemoryStore::new_test_store().await.unwrap();
         MemoryTestStorage {
             accessed_chains: BTreeSet::new(),
             store,
@@ -133,7 +130,7 @@ impl StateStorage for LruMemoryStorage {
     type Context = ViewContext<usize, LruCachingMemoryStore>;
 
     async fn new() -> Self {
-        let store = create_test_memory_store();
+        let store = MemoryStore::new_test_store().await.unwrap();
         let cache_size = 1000;
         let store = LruCachingStore::new(store, cache_size);
         LruMemoryStorage {
@@ -163,7 +160,7 @@ impl StateStorage for RocksDbTestStorage {
     type Context = ViewContext<usize, RocksDbStore>;
 
     async fn new() -> Self {
-        let store = create_rocks_db_test_store().await;
+        let store = RocksDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
         RocksDbTestStorage {
             store,
@@ -192,7 +189,7 @@ impl StateStorage for ScyllaDbTestStorage {
     type Context = ViewContext<usize, ScyllaDbStore>;
 
     async fn new() -> Self {
-        let store = create_scylla_db_test_store().await;
+        let store = ScyllaDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStorage {
             store,
@@ -221,18 +218,8 @@ impl StateStorage for DynamoDbTestStorage {
     type Context = ViewContext<usize, DynamoDbStore>;
 
     async fn new() -> Self {
-        let localstack = LocalStackTestContext::new().await.expect("localstack");
-        let namespace = generate_test_namespace();
-        let common_config = create_dynamo_db_common_config();
+        let store = DynamoDbStore::new_test_store().await.unwrap();
         let accessed_chains = BTreeSet::new();
-        let store_config = DynamoDbStoreConfig {
-            config: localstack.dynamo_db_config(),
-            common_config,
-        };
-        let root_key = &[];
-        let store = DynamoDbStore::recreate_and_connect(&store_config, &namespace, root_key)
-            .await
-            .expect("failed to create from scratch");
         DynamoDbTestStorage {
             store,
             accessed_chains,
@@ -1071,7 +1058,7 @@ async fn compute_hash_view_iter_large() -> Result<()> {
     let n_iter = 2;
     let n = 100;
     let k = 30;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     for _ in 0..n_iter {
         compute_hash_view_iter(&mut rng, n, k).await?;
     }
@@ -1169,7 +1156,7 @@ where
 #[tokio::test]
 async fn check_hash_memoization_persistence_large() -> Result<()> {
     let n = 100;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let key_value_vector = get_random_key_values(&mut rng, n);
     let mut store = MemoryTestStorage::new().await;
     check_hash_memoization_persistence(&mut rng, &mut store, key_value_vector).await
@@ -1202,7 +1189,7 @@ async fn check_large_write_dynamo_db() -> Result<()> {
     // By writing 1000 elements we seriously check the Amazon journaling
     // writing system.
     let n = 1000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut store = DynamoDbTestStorage::new().await;
     check_large_write(&mut store, vector).await
@@ -1211,7 +1198,7 @@ async fn check_large_write_dynamo_db() -> Result<()> {
 #[tokio::test]
 async fn check_large_write_memory() -> Result<()> {
     let n = 1000;
-    let mut rng = test_utils::make_deterministic_rng();
+    let mut rng = make_deterministic_rng();
     let vector = get_random_byte_vector(&mut rng, &[], n);
     let mut store = MemoryTestStorage::new().await;
     check_large_write(&mut store, vector).await

@@ -255,18 +255,19 @@ impl<P, S: Storage + Clone> Client<P, S> {
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, Blob>,
     ) -> ChainClient<P, S> {
-        let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) else {
-            panic!("Inserting already-existing chain {chain_id}");
-        };
-        e.insert(ChainState::new(
-            known_key_pairs,
-            admin_id,
-            block_hash,
-            timestamp,
-            next_block_height,
-            pending_block,
-            pending_blobs,
-        ));
+        // If the entry already exists we assume that the entry is more up to date than
+        // the arguments: If they were read from the wallet file, they might be stale.
+        if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
+            e.insert(ChainState::new(
+                known_key_pairs,
+                admin_id,
+                block_hash,
+                timestamp,
+                next_block_height,
+                pending_block,
+                pending_blobs,
+            ));
+        }
 
         ChainClient {
             client: self.clone(),

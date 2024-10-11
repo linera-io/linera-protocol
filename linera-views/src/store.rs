@@ -7,6 +7,8 @@ use std::{fmt::Debug, future::Future};
 
 use serde::de::DeserializeOwned;
 
+#[cfg(with_testing)]
+use crate::random::generate_test_namespace;
 use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
 
 /// The common initialization parameters for the `KeyValueStore`
@@ -143,9 +145,6 @@ pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
 
-    /// Obtains a test config
-    async fn new_test_config() -> Result<Self::Config, Self::Error>;
-
     /// Connects to an existing namespace using the given configuration.
     async fn connect(
         config: &Self::Config,
@@ -245,6 +244,24 @@ pub trait LocalKeyValueStore:
 impl<T> LocalKeyValueStore for T where
     T: LocalReadableKeyValueStore + LocalWritableKeyValueStore + LocalAdminKeyValueStore
 {
+}
+
+/// The functions needed for testing purposes
+#[cfg(with_testing)]
+pub trait TestKeyValueStore: KeyValueStore {
+    /// Obtains a test config
+    fn new_test_config(
+    ) -> impl std::future::Future<Output = Result<Self::Config, Self::Error>> + Send;
+
+    /// Creates a store for testing purposes
+    fn new_test_store() -> impl std::future::Future<Output = Result<Self, Self::Error>> + Send {
+        async {
+            let config = Self::new_test_config().await?;
+            let namespace = generate_test_namespace();
+            let root_key = &[];
+            Self::recreate_and_connect(&config, &namespace, root_key).await
+        }
+    }
 }
 
 #[doc(hidden)]

@@ -7,8 +7,6 @@ use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
-#[cfg(with_testing)]
-use linera_views::test_utils::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingStore,
@@ -17,16 +15,17 @@ use linera_views::{
         WritableKeyValueStore,
     },
 };
+#[cfg(with_testing)]
+use linera_views::{random::generate_test_namespace, store::TestKeyValueStore};
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
+#[cfg(with_testing)]
+use crate::common::storage_service_test_endpoint;
 #[cfg(with_metrics)]
 use crate::common::{LRU_STORAGE_SERVICE_METRICS, STORAGE_SERVICE_METRICS};
 use crate::{
-    common::{
-        storage_service_test_endpoint, KeyTag, ServiceStoreConfig, ServiceStoreError,
-        MAX_PAYLOAD_SIZE,
-    },
+    common::{KeyTag, ServiceStoreConfig, ServiceStoreError, MAX_PAYLOAD_SIZE},
     key_value_store::{
         statement::Operation, store_processor_client::StoreProcessorClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
@@ -381,11 +380,6 @@ impl ServiceStoreClientInternal {
 impl AdminKeyValueStore for ServiceStoreClientInternal {
     type Config = ServiceStoreConfig;
 
-    async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
-        let endpoint = storage_service_test_endpoint()?;
-        service_config_from_endpoint(&endpoint)
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -489,6 +483,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_delete_namespace(request).await?;
         Ok(())
+    }
+}
+
+#[cfg(with_testing)]
+impl TestKeyValueStore for ServiceStoreClientInternal {
+    async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
+        let endpoint = storage_service_test_endpoint()?;
+        service_config_from_endpoint(&endpoint)
     }
 }
 
@@ -611,10 +613,6 @@ impl WritableKeyValueStore for ServiceStoreClient {
 impl AdminKeyValueStore for ServiceStoreClient {
     type Config = ServiceStoreConfig;
 
-    async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
-        ServiceStoreClientInternal::new_test_config().await
-    }
-
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -649,6 +647,13 @@ impl AdminKeyValueStore for ServiceStoreClient {
 
     async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
         ServiceStoreClientInternal::delete(config, namespace).await
+    }
+}
+
+#[cfg(with_testing)]
+impl TestKeyValueStore for ServiceStoreClient {
+    async fn new_test_config() -> Result<ServiceStoreConfig, ServiceStoreError> {
+        ServiceStoreClientInternal::new_test_config().await
     }
 }
 

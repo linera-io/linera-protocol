@@ -30,11 +30,17 @@ pub enum GrpcProtoConversionError {
     #[error("Conversion failed due to missing field")]
     MissingField,
     #[error("Signature error: {0}")]
-    SignatureError(#[from] ed25519_dalek::SignatureError),
+    SignatureError(ed25519_dalek::SignatureError),
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
     #[error("Inconsistent outer/inner chain ids")]
     InconsistentChainId,
+}
+
+impl From<ed25519_dalek::SignatureError> for GrpcProtoConversionError {
+    fn from(signature_error: ed25519_dalek::SignatureError) -> Self {
+        GrpcProtoConversionError::SignatureError(signature_error)
+    }
 }
 
 /// Extracts an optional field from a Proto type and tries to map it.
