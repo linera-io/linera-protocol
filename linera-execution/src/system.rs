@@ -50,9 +50,6 @@ pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
 /// The relative index of the `ApplicationCreated` message created by the `CreateApplication`
 /// operation.
 pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
-/// The relative index of the `BytecodePublished` message created by the `PublishBytecode`
-/// operation.
-pub static PUBLISH_BYTECODE_MESSAGE_INDEX: u32 = 0;
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
@@ -341,8 +338,6 @@ pub enum SystemExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Incorrect chain ID: {0}")]
-    IncorrectChainId(ChainId),
     #[error("Invalid admin ID in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
     #[error("Invalid committees")]
@@ -389,8 +384,6 @@ pub enum SystemExecutionError {
     CannotRewindEpoch,
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
-    #[error("Attempt to create an application using unregistered bytecode identifier {0:?}")]
-    UnknownBytecodeId(BytecodeId),
     #[error("Application {0:?} is not registered by the chain")]
     UnknownApplicationId(Box<UserApplicationId>),
     #[error("Chain is not active yet.")]
@@ -1077,8 +1070,12 @@ mod tests {
             required_application_ids: vec![],
         };
         let mut txn_tracker = TransactionTracker::default();
-        view.context().extra().add_blob(contract_blob);
-        view.context().extra().add_blob(service_blob);
+        view.context()
+            .extra()
+            .add_blob(contract_blob)
+            .await
+            .unwrap();
+        view.context().extra().add_blob(service_blob).await.unwrap();
         let new_application = view
             .system
             .execute_operation(context, operation, &mut txn_tracker)

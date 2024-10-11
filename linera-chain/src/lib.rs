@@ -159,6 +159,4 @@ pub enum ChainExecutionContext {
     IncomingBundle(u32),
     Operation(u32),
     Block,
-    #[cfg(with_testing)]
-    ReadBytecodeLocation,
 }

@@ -59,19 +59,23 @@ where
     }
 }
 
-fn make_app_description() -> UserApplicationDescription {
+fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     let contract = Bytecode::new(b"contract".into());
     let service = Bytecode::new(b"service".into());
     let contract_blob = Blob::new_contract_bytecode(contract.compress());
     let service_blob = Blob::new_service_bytecode(service.compress());
 
     let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
-    UserApplicationDescription {
-        bytecode_id,
-        creation: make_admin_message_id(BlockHeight(2)),
-        required_application_ids: vec![],
-        parameters: vec![],
-    }
+    (
+        UserApplicationDescription {
+            bytecode_id,
+            creation: make_admin_message_id(BlockHeight(2)),
+            required_application_ids: vec![],
+            parameters: vec![],
+        },
+        contract_blob,
+        service_blob,
+    )
 }
 
 fn admin_id() -> ChainId {
@@ -182,17 +186,15 @@ async fn test_application_permissions() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // Create a mock application.
-    let app_description = make_app_description();
+    let (app_description, contract_blob, service_blob) = make_app_description();
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
-    let contract_blob = Blob::new_contract_bytecode(Bytecode::new(b"contract".into()).compress());
-    extra.add_blob(contract_blob);
-    let service_blob = Blob::new_service_bytecode(Bytecode::new(b"service".into()).compress());
-    extra.add_blob(service_blob);
+    extra.add_blob(contract_blob).await.unwrap();
+    extra.add_blob(service_blob).await.unwrap();
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {

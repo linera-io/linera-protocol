@@ -130,7 +130,7 @@ async fn test_fee_consumption(
     }
 
     let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
-    let (application_id, application) = applications
+    let (application_id, application, _contract_blob, _service_blob) = applications
         .next()
         .expect("Caller mock application should be registered");
 

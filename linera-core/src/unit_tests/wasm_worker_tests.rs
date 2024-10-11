@@ -158,7 +158,7 @@ where
         .await;
 
     let info = worker
-        .fully_handle_certificate(publish_certificate.clone(), vec![service_blob])
+        .fully_handle_certificate(publish_certificate.clone(), vec![service_blob.clone()])
         .await
         .unwrap()
         .info;
@@ -215,6 +215,8 @@ where
             Timestamp::from(2),
             application_description,
             initial_value_bytes.clone(),
+            contract_blob,
+            service_blob,
         )
         .await?;
     let create_block_proposal = HashedCertificateValue::new_confirmed(

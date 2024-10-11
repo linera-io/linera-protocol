@@ -290,6 +290,9 @@ pub trait ExecutionRuntimeContext {
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+
+    #[cfg(with_testing)]
+    async fn add_blob(&self, blob: Blob) -> Result<(), ViewError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -903,10 +906,6 @@ impl TestExecutionRuntimeContext {
             blobs: Arc::default(),
         }
     }
-
-    pub fn add_blob(&self, blob: Blob) {
-        self.blobs.insert(blob.id(), blob);
-    }
 }
 
 #[cfg(with_testing)]
@@ -966,6 +965,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
+    }
+
+    async fn add_blob(&self, blob: Blob) -> Result<(), ViewError> {
+        self.blobs.insert(blob.id(), blob);
+        Ok(())
     }
 }
 

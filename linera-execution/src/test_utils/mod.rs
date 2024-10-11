@@ -12,8 +12,8 @@ use std::{sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::BlockHeight,
-    identifiers::{BlobId, BytecodeId, ChainId, MessageId},
+    data_types::{Blob, BlockHeight, CompressedBytecode, OracleResponse},
+    identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId},
 };
 use linera_views::{
     context::Context,
@@ -31,20 +31,31 @@ use crate::{
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
-pub fn create_dummy_user_application_description(index: u64) -> UserApplicationDescription {
+pub fn create_dummy_user_application_description(
+    index: u64,
+) -> (UserApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
-    let contract_blob_hash = CryptoHash::new(&FakeBlob(String::from("contract")));
-    let service_blob_hash = CryptoHash::new(&FakeBlob(String::from("service")));
-    UserApplicationDescription {
-        bytecode_id: BytecodeId::new(contract_blob_hash, service_blob_hash),
-        creation: MessageId {
-            chain_id,
-            height: BlockHeight(index),
-            index: 1,
+    let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
+        compressed_bytes: String::from("contract").as_bytes().to_vec(),
+    });
+    let service_blob = Blob::new_service_bytecode(CompressedBytecode {
+        compressed_bytes: String::from("service").as_bytes().to_vec(),
+    });
+
+    (
+        UserApplicationDescription {
+            bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
+            creation: MessageId {
+                chain_id,
+                height: BlockHeight(index),
+                index: 1,
+            },
+            required_application_ids: vec![],
+            parameters: vec![],
         },
-        required_application_ids: vec![],
-        parameters: vec![],
-    }
+        contract_blob,
+        service_blob,
+    )
 }
 
 #[derive(Deserialize, Serialize)]
@@ -59,7 +70,7 @@ impl BcsSignable for FakeBlob {}
 pub async fn register_mock_applications<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication)>>
+) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
@@ -68,17 +79,22 @@ where
         create_dummy_user_application_registrations(&mut state.system.registry, count)
             .await?
             .into_iter()
-            .map(|(id, _description)| (id, MockApplication::default()))
+            .map(|(id, _description, contract_blob, service_blob)| {
+                (id, MockApplication::default(), contract_blob, service_blob)
+            })
             .collect();
     let extra = state.context().extra();
 
-    for (id, mock_application) in &mock_applications {
+    for (id, mock_application, contract_blob, service_blob) in &mock_applications {
         extra
             .user_contracts()
             .insert(*id, mock_application.clone().into());
         extra
             .user_services()
             .insert(*id, mock_application.clone().into());
+
+        extra.add_blob(contract_blob.clone()).await?;
+        extra.add_blob(service_blob.clone()).await?;
     }
 
     Ok(mock_applications.into_iter())
@@ -87,19 +103,20 @@ where
 pub async fn create_dummy_user_application_registrations<C>(
     registry: &mut ApplicationRegistryView<C>,
     count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription)>>
+) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)>>
 where
     C: Context + Clone + Send + Sync + 'static,
 {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {
-        let description = create_dummy_user_application_description(index);
+        let (description, contract_blob, service_blob) =
+            create_dummy_user_application_description(index);
         let id = registry.register_application(description.clone()).await?;
 
         assert_eq!(registry.describe_application(id).await?, description);
 
-        ids.push((id, description));
+        ids.push((id, description, contract_blob, service_blob));
     }
 
     Ok(ids)

@@ -23,6 +23,7 @@ use {
     crate::{
         ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
+    linera_base::data_types::Blob,
     linera_views::context::MemoryContext,
     std::sync::Arc,
 };
@@ -65,6 +66,8 @@ where
         local_time: Timestamp,
         application_description: UserApplicationDescription,
         instantiation_argument: Vec<u8>,
+        contract_blob: Blob,
+        service_blob: Blob,
     ) -> Result<(), ExecutionError> {
         let chain_id = application_description.creation.chain_id;
         let context = OperationContext {
@@ -88,6 +91,9 @@ where
             .extra()
             .user_contracts()
             .insert(application_id, contract);
+
+        self.context().extra().add_blob(contract_blob).await?;
+        self.context().extra().add_blob(service_blob).await?;
 
         let tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::default();
