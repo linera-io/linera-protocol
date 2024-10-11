@@ -35,14 +35,14 @@ function GraphQLApp() {
     throw Error("missing app query param");
   }
   if (owner == null) {
-     owner = '';
+    throw Error("missing owner query param");
   }
   if (port == null) {
     port = "8080";
   }
   return (
     <GraphQLProvider chainId={id} applicationId={app} port={port}>
-      <App chainId={id || ''} owner={owner} app={app}/>
+      <App chainId={id || ''} owner={owner} />
     </GraphQLProvider>
   );
 }

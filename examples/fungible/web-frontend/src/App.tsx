@@ -51,10 +51,9 @@ const NOTIFICATION_SUBSCRIPTION = gql`
 type AppProps = {
   chainId: string;
   owner: string;
-  app: string;
 };
 
-function App({ chainId, owner, app }: AppProps) {
+function App({ chainId, owner }: AppProps) {
   const [recipient, setRecipient] = useState("");
   const [targetChain, setTargetChain] = useState("");
   const [amount, setAmount] = useState("");
@@ -62,15 +61,12 @@ function App({ chainId, owner, app }: AppProps) {
   const [error, setError] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
 
-  const typeOwner = owner ? "User" : "Application";
-  const accountId = owner ? owner : app;
-
   let [
     balanceQuery,
     { data: balanceData, called: balanceCalled, error: balanceError },
   ] = useLazyQuery<AccountsQuery>(GET_BALANCE, {
     fetchPolicy: "network-only",
-    variables: { owner: `${typeOwner}:${accountId}` },
+    variables: { owner: `User:${owner}` },
   });
 
   useSubscription(NOTIFICATION_SUBSCRIPTION, {
@@ -132,7 +128,7 @@ function App({ chainId, owner, app }: AppProps) {
     event.preventDefault();
     makePayment({
       variables: {
-        owner: `${typeOwner}:${accountId}`,
+        owner: `User:${owner}`,
         amount,
         targetAccount: {
           chainId: targetChain,
@@ -161,7 +157,7 @@ function App({ chainId, owner, app }: AppProps) {
                 Owner:
               </p>
               <p className="text-slate-600 text-lg lg:text-lg text-wrap break-all">
-                {owner || app || ""}
+                {owner || ""}
               </p>
             </div>
             <div className="flex flex-col items-start justify-start gap-2">
