@@ -62,7 +62,6 @@ jobs:
         echo "LINERA_STORAGE_SERVICE=127.0.0.1:1235" >> "$GITHUB_ENV"
         echo "LINERA_WALLET=/tmp/WORK/wallet_0.json" >> "$GITHUB_ENV"
         echo "LINERA_STORAGE=rocksdb:/tmp/WORK/client_0.db" >> "$GITHUB_ENV"
-        echo "LINERA_FAUCET_URL=http://localhost:8079" >> "$GITHUB_ENV"
     - name: Build example applications
       run: |
         cd examples
@@ -90,7 +89,7 @@ jobs:
     - name: Run the remote-net tests
       run: |
         cargo run --bin linera -- faucet --amount 1000 --port 8079 &
-        cargo test -p linera-service remote_net_grpc --features remote-net
+        LINERA_FAUCET_URL=http://localhost:8079 cargo test -p linera-service remote_net_grpc --features remote-net
     - name: Check that the WIT files are up-to-date
       run: |
         cargo run --bin wit-generator -- -c
