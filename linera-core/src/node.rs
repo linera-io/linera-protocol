@@ -282,6 +282,10 @@ impl From<ChainError> for NodeError {
             ChainError::ExecutionError(
                 ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
                 _,
+            )
+            | ChainError::ExecutionError(
+                ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
+                _,
             ) => Self::BlobNotFoundOnRead(blob_id),
             error => Self::ChainError {
                 error: error.to_string(),

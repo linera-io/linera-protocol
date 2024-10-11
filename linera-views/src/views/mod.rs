@@ -4,7 +4,7 @@
 use std::{fmt::Debug, io::Write};
 
 use async_trait::async_trait;
-use linera_base::{crypto::CryptoHash, data_types::ArithmeticError};
+use linera_base::{crypto::CryptoHash, data_types::ArithmeticError, identifiers::BlobId};
 pub use linera_views_derive::{
     ClonableView, CryptoHashRootView, CryptoHashView, HashableView, RootView, View,
 };
@@ -154,6 +154,10 @@ pub enum ViewError {
     /// The value is too large for the client
     #[error("The value is too large for the client")]
     TooLargeValue,
+
+    /// Blob not found when trying to read it.
+    #[error("Blob not found on storage read: {0}")]
+    BlobNotFoundOnRead(BlobId),
 }
 
 impl ViewError {
