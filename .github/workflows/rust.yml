@@ -75,6 +75,10 @@ jobs:
       run: |
         cargo test -p linera-ethereum --features ethereum
         cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+    - name: Run the benchmark test
+      run: |
+        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
+        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
     - name: Run the validators
       run: |
         cargo build --features storage-service
@@ -96,10 +100,6 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
-    - name: Run the benchmark test
-      run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
-        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
     - name: Run Wasm application tests
       run: |
         cd examples
