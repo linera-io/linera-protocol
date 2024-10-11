@@ -962,7 +962,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         let bytes =
             if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
                 match response {
-                    OracleResponse::Post(bytes) => bytes,
+                    OracleResponse::Http(bytes) => bytes,
                     _ => return Err(ExecutionError::OracleResponseMismatch),
                 }
             } else {
@@ -978,7 +978,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
                     .recv_response()?
             };
         self.transaction_tracker
-            .add_oracle_response(OracleResponse::Post(bytes.clone()));
+            .add_oracle_response(OracleResponse::Http(bytes.clone()));
         Ok(bytes)
     }
 

@@ -770,8 +770,8 @@ pub enum OracleResponse {
         #[serde(with = "serde_bytes")]
         Vec<u8>,
     ),
-    /// The response from an HTTP POST request.
-    Post(
+    /// The response from an HTTP request.
+    Http(
         #[debug(with = "hex_debug")]
         #[serde(with = "serde_bytes")]
         Vec<u8>,
