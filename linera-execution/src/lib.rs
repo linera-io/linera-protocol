@@ -142,6 +142,8 @@ pub enum ExecutionError {
     JoinError(#[from] linera_base::task::Error),
     #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
 
@@ -184,8 +186,6 @@ pub enum ExecutionError {
     UnexpectedOracleResponse,
     #[error("Invalid JSON: {}", .0)]
     Json(#[from] serde_json::Error),
-    #[error(transparent)]
-    Bcs(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
