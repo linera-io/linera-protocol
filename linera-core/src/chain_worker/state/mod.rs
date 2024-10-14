@@ -345,20 +345,29 @@ where
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
-    /// chain or in the `recent_blobs` cache.
+    /// chain, in the `recent_blobs` cache or in storage.
     async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
         let pending_blobs = &self.chain.manager.get().pending_blobs;
         let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
             self.recent_blobs.try_get_many(blob_ids).await;
 
         let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
+        let mut missing_blobs = Vec::new();
         for blob_id in not_found_blobs {
             if let Some(blob) = pending_blobs.get(&blob_id) {
                 blobs.push(blob.clone());
+            } else if let Ok(blob) = self.storage.read_blob(blob_id).await {
+                blobs.push(blob);
+            } else {
+                missing_blobs.push(blob_id);
             }
         }
 
-        Ok(blobs)
+        if missing_blobs.is_empty() {
+            Ok(blobs)
+        } else {
+            Err(WorkerError::BlobsNotFound(missing_blobs))
+        }
     }
 
     /// Inserts a [`Blob`] into the worker's cache.
