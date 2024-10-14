@@ -3253,6 +3253,7 @@ dependencies = [
  "linera-views",
  "linera-views-derive",
  "linera-wasmer",
+ "linera-wasmer-compiler-singlepass",
  "linera-witty",
  "lru",
  "oneshot",
