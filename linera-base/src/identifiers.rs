@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
-    data_types::{BlobBytes, BlobContent, BlockHeight},
+    data_types::{BlobContent, BlockHeight},
     doc_scalar,
 };
 
@@ -228,7 +228,7 @@ impl BlobId {
     /// Creates a new `BlobId` from a `BlobContent`
     pub fn from_content(content: &BlobContent) -> Self {
         Self {
-            hash: CryptoHash::new(&BlobBytes(content.inner_bytes())),
+            hash: CryptoHash::new(&content.blob_bytes()),
             blob_type: content.into(),
         }
     }

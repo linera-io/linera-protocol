@@ -1030,6 +1030,11 @@ impl BlobContent {
         }
         .clone()
     }
+
+    /// Gets the `BlobBytes` for this `BlobContent`.
+    pub fn blob_bytes(&self) -> BlobBytes {
+        BlobBytes(self.inner_bytes())
+    }
 }
 
 impl From<Blob> for BlobContent {
