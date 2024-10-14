@@ -8,7 +8,7 @@ use std::{
     fmt::Debug,
 };
 
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 
 use crate::{
     batch::{
@@ -28,21 +28,6 @@ pub fn get_random_key_prefix() -> Vec<u8> {
     let value: usize = make_nondeterministic_rng().rng_mut().gen();
     bcs::serialize_into(&mut key_prefix, &value).unwrap();
     key_prefix
-}
-
-/// Shuffles the values entries randomly
-pub fn random_shuffle<R: Rng, T: Clone>(rng: &mut R, values: &mut [T]) {
-    let n = values.len();
-    for _ in 0..4 * n {
-        let index1: usize = rng.gen_range(0..n);
-        let index2: usize = rng.gen_range(0..n);
-        if index1 != index2 {
-            let val1 = values.get(index1).unwrap().clone();
-            let val2 = values.get(index2).unwrap().clone();
-            values[index1] = val2;
-            values[index2] = val1;
-        }
-    }
 }
 
 /// Takes a random number generator, a key_prefix and extends it by n random bytes.
@@ -71,7 +56,7 @@ pub fn get_random_kset<R: Rng>(rng: &mut R, n: usize, k: usize) -> Vec<usize> {
     for u in 0..n {
         values.push(u);
     }
-    random_shuffle(rng, &mut values);
+    values.shuffle(rng);
     values[..k].to_vec()
 }
 
@@ -132,7 +117,7 @@ pub fn span_random_reordering_put_delete<R: Rng>(
     for i in 0..n {
         indices.push(i);
     }
-    random_shuffle(rng, &mut indices);
+    indices.shuffle(rng);
     let mut indices_rev = vec![0; n];
     for i in 0..n {
         indices_rev[indices[i]] = i;

@@ -33,7 +33,7 @@ use linera_views::{
     store::TestKeyValueStore as _,
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
-        random_shuffle, span_random_reordering_put_delete,
+        span_random_reordering_put_delete,
     },
     views::{CryptoHashRootView, HashableView, Hasher, RootView, View, ViewError},
 };
@@ -1018,6 +1018,8 @@ where
 
 #[cfg(test)]
 async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) -> Result<()> {
+    use rand::seq::SliceRandom;
+
     let mut unord1_hashes = Vec::new();
     let mut unord2_hashes = Vec::new();
     let mut ord_hashes = Vec::new();
@@ -1026,7 +1028,7 @@ async fn compute_hash_view_iter<R: RngCore>(rng: &mut R, n: usize, k: usize) -> 
     let n_iter = 4;
     for _ in 0..n_iter {
         let mut key_value_vector_b = key_value_vector.clone();
-        random_shuffle(rng, &mut key_value_vector_b);
+        key_value_vector_b.shuffle(rng);
         let operations = span_random_reordering_put_delete(rng, info_op.clone());
         //
         let mut store1 = MemoryTestStorage::new().await;
