@@ -258,7 +258,7 @@ impl CachedContractModule {
     fn create_compilation_engine() -> Engine {
         #[cfg(not(web))]
         {
-            let mut compiler_config = wasmer::Singlepass::default();
+            let mut compiler_config = wasmer_compiler_singlepass::Singlepass::default();
             compiler_config.canonicalize_nans(true);
 
             wasmer::sys::EngineBuilder::new(compiler_config).into()

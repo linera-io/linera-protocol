@@ -66,6 +66,7 @@ wasmtime = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 wasmer = { workspace = true, optional = true, features = ["cranelift", "singlepass"] }
+wasmer-compiler-singlepass.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
