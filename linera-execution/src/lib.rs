@@ -987,7 +987,8 @@ impl TestExecutionRuntimeContext {
 }
 
 #[cfg(with_testing)]
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
