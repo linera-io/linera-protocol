@@ -61,7 +61,7 @@ where
     events: Vec<(StreamName, Vec<u8>, Vec<u8>)>,
     claim_requests: Vec<ClaimRequest>,
     expected_service_queries: VecDeque<(ApplicationId, String, String)>,
-    expected_http_requests: VecDeque<(http::Method, String, Vec<u8>, http::Response)>,
+    expected_http_requests: VecDeque<(http::Request, http::Response)>,
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_open_chain_calls:
@@ -811,15 +811,8 @@ where
     }
 
     /// Adds an expected `http_request` call, and the response it should return in the test.
-    pub fn add_expected_http_request(
-        &mut self,
-        method: http::Method,
-        url: String,
-        payload: Vec<u8>,
-        response: http::Response,
-    ) {
-        self.expected_http_requests
-            .push_back((method, url, payload, response));
+    pub fn add_expected_http_request(&mut self, request: http::Request, response: http::Response) {
+        self.expected_http_requests.push_back((request, response));
     }
 
     /// Adds an expected `read_data_blob` call, and the response it should return in the test.
@@ -859,25 +852,17 @@ where
         serde_json::from_str(&response).expect("Failed to deserialize response")
     }
 
-    /// Makes an HTTP request to the given URL as an oracle and returns the response.
+    /// Makes an HTTP `request` as an oracle and returns the HTTP response.
     ///
     /// Should only be used with queries where it is very likely that all validators will receive
     /// the same response, otherwise most block proposals will fail.
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    pub fn http_request(
-        &mut self,
-        method: http::Method,
-        url: &str,
-        payload: Vec<u8>,
-    ) -> http::Response {
+    pub fn http_request(&mut self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.pop_front();
-        let (expected_method, expected_url, expected_payload, response) =
-            maybe_request.expect("Unexpected HTTP request");
-        assert_eq!(method, expected_method);
-        assert_eq!(*url, expected_url);
-        assert_eq!(payload, expected_payload);
+        let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
+        assert_eq!(request, expected_request);
         response
     }
 

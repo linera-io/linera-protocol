@@ -614,10 +614,7 @@ pub trait BaseRuntime {
     /// Makes an HTTP request to the given URL and returns the answer, if any.
     fn perform_http_request(
         &mut self,
-        method: http::Method,
-        url: &str,
-        headers: Vec<(String, Vec<u8>)>,
-        payload: Vec<u8>,
+        request: http::Request,
     ) -> Result<http::Response, ExecutionError>;
 
     /// Ensures that the current time at block validation is `< timestamp`. Note that block

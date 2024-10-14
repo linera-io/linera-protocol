@@ -26,7 +26,7 @@ interface contract-system-api {
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, key: list<u8>, value: list<u8>);
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
-    perform-http-request: func(method: http-method, query: string, headers: list<tuple<string, list<u8>>>, payload: list<u8>) -> http-response;
+    perform-http-request: func(request: http-request) -> http-response;
     assert-before: func(timestamp: timestamp);
     read-data-blob: func(hash: crypto-hash) -> list<u8>;
     assert-data-blob-exists: func(hash: crypto-hash);
@@ -120,6 +120,13 @@ interface contract-system-api {
         connect,
         patch,
         trace,
+    }
+
+    record http-request {
+        method: http-method,
+        url: string,
+        headers: list<http-header>,
+        body: list<u8>,
     }
 
     record http-response {

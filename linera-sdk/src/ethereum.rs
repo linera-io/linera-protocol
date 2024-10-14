@@ -44,10 +44,13 @@ impl JsonRpcClient for ContractEthereumClient {
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         let response = contract_system_api::perform_http_request(
-            http::Method::Post.into(),
-            &self.url,
-            &[("Content-Type".to_owned(), b"application/json".to_vec())],
-            &payload,
+            &http::Request {
+                method: http::Method::Post,
+                url: self.url.clone(),
+                headers: Vec::from([http::Header::new("Content-Type", b"application/json")]),
+                body: payload,
+            }
+            .into(),
         );
 
         Ok(response.body)
@@ -79,10 +82,13 @@ impl JsonRpcClient for ServiceEthereumClient {
 
     async fn request_inner(&self, payload: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         let response = service_system_api::perform_http_request(
-            http::Method::Post.into(),
-            &self.url,
-            &[("Content-Type".to_owned(), b"application/json".to_vec())],
-            &payload,
+            &http::Request {
+                method: http::Method::Post,
+                url: self.url.clone(),
+                headers: Vec::from([http::Header::new("Content-Type", b"application/json")]),
+                body: payload,
+            }
+            .into(),
         );
 
         Ok(response.body)

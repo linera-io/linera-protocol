@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::hex_debug;
 
 /// An HTTP request.
-#[derive(Clone, Debug, WitLoad, WitStore, WitType)]
+#[derive(Clone, Debug, Eq, PartialEq, WitLoad, WitStore, WitType)]
 #[witty(name = "http-request")]
 pub struct Request {
     /// The [`Method`] used for the HTTP request.
