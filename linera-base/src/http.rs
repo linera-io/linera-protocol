@@ -27,6 +27,42 @@ pub struct Request {
     pub body: Vec<u8>,
 }
 
+impl Request {
+    /// Creates an HTTP GET [`Request`] for a `url`.
+    pub fn get(url: impl Into<String>) -> Self {
+        Request {
+            method: Method::Get,
+            url: url.into(),
+            headers: vec![],
+            body: vec![],
+        }
+    }
+
+    /// Creates an HTTP POST [`Request`] for a `url` with a `payload` that's an arbitrary bytes.
+    pub fn post(url: impl Into<String>, payload: impl Into<Vec<u8>>) -> Self {
+        Request {
+            method: Method::Post,
+            url: url.into(),
+            headers: vec![],
+            body: payload.into(),
+        }
+    }
+
+    /// Creates an HTTP POST [`Request`] for a `url` with a body that's the `payload` serialized to
+    /// JSON.
+    pub fn post_json(
+        url: impl Into<String>,
+        payload: &impl Serialize,
+    ) -> Result<Self, serde_json::Error> {
+        Ok(Request {
+            method: Method::Post,
+            url: url.into(),
+            headers: vec![Header::new("Content-Type", b"application/json")],
+            body: serde_json::to_vec(payload)?,
+        })
+    }
+}
+
 /// The method used in an HTTP request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, WitLoad, WitStore, WitType)]
 #[witty(name = "http-method")]
