@@ -1373,7 +1373,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             )?;
             let mut rng = Box::<dyn CryptoRng>::from(*testing_prng_seed);
             let mut chains = vec![];
-            for i in 0..*num_other_initial_chains {
+            for i in 0..=*num_other_initial_chains {
                 let description = ChainDescription::Root(i);
                 // Create keys.
                 let chain = UserChain::make_initial(&mut rng, description, timestamp);

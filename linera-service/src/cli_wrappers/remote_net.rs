@@ -43,15 +43,15 @@ impl LineraNetConfig for RemoteNetTestingConfig {
             .expect("Creating RemoteNet should not fail");
 
         let client = net.make_client().await;
-        // The tests assume we've created a genesis config with 10
+        // The tests assume we've created a genesis config with 2
         // chains with 10 tokens each. We create the first chain here
         client
             .wallet_init(&[], FaucetOption::NewChain(&self.faucet))
             .await
             .unwrap();
 
-        // And the remaining 9 here
-        for _ in 0..9 {
+        // And the remaining 2 here
+        for _ in 0..2 {
             client
                 .open_and_assign(&client, Amount::from_tokens(10))
                 .await
