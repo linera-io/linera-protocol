@@ -60,8 +60,8 @@ jobs:
     - name: Set environment variables
       run: |
         echo "LINERA_STORAGE_SERVICE=127.0.0.1:1235" >> "$GITHUB_ENV"
-        echo "LINERA_WALLET=/tmp/WORK/wallet_0.json" >> "$GITHUB_ENV"
-        echo "LINERA_STORAGE=rocksdb:/tmp/WORK/client_0.db" >> "$GITHUB_ENV"
+        echo "LINERA_WALLET=/tmp/local-linera-net/wallet_0.json" >> "$GITHUB_ENV"
+        echo "LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_0.db" >> "$GITHUB_ENV"
     - name: Build example applications
       run: |
         cd examples
@@ -81,8 +81,8 @@ jobs:
     - name: Run the validators
       run: |
         cargo build --features storage-service
-        mkdir /tmp/WORK
-        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/WORK --validators 4 --shards 4 &
+        mkdir /tmp/local-linera-net
+        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown

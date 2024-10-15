@@ -899,7 +899,7 @@ pub enum NetCommand {
         path: Option<String>,
 
         /// Run with a specific storage.
-        /// If none, then a linera-storage-service is spanned on a random free port.
+        /// If none, then a linera-storage-service is started on a random free port.
         #[arg(long)]
         storage: Option<String>,
     },
