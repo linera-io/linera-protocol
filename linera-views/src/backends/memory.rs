@@ -19,7 +19,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
     store::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
+        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
     },
 };
@@ -28,16 +28,15 @@ use crate::{
 #[derive(Debug)]
 pub struct MemoryStoreConfig {
     /// The common configuration of the key value store
-    pub common_config: CommonStoreConfig,
+    pub common_config: CommonStoreInternalConfig,
 }
 
 impl MemoryStoreConfig {
     /// Creates a `MemoryStoreConfig`. `max_concurrent_queries` and `cache_size` are not used.
     pub fn new(max_stream_queries: usize) -> Self {
-        let common_config = CommonStoreConfig {
+        let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
         };
         Self { common_config }
     }
@@ -277,10 +276,9 @@ impl MemoryStore {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, MemoryStoreError> {
-        let common_config = CommonStoreConfig {
+        let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = false;
@@ -294,10 +292,9 @@ impl MemoryStore {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, MemoryStoreError> {
-        let common_config = CommonStoreConfig {
+        let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
         let kill_on_drop = true;
@@ -307,6 +304,10 @@ impl MemoryStore {
 
 impl AdminKeyValueStore for MemoryStore {
     type Config = MemoryStoreConfig;
+
+    fn get_name() -> String {
+        "memory".to_string()
+    }
 
     async fn connect(
         config: &Self::Config,
@@ -322,10 +323,9 @@ impl AdminKeyValueStore for MemoryStore {
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, MemoryStoreError> {
         let max_stream_queries = self.max_stream_queries;
-        let common_config = CommonStoreConfig {
+        let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
         let mut memory_stores = MEMORY_STORES
@@ -371,10 +371,9 @@ impl AdminKeyValueStore for MemoryStore {
 impl TestKeyValueStore for MemoryStore {
     async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
         let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
-        let common_config = CommonStoreConfig {
+        let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries,
-            cache_size: 1000,
         };
         Ok(MemoryStoreConfig { common_config })
     }
