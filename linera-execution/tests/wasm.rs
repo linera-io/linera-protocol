@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use counter::CounterAbi;
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
+    data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
     identifiers::{Account, ChainDescription, ChainId},
 };
 use linera_execution::{
@@ -48,6 +48,12 @@ async fn test_fuel_for_counter_wasm_application(
         .register_application(app_desc.clone())
         .await?;
 
+    let app_blob = Blob::new_application_description(app_desc);
+
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+    let app_blob_id = app_blob.id();
+
     let contract =
         WasmContractModule::from_file("tests/fixtures/counter_contract.wasm", wasm_runtime).await?;
     view.context()
@@ -64,14 +70,15 @@ async fn test_fuel_for_counter_wasm_application(
 
     view.context()
         .extra()
-        .add_blobs(vec![contract_blob, service_blob]);
+        .add_blobs(vec![contract_blob, service_blob, app_blob]);
 
     let app_id = app_id.with_abi::<CounterAbi>();
 
     let context = OperationContext {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
-        index: Some(0),
+        txn_index: Some(0),
+        operation_index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
     };
@@ -93,7 +100,14 @@ async fn test_fuel_for_counter_wasm_application(
             chain_id: ChainId::root(0),
             owner: None,
         };
-        let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+        let mut txn_tracker = TransactionTracker::new(
+            0,
+            Some(vec![
+                OracleResponse::Blob(contract_blob_id),
+                OracleResponse::Blob(service_blob_id),
+                OracleResponse::Blob(app_blob_id),
+            ]),
+        );
         view.execute_operation(
             context,
             Timestamp::from(0),

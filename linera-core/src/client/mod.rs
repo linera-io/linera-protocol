@@ -29,11 +29,11 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Round, Timestamp,
+        UserApplicationDescription,
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
-        UserApplicationId,
+        Account, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -49,7 +49,7 @@ use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
-        CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
+        OPEN_CHAIN_MESSAGE_INDEX,
     },
     ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
     SystemQuery, SystemResponse,
@@ -2010,12 +2010,20 @@ where
     /// Queries an application.
     #[tracing::instrument(level = "trace", skip(query))]
     pub async fn query_application(&self, query: Query) -> Result<Response, ChainClientError> {
-        let response = self
-            .client
-            .local_node
-            .query_application(self.chain_id, query)
-            .await?;
-        Ok(response)
+        loop {
+            let result = self
+                .client
+                .local_node
+                .query_application(self.chain_id, query.clone())
+                .await;
+            if let Err(err) = &result {
+                if let Some(blob_ids) = err.get_blobs_not_found() {
+                    self.receive_certificates_for_blobs(blob_ids).await?;
+                    continue; // We found the missing blob: retry.
+                }
+            }
+            return Ok(result?);
+        }
     }
 
     /// Queries a system application.
@@ -2024,11 +2032,7 @@ where
         &self,
         query: SystemQuery,
     ) -> Result<SystemResponse, ChainClientError> {
-        let response = self
-            .client
-            .local_node
-            .query_application(self.chain_id, Query::System(query))
-            .await?;
+        let response = self.query_application(Query::System(query)).await?;
         match response {
             Response::System(response) => Ok(response),
             _ => Err(ChainClientError::InternalError(
@@ -2045,11 +2049,7 @@ where
         query: &A::Query,
     ) -> Result<A::QueryResponse, ChainClientError> {
         let query = Query::user(application_id, query)?;
-        let response = self
-            .client
-            .local_node
-            .query_application(self.chain_id, query)
-            .await?;
+        let response = self.query_application(query).await?;
         match response {
             Response::User(response) => Ok(serde_json::from_slice(&response)?),
             _ => Err(ChainClientError::InternalError(
@@ -2205,7 +2205,7 @@ where
         application_id: UserApplicationId,
         chain_id: Option<ChainId>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
+        let chain_id = chain_id.unwrap_or(application_id.creator_chain_id);
         self.execute_operation(Operation::System(SystemOperation::RequestApplication {
             application_id,
             chain_id,
@@ -2554,7 +2554,8 @@ where
         let service_blob = Blob::new_service_bytecode(compressed_service);
 
         let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
-        self.add_pending_blobs([contract_blob, service_blob]).await;
+        self.add_pending_blobs(vec![contract_blob, service_blob])
+            .await;
         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
             bytecode_id,
         }))
@@ -2594,7 +2595,7 @@ where
     }
 
     /// Adds pending blobs
-    pub async fn add_pending_blobs(&self, pending_blobs: impl IntoIterator<Item = Blob>) {
+    pub async fn add_pending_blobs(&self, pending_blobs: Vec<Blob>) {
         for blob in pending_blobs {
             self.client.local_node.cache_recent_blob(&blob).await;
             self.state_mut().insert_pending_blob(blob);
@@ -2648,28 +2649,25 @@ where
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+        let description = UserApplicationDescription {
             bytecode_id,
+            creator_chain_id: self.chain_id,
+            block_height: self.next_block_height(),
+            operation_index: 0,
             parameters,
+            required_application_ids: required_application_ids.clone(),
+        };
+        let id = UserApplicationId::from(&description);
+        let application_blob = Blob::new_application_description(description.clone());
+
+        self.add_pending_blobs(vec![application_blob]).await;
+        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+            id,
+            description,
             instantiation_argument,
-            required_application_ids,
         }))
         .await?
-        .try_map(|certificate| {
-            // The first message of the only operation created the application.
-            let creation = certificate
-                .value()
-                .executed_block()
-                .and_then(|executed_block| {
-                    executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-                })
-                .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
-            let id = ApplicationId {
-                creation,
-                bytecode_id,
-            };
-            Ok((id, certificate))
-        })
+        .try_map(|certificate| Ok((id, certificate)))
     }
 
     /// Creates a new committee and starts using it (admin chains only).

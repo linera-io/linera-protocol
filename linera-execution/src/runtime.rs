@@ -112,6 +112,8 @@ struct ApplicationStatus {
     signer: Option<Owner>,
     /// The current execution outcome of the application.
     outcome: RawExecutionOutcome<Vec<u8>>,
+    /// The chain ID that created the application.
+    creator_chain_id: ChainId,
 }
 
 /// A loaded application instance.
@@ -119,6 +121,7 @@ struct ApplicationStatus {
 struct LoadedApplication<Instance> {
     instance: Arc<Mutex<Instance>>,
     parameters: Vec<u8>,
+    creator_chain_id: ChainId,
 }
 
 impl<Instance> LoadedApplication<Instance> {
@@ -127,6 +130,7 @@ impl<Instance> LoadedApplication<Instance> {
         LoadedApplication {
             instance: Arc::new(Mutex::new(instance)),
             parameters: description.parameters,
+            creator_chain_id: description.creator_chain_id,
         }
     }
 }
@@ -138,6 +142,7 @@ impl<Instance> Clone for LoadedApplication<Instance> {
         LoadedApplication {
             instance: self.instance.clone(),
             parameters: self.parameters.clone(),
+            creator_chain_id: self.creator_chain_id,
         }
     }
 }
@@ -365,7 +370,7 @@ impl<UserInstance> SyncRuntimeInternal<UserInstance> {
     ) -> Result<(), ExecutionError> {
         ensure!(
             !self.active_applications.contains(&application_id),
-            ExecutionError::ReentrantCall(application_id)
+            ExecutionError::ReentrantCall(Box::new(application_id))
         );
         Ok(())
     }
@@ -430,7 +435,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
             authenticated_signer,
             authenticated_caller_id,
             height: self.height,
-            index: None,
+            txn_index: None,
+            operation_index: None,
         };
         self.push_application(ApplicationStatus {
             caller_id: authenticated_caller_id,
@@ -439,6 +445,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             // Allow further nested calls to be authenticated if this one is.
             signer: authenticated_signer,
             outcome: RawExecutionOutcome::default(),
+            creator_chain_id: application.creator_chain_id,
         });
         Ok((application.instance, callee_context))
     }
@@ -718,7 +725,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
     }
 
     fn application_creator_chain_id(&mut self) -> Result<ChainId, ExecutionError> {
-        Ok(self.current_application().id.creation.chain_id)
+        Ok(self.current_application().creator_chain_id)
     }
 
     fn application_parameters(&mut self) -> Result<Vec<u8>, ExecutionError> {
@@ -1118,6 +1125,7 @@ impl ContractSyncRuntime {
                 parameters: application.parameters.clone(),
                 signer,
                 outcome: RawExecutionOutcome::default(),
+                creator_chain_id: application.creator_chain_id,
             };
 
             runtime.push_application(status);
@@ -1459,6 +1467,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
                 parameters: application.parameters,
                 signer: None,
                 outcome: RawExecutionOutcome::default(),
+                creator_chain_id: application.creator_chain_id,
             });
             (query_context, application.instance)
         };

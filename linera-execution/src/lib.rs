@@ -148,7 +148,7 @@ pub enum ExecutionError {
     InvalidPromise,
 
     #[error("Attempted to perform a reentrant call to application {0}")]
-    ReentrantCall(UserApplicationId),
+    ReentrantCall(Box<UserApplicationId>),
     #[error(
         "Application {caller_id} attempted to perform a cross-application to {callee_id} call \
         from `finalize`"
@@ -177,7 +177,7 @@ pub enum ExecutionError {
     #[error("Owner is None")]
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
-    UnauthorizedApplication(UserApplicationId),
+    UnauthorizedApplication(Box<UserApplicationId>),
     #[error("Failed to make network reqwest")]
     ReqwestError(#[from] reqwest::Error),
     #[error("Encountered IO error")]
@@ -310,8 +310,10 @@ pub struct OperationContext {
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
+    /// The current index of the transaction.
+    pub txn_index: Option<u32>,
     /// The current index of the operation.
-    pub index: Option<u32>,
+    pub operation_index: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]

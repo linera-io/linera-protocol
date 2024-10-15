@@ -275,7 +275,9 @@ where
             } => {
                 let app_permissions = self.system.application_permissions.get();
                 if !app_permissions.can_close_chain(&application_id) {
-                    callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
+                    callback.respond(Err(ExecutionError::UnauthorizedApplication(Box::new(
+                        application_id,
+                    ))));
                 } else {
                     let chain_id = self.context().extra().chain_id();
                     self.system.close_chain(chain_id).await?;
