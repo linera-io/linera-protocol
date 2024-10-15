@@ -239,6 +239,10 @@ where
 {
     type Config = DualStoreConfig<S1::Config, S2::Config>;
 
+    fn get_name() -> String {
+        format!("dual {} and {}", S1::get_name(), S2::get_name())
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,

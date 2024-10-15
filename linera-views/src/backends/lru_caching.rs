@@ -17,13 +17,13 @@ use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
 use {linera_base::prometheus_util, prometheus::IntCounterVec};
 
-#[cfg(with_testing)]
-use crate::memory::MemoryStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
-    store::{ReadableKeyValueStore, RestrictedKeyValueStore, WithError, WritableKeyValueStore},
+    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
+#[cfg(with_testing)]
+use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
 #[cfg(with_metrics)]
 /// The total number of cache faults
@@ -101,7 +101,7 @@ impl<'a> LruPrefixCache {
 #[derive(Clone)]
 pub struct LruCachingStore<K> {
     /// The inner store that is called by the LRU cache one
-    pub store: K,
+    store: K,
     lru_read_values: Option<Arc<Mutex<LruPrefixCache>>>,
 }
 
@@ -272,6 +272,76 @@ where
     }
 }
 
+/// The configuration type for the `LruCachingStore`.
+pub struct LruSplittingConfig<C> {
+    /// The inner configuration of the `LruCachingStore`.
+    pub inner_config: C,
+    /// The cache size being used
+    pub cache_size: usize,
+}
+
+impl<K> AdminKeyValueStore for LruCachingStore<K>
+where
+    K: AdminKeyValueStore + Send + Sync,
+{
+    type Config = LruSplittingConfig<K::Config>;
+
+    fn get_name() -> String {
+        format!("lru splitting {}", K::get_name())
+    }
+
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
+        let store = K::connect(&config.inner_config, namespace, root_key).await?;
+        let cache_size = config.cache_size;
+        Ok(LruCachingStore::new(store, cache_size))
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key)?;
+        let cache_size = self.cache_size();
+        Ok(LruCachingStore::new(store, cache_size))
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
+        K::list_all(&config.inner_config).await
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
+        K::delete_all(&config.inner_config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
+        K::exists(&config.inner_config, namespace).await
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        K::create(&config.inner_config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        K::delete(&config.inner_config, namespace).await
+    }
+}
+
+#[cfg(with_testing)]
+impl<K> TestKeyValueStore for LruCachingStore<K>
+where
+    K: TestKeyValueStore + Send + Sync,
+{
+    async fn new_test_config() -> Result<LruSplittingConfig<K::Config>, K::Error> {
+        let inner_config = K::new_test_config().await?;
+        let cache_size = TEST_CACHE_SIZE;
+        Ok(LruSplittingConfig {
+            inner_config,
+            cache_size,
+        })
+    }
+}
+
 fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>> {
     if cache_size == 0 {
         None
@@ -280,16 +350,24 @@ fn new_lru_prefix_cache(cache_size: usize) -> Option<Arc<Mutex<LruPrefixCache>>>
     }
 }
 
-impl<K> LruCachingStore<K>
-where
-    K: RestrictedKeyValueStore,
-{
+impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
     pub fn new(store: K, cache_size: usize) -> Self {
         let lru_read_values = new_lru_prefix_cache(cache_size);
         Self {
             store,
             lru_read_values,
+        }
+    }
+
+    /// Gets the `cache_size`
+    pub fn cache_size(&self) -> usize {
+        match &self.lru_read_values {
+            None => 0,
+            Some(lru_read_values) => {
+                let lru_read_values = lru_read_values.lock().unwrap();
+                lru_read_values.max_cache_size
+            }
         }
     }
 }

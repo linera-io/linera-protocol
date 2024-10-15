@@ -2,28 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
 
 use linera_base::command::resolve_binary;
-#[cfg(with_metrics)]
-use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
-    store::{CommonStoreConfig, KeyValueStoreError},
+    store::{CommonStoreInternalConfig, KeyValueStoreError},
     views::MIN_VIEW_TAG,
 };
 use thiserror::Error;
 use tonic::Status;
-
-/// The shared store is potentially handling an infinite number of connections.
-/// However, for testing or some other purpose we really need to decrease the number of
-/// connections.
-#[cfg(with_testing)]
-const TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES: usize = 10;
-
-/// The number of entries in a stream of the tests can be controlled by this parameter for tests.
-#[cfg(with_testing)]
-const TEST_SHARED_STORE_MAX_STREAM_QUERIES: usize = 10;
 
 // The maximal block size on GRPC is 4M.
 //
@@ -78,33 +64,16 @@ impl KeyValueStoreError for ServiceStoreError {
     const BACKEND: &'static str = "service";
 }
 
-#[cfg(with_testing)]
-pub fn create_shared_store_common_config() -> CommonStoreConfig {
-    CommonStoreConfig {
-        max_concurrent_queries: Some(TEST_SHARED_STORE_MAX_CONCURRENT_QUERIES),
-        max_stream_queries: TEST_SHARED_STORE_MAX_STREAM_QUERIES,
-        cache_size: usize::MAX,
-    }
-}
-
 pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
     Ok(std::env::var("LINERA_STORAGE_SERVICE")?)
 }
 
-#[cfg(with_metrics)]
-pub(crate) static STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("storage service".to_string()));
-
-#[cfg(with_metrics)]
-pub(crate) static LRU_STORAGE_SERVICE_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("storage service lru caching".to_string()));
-
 #[derive(Debug, Clone)]
-pub struct ServiceStoreConfig {
+pub struct ServiceStoreInternalConfig {
     /// The endpoint used by the shared store
     pub endpoint: String,
     /// The common configuration of the key value store
-    pub common_config: CommonStoreConfig,
+    pub common_config: CommonStoreInternalConfig,
 }
 
 impl ServiceStoreConfig {

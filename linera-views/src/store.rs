@@ -13,6 +13,15 @@ use crate::{batch::Batch, common::from_bytes_option, views::ViewError};
 
 /// The common initialization parameters for the `KeyValueStore`
 #[derive(Debug, Clone)]
+pub struct CommonStoreInternalConfig {
+    /// The number of concurrent to a database
+    pub max_concurrent_queries: Option<usize>,
+    /// The number of streams used for the async streams.
+    pub max_stream_queries: usize,
+}
+
+/// The common initialization parameters for the `KeyValueStore`
+#[derive(Debug, Clone)]
 pub struct CommonStoreConfig {
     /// The number of concurrent to a database
     pub max_concurrent_queries: Option<usize>,
@@ -20,6 +29,16 @@ pub struct CommonStoreConfig {
     pub max_stream_queries: usize,
     /// The cache size being used.
     pub cache_size: usize,
+}
+
+impl CommonStoreConfig {
+    /// Gets the reduced `CommonStoreInternalConfig`.
+    pub fn reduced(&self) -> CommonStoreInternalConfig {
+        CommonStoreInternalConfig {
+            max_concurrent_queries: self.max_concurrent_queries,
+            max_stream_queries: self.max_stream_queries,
+        }
+    }
 }
 
 impl Default for CommonStoreConfig {
@@ -144,6 +163,8 @@ pub trait LocalWritableKeyValueStore: WithError {
 pub trait LocalAdminKeyValueStore: WithError + Sized {
     /// The configuration needed to interact with a new store.
     type Config: Send + Sync;
+    /// The name of this class of stores
+    fn get_name() -> String;
 
     /// Connects to an existing namespace using the given configuration.
     async fn connect(

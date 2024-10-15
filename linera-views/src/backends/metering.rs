@@ -3,7 +3,10 @@
 
 //! Adds metrics to a key-value store.
 
-use std::sync::LazyLock;
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    sync::{Arc, LazyLock, Mutex},
+};
 
 use convert_case::{Case, Casing};
 use linera_base::prometheus_util::{
@@ -11,25 +14,34 @@ use linera_base::prometheus_util::{
 };
 use prometheus::{HistogramVec, IntCounterVec};
 
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::Batch,
     store::{
-        KeyIterable as _, KeyValueIterable as _, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        AdminKeyValueStore, KeyIterable as _, KeyValueIterable as _, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
 };
 
 #[derive(Clone)]
 /// The implementation of the `KeyValueStoreMetrics` for the `KeyValueStore`.
 pub struct KeyValueStoreMetrics {
-    read_value_bytes: HistogramVec,
-    contains_key: HistogramVec,
-    contains_keys: HistogramVec,
-    read_multi_values_bytes: HistogramVec,
-    find_keys_by_prefix: HistogramVec,
-    find_key_values_by_prefix: HistogramVec,
-    write_batch: HistogramVec,
-    clear_journal: HistogramVec,
+    read_value_bytes_latency: HistogramVec,
+    contains_key_latency: HistogramVec,
+    contains_keys_latency: HistogramVec,
+    read_multi_values_bytes_latency: HistogramVec,
+    find_keys_by_prefix_latency: HistogramVec,
+    find_key_values_by_prefix_latency: HistogramVec,
+    write_batch_latency: HistogramVec,
+    clear_journal_latency: HistogramVec,
+    connect_latency: HistogramVec,
+    clone_with_root_key_latency: HistogramVec,
+    list_all_latency: HistogramVec,
+    delete_all_latency: HistogramVec,
+    exists_latency: HistogramVec,
+    create_latency: HistogramVec,
+    delete_latency: HistogramVec,
     read_value_none_cases: IntCounterVec,
     read_value_key_size: HistogramVec,
     read_value_value_size: HistogramVec,
@@ -45,32 +57,34 @@ pub struct KeyValueStoreMetrics {
     find_key_values_by_prefix_num_keys: HistogramVec,
     find_key_values_by_prefix_key_values_size: HistogramVec,
     write_batch_size: HistogramVec,
+    list_all_sizes: HistogramVec,
+    exists_true_cases: IntCounterVec,
 }
 
-/// The metrics for the "rocks db"
-#[cfg(with_rocksdb)]
-pub(crate) static ROCKS_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("rocks db internal".to_string()));
+#[derive(Default)]
+struct StoreMetrics {
+    stores: BTreeMap<String, Arc<KeyValueStoreMetrics>>,
+}
 
-/// The metrics for the "dynamo db"
-#[cfg(with_dynamodb)]
-pub(crate) static DYNAMO_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("dynamo db internal".to_string()));
+/// The global variables of the RocksDB stores
+static STORE_COUNTERS: LazyLock<Mutex<StoreMetrics>> =
+    LazyLock::new(|| Mutex::new(StoreMetrics::default()));
 
-/// The metrics for the "scylla db"
-#[cfg(with_scylladb)]
-pub(crate) static SCYLLA_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("scylla db internal".to_string()));
-
-/// The metrics for the "scylla db"
-#[cfg(any(with_rocksdb, with_dynamodb))]
-pub(crate) static VALUE_SPLITTING_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
-
-/// The metrics for the "lru caching"
-#[cfg(any(with_rocksdb, with_dynamodb, with_scylladb))]
-pub(crate) static LRU_CACHING_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
+fn get_counter(name: &str) -> Arc<KeyValueStoreMetrics> {
+    let mut store_metrics = STORE_COUNTERS.lock().unwrap();
+    let key = name.to_string();
+    match store_metrics.stores.entry(key) {
+        Entry::Occupied(entry) => {
+            let entry = entry.into_mut();
+            entry.clone()
+        }
+        Entry::Vacant(entry) => {
+            let store_metric = Arc::new(KeyValueStoreMetrics::new(name.to_string()));
+            entry.insert(store_metric.clone());
+            store_metric
+        }
+    }
+}
 
 impl KeyValueStoreMetrics {
     /// Creation of a named Metered counter.
@@ -79,175 +93,153 @@ impl KeyValueStoreMetrics {
         let var_name = name.replace(' ', "_");
         let title_name = name.to_case(Case::Snake);
 
-        let read_value_bytes1 = format!("{}_read_value_bytes_latency", var_name);
-        let read_value_bytes2 = format!("{} read value bytes latency", title_name);
-        let read_value_bytes =
-            register_histogram_vec(&read_value_bytes1, &read_value_bytes2, &[], None);
+        let entry1 = format!("{}_read_value_bytes_latency", var_name);
+        let entry2 = format!("{} read value bytes latency", title_name);
+        let read_value_bytes_latency = register_histogram_vec(&entry1, &entry2, &[], None):
 
-        let contains_key1 = format!("{}_contains_key_latency", var_name);
-        let contains_key2 = format!("{} contains key latency", title_name);
-        let contains_key = register_histogram_vec(&contains_key1, &contains_key2, &[], None);
+        let entry1 = format!("{}_contains_key_latency", var_name);
+        let entry2 = format!("{} contains key latency", title_name);
+        let contains_key_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let contains_keys1 = format!("{}_contains_keys_latency", var_name);
-        let contains_keys2 = format!("{} contains keys latency", title_name);
-        let contains_keys = register_histogram_vec(&contains_keys1, &contains_keys2, &[], None);
+        let entry1 = format!("{}_contains_keys_latency", var_name);
+        let entry2 = format!("{} contains keys latency", title_name);
+        let contains_keys_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let read_multi_values1 = format!("{}_read_multi_value_bytes_latency", var_name);
-        let read_multi_values2 = format!("{} read multi value bytes latency", title_name);
-        let read_multi_values_bytes =
-            register_histogram_vec(&read_multi_values1, &read_multi_values2, &[], None);
+        let entry1 = format!("{}_read_multi_value_bytes_latency", var_name);
+        let entry2 = format!("{} read multi value bytes latency", title_name);
+        let read_multi_values_bytes_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_keys1 = format!("{}_find_keys_by_prefix_latency", var_name);
-        let find_keys2 = format!("{} find keys by prefix latency", title_name);
-        let find_keys_by_prefix = register_histogram_vec(&find_keys1, &find_keys2, &[], None);
+        let entry1 = format!("{}_find_keys_by_prefix_latency", var_name);
+        let entry2 = format!("{} find keys by prefix latency", title_name);
+        let find_keys_by_prefix_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_key_values1 = format!("{}_find_key_values_by_prefix_latency", var_name);
-        let find_key_values2 = format!("{} find key values by prefix latency", title_name);
-        let find_key_values_by_prefix =
-            register_histogram_vec(&find_key_values1, &find_key_values2, &[], None);
+        let entry1 = format!("{}_find_key_values_by_prefix_latency", var_name);
+        let entry2 = format!("{} find key values by prefix latency", title_name);
+        let find_key_values_by_prefix_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let write_batch1 = format!("{}_write_batch_latency", var_name);
-        let write_batch2 = format!("{} write batch latency", title_name);
-        let write_batch = register_histogram_vec(&write_batch1, &write_batch2, &[], None);
+        let entry1 = format!("{}_write_batch_latency", var_name);
+        let entry2 = format!("{} write batch latency", title_name);
+        let write_batch_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let clear_journal1 = format!("{}_clear_journal_latency", var_name);
-        let clear_journal2 = format!("{} clear journal latency", title_name);
-        let clear_journal = register_histogram_vec(&clear_journal1, &clear_journal2, &[], None);
+        let entry1 = format!("{}_clear_journal_latency", var_name);
+        let entry2 = format!("{} clear journal latency", title_name);
+        let clear_journal_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let read_value_none_cases1 = format!("{}_read_value_number_none_cases", var_name);
-        let read_value_none_cases2 = format!("{} read value number none cases", title_name);
-        let read_value_none_cases =
-            register_int_counter_vec(&read_value_none_cases1, &read_value_none_cases2, &[]);
+        let entry1 = format!("{}_connect_latency", var_name);
+        let entry2 = format!("{} connect latency", title_name);
+        let connect_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let read_value_key_size1 = format!("{}_read_value_key_size", var_name);
-        let read_value_key_size2 = format!("{} read value key size", title_name);
-        let read_value_key_size =
-            register_histogram_vec(&read_value_key_size1, &read_value_key_size2, &[], None);
+        let entry1 = format!("{}_clone_with_root_key_latency", var_name);
+        let entry2 = format!("{} clone with root key latency", title_name);
+        let clone_with_root_key_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let read_value_value_size1 = format!("{}_read_value_value_size", var_name);
-        let read_value_value_size2 = format!("{} read value value size", title_name);
-        let read_value_value_size =
-            register_histogram_vec(&read_value_value_size1, &read_value_value_size2, &[], None);
+        let entry1 = format!("{}_list_all_latency", var_name);
+        let entry2 = format!("{} list all latency", title_name);
+        let list_all_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let read_multi_values_num_entries1 = format!("{}_read_multi_values_num_entries", var_name);
-        let read_multi_values_num_entries2 =
-            format!("{} read multi values num entries", title_name);
-        let read_multi_values_num_entries = register_histogram_vec(
-            &read_multi_values_num_entries1,
-            &read_multi_values_num_entries2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_delete_all_latency", var_name);
+        let entry2 = format!("{} delete all latency", title_name);
+        let delete_all_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let read_multi_values_key_sizes1 = format!("{}_read_multi_values_key_sizes", var_name);
-        let read_multi_values_key_sizes2 = format!("{} read multi values key sizes", title_name);
-        let read_multi_values_key_sizes = register_histogram_vec(
-            &read_multi_values_key_sizes1,
-            &read_multi_values_key_sizes2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_exists_latency", var_name);
+        let entry2 = format!("{} exists latency", title_name);
+        let exists_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let contains_keys_num_entries1 = format!("{}_contains_keys_num_entries", var_name);
-        let contains_keys_num_entries2 = format!("{} contains keys num entries", title_name);
-        let contains_keys_num_entries = register_histogram_vec(
-            &contains_keys_num_entries1,
-            &contains_keys_num_entries2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_create_latency", var_name);
+        let entry2 = format!("{} create latency", title_name);
+        let create_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let contains_keys_key_sizes1 = format!("{}_contains_keys_key_sizes", var_name);
-        let contains_keys_key_sizes2 = format!("{} contains keys key sizes", title_name);
-        let contains_keys_key_sizes = register_histogram_vec(
-            &contains_keys_key_sizes1,
-            &contains_keys_key_sizes2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_delete_latency", var_name);
+        let entry2 = format!("{} delete latency", title_name);
+        let delete_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let contains_key_key_size1 = format!("{}_contains_key_key_size", var_name);
-        let contains_key_key_size2 = format!("{} contains key key size", title_name);
-        let contains_key_key_size =
-            register_histogram_vec(&contains_key_key_size1, &contains_key_key_size2, &[], None);
+        let entry1 = format!("{}_read_value_number_none_cases", var_name);
+        let entry2 = format!("{} read value number none cases", title_name);
+        let read_value_none_cases = register_int_counter_vec(&entry1, &entry2, &[]);
 
-        let find_keys_by_prefix_prefix_size1 =
-            format!("{}_find_keys_by_prefix_prefix_size", var_name);
-        let find_keys_by_prefix_prefix_size2 =
-            format!("{} find keys by prefix prefix size", title_name);
-        let find_keys_by_prefix_prefix_size = register_histogram_vec(
-            &find_keys_by_prefix_prefix_size1,
-            &find_keys_by_prefix_prefix_size2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_read_value_key_size", var_name);
+        let entry2 = format!("{} read value key size", title_name);
+        let read_value_key_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_keys_by_prefix_num_keys1 = format!("{}_find_keys_by_prefix_num_keys", var_name);
-        let find_keys_by_prefix_num_keys2 = format!("{} find keys by prefix num keys", title_name);
-        let find_keys_by_prefix_num_keys = register_histogram_vec(
-            &find_keys_by_prefix_num_keys1,
-            &find_keys_by_prefix_num_keys2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_read_value_value_size", var_name);
+        let entry2 = format!("{} read value value size", title_name);
+        let read_value_value_size = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_keys_by_prefix_keys_size1 = format!("{}_find_keys_by_prefix_keys_size", var_name);
-        let find_keys_by_prefix_keys_size2 =
-            format!("{} find keys by prefix keys size", title_name);
-        let find_keys_by_prefix_keys_size = register_histogram_vec(
-            &find_keys_by_prefix_keys_size1,
-            &find_keys_by_prefix_keys_size2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_read_multi_values_num_entries", var_name);
+        let entry2 = format!("{} read multi values num entries", title_name);
+        let read_multi_values_num_entries = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_key_values_by_prefix_prefix_size1 =
-            format!("{}_find_key_values_by_prefix_prefix_size", var_name);
-        let find_key_values_by_prefix_prefix_size2 =
-            format!("{} find key values by prefix prefix size", title_name);
-        let find_key_values_by_prefix_prefix_size = register_histogram_vec(
-            &find_key_values_by_prefix_prefix_size1,
-            &find_key_values_by_prefix_prefix_size2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_read_multi_values_key_sizes", var_name);
+        let entry2 = format!("{} read multi values key sizes", title_name);
+        let read_multi_values_key_sizes = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_key_values_by_prefix_num_keys1 =
-            format!("{}_find_key_values_by_prefix_num_keys", var_name);
-        let find_key_values_by_prefix_num_keys2 =
-            format!("{} find key values by prefix num keys", title_name);
-        let find_key_values_by_prefix_num_keys = register_histogram_vec(
-            &find_key_values_by_prefix_num_keys1,
-            &find_key_values_by_prefix_num_keys2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_contains_keys_num_entries", var_name);
+        let entry2 = format!("{} contains keys num entries", title_name);
+        let contains_keys_num_entries = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let find_key_values_by_prefix_key_values_size1 =
-            format!("{}_find_key_values_by_prefix_key_values_size", var_name);
-        let find_key_values_by_prefix_key_values_size2 =
-            format!("{} find key values by prefix key values size", title_name);
-        let find_key_values_by_prefix_key_values_size = register_histogram_vec(
-            &find_key_values_by_prefix_key_values_size1,
-            &find_key_values_by_prefix_key_values_size2,
-            &[],
-            None,
-        );
+        let entry1 = format!("{}_contains_keys_key_sizes", var_name);
+        let entry2 = format!("{} contains keys key sizes", title_name);
+        let contains_keys_key_sizes = register_histogram_vec(&entry1, &entry2, &[], None);
 
-        let write_batch_size1 = format!("{}_write_batch_size", var_name);
-        let write_batch_size2 = format!("{} write batch size", title_name);
-        let write_batch_size =
-            register_histogram_vec(&write_batch_size1, &write_batch_size2, &[], None);
+        let entry1 = format!("{}_contains_key_key_size", var_name);
+        let entry2 = format!("{} contains key key size", title_name);
+        let contains_key_key_size = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_find_keys_by_prefix_prefix_size", var_name);
+        let entry2 = format!("{} find keys by prefix prefix size", title_name);
+        let find_keys_by_prefix_prefix_size = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_find_keys_by_prefix_num_keys", var_name);
+        let entry2 = format!("{} find keys by prefix num keys", title_name);
+        let find_keys_by_prefix_num_keys = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_find_keys_by_prefix_keys_size", var_name);
+        let entry2 = format!("{} find keys by prefix keys size", title_name);
+        let find_keys_by_prefix_keys_size = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_find_key_values_by_prefix_prefix_size", var_name);
+        let entry2 = format!("{} find key values by prefix prefix size", title_name);
+        let find_key_values_by_prefix_prefix_size =
+            register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_find_key_values_by_prefix_num_keys", var_name);
+        let entry2 = format!("{} find key values by prefix num keys", title_name);
+        let find_key_values_by_prefix_num_keys =
+            register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_find_key_values_by_prefix_key_values_size", var_name);
+        let entry2 = format!("{} find key values by prefix key values size", title_name);
+        let find_key_values_by_prefix_key_values_size =
+            register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_write_batch_size", var_name);
+        let entry2 = format!("{} write batch size", title_name);
+        let write_batch_size = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_list_all_sizes", var_name);
+        let entry2 = format!("{} list all sizes", title_name);
+        let list_all_sizes = register_histogram_vec(&entry1, &entry2, &[], None);
+
+        let entry1 = format!("{}_exists_true_cases", var_name);
+        let entry2 = format!("{} exists true cases", title_name);
+        let exists_true_cases = register_int_counter_vec(&entry1, &entry2, &[]);
 
         KeyValueStoreMetrics {
-            read_value_bytes,
-            contains_key,
-            contains_keys,
-            read_multi_values_bytes,
-            find_keys_by_prefix,
-            find_key_values_by_prefix,
-            write_batch,
-            clear_journal,
+            read_value_bytes_latency,
+            contains_key_latency,
+            contains_keys_latency,
+            read_multi_values_bytes_latency,
+            find_keys_by_prefix_latency,
+            find_key_values_by_prefix_latency,
+            write_batch_latency,
+            clear_journal_latency,
+            connect_latency,
+            clone_with_root_key_latency,
+            list_all_latency,
+            delete_all_latency,
+            exists_latency,
+            create_latency,
+            delete_latency,
             read_value_none_cases,
             read_value_key_size,
             read_value_value_size,
@@ -263,6 +255,8 @@ impl KeyValueStoreMetrics {
             find_key_values_by_prefix_num_keys,
             find_key_values_by_prefix_key_values_size,
             write_batch_size,
+            list_all_sizes,
+            exists_true_cases,
         }
     }
 }
@@ -271,9 +265,9 @@ impl KeyValueStoreMetrics {
 #[derive(Clone)]
 pub struct MeteredStore<K> {
     /// the metrics being stored
-    counter: &'static LazyLock<KeyValueStoreMetrics>,
+    counter: Arc<KeyValueStoreMetrics>,
     /// The underlying store of the metered store
-    pub store: K,
+    store: K,
 }
 
 impl<K> WithError for MeteredStore<K>
@@ -296,7 +290,7 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-        let _latency = self.counter.read_value_bytes.measure_latency();
+        let _latency = self.counter.read_value_bytes_latency.measure_latency();
         self.counter
             .read_value_key_size
             .with_label_values(&[])
@@ -318,7 +312,7 @@ where
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
-        let _latency = self.counter.contains_key.measure_latency();
+        let _latency = self.counter.contains_key_latency.measure_latency();
         self.counter
             .contains_key_key_size
             .with_label_values(&[])
@@ -327,7 +321,7 @@ where
     }
 
     async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error> {
-        let _latency = self.counter.contains_keys.measure_latency();
+        let _latency = self.counter.contains_keys_latency.measure_latency();
         self.counter
             .contains_keys_num_entries
             .with_label_values(&[])
@@ -344,7 +338,10 @@ where
         &self,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
-        let _latency = self.counter.read_multi_values_bytes.measure_latency();
+        let _latency = self
+            .counter
+            .read_multi_values_bytes_latency
+            .measure_latency();
         self.counter
             .read_multi_values_num_entries
             .with_label_values(&[])
@@ -358,7 +355,7 @@ where
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error> {
-        let _latency = self.counter.find_keys_by_prefix.measure_latency();
+        let _latency = self.counter.find_keys_by_prefix_latency.measure_latency();
         self.counter
             .find_keys_by_prefix_prefix_size
             .with_label_values(&[])
@@ -385,7 +382,10 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Self::KeyValues, Self::Error> {
-        let _latency = self.counter.find_key_values_by_prefix.measure_latency();
+        let _latency = self
+            .counter
+            .find_key_values_by_prefix_latency
+            .measure_latency();
         self.counter
             .find_key_values_by_prefix_prefix_size
             .with_label_values(&[])
@@ -416,7 +416,7 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        let _latency = self.counter.write_batch.measure_latency();
+        let _latency = self.counter.write_batch_latency.measure_latency();
         self.counter
             .write_batch_size
             .with_label_values(&[])
@@ -425,14 +425,94 @@ where
     }
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
-        let _metric = self.counter.clear_journal.measure_latency();
+        let _metric = self.counter.clear_journal_latency.measure_latency();
         self.store.clear_journal().await
     }
 }
 
-impl<K> MeteredStore<K> {
-    /// Creates a new Metered store
-    pub fn new(counter: &'static LazyLock<KeyValueStoreMetrics>, store: K) -> Self {
-        Self { counter, store }
+impl<K> AdminKeyValueStore for MeteredStore<K>
+where
+    K: AdminKeyValueStore + Send + Sync,
+{
+    type Config = K::Config;
+
+    fn get_name() -> String {
+        K::get_name()
+    }
+
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.connect_latency.measure_latency();
+        let store = K::connect(config, namespace, root_key).await?;
+        let counter = get_counter(&name);
+        Ok(Self { counter, store })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let _latency = self.counter.clone_with_root_key_latency.measure_latency();
+        let store = self.store.clone_with_root_key(root_key)?;
+        let counter = self.counter.clone();
+        Ok(Self { counter, store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.list_all_latency.measure_latency();
+        let namespaces = K::list_all(config).await?;
+        let counter = get_counter(&name);
+        counter
+            .list_all_sizes
+            .with_label_values(&[])
+            .observe(namespaces.len() as f64);
+        Ok(namespaces)
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.delete_all_latency.measure_latency();
+        K::delete_all(config).await
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.exists_latency.measure_latency();
+        let result = K::exists(config, namespace).await?;
+        if result {
+            let counter = get_counter(&name);
+            counter.exists_true_cases.with_label_values(&[]).inc();
+        }
+        Ok(result)
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.create_latency.measure_latency();
+        K::create(config, namespace).await
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        let name = K::get_name();
+        let counter = get_counter(&name);
+        let _latency = counter.delete_latency.measure_latency();
+        K::delete(config, namespace).await
+    }
+}
+
+#[cfg(with_testing)]
+impl<K> TestKeyValueStore for MeteredStore<K>
+where
+    K: TestKeyValueStore + Send + Sync,
+{
+    async fn new_test_config() -> Result<K::Config, Self::Error> {
+        K::new_test_config().await
     }
 }
