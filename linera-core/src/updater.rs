@@ -25,8 +25,9 @@ use tracing::{error, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::{LocalNodeClient, RemoteNode},
+    local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
+    remote_node::RemoteNode,
 };
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction

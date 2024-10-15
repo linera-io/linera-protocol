@@ -13,6 +13,7 @@ pub mod join_set_ext;
 pub mod local_node;
 pub mod node;
 pub mod notifier;
+pub mod remote_node;
 #[cfg(with_testing)]
 #[path = "unit_tests/test_utils.rs"]
 pub mod test_utils;
