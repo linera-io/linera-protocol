@@ -6,7 +6,7 @@ use std::{
     mem, vec,
 };
 
-use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
+use futures::{stream::FuturesOrdered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, ChainId, Destination, Owner},
@@ -271,7 +271,7 @@ where
                     message: SystemMessage::RegisterApplications { applications },
                 })
             })
-            .collect::<FuturesUnordered<_>>()
+            .collect::<FuturesOrdered<_>>()
             .try_collect::<Vec<_>>()
             .await?;
 
