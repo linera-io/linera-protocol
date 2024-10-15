@@ -66,24 +66,13 @@ where
     pub async fn register_new_application(
         &mut self,
         application_id: UserApplicationId,
-        parameters: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
+        description: UserApplicationDescription,
     ) -> Result<(), SystemExecutionError> {
         // Make sure that referenced applications ids have been registered.
-        for required_id in &required_application_ids {
+        for required_id in &description.required_application_ids {
             self.describe_application(*required_id).await?;
         }
-        // Create description and register it.
-        let UserApplicationId {
-            bytecode_id,
-            creation,
-        } = application_id;
-        let description = UserApplicationDescription {
-            bytecode_id,
-            parameters,
-            creation,
-            required_application_ids,
-        };
+        // Register the description.
         self.known_applications
             .insert(&application_id, description)?;
         Ok(())

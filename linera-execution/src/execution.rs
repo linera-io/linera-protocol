@@ -8,8 +8,8 @@ use std::{
 
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
-    data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainId, Destination, Owner},
+    data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
+    identifiers::{Account, BlobId, BlobType, ChainId, Destination, Owner},
 };
 use linera_views::{
     context::Context,
@@ -69,23 +69,24 @@ where
         contract_blob: Blob,
         service_blob: Blob,
     ) -> Result<(), ExecutionError> {
-        let chain_id = application_description.creation.chain_id;
+        let chain_id = application_description.creator_chain_id;
         let context = OperationContext {
             chain_id,
             authenticated_signer: None,
             authenticated_caller_id: None,
-            height: application_description.creation.height,
-            index: Some(0),
+            height: application_description.block_height,
+            txn_index: Some(0),
+            operation_index: Some(0),
         };
 
         let action = UserAction::Instantiate(context, instantiation_argument);
-        let next_message_index = application_description.creation.index + 1;
 
         let application_id = self
             .system
             .registry
-            .register_application(application_description)
+            .register_application(application_description.clone())
             .await?;
+        let application_blob = Blob::new_application_description(application_description);
 
         self.context()
             .extra()
@@ -94,7 +95,7 @@ where
 
         self.context()
             .extra()
-            .add_blobs(vec![contract_blob, service_blob]);
+            .add_blobs(vec![contract_blob, service_blob, application_blob]);
 
         let tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::default();
@@ -103,7 +104,7 @@ where
             tracker,
             account: None,
         };
-        let mut txn_tracker = TransactionTracker::new(next_message_index, None);
+        let mut txn_tracker = TransactionTracker::new(0, None);
         self.run_user_action(
             application_id,
             chain_id,
@@ -163,6 +164,23 @@ where
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<Owner>>,
     ) -> Result<(), ExecutionError> {
+        match action {
+            UserAction::Instantiate(_, _) => {
+                self.system
+                    .check_and_record_bytecode_blobs(&application_id.bytecode_id, txn_tracker)
+                    .await?;
+                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                    application_id.application_description_hash,
+                    BlobType::ApplicationDescription,
+                )))?;
+            }
+            UserAction::Operation(_, _) | UserAction::Message(_, _) => {
+                self.system
+                    .check_and_record_application_blob(&application_id, txn_tracker)
+                    .await?;
+            }
+        }
+
         let ExecutionRuntimeConfig {} = self.context().extra().execution_runtime_config();
         self.run_user_action_with_runtime(
             application_id,

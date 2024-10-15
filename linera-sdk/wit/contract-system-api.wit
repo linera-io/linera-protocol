@@ -41,8 +41,9 @@ interface contract-system-api {
     }
 
     record application-id {
+        application-description-hash: crypto-hash,
         bytecode-id: bytecode-id,
-        creation: message-id,
+        creator-chain-id: chain-id,
     }
 
     record application-permissions {

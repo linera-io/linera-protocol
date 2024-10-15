@@ -788,6 +788,7 @@ where
         let mut oracle_responses = Vec::new();
         let mut events = Vec::new();
         let mut messages = Vec::new();
+        let mut operation_index = 0;
         for (txn_index, transaction) in block.transactions() {
             let chain_execution_context = match transaction {
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
@@ -829,10 +830,12 @@ where
                     let context = OperationContext {
                         chain_id,
                         height: block.height,
-                        index: Some(txn_index),
+                        txn_index: Some(txn_index),
+                        operation_index: Some(operation_index),
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
                     };
+                    operation_index += 1;
                     self.execution_state
                         .execute_operation(
                             context,

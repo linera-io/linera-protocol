@@ -296,29 +296,17 @@ pub struct MessageId {
 #[derive(WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ApplicationId<A = ()> {
-    /// The bytecode to use for the application.
-    pub bytecode_id: BytecodeId<A>,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
-}
-
-/// A unique identifier for a user application from a blob.
-#[derive(WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default))]
-pub struct BlobApplicationId<A = ()> {
     /// The hash of the `UserApplicationDescription` this refers to.
     pub application_description_hash: CryptoHash,
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
+    /// The chain ID that created the application.
+    pub creator_chain_id: ChainId,
 }
 
 /// Alias for `ApplicationId`. Use this alias in the core
 /// protocol where the distinction with the more general enum `GenericApplicationId` matters.
 pub type UserApplicationId<A = ()> = ApplicationId<A>;
-
-/// Alias for `BlobApplicationId`. Use this alias in the core
-/// protocol where the distinction with the more general enum `GenericApplicationId` matters.
-pub type BlobUserApplicationId<A = ()> = BlobApplicationId<A>;
 
 /// A unique identifier for an application.
 #[derive(
@@ -690,11 +678,8 @@ impl<A> Copy for ApplicationId<A> {}
 
 impl<A: PartialEq> PartialEq for ApplicationId<A> {
     fn eq(&self, other: &Self) -> bool {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = other;
-        self.bytecode_id == *bytecode_id && self.creation == *creation
+        self.application_description_hash == other.application_description_hash
+            && self.bytecode_id == other.bytecode_id
     }
 }
 
@@ -702,50 +687,33 @@ impl<A: Eq> Eq for ApplicationId<A> {}
 
 impl<A: PartialOrd> PartialOrd for ApplicationId<A> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = other;
-        match self.bytecode_id.partial_cmp(bytecode_id) {
-            Some(std::cmp::Ordering::Equal) => self.creation.partial_cmp(creation),
-            result => result,
-        }
+        (self.application_description_hash, self.bytecode_id)
+            .partial_cmp(&(other.application_description_hash, other.bytecode_id))
     }
 }
 
 impl<A: Ord> Ord for ApplicationId<A> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = other;
-        match self.bytecode_id.cmp(bytecode_id) {
-            std::cmp::Ordering::Equal => self.creation.cmp(creation),
-            result => result,
-        }
+        (self.application_description_hash, self.bytecode_id)
+            .cmp(&(other.application_description_hash, other.bytecode_id))
     }
 }
 
 impl<A> Hash for ApplicationId<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = self;
-        bytecode_id.hash(state);
-        creation.hash(state);
+        self.application_description_hash.hash(state);
+        self.bytecode_id.hash(state);
     }
 }
 
 impl<A> Debug for ApplicationId<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = self;
         f.debug_struct("ApplicationId")
-            .field("bytecode_id", bytecode_id)
-            .field("creation", creation)
+            .field(
+                "application_description_hash",
+                &self.application_description_hash,
+            )
+            .field("bytecode_id", &self.bytecode_id)
             .finish()
     }
 }
@@ -753,8 +721,9 @@ impl<A> Debug for ApplicationId<A> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "ApplicationId")]
 struct SerializableApplicationId {
+    pub application_description_hash: CryptoHash,
     pub bytecode_id: BytecodeId,
-    pub creation: MessageId,
+    pub creator_chain_id: ChainId,
 }
 
 impl<A> Serialize for ApplicationId<A> {
@@ -764,16 +733,18 @@ impl<A> Serialize for ApplicationId<A> {
     {
         if serializer.is_human_readable() {
             let bytes = bcs::to_bytes(&SerializableApplicationId {
+                application_description_hash: self.application_description_hash,
                 bytecode_id: self.bytecode_id.forget_abi(),
-                creation: self.creation,
+                creator_chain_id: self.creator_chain_id,
             })
             .map_err(serde::ser::Error::custom)?;
             serializer.serialize_str(&hex::encode(bytes))
         } else {
             SerializableApplicationId::serialize(
                 &SerializableApplicationId {
+                    application_description_hash: self.application_description_hash,
                     bytecode_id: self.bytecode_id.forget_abi(),
-                    creation: self.creation,
+                    creator_chain_id: self.creator_chain_id,
                 },
                 serializer,
             )
@@ -792,25 +763,41 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
             let application_id: SerializableApplicationId =
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
+                application_description_hash: application_id.application_description_hash,
                 bytecode_id: application_id.bytecode_id.with_abi(),
-                creation: application_id.creation,
+                creator_chain_id: application_id.creator_chain_id,
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
+                application_description_hash: value.application_description_hash,
                 bytecode_id: value.bytecode_id.with_abi(),
-                creation: value.creation,
+                creator_chain_id: value.creator_chain_id,
             })
         }
     }
 }
 
 impl ApplicationId {
+    /// Creates an application ID from the application description hash.
+    pub fn new(
+        application_description_hash: CryptoHash,
+        bytecode_id: BytecodeId,
+        creator_chain_id: ChainId,
+    ) -> Self {
+        ApplicationId {
+            application_description_hash,
+            bytecode_id,
+            creator_chain_id,
+        }
+    }
+
     /// Specializes an application ID for a given ABI.
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
+            application_description_hash: self.application_description_hash,
             bytecode_id: self.bytecode_id.with_abi(),
-            creation: self.creation,
+            creator_chain_id: self.creator_chain_id,
         }
     }
 }
@@ -819,142 +806,9 @@ impl<A> ApplicationId<A> {
     /// Forgets the ABI of a bytecode ID (if any).
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
-            bytecode_id: self.bytecode_id.forget_abi(),
-            creation: self.creation,
-        }
-    }
-}
-
-// Cannot use #[derive(Clone)] because it requires `A: Clone`.
-impl<A> Clone for BlobApplicationId<A> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<A> Copy for BlobApplicationId<A> {}
-
-impl<A: PartialEq> PartialEq for BlobApplicationId<A> {
-    fn eq(&self, other: &Self) -> bool {
-        self.application_description_hash == other.application_description_hash
-            && self.bytecode_id == other.bytecode_id
-    }
-}
-
-impl<A: Eq> Eq for BlobApplicationId<A> {}
-
-impl<A: PartialOrd> PartialOrd for BlobApplicationId<A> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (self.application_description_hash, self.bytecode_id)
-            .partial_cmp(&(other.application_description_hash, other.bytecode_id))
-    }
-}
-
-impl<A: Ord> Ord for BlobApplicationId<A> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.application_description_hash, self.bytecode_id)
-            .cmp(&(other.application_description_hash, other.bytecode_id))
-    }
-}
-
-impl<A> Hash for BlobApplicationId<A> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.application_description_hash.hash(state);
-        self.bytecode_id.hash(state);
-    }
-}
-
-impl<A> Debug for BlobApplicationId<A> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BlobApplicationId")
-            .field(
-                "application_description_hash",
-                &self.application_description_hash,
-            )
-            .field("bytecode_id", &self.bytecode_id)
-            .finish()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename = "BlobApplicationId")]
-struct SerializableBlobApplicationId {
-    pub application_description_hash: CryptoHash,
-    pub bytecode_id: BytecodeId,
-}
-
-impl<A> Serialize for BlobApplicationId<A> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        if serializer.is_human_readable() {
-            let bytes = bcs::to_bytes(&SerializableBlobApplicationId {
-                application_description_hash: self.application_description_hash,
-                bytecode_id: self.bytecode_id.forget_abi(),
-            })
-            .map_err(serde::ser::Error::custom)?;
-            serializer.serialize_str(&hex::encode(bytes))
-        } else {
-            SerializableBlobApplicationId::serialize(
-                &SerializableBlobApplicationId {
-                    application_description_hash: self.application_description_hash,
-                    bytecode_id: self.bytecode_id.forget_abi(),
-                },
-                serializer,
-            )
-        }
-    }
-}
-
-impl<'de, A> Deserialize<'de> for BlobApplicationId<A> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let application_id_bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
-            let application_id: SerializableBlobApplicationId =
-                bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
-            Ok(BlobApplicationId {
-                application_description_hash: application_id.application_description_hash,
-                bytecode_id: application_id.bytecode_id.with_abi(),
-            })
-        } else {
-            let value = SerializableBlobApplicationId::deserialize(deserializer)?;
-            Ok(BlobApplicationId {
-                application_description_hash: value.application_description_hash,
-                bytecode_id: value.bytecode_id.with_abi(),
-            })
-        }
-    }
-}
-
-impl BlobApplicationId {
-    /// Creates an application ID from the application description hash.
-    pub fn new(application_description_hash: CryptoHash, bytecode_id: BytecodeId) -> Self {
-        BlobApplicationId {
-            application_description_hash,
-            bytecode_id,
-        }
-    }
-
-    /// Specializes an application ID for a given ABI.
-    pub fn with_abi<A>(self) -> BlobApplicationId<A> {
-        BlobApplicationId {
-            application_description_hash: self.application_description_hash,
-            bytecode_id: self.bytecode_id.with_abi(),
-        }
-    }
-}
-
-impl<A> BlobApplicationId<A> {
-    /// Forgets the ABI of a bytecode ID (if any).
-    pub fn forget_abi(self) -> BlobApplicationId {
-        BlobApplicationId {
             application_description_hash: self.application_description_hash,
             bytecode_id: self.bytecode_id.forget_abi(),
+            creator_chain_id: self.creator_chain_id,
         }
     }
 }

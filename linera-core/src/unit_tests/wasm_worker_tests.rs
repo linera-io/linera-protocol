@@ -17,9 +17,7 @@ use linera_base::{
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
-    identifiers::{
-        BytecodeId, ChainDescription, ChainId, Destination, MessageId, UserApplicationId,
-    },
+    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -180,25 +178,23 @@ where
     let initial_value = 10_u64;
     let initial_value_bytes = serde_json::to_vec(&initial_value)?;
     let parameters_bytes = serde_json::to_vec(&())?;
-    let create_operation = SystemOperation::CreateApplication {
+
+    let description = UserApplicationDescription {
         bytecode_id,
+        creator_chain_id: creator_chain.into(),
+        block_height: BlockHeight(0),
+        operation_index: 0,
+        required_application_ids: vec![],
         parameters: parameters_bytes.clone(),
+    };
+    let id = UserApplicationId::from(&description);
+
+    let app_blob = Blob::new_application_description(description.clone());
+
+    let create_operation = SystemOperation::CreateApplication {
+        id,
+        description: description.clone(),
         instantiation_argument: initial_value_bytes.clone(),
-        required_application_ids: vec![],
-    };
-    let application_id = UserApplicationId {
-        bytecode_id,
-        creation: MessageId {
-            chain_id: creator_chain.into(),
-            height: BlockHeight::from(0),
-            index: 0,
-        },
-    };
-    let application_description = UserApplicationDescription {
-        bytecode_id,
-        creation: application_id.creation,
-        required_application_ids: vec![],
-        parameters: parameters_bytes,
     };
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
@@ -206,19 +202,24 @@ where
     creator_system_state
         .registry
         .known_applications
-        .insert(application_id, application_description.clone());
+        .insert(id, description.clone());
     creator_system_state.timestamp = Timestamp::from(2);
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
         .simulate_instantiation(
             contract.into(),
             Timestamp::from(2),
-            application_description,
+            description,
             initial_value_bytes.clone(),
             contract_blob,
             service_blob,
         )
         .await?;
+    let oracle_responses = vec![
+        OracleResponse::Blob(contract_blob_id),
+        OracleResponse::Blob(service_blob_id),
+        OracleResponse::Blob(app_blob.id()),
+    ];
     let create_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![vec![OutgoingMessage {
@@ -231,17 +232,14 @@ where
             }]],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![vec![
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-            ]],
+            oracle_responses: vec![oracle_responses.clone()],
         }
         .with(create_block),
     );
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(create_certificate.clone(), vec![])
+        .fully_handle_certificate(create_certificate.clone(), vec![app_blob])
         .await
         .unwrap()
         .info;
@@ -258,7 +256,7 @@ where
     let run_block = make_child_block(&create_certificate.value)
         .with_timestamp(3)
         .with_operation(Operation::User {
-            application_id,
+            application_id: id,
             bytes: user_operation.clone(),
         });
     let operation_context = OperationContext {
@@ -266,7 +264,8 @@ where
         authenticated_signer: None,
         authenticated_caller_id: None,
         height: run_block.height,
-        index: Some(0),
+        txn_index: Some(0),
+        operation_index: Some(0),
     };
     let mut controller = ResourceController::default();
     creator_state
@@ -274,10 +273,10 @@ where
             operation_context,
             Timestamp::from(3),
             Operation::User {
-                application_id,
+                application_id: id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(0, Some(oracle_responses.clone())),
             &mut controller,
         )
         .await?;
@@ -287,7 +286,7 @@ where
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
-            oracle_responses: vec![Vec::new()],
+            oracle_responses: vec![oracle_responses],
         }
         .with(run_block),
     );

@@ -81,8 +81,9 @@ impl From<ChainId> for wit_system_api::ChainId {
 impl From<ApplicationId> for wit_system_api::ApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         wit_system_api::ApplicationId {
+            application_description_hash: application_id.application_description_hash.into(),
             bytecode_id: application_id.bytecode_id.into(),
-            creation: application_id.creation.into(),
+            creator_chain_id: application_id.creator_chain_id.into(),
         }
     }
 }

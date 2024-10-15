@@ -12,8 +12,7 @@ use crate::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Resources, SendMessageRequest, TimeDelta, Timestamp},
     identifiers::{
-        Account, ApplicationId, BlobApplicationId, BytecodeId, ChainId, ChannelName, Destination,
-        MessageId, Owner,
+        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -99,25 +98,10 @@ fn message_id_test_case() -> MessageId {
 
 /// Creates a dummy [`ApplicationId`] instance to use for the WIT roundtrip test.
 fn application_id_test_case() -> ApplicationId {
-    ApplicationId {
-        bytecode_id: BytecodeId::new(
-            CryptoHash::test_hash("contract bytecode"),
-            CryptoHash::test_hash("service bytecode"),
-        ),
-        creation: MessageId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(0),
-            index: 0,
-        },
-    }
-}
-
-/// Creates a dummy [`BlobApplicationId`] instance to use for the WIT roundtrip test.
-#[allow(dead_code)]
-fn blob_application_id_test_case() -> BlobApplicationId {
-    BlobApplicationId::new(
+    ApplicationId::new(
         CryptoHash::test_hash("application description"),
         bytecode_id_test_case(),
+        ChainId::root(15),
     )
 }
 

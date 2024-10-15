@@ -69,7 +69,9 @@ fn make_app_description() -> (UserApplicationDescription, Blob, Blob) {
     (
         UserApplicationDescription {
             bytecode_id,
-            creation: make_admin_message_id(BlockHeight(2)),
+            creator_chain_id: admin_id(),
+            block_height: BlockHeight(2),
+            operation_index: 0,
             required_application_ids: vec![],
             parameters: vec![],
         },
@@ -190,10 +192,12 @@ async fn test_application_permissions() {
     let application_id = ApplicationId::from(&app_description);
     let application = MockApplication::default();
     let extra = &chain.context().extra();
+
+    let app_blob = Blob::new_application_description(app_description.clone());
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
-    extra.add_blobs(vec![contract_blob, service_blob]);
+    extra.add_blobs(vec![contract_blob, service_blob, app_blob]);
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {

@@ -1402,8 +1402,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     client_b.wallet_init(&[], FaucetOption::None).await?;
 
     // Create initial server and client config.
-    let (contract_fungible_a, service_fungible_a) = client_a.build_example("fungible").await?;
-    let (contract_fungible_b, service_fungible_b) = client_b.build_example("fungible").await?;
+    let (contract_fungible, service_fungible) = client_a.build_example("fungible").await?;
     let (contract_matching, service_matching) =
         client_admin.build_example("matching-engine").await?;
 
@@ -1425,30 +1424,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         accounts: accounts1,
     };
 
-    // Setting up the application fungible on chain_a and chain_b
-    let params0 = fungible::Parameters::new("ZERO");
-    let token0 = client_a
-        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-            contract_fungible_a,
-            service_fungible_a,
-            &params0,
-            &state_fungible0,
-            &[],
-            None,
-        )
-        .await?;
-    let params1 = fungible::Parameters::new("ONE");
-    let token1 = client_b
-        .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-            contract_fungible_b,
-            service_fungible_b,
-            &params1,
-            &state_fungible1,
-            &[],
-            None,
-        )
-        .await?;
-
     // Now creating the service and exporting the applications
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
@@ -1458,6 +1433,35 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
         .await?;
     let mut node_service_a = client_a.run_node_service(port2, ProcessInbox::Skip).await?;
     let mut node_service_b = client_b.run_node_service(port3, ProcessInbox::Skip).await?;
+
+    // Setting up the application fungible on chain_a and chain_b
+    let fungible_bytecode_id = node_service_admin
+        .publish_bytecode::<
+            fungible::FungibleTokenAbi,
+            fungible::Parameters,
+            fungible::InitialState
+        >(&chain_admin, contract_fungible, service_fungible).await?;
+
+    let params0 = fungible::Parameters::new("ZERO");
+    let token0 = node_service_a
+        .create_application(
+            &chain_a,
+            &fungible_bytecode_id,
+            &params0,
+            &state_fungible0,
+            &[],
+        )
+        .await?;
+    let params1 = fungible::Parameters::new("ONE");
+    let token1 = node_service_b
+        .create_application(
+            &chain_b,
+            &fungible_bytecode_id,
+            &params1,
+            &state_fungible1,
+            &[],
+        )
+        .await?;
 
     node_service_a
         .request_application(&chain_a, &token1)
@@ -1482,6 +1486,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
 
     let app_fungible0_a = FungibleApp(node_service_a.make_application(&chain_a, &token0).await?);
     let app_fungible1_a = FungibleApp(node_service_a.make_application(&chain_a, &token1).await?);
+
     let app_fungible0_b = FungibleApp(node_service_b.make_application(&chain_b, &token0).await?);
     let app_fungible1_b = FungibleApp(node_service_b.make_application(&chain_b, &token1).await?);
     app_fungible0_a
@@ -1498,6 +1503,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
             (owner_admin, Amount::ZERO),
         ])
         .await;
+
     let app_fungible0_admin = FungibleApp(
         node_service_admin
             .make_application(&chain_admin, &token0)

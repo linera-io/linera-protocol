@@ -4,20 +4,12 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{BytecodeId, ChainId, MessageId},
+    identifiers::{BytecodeId, ChainId},
 };
 
 use super::{
     ApplicationRegistry, ApplicationRegistryView, UserApplicationDescription, UserApplicationId,
 };
-
-fn message_id(index: u32) -> MessageId {
-    MessageId {
-        chain_id: ChainId::root(0),
-        height: BlockHeight::ZERO,
-        index,
-    }
-}
 
 fn bytecode_id() -> BytecodeId {
     BytecodeId::new(
@@ -28,15 +20,18 @@ fn bytecode_id() -> BytecodeId {
 
 fn app_id(index: u32) -> UserApplicationId {
     UserApplicationId {
+        application_description_hash: CryptoHash::test_hash(format!("application_{}", index)),
         bytecode_id: bytecode_id(),
-        creation: message_id(index),
+        creator_chain_id: ChainId::root(0),
     }
 }
 
 fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
     UserApplicationDescription {
         bytecode_id: bytecode_id(),
-        creation: message_id(index),
+        creator_chain_id: ChainId::root(0),
+        block_height: BlockHeight::ZERO,
+        operation_index: index,
         parameters: vec![],
         required_application_ids: deps.into_iter().map(app_id).collect(),
     }
@@ -45,10 +40,9 @@ fn app_description(index: u32, deps: Vec<u32>) -> UserApplicationDescription {
 fn registry(graph: impl IntoIterator<Item = (u32, Vec<u32>)>) -> ApplicationRegistry {
     let mut registry = ApplicationRegistry::default();
     for (index, deps) in graph {
-        let description = app_description(index, deps);
         registry
             .known_applications
-            .insert((&description).into(), description);
+            .insert(app_id(index), app_description(index, deps));
     }
     registry
 }
