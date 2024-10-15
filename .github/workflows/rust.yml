@@ -60,12 +60,13 @@ jobs:
     - name: Set environment variables
       run: |
         echo "LINERA_STORAGE_SERVICE=127.0.0.1:1235" >> "$GITHUB_ENV"
-
+        echo "LINERA_WALLET=/tmp/local-linera-net/wallet_0.json" >> "$GITHUB_ENV"
+        echo "LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_0.db" >> "$GITHUB_ENV"
     - name: Build example applications
       run: |
         cd examples
         cargo build --locked --release --target wasm32-unknown-unknown
-    - name: Run end-to-end tests
+    - name: Run the storage-service instance and the storage-service tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
         cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
@@ -73,9 +74,23 @@ jobs:
       run: |
         cargo test -p linera-ethereum --features ethereum
         cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+    - name: Run the benchmark test
+      run: |
+        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
+        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
+    - name: Run the validators
+      run: |
+        cargo build --features storage-service
+        mkdir /tmp/local-linera-net
+        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+    - name: Run the remote-net tests
+      run: |
+        cargo build --bin linera
+        cargo run --bin linera -- faucet --amount 1000 --port 8079 &
+        LINERA_FAUCET_URL=http://localhost:8079 cargo test -p linera-service remote_net_grpc --features remote-net
     - name: Check that the WIT files are up-to-date
       run: |
         cargo run --bin wit-generator -- -c
@@ -85,10 +100,6 @@ jobs:
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
-    - name: Run the benchmark test
-      run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
-        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
     - name: Run Wasm application tests
       run: |
         cd examples

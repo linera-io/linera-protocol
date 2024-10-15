@@ -29,16 +29,14 @@ use {
 
 struct StorageConfigProvider {
     /// The StorageConfig and the namespace
-    pub storage_config_namespace: StorageConfigNamespace,
+    pub storage: StorageConfigNamespace,
     #[cfg(feature = "storage-service")]
     _service_guard: Option<StorageServiceGuard>,
 }
 
 impl StorageConfigProvider {
-    pub async fn new(
-        storage_config_namespace: &Option<String>,
-    ) -> anyhow::Result<StorageConfigProvider> {
-        match storage_config_namespace {
+    pub async fn new(storage: &Option<String>) -> anyhow::Result<StorageConfigProvider> {
+        match storage {
             #[cfg(feature = "storage-service")]
             None => {
                 let service_endpoint = linera_base::port::get_free_endpoint().await?;
@@ -50,49 +48,45 @@ impl StorageConfigProvider {
                     endpoint: service_endpoint,
                 };
                 let namespace = "table_default".to_string();
-                let storage_config_namespace = StorageConfigNamespace {
+                let storage = StorageConfigNamespace {
                     storage_config,
                     namespace,
                 };
                 Ok(StorageConfigProvider {
-                    storage_config_namespace,
+                    storage,
                     _service_guard,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
             None => {
-                panic!("When storage_config_namespace is not selected, the storage-service needs to be enabled");
+                panic!("When storage is not selected, the storage-service needs to be enabled");
             }
             #[cfg(feature = "storage-service")]
-            Some(storage_config_namespace) => {
-                let storage_config_namespace =
-                    StorageConfigNamespace::from_str(storage_config_namespace)?;
+            Some(storage) => {
+                let storage = StorageConfigNamespace::from_str(storage)?;
                 Ok(StorageConfigProvider {
-                    storage_config_namespace,
+                    storage,
                     _service_guard: None,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
-            Some(storage_config_namespace) => {
-                let storage_config_namespace =
-                    StorageConfigNamespace::from_str(storage_config_namespace)?;
-                Ok(StorageConfigProvider {
-                    storage_config_namespace,
-                })
+            Some(storage) => {
+                let storage = StorageConfigNamespace::from_str(storage)?;
+                Ok(StorageConfigProvider { storage })
             }
         }
     }
 
     pub fn storage_config(&self) -> StorageConfig {
-        self.storage_config_namespace.storage_config.clone()
+        self.storage.storage_config.clone()
     }
 
     pub fn namespace(&self) -> String {
-        self.storage_config_namespace.namespace.clone()
+        self.storage.namespace.clone()
     }
 
     pub fn database(&self) -> anyhow::Result<Database> {
-        match self.storage_config_namespace.storage_config {
+        match self.storage.storage_config {
             StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
@@ -153,7 +147,7 @@ pub async fn handle_net_up_service(
     testing_prng_seed: Option<u64>,
     policy: ResourceControlPolicy,
     path: &Option<String>,
-    storage_config_namespace: &Option<String>,
+    storage: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -165,10 +159,10 @@ pub async fn handle_net_up_service(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
-    let storage_config_namespace = StorageConfigProvider::new(storage_config_namespace).await?;
-    let storage_config = storage_config_namespace.storage_config();
-    let namespace = storage_config_namespace.namespace();
-    let database = storage_config_namespace.database()?;
+    let storage = StorageConfigProvider::new(storage).await?;
+    let storage_config = storage.storage_config();
+    let namespace = storage.namespace();
+    let database = storage.database()?;
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
     let path_provider = PathProvider::new(path)?;
     let config = LocalNetConfig {

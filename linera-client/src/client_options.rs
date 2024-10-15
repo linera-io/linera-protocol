@@ -899,9 +899,9 @@ pub enum NetCommand {
         path: Option<String>,
 
         /// Run with a specific storage.
-        /// If none, then a linera-storage-service is spanned on a random free port.
+        /// If none, then a linera-storage-service is started on a random free port.
         #[arg(long)]
-        storage_config_namespace: Option<String>,
+        storage: Option<String>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
