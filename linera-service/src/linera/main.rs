@@ -30,8 +30,9 @@ use linera_client::{
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ClientOutcome},
-    local_node::{LocalNodeClient, RemoteNode},
+    local_node::LocalNodeClient,
     node::ValidatorNodeProvider,
+    remote_node::RemoteNode,
     worker::{Reason, WorkerState},
     JoinSetExt as _,
 };
