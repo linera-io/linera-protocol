@@ -44,11 +44,11 @@ pub struct ProxyOptions {
     /// Path to server configuration.
     config_path: PathBuf,
 
-    /// Timeout for sending queries (us)
+    /// Timeout for sending queries (ms)
     #[arg(long = "send-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     send_timeout: Duration,
 
-    /// Timeout for receiving responses (us)
+    /// Timeout for receiving responses (ms)
     #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     recv_timeout: Duration,
 
