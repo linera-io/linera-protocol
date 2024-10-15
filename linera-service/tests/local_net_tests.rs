@@ -537,7 +537,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
 
     let (mut net, client) = config.instantiate().await?;
 
-    assert_eq!(client.load_wallet()?.num_chains(), 2);
+    assert_eq!(client.load_wallet()?.num_chains(), 3);
     // Launch local benchmark using all user chains and creating additional ones.
     client.benchmark(2, 4, 10, None).await?;
     assert_eq!(client.load_wallet()?.num_chains(), 4);
