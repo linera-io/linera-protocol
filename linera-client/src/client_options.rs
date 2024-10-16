@@ -855,7 +855,7 @@ pub enum NetCommand {
         /// The number of initial "root" chains created in the genesis config on top of
         /// the default "admin" chain. All initial chains belong to the first "admin"
         /// wallet.
-        #[arg(long, default_value = "10")]
+        #[arg(long, default_value = "2")]
         other_initial_chains: u32,
 
         /// The initial amount of native tokens credited in the initial "root" chains,
