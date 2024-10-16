@@ -64,8 +64,21 @@ service ValidatorNode {
   // Downloads a certificate.
   rpc DownloadCertificate(CryptoHash) returns (Certificate);
 
+  // Downloads a batch of certificates.
+  rpc DownloadCertificates(CertificatesBatchRequest) returns (CertificatesBatchResponse);
+
   // Returns the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
+}
+
+// A request for a batch of certificates.
+message CertificatesBatchRequest {
+  repeated CryptoHash hashes = 1;
+}
+
+// A batch of certificates.
+message CertificatesBatchResponse {
+  repeated Certificate certificates = 1;
 }
 
 // Information about the Linera crate version the validator is running

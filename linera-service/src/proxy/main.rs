@@ -314,6 +314,9 @@ where
             DownloadCertificate(hash) => {
                 Ok(Some(self.storage.read_certificate(*hash).await?.into()))
             }
+            DownloadCertificates(hashes) => {
+                Ok(Some(self.storage.read_certificates(*hashes).await?.into()))
+            }
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
             )))),
@@ -330,7 +333,8 @@ where
             | DownloadBlobContentResponse(_)
             | BlobLastUsedByResponse(_)
             | DownloadCertificateValueResponse(_)
-            | DownloadCertificateResponse(_) => {
+            | DownloadCertificateResponse(_)
+            | DownloadCertificatesResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }
         }

@@ -317,6 +317,14 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn download_certificates(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        Ok(client_delegate!(self, download_certificates, hashes)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
         Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)

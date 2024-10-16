@@ -179,6 +179,16 @@ where
         .await
     }
 
+    async fn download_certificates(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_download_certificates(hashes, sender)
+        })
+        .await
+    }
+
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_blob_last_used_by(blob_id, sender)
@@ -463,6 +473,22 @@ where
             .map_err(Into::into);
 
         sender.send(certificate)
+    }
+
+    async fn do_download_certificates(
+        self,
+        hashes: Vec<CryptoHash>,
+        sender: oneshot::Sender<Result<Vec<Certificate>, NodeError>>,
+    ) -> Result<(), Result<Vec<Certificate>, NodeError>> {
+        let validator = self.client.lock().await;
+        let certificates = validator
+            .state
+            .storage_client()
+            .read_certificates(hashes)
+            .await
+            .map_err(Into::into);
+
+        sender.send(certificates)
     }
 
     async fn do_blob_last_used_by(
@@ -819,6 +845,7 @@ where
                         mut requested_sent_certificate_hashes,
                         ..
                     } = *response.info;
+                    debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
                             if cert.value().is_confirmed()

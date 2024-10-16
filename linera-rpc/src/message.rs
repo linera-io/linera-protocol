@@ -28,6 +28,7 @@ pub enum RpcMessage {
     DownloadBlobContent(Box<BlobId>),
     DownloadCertificateValue(Box<CryptoHash>),
     DownloadCertificate(Box<CryptoHash>),
+    DownloadCertificates(Box<Vec<CryptoHash>>),
     BlobLastUsedBy(Box<BlobId>),
     VersionInfoQuery,
     GenesisConfigHashQuery,
@@ -41,6 +42,7 @@ pub enum RpcMessage {
     DownloadBlobContentResponse(Box<BlobContent>),
     DownloadCertificateValueResponse(Box<CertificateValue>),
     DownloadCertificateResponse(Box<Certificate>),
+    DownloadCertificatesResponse(Box<Vec<Certificate>>),
     BlobLastUsedByResponse(Box<CryptoHash>),
 
     // Internal to a validator
@@ -72,9 +74,11 @@ impl RpcMessage {
             | DownloadCertificateValue(_)
             | DownloadCertificateValueResponse(_)
             | DownloadCertificate(_)
+            | DownloadCertificates(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByResponse(_)
-            | DownloadCertificateResponse(_) => {
+            | DownloadCertificateResponse(_)
+            | DownloadCertificatesResponse(_) => {
                 return None;
             }
         };
@@ -93,7 +97,8 @@ impl RpcMessage {
             | DownloadBlobContent(_)
             | DownloadCertificateValue(_)
             | BlobLastUsedBy(_)
-            | DownloadCertificate(_) => true,
+            | DownloadCertificate(_)
+            | DownloadCertificates(_) => true,
             BlockProposal(_)
             | LiteCertificate(_)
             | Certificate(_)
@@ -107,7 +112,8 @@ impl RpcMessage {
             | DownloadBlobContentResponse(_)
             | DownloadCertificateValueResponse(_)
             | BlobLastUsedByResponse(_)
-            | DownloadCertificateResponse(_) => false,
+            | DownloadCertificateResponse(_)
+            | DownloadCertificatesResponse(_) => false,
         }
     }
 }
@@ -172,6 +178,18 @@ impl TryFrom<RpcMessage> for Certificate {
     }
 }
 
+impl TryFrom<RpcMessage> for Vec<Certificate> {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        use RpcMessage::*;
+        match message {
+            DownloadCertificatesResponse(certificates) => Ok(*certificates),
+            Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
 impl TryFrom<RpcMessage> for CryptoHash {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
@@ -200,6 +218,12 @@ impl From<HandleLiteCertRequest<'static>> for RpcMessage {
 impl From<HandleCertificateRequest> for RpcMessage {
     fn from(request: HandleCertificateRequest) -> Self {
         RpcMessage::Certificate(Box::new(request))
+    }
+}
+
+impl From<Vec<CryptoHash>> for RpcMessage {
+    fn from(hashes: Vec<CryptoHash>) -> Self {
+        RpcMessage::DownloadCertificates(Box::new(hashes))
     }
 }
 
@@ -254,5 +278,11 @@ impl From<CertificateValue> for RpcMessage {
 impl From<Certificate> for RpcMessage {
     fn from(certificate: Certificate) -> Self {
         RpcMessage::DownloadCertificateResponse(Box::new(certificate))
+    }
+}
+
+impl From<Vec<Certificate>> for RpcMessage {
+    fn from(certificates: Vec<Certificate>) -> Self {
+        RpcMessage::DownloadCertificatesResponse(Box::new(certificates))
     }
 }
