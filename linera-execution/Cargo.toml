@@ -12,7 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["tokio/macros", "linera-base/test", "linera-views/test"]
+test = ["tokio/macros", "linera-views/test"]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []
@@ -65,18 +65,12 @@ wasmtime = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
-wasmer = { workspace = true, optional = true, features = [
-    "cranelift",
-    "singlepass",
-] }
+wasmer = { workspace = true, optional = true, features = ["cranelift", "singlepass"] }
 wasmer-compiler-singlepass.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
-wasmer = { workspace = true, optional = true, features = [
-    "js-default",
-    "js-serializable-module",
-] }
+wasmer = { workspace = true, optional = true, features = ["js-default", "js-serializable-module"] }
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -85,8 +79,6 @@ bcs.workspace = true
 counter.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", features = ["test"] }
-linera-storage = { workspace = true, features = ["test"] }
-linera-views = { workspace = true, features = ["test"] }
 linera-witty = { workspace = true, features = ["log", "macros", "test"] }
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }

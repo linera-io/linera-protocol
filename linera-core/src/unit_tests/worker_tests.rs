@@ -3597,7 +3597,9 @@ where
     let mut applications;
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        applications = register_mock_applications(&mut chain.execution_state, 1).await?;
+        applications =
+            crate::test_utils::register_mock_applications(&mut chain.execution_state, 1, storage)
+                .await?;
         chain.save().await?;
     }
 
@@ -3687,7 +3689,9 @@ where
     let mut applications;
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        applications = register_mock_applications(&mut chain.execution_state, 1).await?;
+        applications =
+            crate::test_utils::register_mock_applications(&mut chain.execution_state, 1, storage)
+                .await?;
         chain.save().await?;
     }
 
