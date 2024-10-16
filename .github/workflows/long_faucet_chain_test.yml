@@ -34,4 +34,4 @@ jobs:
     - name: Run end-to-end tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test -p linera-service --features storage-service -- --ignored test_end_to_end_faucet_with_long_chains --nocapture
+        cargo test --release -p linera-service --features storage-service -- --ignored test_end_to_end_faucet_with_long_chains --nocapture
