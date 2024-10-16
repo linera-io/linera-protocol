@@ -10,6 +10,9 @@ on:
       - 'configuration/**'
       - 'kubernetes/**'
       - 'scripts/**'
+  pull_request:
+    branches:
+      - "**"
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
