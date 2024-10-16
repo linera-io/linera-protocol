@@ -9,6 +9,7 @@ on:
     paths:
       - 'docker/Dockerfile'
       - 'docker/compose.sh'
+      - 'docker/docker-compose.yml'
       - 'Cargo.toml'
       - '.github/workflows/docker.yml'
   workflow_dispatch:
@@ -51,6 +52,8 @@ jobs:
           cargo install --path linera-service --bin linera --bin linera-server --debug
       - name: Build Docker image
         run: docker build . -f docker/Dockerfile -t linera
+      - name: Increase aio-max-nr
+        run: echo 1048576 > /proc/sys/fs/aio-max-nr
       - name: Run Compose
         run: cd docker && ./compose.sh &
       - name: Sync
@@ -59,4 +62,4 @@ jobs:
           # Docker compose can take some time to start
           max_attempts: 5
           timeout_minutes: 2
-          command: sleep 60 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
+          command: sleep 120 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
