@@ -194,9 +194,6 @@ pub enum ExecutionError {
         local_time: Timestamp,
     },
 
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
-
     #[error("Event keys can be at most {MAX_EVENT_KEY_LEN} bytes.")]
     EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]

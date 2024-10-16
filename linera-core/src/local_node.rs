@@ -5,10 +5,11 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, VecDeque},
+    future::Future,
     sync::Arc,
 };
 
-use futures::future;
+use futures::{future, stream::FuturesUnordered};
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
@@ -17,12 +18,12 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, LiteCertificate,
     },
-    ChainStateView,
+    ChainError, ChainStateView,
 };
-use linera_execution::{Query, Response};
+use linera_execution::{ExecutionError, Query, Response, SystemExecutionError};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
-use rand::seq::SliceRandom as _;
+use rand::{prelude::SliceRandom, thread_rng};
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
 use tracing::warn;
@@ -84,6 +85,36 @@ pub enum LocalNodeError {
 
     #[error(transparent)]
     NodeError(#[from] NodeError),
+}
+
+impl LocalNodeError {
+    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) => {
+                match **chain_error {
+                    ChainError::ExecutionError(
+                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
+                            blob_id,
+                        )),
+                        _,
+                    )
+                    | ChainError::ExecutionError(
+                        ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
+                        _,
+                    ) => Some(vec![blob_id]),
+                    _ => None,
+                }
+            }
+            LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
+                Some(blob_ids.clone())
+            }
+            LocalNodeError::NodeError(NodeError::BlobNotFoundOnRead(blob_id)) => {
+                Some(vec![*blob_id])
+            }
+            LocalNodeError::NodeError(NodeError::BlobsNotFound(blob_ids)) => Some(blob_ids.clone()),
+            _ => None,
+        }
+    }
 }
 
 impl<S> LocalNodeClient<S>
@@ -273,13 +304,17 @@ where
                 .await;
 
             result = match &result {
-                Err(LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids))) => {
-                    let blobs = remote_node.try_download_blobs(blob_ids).await;
-                    if blobs.len() != blob_ids.len() {
-                        result
+                Err(err) => {
+                    if let Some(blob_ids) = err.get_blobs_not_found() {
+                        let blobs = remote_node.try_download_blobs(blob_ids.as_slice()).await;
+                        if blobs.len() != blob_ids.len() {
+                            result
+                        } else {
+                            self.handle_certificate(certificate, blobs, notifications)
+                                .await
+                        }
                     } else {
-                        self.handle_certificate(certificate, blobs, notifications)
-                            .await
+                        result
                     }
                 }
                 _ => result,
@@ -370,7 +405,7 @@ where
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
-        validators.shuffle(&mut rand::thread_rng());
+        validators.shuffle(&mut thread_rng());
         for remote_node in validators {
             let info = self.local_chain_info(chain_id).await?;
             if target_next_block_height <= info.next_block_height {
@@ -460,13 +495,34 @@ where
     ) -> Option<Blob> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
-        validators.shuffle(&mut rand::thread_rng());
+        validators.shuffle(&mut thread_rng());
         for remote_node in validators {
             if let Some(blob) = remote_node.try_download_blob(blob_id).await {
                 return Some(blob);
             }
         }
         None
+    }
+
+    #[tracing::instrument(level = "trace", skip(validators))]
+    pub async fn download_certificate_for_blob_from_validators_futures(
+        validators: &[RemoteNode<impl ValidatorNode>],
+        blob_id: BlobId,
+    ) -> FuturesUnordered<impl Future<Output = Option<Certificate>> + '_> {
+        let futures = FuturesUnordered::new();
+
+        let mut validators: Vec<_> = validators.iter().collect();
+        validators.shuffle(&mut thread_rng());
+        for remote_node in validators {
+            futures.push(async move {
+                remote_node
+                    .download_certificate_for_blob(blob_id)
+                    .await
+                    .ok()
+            });
+        }
+
+        futures
     }
 
     #[tracing::instrument(level = "trace", skip(nodes))]

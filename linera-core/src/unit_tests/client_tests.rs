@@ -1420,7 +1420,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::BlobNotFound(not_found_blob_id)) if not_found_blob_id == blob0_id
+        Err(ChainClientError::BlobsNotFound(not_found_blob_ids)) if not_found_blob_ids == [blob0_id]
     );
 
     // Take one validator down

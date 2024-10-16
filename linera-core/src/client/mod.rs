@@ -17,7 +17,7 @@ use dashmap::{
     DashMap,
 };
 use futures::{
-    future::{self, FusedFuture, Future},
+    future::{self, try_join_all, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -500,8 +500,8 @@ pub enum ChainClientError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Blob not found: {0}")]
-    BlobNotFound(BlobId),
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1493,21 +1493,12 @@ where
                 .handle_block_proposal(*proposal.clone())
                 .await
             {
-                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) =
-                    &original_err
-                {
-                    if let ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
-                            blob_id,
-                        )),
-                        _,
-                    ) = &**chain_error
-                    {
-                        self.update_local_node_with_blob_from(*blob_id, remote_node)
-                            .await?;
-                        continue; // We found the missing blob: retry.
-                    }
+                if let Some(blob_ids) = original_err.get_blobs_not_found() {
+                    self.update_local_node_with_blobs_from(blob_ids, remote_node)
+                        .await?;
+                    continue; // We found the missing blobs: retry.
                 }
+
                 warn!(
                     "Skipping proposal from {} and validator {}: {}",
                     owner, remote_node.name, original_err
@@ -1543,40 +1534,76 @@ where
 
     /// Downloads and processes from the specified validator a confirmed block certificate that
     /// uses the given blob. If this succeeds, the blob will be in our storage.
-    async fn update_local_node_with_blob_from(
+    async fn update_local_node_with_blobs_from(
         &self,
-        blob_id: BlobId,
+        blob_ids: Vec<BlobId>,
         remote_node: &RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
-        let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
-        // This will download all ancestors of the certificate and process all of them locally.
-        self.receive_certificate(certificate).await?;
+        try_join_all(blob_ids.into_iter().map(|blob_id| async move {
+            let certificate = remote_node.download_certificate_for_blob(blob_id).await?;
+            // This will download all ancestors of the certificate and process all of them locally.
+            self.receive_certificate(certificate).await
+        }))
+        .await?;
+
         Ok(())
     }
 
     /// Downloads and processes a confirmed block certificate that uses the given blob.
     /// If this succeeds, the blob will be in our storage.
-    async fn receive_certificate_for_blob(&self, blob_id: BlobId) -> Result<(), ChainClientError> {
+    pub async fn receive_certificate_for_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<(), ChainClientError> {
+        self.receive_certificates_for_blobs(vec![blob_id]).await
+    }
+
+    /// Downloads and processes confirmed block certificates that use the given blobs.
+    /// If this succeeds, the blobs will be in our storage.
+    pub async fn receive_certificates_for_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<(), ChainClientError> {
         let validators = self.validator_nodes().await?;
-        let mut tasks = FuturesUnordered::new();
-        for remote_node in validators {
-            let remote_node = remote_node.clone();
-            tasks.push(async move {
-                let cert = remote_node
-                    .download_certificate_for_blob(blob_id)
-                    .await
-                    .ok()?;
-                self.receive_certificate(cert).await.ok()
-            });
+        let mut tasks = BTreeMap::new();
+
+        for blob_id in blob_ids {
+            if tasks.contains_key(&blob_id) {
+                continue;
+            }
+
+            tasks.insert(
+                blob_id,
+                LocalNodeClient::<S>::download_certificate_for_blob_from_validators_futures(
+                    &validators,
+                    blob_id,
+                )
+                .await,
+            );
         }
 
-        while let Some(result) = tasks.next().await {
-            if result.is_some() {
-                return Ok(());
+        let mut missing_blobs = Vec::new();
+        for (blob_id, mut blob_id_tasks) in tasks {
+            let mut found_blob = false;
+            while let Some(result) = blob_id_tasks.next().await {
+                if let Some(cert) = result {
+                    if self.receive_certificate(cert).await.is_ok() {
+                        found_blob = true;
+                        break;
+                    }
+                }
+            }
+
+            if !found_blob {
+                missing_blobs.push(blob_id);
             }
         }
 
-        Err(ChainClientError::BlobNotFound(blob_id))
+        if missing_blobs.is_empty() {
+            Ok(())
+        } else {
+            Err(ChainClientError::BlobsNotFound(missing_blobs))
+        }
     }
 
     /// Attempts to execute the block locally. If any incoming message execution fails, that
@@ -1634,14 +1661,9 @@ where
                 .local_node
                 .stage_block_execution(block.clone())
                 .await;
-            if let Err(LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))) = &result
-            {
-                if let ChainError::ExecutionError(
-                    ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
-                    _,
-                ) = &**chain_error
-                {
-                    self.receive_certificate_for_blob(*blob_id).await?;
+            if let Err(err) = &result {
+                if let Some(blob_ids) = err.get_blobs_not_found() {
+                    self.receive_certificates_for_blobs(blob_ids).await?;
                     continue; // We found the missing blob: retry.
                 }
             }
