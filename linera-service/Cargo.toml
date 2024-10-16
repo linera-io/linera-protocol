@@ -16,8 +16,11 @@ ethereum = []
 default = ["wasmer", "rocksdb"]
 test = [
     "linera-base/test",
-    "linera-views/test",
+    "linera-chain/test",
+    "linera-core/test",
     "linera-execution/test",
+    "linera-storage/test",
+    "linera-views/test",
     "dep:stdext",
 ]
 benchmark = ["linera-base/test", "linera-client/benchmark", "dep:linera-sdk"]

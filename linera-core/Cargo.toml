@@ -89,7 +89,11 @@ assert_matches.workspace = true
 counter.workspace = true
 criterion.workspace = true
 fungible.workspace = true
+linera-base = { workspace = true, features = ["test"] }
+linera-chain = { workspace = true, features = ["test"] }
 linera-core = { path = ".", features = ["test"] }
+linera-execution = { workspace = true, features = ["test"] }
+linera-storage = { workspace = true, features = ["test"] }
 linera-views.workspace = true
 meta-counter.workspace = true
 serde_json.workspace = true
@@ -98,7 +102,9 @@ test-case.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-criterion = { workspace = true, default-features = true, features = ["async_tokio"] }
+criterion = { workspace = true, default-features = true, features = [
+    "async_tokio",
+] }
 
 [package.metadata.cargo-machete]
 ignored = ["async-graphql", "proptest"]
