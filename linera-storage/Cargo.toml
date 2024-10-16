@@ -49,7 +49,6 @@ serde.workspace = true
 anyhow.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
-linera-execution = { workspace = true, features = ["test"] }
 linera-storage = { path = ".", features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
 
