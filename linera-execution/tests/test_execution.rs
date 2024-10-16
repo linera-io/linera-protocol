@@ -22,11 +22,12 @@ use linera_execution::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
+    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemOperation,
+    TransactionTracker,
 };
-use linera_views::batch::Batch;
+use linera_views::{batch::Batch, context::Context, views::View};
 
 fn make_operation_context() -> OperationContext {
     OperationContext {
@@ -44,8 +45,16 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (app_id, app_desc) =
+    let (app_id, app_desc, contract_blob, service_blob) =
         &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
+    view.context()
+        .extra()
+        .add_blob(contract_blob.clone())
+        .await?;
+    view.context()
+        .extra()
+        .add_blob(service_blob.clone())
+        .await?;
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
@@ -77,10 +86,10 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -264,10 +273,10 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -377,10 +386,10 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -451,7 +460,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 1).await?;
-    let (id, application) = applications
+    let (id, application, _, _) = applications
         .next()
         .expect("Mock application should be registered");
 
@@ -492,16 +501,16 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 4).await?;
-    let (first_id, first_application) = applications
+    let (first_id, first_application, _, _) = applications
         .next()
         .expect("First mock application should be registered");
-    let (second_id, second_application) = applications
+    let (second_id, second_application, _, _) = applications
         .next()
         .expect("Second mock application should be registered");
-    let (third_id, third_application) = applications
+    let (third_id, third_application, _, _) = applications
         .next()
         .expect("Third mock application should be registered");
-    let (fourth_id, fourth_application) = applications
+    let (fourth_id, fourth_application, _, _) = applications
         .next()
         .expect("Fourth mock application should be registered");
 
@@ -563,16 +572,16 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 4).await?;
-    let (first_id, first_application) = applications
+    let (first_id, first_application, _, _) = applications
         .next()
         .expect("First mock application should be registered");
-    let (second_id, second_application) = applications
+    let (second_id, second_application, _, _) = applications
         .next()
         .expect("Second mock application should be registered");
-    let (third_id, third_application) = applications
+    let (third_id, third_application, _, _) = applications
         .next()
         .expect("Third mock application should be registered");
-    let (fourth_id, fourth_application) = applications
+    let (fourth_id, fourth_application, _, _) = applications
         .next()
         .expect("Fourth mock application should be registered");
 
@@ -745,10 +754,10 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, _target_application) = applications
+    let (target_id, _target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -798,10 +807,10 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -857,10 +866,10 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -919,10 +928,10 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -949,7 +958,9 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
                 application_id: caller_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut TransactionTracker::new(
+                0,
+                Some(Vec::new())),
             &mut controller,
         )
         .await,
@@ -968,7 +979,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 1).await?;
-    let (application_id, application) = applications
+    let (application_id, application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
 
@@ -1061,10 +1072,10 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 2).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -1169,13 +1180,13 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     let mut view = state.into_view().await;
 
     let mut applications = register_mock_applications(&mut view, 3).await?;
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
-    let (middle_id, middle_application) = applications
+    let (middle_id, middle_application, _, _) = applications
         .next()
         .expect("Middle mock application should be registered");
-    let (target_id, target_application) = applications
+    let (target_id, target_application, _, _) = applications
         .next()
         .expect("Target mock application should be registered");
 
@@ -1300,15 +1311,15 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
     let mut applications = register_mock_applications(&mut view, 3).await?;
     // The entrypoint application, which sends a message and calls other applications
-    let (caller_id, caller_application) = applications
+    let (caller_id, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
     // An application that does not send any messages
-    let (silent_target_id, silent_target_application) = applications
+    let (silent_target_id, silent_target_application, _, _) = applications
         .next()
         .expect("Target mock application that doesn't send messages should be registered");
     // An application that sends a message when handling a cross-application call
-    let (sending_target_id, sending_target_application) = applications
+    let (sending_target_id, sending_target_application, _, _) = applications
         .next()
         .expect("Target mock application that sends a message should be registered");
 
@@ -1493,7 +1504,7 @@ async fn test_open_chain() {
     };
     let mut view = state.into_view().await;
     let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
-    let (application_id, application) = applications.next().unwrap();
+    let (application_id, application, _, _) = applications.next().unwrap();
 
     let context = OperationContext {
         height: BlockHeight(1),
@@ -1595,7 +1606,7 @@ async fn test_close_chain() {
     };
     let mut view = state.into_view().await;
     let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
-    let (application_id, application) = applications.next().unwrap();
+    let (application_id, application, _, _) = applications.next().unwrap();
 
     // The application is not authorized to close the chain.
     let context = make_operation_context();
