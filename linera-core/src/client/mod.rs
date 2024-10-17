@@ -1176,7 +1176,7 @@ where
                     }
                     _ => {
                         error!("Validator sent more than one certificate hash for a single block.");
-                        break;
+                        return Err(NodeError::InvalidChainInfoResponse);
                     }
                 };
 
@@ -1239,7 +1239,7 @@ where
             Ok(HandleCertificateResult::New)
         } else {
             // We don't accept a certificate from a committee that was retired.
-            return Ok(HandleCertificateResult::OldEpoch);
+            Ok(HandleCertificateResult::OldEpoch)
         }
     }
 
