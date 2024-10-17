@@ -39,6 +39,8 @@ pub enum Error {
     WalletAlreadyExists(PathBuf),
     #[error("default configuration directory not supported: please specify a path")]
     NoDefaultConfigurationDirectory,
+    #[error("no wallet found")]
+    NonexistentWallet,
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("storage error: {0}")]
@@ -52,8 +54,8 @@ pub enum Error {
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 
-#[cfg(with_local_storage)]
-util::impl_from_dynamic!(Error:Persistence, persistent::local_storage::Error);
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
 
 util::impl_from_infallible!(Error);
 
@@ -86,8 +88,9 @@ pub struct ClientOptions {
     #[arg(long = "recv-timeout-ms", default_value = "4000", value_parser = util::parse_millis)]
     pub recv_timeout: Duration,
 
+    /// The maximum number of incoming message bundles to include in a block proposal.
     #[arg(long, default_value = "10")]
-    pub max_pending_messages: usize,
+    pub max_pending_message_bundles: usize,
 
     /// The WebAssembly runtime to use.
     #[arg(long)]
@@ -109,17 +112,17 @@ pub struct ClientOptions {
     #[command(subcommand)]
     pub command: ClientCommand,
 
-    /// Delay increment for retrying to connect to a validator for notifications.
+    /// Delay increment for retrying to connect to a validator.
     #[arg(
-        long = "notification-retry-delay-ms",
+        long = "retry-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis
     )]
-    pub notification_retry_delay: Duration,
+    pub retry_delay: Duration,
 
-    /// Number of times to retry connecting to a validator for notifications.
+    /// Number of times to retry connecting to a validator.
     #[arg(long, default_value = "10")]
-    pub notification_retries: u32,
+    pub max_retries: u32,
 
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
@@ -172,7 +175,7 @@ impl ClientOptions {
     }
 
     pub async fn run_with_storage<R: Runnable>(&self, job: R) -> Result<R::Output, Error> {
-        let genesis_config = self.wallet()?.genesis_config().clone();
+        let genesis_config = self.wallet().await?.genesis_config().clone();
         let output = Box::pin(run_with_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
@@ -207,7 +210,7 @@ impl ClientOptions {
     }
 
     pub async fn initialize_storage(&self) -> Result<(), Error> {
-        let wallet = self.wallet()?;
+        let wallet = self.wallet().await?;
         full_initialize_storage(
             self.storage_config()?
                 .add_common_config(self.common_config())
@@ -221,7 +224,7 @@ impl ClientOptions {
 
 #[cfg(feature = "fs")]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
+    pub async fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
         let wallet = persistent::File::read(&self.wallet_path()?)?;
         Ok(WalletState::new(wallet))
     }
@@ -260,20 +263,22 @@ impl ClientOptions {
     }
 }
 
-#[cfg(with_local_storage)]
+#[cfg(with_indexed_db)]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<persistent::LocalStorage<Wallet>>, Error> {
-        Ok(WalletState::new(persistent::LocalStorage::read(
-            "linera-wallet",
-        )?))
+    pub async fn wallet(&self) -> Result<WalletState<persistent::IndexedDb<Wallet>>, Error> {
+        Ok(WalletState::new(
+            persistent::IndexedDb::read("linera-wallet")
+                .await?
+                .ok_or(Error::NonexistentWallet)?,
+        ))
     }
 }
 
 #[cfg(not(with_persist))]
 impl ClientOptions {
-    pub fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
+    pub async fn wallet(&self) -> Result<WalletState<persistent::Memory<Wallet>>, Error> {
         #![allow(unreachable_code)]
-        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `local_storage` features");
+        let _wallet = unimplemented!("No persistence backend selected for wallet; please use one of the `fs` or `indexed-db` features");
         Ok(WalletState::new(persistent::Memory::new(_wallet)))
     }
 }
@@ -835,7 +840,7 @@ pub enum NetCommand {
         /// The number of initial "root" chains created in the genesis config on top of
         /// the default "admin" chain. All initial chains belong to the first "admin"
         /// wallet.
-        #[arg(long, default_value = "10")]
+        #[arg(long, default_value = "2")]
         other_initial_chains: u32,
 
         /// The initial amount of native tokens credited in the initial "root" chains,

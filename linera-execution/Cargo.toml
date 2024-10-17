@@ -42,7 +42,7 @@ cfg-if.workspace = true
 clap.workspace = true
 custom_debug_derive.workspace = true
 dashmap.workspace = true
-derive_more.workspace = true
+derive_more = { workspace = true, features = ["display"] }
 futures.workspace = true
 linera-base.workspace = true
 linera-views.workspace = true

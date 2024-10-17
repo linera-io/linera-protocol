@@ -43,7 +43,7 @@ impl LineraNetConfig for RemoteNetTestingConfig {
             .expect("Creating RemoteNet should not fail");
 
         let client = net.make_client().await;
-        // The tests assume we've created a genesis config with 10
+        // The tests assume we've created a genesis config with 2
         // chains with 10 tokens each. We create the first chain here
         client
             .wallet_init(&[], FaucetOption::NewChain(&self.faucet))
@@ -115,10 +115,12 @@ impl RemoteNet {
     async fn new(testing_prng_seed: Option<u64>, faucet: &Faucet) -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         // Write json config to disk
-        Persist::persist(&mut persistent::File::new(
+        persistent::File::new(
             tmp_dir.path().join("genesis.json").as_path(),
             faucet.genesis_config().await?,
-        )?)?;
+        )?
+        .persist()
+        .await?;
         Ok(Self {
             network: Network::Grpc,
             testing_prng_seed,

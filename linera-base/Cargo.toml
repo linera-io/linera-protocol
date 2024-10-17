@@ -20,6 +20,7 @@ web = [
     "rand/getrandom",
     "rand/std",
     "rand/std_rng",
+    "tracing-web",
     "web-time",
     "wasm-bindgen-futures",
 ]
@@ -58,6 +59,7 @@ web-time = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ruzstd.workspace = true
+tracing-web = { optional = true, workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 chrono.workspace = true

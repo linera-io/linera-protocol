@@ -86,7 +86,7 @@ mod tests {
     /// Checks the internal state before and after the first and second polls, and ensures that
     /// only the first poll returns [`Poll::Pending`].
     #[test]
-    #[allow(clippy::bool_assert_comparison)]
+    #[expect(clippy::bool_assert_comparison)]
     fn yield_once_returns_pending_only_on_first_call() {
         let mut future = yield_once();
 

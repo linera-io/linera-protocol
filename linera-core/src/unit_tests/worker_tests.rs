@@ -168,7 +168,7 @@ where
         .unwrap()
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_simple_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
@@ -200,7 +200,7 @@ where
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
@@ -234,7 +234,7 @@ where
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
@@ -1911,7 +1911,7 @@ where
         );
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_nth(0);
+    let query = ChainInfoQuery::new(ChainId::root(2)).with_received_log_excluding_first_n(0);
     let (response, _actions) = worker.handle_chain_info_query(query).await?;
     assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(

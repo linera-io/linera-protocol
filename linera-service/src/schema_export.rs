@@ -13,13 +13,14 @@ use linera_chain::data_types::{
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
     wallet::Wallet,
+    Error,
 };
 use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, LocalValidatorNodeProvider, NodeError, NotificationStream,
-        ValidatorNode,
+        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        ValidatorNodeProvider,
     },
 };
 use linera_execution::committee::{Committee, ValidatorName};
@@ -99,7 +100,7 @@ impl ValidatorNode for DummyValidatorNode {
 
 struct DummyValidatorNodeProvider;
 
-impl LocalValidatorNodeProvider for DummyValidatorNodeProvider {
+impl ValidatorNodeProvider for DummyValidatorNodeProvider {
     type Node = DummyValidatorNode;
 
     fn make_node(&self, _address: &str) -> Result<Self::Node, NodeError> {
@@ -127,7 +128,7 @@ struct DummyContext<P, S> {
 }
 
 #[async_trait]
-impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientContext
+impl<P: ValidatorNodeProvider + Send, S: Storage + Clone + Send + Sync + 'static> ClientContext
     for DummyContext<P, S>
 {
     type ValidatorNodeProvider = P;
@@ -137,16 +138,27 @@ impl<P: LocalValidatorNodeProvider + Send, S: Storage + Send + Sync> ClientConte
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<P, S> {
+    fn make_chain_client(&self, _: ChainId) -> Result<ChainClient<P, S>, Error> {
         unimplemented!()
     }
 
-    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {}
+    async fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
 
-    async fn update_wallet(&mut self, _: &ChainClient<P, S>) {}
+    async fn update_wallet(&mut self, _: &ChainClient<P, S>) -> Result<(), Error> {
+        Ok(())
+    }
 
-    fn clients(&self) -> Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>> {
-        vec![]
+    fn clients(
+        &self,
+    ) -> Result<Vec<ChainClient<Self::ValidatorNodeProvider, Self::Storage>>, Error> {
+        Ok(vec![])
     }
 }
 
@@ -161,10 +173,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("storage");
     let config = ChainListenerConfig::default();
-    let context = DummyContext {
+    let context = DummyContext::<DummyValidatorNodeProvider, _> {
         _phantom: std::marker::PhantomData,
     };
-    let service = NodeService::<DummyValidatorNodeProvider, _, _>::new(
+    let service = NodeService::new(
         config,
         std::num::NonZeroU16::new(8080).unwrap(),
         None,

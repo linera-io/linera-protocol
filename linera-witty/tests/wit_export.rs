@@ -140,7 +140,7 @@ pub struct Setters;
 
 #[wit_export(package = "witty-macros:test-modules")]
 impl Setters {
-    #[allow(clippy::bool_assert_comparison)]
+    #[expect(clippy::bool_assert_comparison)]
     fn set_bool(value: bool) {
         assert_eq!(value, false);
     }

@@ -271,7 +271,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
         for i in 0..10 {
             // Add a new block on the chain, triggering a notification.
             client1
-                .transfer(Amount::from_tokens(1), chain, ChainId::root(9))
+                .transfer(Amount::from_tokens(1), chain, ChainId::root(1))
                 .await?;
             tokio::time::sleep(Duration::from_secs(i)).await;
             height += 1;
@@ -313,7 +313,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
         net.remove_validator(i)?;
     }
     let result = client
-        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(5))
+        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(1))
         .await;
     assert!(result.is_err());
     // The transfer didn't get confirmed.
@@ -537,7 +537,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
 
     let (mut net, client) = config.instantiate().await?;
 
-    assert_eq!(client.load_wallet()?.num_chains(), 2);
+    assert_eq!(client.load_wallet()?.num_chains(), 3);
     // Launch local benchmark using all user chains and creating additional ones.
     client.benchmark(2, 4, 10, None).await?;
     assert_eq!(client.load_wallet()?.num_chains(), 4);

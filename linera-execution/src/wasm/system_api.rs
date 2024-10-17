@@ -735,7 +735,7 @@ where
     }
 
     /// Waits for the promise to search for entries whose keys that start with the `key_prefix`.
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_wait(
         caller: &mut Caller,
         promise_id: u32,

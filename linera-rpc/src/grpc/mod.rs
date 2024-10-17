@@ -15,8 +15,6 @@ pub use node_provider::*;
 #[cfg(with_server)]
 pub use server::*;
 
-#[allow(clippy::derive_partial_eq_without_eq)]
-// https://github.com/hyperium/tonic/issues/1056
 pub mod api {
     tonic::include_proto!("rpc.v1");
 }

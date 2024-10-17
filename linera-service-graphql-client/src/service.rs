@@ -41,7 +41,7 @@ mod types {
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-    #[allow(clippy::enum_variant_names)]
+    #[expect(clippy::enum_variant_names)]
     pub enum Reason {
         NewBlock {
             height: BlockHeight,

@@ -252,7 +252,7 @@ type ChainTipState {
 	"""
 	nextBlockHeight: BlockHeight!
 	"""
-	Number of incoming messages.
+	Number of incoming message bundles.
 	"""
 	numIncomingBundles: Int!
 	"""

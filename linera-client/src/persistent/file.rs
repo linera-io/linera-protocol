@@ -9,7 +9,7 @@ use std::{
 use fs4::FileExt as _;
 use thiserror_context::Context;
 
-use super::Persist;
+use super::{Dirty, Persist};
 
 /// A guard that keeps an exclusive lock on a file.
 struct Lock(fs_err::File);
@@ -83,12 +83,20 @@ pub struct File<T> {
     _lock: Lock,
     path: std::path::PathBuf,
     value: T,
+    dirty: Dirty,
 }
 
 impl<T> std::ops::Deref for File<T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.value
+    }
+}
+
+impl<T> std::ops::DerefMut for File<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        *self.dirty = true;
+        &mut self.value
     }
 }
 
@@ -104,10 +112,10 @@ fn open_options() -> fs_err::OpenOptions {
     options
 }
 
-impl<T: serde::de::DeserializeOwned> File<T> {
+impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
     /// Creates a new persistent file at `path` containing `value`.
     pub fn new(path: &Path, value: T) -> Result<Self, Error> {
-        Ok(Self {
+        let this = Self {
             _lock: Lock::new(
                 fs_err::OpenOptions::new()
                     .read(true)
@@ -118,7 +126,9 @@ impl<T: serde::de::DeserializeOwned> File<T> {
             .with_context(|| format!("locking path {}", path.display()))?,
             path: path.into(),
             value,
-        })
+            dirty: Dirty::new(true),
+        };
+        Ok(this)
     }
 
     /// Reads the value from a file at `path`, returning an error if it does not exist.
@@ -140,24 +150,50 @@ impl<T: serde::de::DeserializeOwned> File<T> {
     ) -> Result<Self, Error> {
         let lock = Lock::new(open_options().read(true).open(path)?)?;
         let mut reader = io::BufReader::new(&lock.0);
+        let dirty;
+
+        let value = if reader.fill_buf()?.is_empty() {
+            dirty = Dirty::new(true);
+            value()?
+        } else {
+            dirty = Dirty::new(false);
+            serde_json::from_reader(reader)?
+        };
 
         Ok(Self {
-            value: if reader.fill_buf()?.is_empty() {
-                value()?
-            } else {
-                serde_json::from_reader(reader)?
-            },
+            value,
             path: path.into(),
+            dirty,
             _lock: lock,
         })
     }
+
+    fn save(&mut self) -> Result<(), Error> {
+        let mut temp_file_path = self.path.clone();
+        temp_file_path.set_extension("json.new");
+        let temp_file = open_options().open(&temp_file_path)?;
+        let mut temp_file_writer = std::io::BufWriter::new(temp_file);
+
+        let remove_temp_file = || fs_err::remove_file(&temp_file_path);
+
+        serde_json::to_writer_pretty(&mut temp_file_writer, &self.value)
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
+        temp_file_writer
+            .flush()
+            .map_err(Error::from)
+            .or_cleanup(remove_temp_file)?;
+        fs_err::rename(&temp_file_path, &self.path)?;
+        *self.dirty = false;
+        Ok(())
+    }
 }
 
-impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
+impl<T: serde::Serialize + serde::de::DeserializeOwned + Send> Persist for File<T> {
     type Error = Error;
 
-    fn as_mut(this: &mut Self) -> &mut T {
-        &mut this.value
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.value
     }
 
     /// Writes the value to disk.
@@ -169,27 +205,12 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> Persist for File<T> {
     /// The temporary file is then renamed to the original filename. If
     /// serialization or writing to disk fails, the temporary file is
     /// deleted.
-    fn persist(this: &mut Self) -> Result<(), Error> {
-        let mut temp_file_path = this.path.clone();
-        temp_file_path.set_extension("json.new");
-        let temp_file = open_options().open(&temp_file_path)?;
-        let mut temp_file_writer = std::io::BufWriter::new(temp_file);
-
-        let remove_temp_file = || fs_err::remove_file(&temp_file_path);
-
-        serde_json::to_writer_pretty(&mut temp_file_writer, &this.value)
-            .map_err(Error::from)
-            .or_cleanup(remove_temp_file)?;
-        temp_file_writer
-            .flush()
-            .map_err(Error::from)
-            .or_cleanup(remove_temp_file)?;
-        fs_err::rename(&temp_file_path, &this.path)?;
-        Ok(())
+    async fn persist(&mut self) -> Result<(), Error> {
+        self.save()
     }
 
     /// Takes the value out, releasing the lock on the persistent file.
-    fn into_value(this: Self) -> T {
-        this.value
+    fn into_value(self) -> T {
+        self.value
     }
 }

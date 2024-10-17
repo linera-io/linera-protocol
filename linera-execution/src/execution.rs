@@ -144,7 +144,7 @@ where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn run_user_action(
         &mut self,
         application_id: UserApplicationId,
@@ -171,7 +171,7 @@ where
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn run_user_action_with_runtime(
         &mut self,
         application_id: UserApplicationId,

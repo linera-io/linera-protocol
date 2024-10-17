@@ -420,7 +420,7 @@ mod tests {
     // The key splitting means that when a key is overwritten
     // some previous segments may still be present.
     #[tokio::test]
-    #[allow(clippy::assertions_on_constants)]
+    #[expect(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
         let store = LimitedTestMemoryStore::new();
         const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;

@@ -102,7 +102,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--recv-timeout-ms <RECV_TIMEOUT>` — Timeout for receiving responses (milliseconds)
 
   Default value: `4000`
-* `--max-pending-messages <MAX_PENDING_MESSAGES>`
+* `--max-pending-message-bundles <MAX_PENDING_MESSAGE_BUNDLES>` — The maximum number of incoming message bundles to include in a block proposal
 
   Default value: `10`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
@@ -113,10 +113,10 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `--cache-size <CACHE_SIZE>` — The maximal number of entries in the storage cache
 
   Default value: `1000`
-* `--notification-retry-delay-ms <NOTIFICATION_RETRY_DELAY>` — Delay increment for retrying to connect to a validator for notifications
+* `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`
-* `--notification-retries <NOTIFICATION_RETRIES>` — Number of times to retry connecting to a validator for notifications
+* `--max-retries <MAX_RETRIES>` — Number of times to retry connecting to a validator
 
   Default value: `10`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
@@ -848,7 +848,7 @@ Start a Local Linera Network
 * `--extra-wallets <EXTRA_WALLETS>` — The number of extra wallets and user chains to initialise. Default is 0
 * `--other-initial-chains <OTHER_INITIAL_CHAINS>` — The number of initial "root" chains created in the genesis config on top of the default "admin" chain. All initial chains belong to the first "admin" wallet
 
-  Default value: `10`
+  Default value: `2`
 * `--initial-amount <INITIAL_AMOUNT>` — The initial amount of native tokens credited in the initial "root" chains, including the default "admin" chain
 
   Default value: `1000000`

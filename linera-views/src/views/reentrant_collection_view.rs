@@ -75,7 +75,6 @@ impl<T> std::ops::DerefMut for WriteGuardedView<T> {
 /// A view that supports accessing a collection of views of the same kind, indexed by `Vec<u8>`,
 /// possibly several subviews at a time.
 #[derive(Debug)]
-#[allow(clippy::type_complexity)]
 pub struct ReentrantByteCollectionView<C, W> {
     /// The view [`Context`].
     context: C,

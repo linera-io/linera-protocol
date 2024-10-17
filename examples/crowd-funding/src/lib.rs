@@ -324,7 +324,6 @@ impl std::fmt::Display for InstantiationArgument {
 
 /// Operations that can be executed by the application.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
-#[allow(clippy::large_enum_variant)]
 pub enum Operation {
     /// Pledge some tokens to the campaign (from an account on the current chain to the campaign chain).
     Pledge { owner: AccountOwner, amount: Amount },
@@ -336,7 +335,6 @@ pub enum Operation {
 
 /// Messages that can be exchanged across chains from the same application instance.
 #[derive(Debug, Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
 pub enum Message {
     /// Pledge some tokens to the campaign (from an account on the receiver chain).
     PledgeWithAccount { owner: AccountOwner, amount: Amount },

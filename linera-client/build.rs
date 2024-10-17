@@ -10,8 +10,8 @@ fn main() {
             feature = "dynamodb",
             feature = "storage-service"
         ) },
-        with_persist: { any(feature = "fs", with_local_storage) },
-        with_local_storage: { all(web, feature = "local_storage") },
+        with_persist: { any(feature = "fs", with_indexed_db) },
+        with_indexed_db: { all(web, feature = "indexed-db") },
         with_testing: { any(test, feature = "test") },
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
     };

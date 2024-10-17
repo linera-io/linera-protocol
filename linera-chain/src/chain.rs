@@ -80,7 +80,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             1.0, 2.5, 5.0, 10.0, 25.0, 50.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -122,7 +122,7 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             100_000.0, 250_000.0, 500_000.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -133,7 +133,7 @@ static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         &[],
         Some(vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -160,7 +160,7 @@ static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             8_388_608.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -187,7 +187,7 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             8_388_608.0,
         ]),
     )
-    .expect("Counter creation should not fail")
+    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -278,7 +278,7 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-    /// Number of incoming messages.
+    /// Number of incoming message bundles.
     pub num_incoming_bundles: u32,
     /// Number of operations.
     pub num_operations: u32,
@@ -615,7 +615,7 @@ where
         Ok(true)
     }
 
-    /// Removes the incoming messages in the block from the inboxes.
+    /// Removes the incoming message bundles in the block from the inboxes.
     pub async fn remove_bundles_from_inboxes(&mut self, block: &Block) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
         let mut bundles_by_origin: BTreeMap<_, Vec<&MessageBundle>> = Default::default();
@@ -683,7 +683,7 @@ where
     /// * Modifies the state of outboxes and channels, if needed.
     /// * As usual, in case of errors, `self` may not be consistent any more and should be thrown
     ///   away.
-    /// * Returns the list of messages caused by the block being executed.
+    /// * Returns the outcome of the execution.
     pub async fn execute_block(
         &mut self,
         block: &Block,
@@ -919,7 +919,7 @@ where
     }
 
     /// Executes a message as part of an incoming bundle in a block.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn execute_message_in_block(
         &mut self,
         message_id: MessageId,

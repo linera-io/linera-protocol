@@ -43,7 +43,6 @@ where
     type ImportParameters = Parameter;
     type ExportParameters = (Parameter,);
 
-    #[allow(clippy::unused_unit)]
     fn into_wasmer(self) -> Self::ImportParameters {
         let hlist_pat![parameter] = self;
 

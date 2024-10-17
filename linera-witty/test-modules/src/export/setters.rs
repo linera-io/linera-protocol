@@ -14,7 +14,7 @@ use self::exports::witty_macros::test_modules::setters::Setters;
 struct Implementation;
 
 impl Setters for Implementation {
-    #[allow(clippy::bool_assert_comparison)]
+    #[expect(clippy::bool_assert_comparison)]
     fn set_bool(value: bool) {
         assert_eq!(value, false);
     }

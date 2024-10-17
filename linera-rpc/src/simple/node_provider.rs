@@ -3,7 +3,7 @@
 
 use std::str::FromStr as _;
 
-use linera_core::node::{LocalValidatorNodeProvider, NodeError};
+use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::SimpleClient;
 use crate::{config::ValidatorPublicNetworkPreConfig, node_provider::NodeOptions};
@@ -18,7 +18,7 @@ impl SimpleNodeProvider {
     }
 }
 
-impl LocalValidatorNodeProvider for SimpleNodeProvider {
+impl ValidatorNodeProvider for SimpleNodeProvider {
     type Node = SimpleClient;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {

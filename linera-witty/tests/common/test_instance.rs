@@ -470,7 +470,6 @@ where
             assert_eq!(value, expected_value);
         }
 
-        #[allow(clippy::bool_assert_comparison)]
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/entrypoint#entrypoint",
@@ -515,7 +514,6 @@ where
                 .unwrap_or_else(|error| panic!("Failed to call setter function {name:?}: {error}"));
         }
 
-        #[allow(clippy::bool_assert_comparison)]
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/entrypoint#entrypoint",
@@ -558,7 +556,6 @@ where
             assert_eq!(result, expected_result);
         }
 
-        #[allow(clippy::bool_assert_comparison)]
         self.mock_exported_function(
             instance,
             "witty-macros:test-modules/entrypoint#entrypoint",
