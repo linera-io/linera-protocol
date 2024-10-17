@@ -1162,7 +1162,6 @@ where
                 .info;
             if !local_response.requested_sent_certificate_hashes.is_empty() {
                 // We've already processed incoming messages for this certificate.
-                // TODO: We verify it's non-empty but how do we make sure we've processed ALL?
                 new_tracker += 1;
                 continue;
             }
