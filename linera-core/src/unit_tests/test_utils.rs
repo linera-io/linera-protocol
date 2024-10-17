@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroUsize,
     sync::Arc,
+    vec,
 };
 
 use async_trait::async_trait;
@@ -15,16 +16,17 @@ use futures::{
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{BlobId, ChainDescription, ChainId},
+    identifiers::{BlobId, ChainDescription, ChainId, UserApplicationId},
 };
 use linera_chain::data_types::{
     BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    ResourceControlPolicy, WasmRuntime,
+    test_utils::{register_mock_applications_internal, MockApplication},
+    ExecutionRuntimeContext, ExecutionStateView, ResourceControlPolicy, WasmRuntime,
 };
-use linera_storage::{DbStorage, Storage, TestClock};
+use linera_storage::{ChainRuntimeContext, DbStorage, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
@@ -33,7 +35,8 @@ use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
-    memory::MemoryStore, random::generate_test_namespace, store::TestKeyValueStore as _,
+    context::Context, memory::MemoryStore, random::generate_test_namespace,
+    store::TestKeyValueStore as _,
 };
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -1131,4 +1134,28 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
     fn clock(&self) -> &TestClock {
         &self.clock
     }
+}
+
+/// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
+///
+/// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
+/// [`MockApplication`]s.
+pub async fn register_mock_applications<C, S>(
+    state: &mut ExecutionStateView<C>,
+    count: u64,
+    storage: S,
+) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
+where
+    C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    let mock_applications = register_mock_applications_internal(state, count).await?;
+    for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
+        storage
+            .write_blobs(&[contract_blob.clone(), service_blob.clone()])
+            .await?;
+    }
+
+    Ok(mock_applications.into_iter())
 }

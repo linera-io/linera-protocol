@@ -22,10 +22,9 @@ use linera_execution::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
-    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemOperation,
-    TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
+    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 
@@ -49,12 +48,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
     view.context()
         .extra()
-        .add_blob(contract_blob.clone())
-        .await?;
-    view.context()
-        .extra()
-        .add_blob(service_blob.clone())
-        .await?;
+        .add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();

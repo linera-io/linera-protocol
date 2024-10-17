@@ -92,8 +92,9 @@ where
             .user_contracts()
             .insert(application_id, contract);
 
-        self.context().extra().add_blob(contract_blob).await?;
-        self.context().extra().add_blob(service_blob).await?;
+        self.context()
+            .extra()
+            .add_blobs(vec![contract_blob, service_blob]);
 
         let tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::default();

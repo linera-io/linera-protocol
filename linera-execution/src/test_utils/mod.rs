@@ -72,6 +72,23 @@ pub async fn register_mock_applications<C>(
     count: u64,
 ) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
 where
+    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    let mock_applications = register_mock_applications_internal(state, count).await?;
+    let extra = state.context().extra();
+    for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
+        extra.add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
+    }
+
+    Ok(mock_applications.into_iter())
+}
+
+pub async fn register_mock_applications_internal<C>(
+    state: &mut ExecutionStateView<C>,
+    count: u64,
+) -> anyhow::Result<Vec<(UserApplicationId, MockApplication, Blob, Blob)>>
+where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
@@ -85,19 +102,16 @@ where
             .collect();
     let extra = state.context().extra();
 
-    for (id, mock_application, contract_blob, service_blob) in &mock_applications {
+    for (id, mock_application, _contract_blob, _service_blob) in &mock_applications {
         extra
             .user_contracts()
             .insert(*id, mock_application.clone().into());
         extra
             .user_services()
             .insert(*id, mock_application.clone().into());
-
-        extra.add_blob(contract_blob.clone()).await?;
-        extra.add_blob(service_blob.clone()).await?;
     }
 
-    Ok(mock_applications.into_iter())
+    Ok(mock_applications)
 }
 
 pub async fn create_dummy_user_application_registrations<C>(

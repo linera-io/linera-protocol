@@ -424,11 +424,6 @@ where
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
     }
-
-    #[cfg(with_testing)]
-    async fn add_blob(&self, blob: Blob) -> Result<(), ViewError> {
-        self.storage.write_blob(&blob).await
-    }
 }
 
 /// A clock that can be used to get the current `Timestamp`.

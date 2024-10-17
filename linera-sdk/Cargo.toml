@@ -73,10 +73,6 @@ wasmtime.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-sdk = { path = ".", features = ["test"] }
-linera-base = { workspace = true, features = ["test"] }
-linera-core = { workspace = true, features = ["test"] }
-linera-storage = { workspace = true, features = ["test"] }
-linera-views = { workspace = true, features = ["test"] }
 tokio-test.workspace = true
 
 [build-dependencies]
