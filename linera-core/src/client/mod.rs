@@ -1187,7 +1187,7 @@ where
                 .await?;
 
             match self
-                .handle_certificate(max_epoch, &committees, certificate)
+                .check_certificate(max_epoch, &committees, certificate)
                 .await?
             {
                 HandleCertificateResult::FutureEpoch(certificate) => {
@@ -1218,7 +1218,7 @@ where
         Ok((remote_node.name, new_tracker, certificates))
     }
 
-    async fn handle_certificate(
+    async fn check_certificate(
         &self,
         highest_known_epoch: Epoch,
         committees: &BTreeMap<Epoch, Committee>,
