@@ -616,6 +616,12 @@ enum ReceiveCertificateMode {
     AlreadyChecked,
 }
 
+enum HandleCertificateResult {
+    OldEpoch,
+    New,
+    FutureEpoch,
+}
+
 impl<P, S> ChainClient<P, S>
 where
     P: ValidatorNodeProvider + Sync + 'static,
@@ -1138,11 +1144,13 @@ where
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
-        let mut certificates = Vec::new();
+        let mut certificates: Vec<Certificate> = Vec::new();
         let mut new_tracker = tracker;
+
         for entry in info.requested_received_log {
             let query = ChainInfoQuery::new(entry.chain_id)
                 .with_sent_certificate_hashes_in_range(BlockHeightRange::single(entry.height));
+
             let local_response = self
                 .client
                 .local_node
@@ -1150,64 +1158,89 @@ where
                 .await
                 .map_err(|error| NodeError::LocalNodeQuery {
                     error: error.to_string(),
-                })?;
-            if !local_response
-                .info
-                .requested_sent_certificate_hashes
-                .is_empty()
-            {
+                })?
+                .info;
+            if !local_response.requested_sent_certificate_hashes.is_empty() {
+                // We've already processed incoming messages for this certificate.
                 new_tracker += 1;
                 continue;
             }
 
-            let mut info = remote_node.handle_chain_info_query(query).await?;
-            let Some(certificate_hash) = info.requested_sent_certificate_hashes.pop() else {
-                break;
-            };
+            let remote_response = remote_node.handle_chain_info_query(query).await?;
+            let certificate_hash =
+                match remote_response.requested_sent_certificate_hashes.as_slice() {
+                    &[hash] => hash,
+                    [] => {
+                        warn!("Validator didn't have certificate he claimed to have.");
+                        break;
+                    }
+                    _ => {
+                        error!("Validator sent more than one certificate hash for a single block.");
+                        return Err(NodeError::InvalidChainInfoResponse);
+                    }
+                };
 
             let certificate = remote_node
                 .node
                 .download_certificate(certificate_hash)
                 .await?;
-            let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value()
-            else {
-                return Err(NodeError::InvalidChainInfoResponse);
-            };
-            let block = &executed_block.block;
-            // Check that certificates are valid w.r.t one of our trusted committees.
-            if block.epoch > max_epoch {
-                // We don't accept a certificate from a committee in the future.
-                warn!(
-                    "Postponing received certificate from {:.8} at height {} from future epoch {}",
-                    entry.chain_id, entry.height, block.epoch
-                );
-                // Stop the synchronization here. Do not increment the tracker further so
-                // that this certificate can still be downloaded later, once our committee
-                // is updated.
-                break;
-            }
-            match committees.get(&block.epoch) {
-                Some(committee) => {
-                    // This epoch is recognized by our chain. Let's verify the
-                    // certificate.
-                    certificate.check(committee)?;
-                    certificates.push(certificate);
-                    new_tracker += 1;
+
+            match self
+                .check_certificate(max_epoch, &committees, &certificate)
+                .await?
+            {
+                HandleCertificateResult::FutureEpoch => {
+                    warn!("Postponing received certificate from {:.8} at height {} from future epoch {}",
+                          entry.chain_id, entry.height, certificate.value().epoch());
+                    // Stop the synchronization here. Do not increment the tracker further so
+                    // that this certificate can still be downloaded later, once our committee
+                    // is updated.
+                    break;
                 }
-                None => {
+                HandleCertificateResult::OldEpoch => {
                     // This epoch is not recognized any more. Let's skip the certificate.
                     // If a higher block with a recognized epoch comes up later from the
                     // same chain, the call to `receive_certificate` below will download
                     // the skipped certificate again.
                     warn!(
                         "Skipping received certificate from past epoch {:?}",
-                        block.epoch
+                        certificate.value().epoch()
                     );
+                    new_tracker += 1;
+                }
+                HandleCertificateResult::New => {
+                    certificates.push(certificate);
                     new_tracker += 1;
                 }
             }
         }
         Ok((remote_node.name, new_tracker, certificates))
+    }
+
+    async fn check_certificate(
+        &self,
+        highest_known_epoch: Epoch,
+        committees: &BTreeMap<Epoch, Committee>,
+        incoming_certificate: &Certificate,
+    ) -> Result<HandleCertificateResult, NodeError> {
+        let CertificateValue::ConfirmedBlock { executed_block, .. } = incoming_certificate.value()
+        else {
+            return Err(NodeError::InvalidChainInfoResponse);
+        };
+        let block = &executed_block.block;
+        // Check that certificates are valid w.r.t one of our trusted committees.
+        if block.epoch > highest_known_epoch {
+            return Ok(HandleCertificateResult::FutureEpoch);
+        }
+        if let Some(known_committee) = committees.get(&block.epoch) {
+            // This epoch is recognized by our chain. Let's verify the
+            // certificate.
+            let _ = incoming_certificate.check(known_committee)?;
+            Ok(HandleCertificateResult::New)
+        } else {
+            // We don't accept a certificate from a committee that was retired.
+            Ok(HandleCertificateResult::OldEpoch)
+        }
     }
 
     /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
