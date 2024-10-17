@@ -10,7 +10,7 @@ use linera_execution::ResourceControlPolicy;
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNetConfig, PathProvider, StorageConfigBuilder},
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, NetworkConfig,
     },
     util::listen_for_shutdown_signals,
 };
@@ -148,6 +148,7 @@ pub async fn handle_net_up_service(
     policy: ResourceControlPolicy,
     path: &Option<String>,
     storage: &Option<String>,
+    external_protocol: String,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -164,9 +165,16 @@ pub async fn handle_net_up_service(
     let namespace = storage.namespace();
     let database = storage.database()?;
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
+    let external = match external_protocol.as_str() {
+        "grpc" => Network::Grpc,
+        "grpcs" => Network::Grpcs,
+        _ => panic!("Only allowed options are grpc and grpcs"),
+    };
+    let internal = Network::Grpc;
+    let network = NetworkConfig { external, internal };
     let path_provider = PathProvider::new(path)?;
     let config = LocalNetConfig {
-        network: Network::Grpc,
+        network,
         database,
         testing_prng_seed,
         namespace,

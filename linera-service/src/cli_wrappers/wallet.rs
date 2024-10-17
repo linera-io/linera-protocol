@@ -773,7 +773,7 @@ impl ClientWrapper {
     }
 
     pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
-        let address = format!("{}:127.0.0.1:{}", self.network.external_short(), port);
+        let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
             .arg("set-validator")

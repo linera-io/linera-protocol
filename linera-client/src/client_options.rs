@@ -902,6 +902,10 @@ pub enum NetCommand {
         /// If none, then a linera-storage-service is started on a random free port.
         #[arg(long)]
         storage: Option<String>,
+
+        /// External protocol used, either grpc or grpcs.
+        #[arg(long, default_value = "grpc")]
+        external_protocol: String,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

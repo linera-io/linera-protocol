@@ -27,13 +27,14 @@ use linera_storage_service::common::storage_service_test_endpoint;
 use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
+use tonic::transport::{channel::ClientTlsConfig, Endpoint};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
 use tracing::{info, warn};
 
 use crate::{
-    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network},
+    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig},
     util::ChildExt,
 };
 
@@ -148,7 +149,7 @@ impl PathProvider {
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
     pub database: Database,
-    pub network: Network,
+    pub network: NetworkConfig,
     pub testing_prng_seed: Option<u64>,
     pub namespace: String,
     pub num_other_initial_chains: u32,
@@ -162,7 +163,7 @@ pub struct LocalNetConfig {
 
 /// A set of Linera validators running locally as native processes.
 pub struct LocalNet {
-    network: Network,
+    network: NetworkConfig,
     testing_prng_seed: Option<u64>,
     next_client_id: usize,
     num_initial_validators: usize,
@@ -244,6 +245,9 @@ impl LocalNetConfig {
         let num_shards = 4;
         let storage_config_builder = StorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::create_temporary_directory().unwrap();
+        let internal = network.drop_tls();
+        let external = network;
+        let network = NetworkConfig { internal, external };
         Self {
             database,
             network,
@@ -310,7 +314,7 @@ impl LineraNet for LocalNet {
     async fn make_client(&mut self) -> ClientWrapper {
         let client = ClientWrapper::new(
             self.path_provider.clone(),
-            self.network,
+            self.network.external,
             self.testing_prng_seed,
             self.next_client_id,
         );
@@ -330,8 +334,9 @@ impl LineraNet for LocalNet {
 }
 
 impl LocalNet {
+    #[allow(clippy::too_many_arguments)]
     fn new(
-        network: Network,
+        network: NetworkConfig,
         testing_prng_seed: Option<u64>,
         namespace: String,
         num_initial_validators: usize,
@@ -396,16 +401,18 @@ impl LocalNet {
         let port = Self::proxy_port(n);
         let internal_port = Self::internal_port(n);
         let metrics_port = Self::proxy_metrics_port(n);
-        let external_protocol = self.network.external();
-        let internal_protocol = self.network.internal();
+        let external_protocol = self.network.external.toml();
+        let internal_protocol = self.network.internal.toml();
+        let external_host = self.network.external.localhost();
+        let internal_host = self.network.internal.localhost();
         let mut content = format!(
             r#"
                 server_config_path = "server_{n}.json"
-                host = "127.0.0.1"
+                host = "{external_host}"
                 port = {port}
-                internal_host = "127.0.0.1"
+                internal_host = "{internal_host}"
                 internal_port = {internal_port}
-                metrics_host = "127.0.0.1"
+                metrics_host = "{external_host}"
                 metrics_port = {metrics_port}
                 external_protocol = {external_protocol}
                 internal_protocol = {internal_protocol}
@@ -418,9 +425,9 @@ impl LocalNet {
                 r#"
 
                 [[shards]]
-                host = "127.0.0.1"
+                host = "{internal_host}"
                 port = {shard_port}
-                metrics_host = "127.0.0.1"
+                metrics_host = "{external_host}"
                 metrics_port = {shard_metrics_port}
                 "#
             ));
@@ -467,11 +474,16 @@ impl LocalNet {
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
-        match self.network {
+        match self.network.external {
             Network::Grpc => {
                 let port = Self::proxy_port(validator);
                 let nickname = format!("validator proxy {validator}");
-                Self::ensure_grpc_server_has_started(&nickname, port).await?;
+                Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
+            }
+            Network::Grpcs => {
+                let port = Self::proxy_port(validator);
+                let nickname = format!("validator proxy {validator}");
+                Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
             Network::Tcp | Network::Udp => {
                 info!("Letting validator proxy {validator} start");
@@ -481,15 +493,32 @@ impl LocalNet {
         Ok(child)
     }
 
-    async fn ensure_grpc_server_has_started(nickname: &str, port: usize) -> Result<()> {
-        let connection = tonic::transport::Endpoint::new(format!("http://127.0.0.1:{port}"))
-            .context("endpoint should always parse")?
-            .connect_lazy();
+    async fn ensure_grpc_server_has_started(
+        nickname: &str,
+        port: usize,
+        scheme: &str,
+    ) -> Result<()> {
+        let endpoint = match scheme {
+            "http" => Endpoint::new(format!("http://localhost:{port}"))
+                .context("endpoint should always parse")?,
+            "https" => {
+                use linera_rpc::CERT_PEM;
+                let certificate = tonic::transport::Certificate::from_pem(CERT_PEM);
+                let tls_config = ClientTlsConfig::new().ca_certificate(certificate);
+                Endpoint::new(format!("https://localhost:{port}"))
+                    .context("endpoint should always parse")?
+                    .tls_config(tls_config)?
+            }
+            _ => bail!("Only supported scheme are http and https"),
+        };
+        let connection = endpoint.connect_lazy();
         let mut client = HealthClient::new(connection);
         linera_base::time::timer::sleep(Duration::from_millis(100)).await;
         for i in 0..10 {
+            warn!("Iteration, i={}", i);
             linera_base::time::timer::sleep(Duration::from_millis(i * 500)).await;
             let result = client.check(HealthCheckRequest::default()).await;
+            warn!("result={:?}", result);
             if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
                 info!("Successfully started {nickname}");
                 return Ok(());
@@ -559,11 +588,16 @@ impl LocalNet {
             .args(["--genesis", "genesis.json"])
             .spawn_into()?;
 
-        match self.network {
+        match self.network.internal {
             Network::Grpc => {
                 let port = Self::shard_port(validator, shard);
                 let nickname = format!("validator server {validator}:{shard}");
-                Self::ensure_grpc_server_has_started(&nickname, port).await?;
+                Self::ensure_grpc_server_has_started(&nickname, port, "http").await?;
+            }
+            Network::Grpcs => {
+                let port = Self::shard_port(validator, shard);
+                let nickname = format!("validator server {validator}:{shard}");
+                Self::ensure_grpc_server_has_started(&nickname, port, "https").await?;
             }
             Network::Tcp | Network::Udp => {
                 info!("Letting validator server {validator}:{shard} start");

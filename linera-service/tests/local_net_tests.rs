@@ -74,7 +74,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let network = config.network;
+    let network = config.network.external;
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
@@ -103,7 +103,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .await?;
     let port = get_node_port().await;
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(port, ProcessInbox::Skip).await?),
+        Network::Grpc | Network::Grpcs => {
+            Some(client_2.run_node_service(port, ProcessInbox::Skip).await?)
+        }
         Network::Tcp | Network::Udp => None,
     };
 
@@ -124,11 +126,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     net.start_validator(4).await?;
     net.start_validator(5).await?;
 
-    let address = format!(
-        "{}:localhost:{}",
-        network.external_short(),
-        LocalNet::proxy_port(4)
-    );
+    let address = format!("{}:localhost:{}", network.short(), LocalNet::proxy_port(4));
     assert_eq!(
         client.query_validator(&address).await?,
         net.genesis_config()?.hash()

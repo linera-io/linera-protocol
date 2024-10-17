@@ -870,6 +870,9 @@ Start a Local Linera Network
 * `--testing-prng-seed <TESTING_PRNG_SEED>` — Force this wallet to generate keys using a PRNG and a given seed. USE FOR TESTING ONLY
 * `--path <PATH>` — Run with a specific path where the wallet and validator input files are. If none, then a temporary directory is created
 * `--storage <STORAGE>` — Run with a specific storage. If none, then a linera-storage-service is started on a random free port
+* `--external-protocol <EXTERNAL_PROTOCOL>` — External protocol used, either grpc or grpcs
+
+  Default value: `grpc`
 
 
 
