@@ -601,6 +601,7 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         Unsend::new(self.state().inner.map(|state| state.pending_blobs()))
     }
 }
+
 #[cfg(with_testing)]
 impl<P: 'static, S: Storage> ChainClient<P, S> {
     pub fn block_hash(&self) -> Option<CryptoHash> {
