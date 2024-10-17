@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -39,8 +39,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        IncomingBundle, LiteCertificate, LiteVote, MessageAction, PostedMessage,
+        Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
+        HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
+        PostedMessage,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -419,6 +420,53 @@ where
             chain_id: self.chain_id,
             options: self.options.clone(),
         }
+    }
+}
+
+// Tracks which chain_id<>block_height pairs have been successfully processed.
+struct MultichainTracker {
+    // Starting tracker index.
+    tracker: u64,
+    // Log of received certificates by the remote node.
+    remote_node_received_log: Vec<ChainAndHeight>,
+    // Track which certificates have been successfully processed.
+    // We will use that information later to update the tracker.
+    successfuly_processed: BTreeMap<ChainId, BTreeSet<BlockHeight>>,
+}
+
+impl MultichainTracker {
+    fn new(init: u64, log: Vec<ChainAndHeight>) -> Self {
+        Self {
+            tracker: init,
+            remote_node_received_log: log,
+            successfuly_processed: BTreeMap::new(),
+        }
+    }
+
+    fn push(&mut self, chain_id: ChainId, height: BlockHeight) {
+        self.successfuly_processed
+            .entry(chain_id)
+            .or_default()
+            .insert(height);
+    }
+
+    // Returns an index of the last processed certificate in the original remote_node_received_log.
+    //
+    // Goes through the original `remote_node_received_log` and checks which of the certificates have been received.
+    // Upon finding the first entry that has not been processed, it stops and returns the index of the last processed certificate.
+    fn finalize(&mut self) -> u64 {
+        for r in &self.remote_node_received_log {
+            if let Some(processed) = self.successfuly_processed.get(&r.chain_id) {
+                if processed.contains(&r.height) {
+                    self.tracker += 1;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        self.tracker
     }
 }
 
@@ -1132,76 +1180,80 @@ where
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
+        let mut tracker = MultichainTracker::new(tracker, info.requested_received_log.clone());
+        let remote_node_chains_view = info.requested_received_log.into_iter().fold(
+            BTreeMap::<ChainId, Vec<BlockHeight>>::new(),
+            |mut chain_to_info, entry| {
+                chain_to_info
+                    .entry(entry.chain_id)
+                    .or_default()
+                    .push(entry.height);
+                chain_to_info
+            },
+        );
+
+        // Collect all certificates that have been successfully processed.
         let mut certificates: Vec<Certificate> = Vec::new();
-        let mut new_tracker = tracker;
 
-        for entry in info.requested_received_log {
-            let query = ChainInfoQuery::new(entry.chain_id)
-                .with_sent_certificate_hashes_in_range(BlockHeightRange::single(entry.height));
-
-            let local_response = self
-                .client
-                .local_node
-                .handle_chain_info_query(query.clone())
-                .await
-                .map_err(|error| NodeError::LocalNodeQuery {
-                    error: error.to_string(),
-                })?
-                .info;
-            if !local_response.requested_sent_certificate_hashes.is_empty() {
-                // We've already processed incoming messages for this certificate.
-                new_tracker += 1;
-                continue;
-            }
+        for (chain_id, mut block_batch) in remote_node_chains_view {
+            block_batch.sort();
+            let first_block = block_batch.first().expect("nonempty batch");
+            let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1;
+            let block_batch_range = BlockHeightRange::multi(*first_block, batch_size);
+            let query = ChainInfoQuery::new(chain_id)
+                .with_sent_certificate_hashes_in_range(block_batch_range.clone());
 
             let remote_response = remote_node.handle_chain_info_query(query).await?;
-            let certificate_hash =
+
+            let certificate_hashes =
                 match remote_response.requested_sent_certificate_hashes.as_slice() {
-                    &[hash] => hash,
-                    [] => {
-                        warn!("Validator didn't have certificate he claimed to have.");
-                        break;
-                    }
-                    _ => {
-                        error!("Validator sent more than one certificate hash for a single block.");
+                    hashes if hashes.len() as u64 != block_batch_range.limit.unwrap() => {
+                        error!(
+                            block_range = ?block_batch_range,
+                            received_num = hashes.len(),
+                            "Validator sent invalid number of certificate hashes."
+                        );
                         return Err(NodeError::InvalidChainInfoResponse);
                     }
+                    hashes => hashes.to_vec(),
                 };
 
-            let certificate = remote_node
+            let remote_certificates = remote_node
                 .node
-                .download_certificate(certificate_hash)
+                .download_certificates(certificate_hashes)
                 .await?;
 
-            match self
-                .check_certificate(max_epoch, &committees, &certificate)
-                .await?
-            {
-                HandleCertificateResult::FutureEpoch => {
-                    warn!("Postponing received certificate from {:.8} at height {} from future epoch {}",
-                          entry.chain_id, entry.height, certificate.value().epoch());
-                    // Stop the synchronization here. Do not increment the tracker further so
-                    // that this certificate can still be downloaded later, once our committee
-                    // is updated.
-                    break;
-                }
-                HandleCertificateResult::OldEpoch => {
-                    // This epoch is not recognized any more. Let's skip the certificate.
-                    // If a higher block with a recognized epoch comes up later from the
-                    // same chain, the call to `receive_certificate` below will download
-                    // the skipped certificate again.
-                    warn!(
-                        "Skipping received certificate from past epoch {:?}",
-                        certificate.value().epoch()
-                    );
-                    new_tracker += 1;
-                }
-                HandleCertificateResult::New => {
-                    certificates.push(certificate);
-                    new_tracker += 1;
+            for certificate in remote_certificates {
+                match self
+                    .check_certificate(max_epoch, &committees, &certificate)
+                    .await?
+                {
+                    HandleCertificateResult::FutureEpoch => {
+                        warn!("Postponing received certificate from {:.8} at height {} from future epoch {}",
+                              chain_id, certificate.value().height(), certificate.value().epoch());
+                        // Stop the synchronization here. Do not increment the tracker further so
+                        // that this certificate can still be downloaded later, once our committee
+                        // is updated.
+                    }
+                    HandleCertificateResult::OldEpoch => {
+                        tracker.push(chain_id, certificate.value().height());
+                        // This epoch is not recognized any more. Let's skip the certificate.
+                        // If a higher block with a recognized epoch comes up later from the
+                        // same chain, the call to `receive_certificate` below will download
+                        // the skipped certificate again.
+                        warn!(
+                            "Skipping received certificate from past epoch {:?}",
+                            certificate.value().epoch()
+                        );
+                    }
+                    HandleCertificateResult::New => {
+                        tracker.push(chain_id, certificate.value().height());
+                        certificates.push(certificate);
+                    }
                 }
             }
         }
+        let new_tracker = tracker.finalize();
         Ok((remote_node.name, new_tracker, certificates))
     }
 
