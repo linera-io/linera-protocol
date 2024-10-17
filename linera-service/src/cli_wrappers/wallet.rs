@@ -990,12 +990,17 @@ impl NodeService {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
             let client = reqwest_client();
-            let response = client
+            let result = client
                 .post(url)
                 .json(&json!({ "query": query }))
                 .send()
-                .await
-                .with_context(|| format!("query_node: failed to post query={}", query))?;
+                .await;
+            if matches!(result, Err(ref error) if error.is_timeout()) {
+                warn!("Timeout when sending query {query:?} to the node service");
+                continue;
+            }
+            let response =
+                result.with_context(|| format!("query_node: failed to post query={query}"))?;
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",
