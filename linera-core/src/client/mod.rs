@@ -583,22 +583,10 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
         self.chain_id
     }
 
-    /// Gets the hash of the latest known block.
+    /// Gets the tip state of the chain.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn block_hash(&self) -> Option<CryptoHash> {
-        self.state().block_hash()
-    }
-
-    /// Gets the earliest possible timestamp for the next block.
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn timestamp(&self) -> Timestamp {
-        self.state().timestamp()
-    }
-
-    /// Gets the next block height.
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn next_block_height(&self) -> BlockHeight {
-        self.state().next_block_height()
+    pub fn tip(&self) -> (BlockHeight, Option<CryptoHash>, Timestamp) {
+        self.state().tip()
     }
 
     /// Gets a guarded reference to the next pending block.
@@ -611,6 +599,16 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn pending_blobs(&self) -> ChainGuardMapped<BTreeMap<BlobId, Blob>> {
         Unsend::new(self.state().inner.map(|state| state.pending_blobs()))
+    }
+}
+#[cfg(with_testing)]
+impl<P: 'static, S: Storage> ChainClient<P, S> {
+    pub fn block_hash(&self) -> Option<CryptoHash> {
+        self.state().tip().1
+    }
+
+    pub fn next_block_height(&self) -> BlockHeight {
+        self.state().next_block_height()
     }
 }
 
@@ -694,8 +692,7 @@ where
         {
             let state = self.state();
             ensure!(
-                state.has_other_owners(&info.manager.ownership)
-                    || info.next_block_height == state.next_block_height(),
+                state.has_other_owners(&info.manager.ownership) || info.tip() == state.tip(),
                 ChainClientError::WalletSynchronizationError
             );
         }
@@ -888,7 +885,7 @@ where
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
-        let next_block_height = self.next_block_height();
+        let (next_block_height, block_hash, tip_time) = self.state().tip();
         let nodes = self.validator_nodes().await?;
         let mut info = self
             .client
@@ -897,7 +894,7 @@ where
         if info.next_block_height == next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
-                self.block_hash() == info.block_hash,
+                (info.block_hash, info.timestamp) == (block_hash, tip_time),
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
@@ -1739,12 +1736,8 @@ where
         round: Round,
         manager: ChainManagerInfo,
     ) -> Result<Certificate, ChainClientError> {
-        let next_block_height;
-        let block_hash;
-        {
+        let (next_block_height, block_hash, tip_time) = {
             let state = self.state();
-            next_block_height = state.next_block_height();
-            block_hash = state.block_hash();
             // In the fast round, we must never make any conflicting proposals.
             if round.is_fast() {
                 if let Some(pending) = &state.pending_block() {
@@ -1752,12 +1745,13 @@ where
                         pending == &block,
                         ChainClientError::BlockProposalError(
                             "Client state has a different pending block; \
-                             use the `linera retry-pending-block` command to commit that first"
+                            use the `linera retry-pending-block` command to commit that first"
                         )
                     );
                 }
             }
-        }
+            state.tip()
+        };
 
         ensure!(
             block.height == next_block_height,
@@ -1766,6 +1760,10 @@ where
         ensure!(
             block.previous_block_hash == block_hash,
             ChainClientError::BlockProposalError("Unexpected previous block hash")
+        );
+        ensure!(
+            block.timestamp >= tip_time,
+            ChainClientError::BlockProposalError("Unexpected block time")
         );
         // Make sure that we follow the steps in the multi-round protocol.
         let executed_block = if let Some(validated_block_certificate) = &manager.requested_locked {
@@ -1828,7 +1826,7 @@ where
             .submit_block_proposal(&committee, proposal, hashed_value)
             .await?;
         // Communicate the new certificate now.
-        let next_block_height = self.next_block_height();
+        let next_block_height = self.state().next_block_height();
         self.communicate_chain_updates(
             &committee,
             self.chain_id,
@@ -1840,7 +1838,6 @@ where
             if new_committee != committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
-                let next_block_height = self.next_block_height();
                 self.communicate_chain_updates(
                     &new_committee,
                     self.chain_id,
@@ -1948,15 +1945,9 @@ where
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
     ) -> Result<HashedCertificateValue, ChainClientError> {
-        let timestamp = self.next_timestamp(&incoming_bundles).await;
+        let (height, previous_block_hash, tip_time) = self.state().tip();
+        let timestamp = self.next_timestamp(&incoming_bundles, tip_time).await;
         let identity = self.identity().await?;
-        let previous_block_hash;
-        let height;
-        {
-            let state = self.state();
-            previous_block_hash = state.block_hash();
-            height = state.next_block_height();
-        }
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -1982,14 +1973,18 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     #[tracing::instrument(level = "trace", skip(incoming_bundles))]
-    async fn next_timestamp(&self, incoming_bundles: &[IncomingBundle]) -> Timestamp {
+    async fn next_timestamp(
+        &self,
+        incoming_bundles: &[IncomingBundle],
+        tip_time: Timestamp,
+    ) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
         incoming_bundles
             .iter()
             .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
-            .max(self.timestamp())
+            .max(tip_time)
     }
 
     /// Queries an application.
@@ -2082,14 +2077,15 @@ where
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
-        let timestamp = self.next_timestamp(&incoming_bundles).await;
+        let (height, previous_block_hash, timestamp) = self.state().tip();
+        let timestamp = self.next_timestamp(&incoming_bundles, timestamp).await;
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
             operations: Vec::new(),
-            previous_block_hash: self.block_hash(),
-            height: self.next_block_height(),
+            previous_block_hash,
+            height,
             authenticated_signer: owner,
             timestamp,
         };
@@ -2149,9 +2145,9 @@ where
         &self,
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
-        let next_block_height = self.next_block_height();
+        let next_block_height = self.state().tip();
         ensure!(
-            self.chain_info().await?.next_block_height == next_block_height,
+            self.chain_info().await?.tip() == next_block_height,
             ChainClientError::WalletSynchronizationError
         );
         let mut query = ChainInfoQuery::new(self.chain_id);
@@ -2171,7 +2167,7 @@ where
     #[tracing::instrument(level = "trace")]
     pub async fn update_validators(&self) -> Result<(), ChainClientError> {
         let committee = self.local_committee().await?;
-        let next_block_height = self.next_block_height();
+        let next_block_height = self.state().next_block_height();
         self.communicate_chain_updates(
             &committee,
             self.chain_id,

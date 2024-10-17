@@ -77,12 +77,8 @@ impl ChainState {
         state
     }
 
-    pub fn block_hash(&self) -> Option<CryptoHash> {
-        self.block_hash
-    }
-
-    pub fn timestamp(&self) -> Timestamp {
-        self.timestamp
+    pub fn tip(&self) -> (BlockHeight, Option<CryptoHash>, Timestamp) {
+        (self.next_block_height, self.block_hash, self.timestamp)
     }
 
     pub fn next_block_height(&self) -> BlockHeight {

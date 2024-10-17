@@ -169,14 +169,15 @@ impl Wallet {
     {
         let key_pair = chain_client.key_pair().await.map(|k| k.copy()).ok();
         let state = chain_client.state();
+        let (next_block_height, block_hash, timestamp) = state.tip();
         self.chains.insert(
             chain_client.chain_id(),
             UserChain {
                 chain_id: chain_client.chain_id(),
                 key_pair,
-                block_hash: state.block_hash(),
-                next_block_height: state.next_block_height(),
-                timestamp: state.timestamp(),
+                block_hash,
+                next_block_height,
+                timestamp,
                 pending_block: state.pending_block().clone(),
                 pending_blobs: state.pending_blobs().clone(),
             },
