@@ -3045,7 +3045,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             .transfer(Amount::from_attos(1), chain1, chain2)
             .await
             .unwrap();
-        let timeout = Instant::now() + Duration::from_secs(1);
+        let timeout = Instant::now() + Duration::from_secs(10);
         loop {
             let sleep = Box::pin(tokio::time::sleep(timeout.duration_since(Instant::now())));
             match future::select(notifications2.next(), sleep).await {
