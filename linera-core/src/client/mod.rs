@@ -261,7 +261,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
             e.insert(ChainState::new(
                 known_key_pairs,
-                admin_id,
                 block_hash,
                 timestamp,
                 next_block_height,
@@ -273,6 +272,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         ChainClient {
             client: self.clone(),
             chain_id,
+            admin_id,
             options: ChainClientOptions {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
@@ -417,6 +417,8 @@ where
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
+    /// The ID of the admin chain.
+    admin_id: ChainId,
     /// The client options.
     options: ChainClientOptions,
 }
@@ -429,6 +431,7 @@ where
         Self {
             client: self.client.clone(),
             chain_id: self.chain_id,
+            admin_id: self.admin_id,
             options: self.options.clone(),
         }
     }
@@ -789,7 +792,7 @@ where
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let admin_id = self.state().admin_id();
+        let admin_id = self.admin_id;
         let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
@@ -1287,8 +1290,7 @@ where
         let local_committee = self.local_committee().await?;
         let nodes = self.make_nodes(&local_committee)?;
         // Synchronize the state of the admin chain from the network.
-        let admin_id = self.state().admin_id();
-        self.synchronize_chain_state(&nodes, admin_id).await?;
+        self.synchronize_chain_state(&nodes, self.admin_id).await?;
         let client = self.clone();
         // Proceed to downloading received certificates.
         let result = communicate_with_quorum(
@@ -2482,7 +2484,7 @@ where
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
                 committees,
-                admin_id: self.state().admin_id(),
+                admin_id: self.admin_id,
                 epoch,
                 balance,
                 application_permissions: application_permissions.clone(),
@@ -2729,7 +2731,7 @@ where
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let operation = SystemOperation::Subscribe {
-            chain_id: self.state().admin_id(),
+            chain_id: self.admin_id,
             channel: SystemChannel::Admin,
         };
         self.execute_operation(Operation::System(operation)).await
@@ -2742,7 +2744,7 @@ where
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let operation = SystemOperation::Unsubscribe {
-            chain_id: self.state().admin_id(),
+            chain_id: self.admin_id,
             channel: SystemChannel::Admin,
         };
         self.execute_operation(Operation::System(operation)).await
