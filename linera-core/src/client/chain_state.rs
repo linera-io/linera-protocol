@@ -11,6 +11,7 @@ use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Blob, BlockHeight, Timestamp},
     identifiers::{BlobId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_chain::data_types::Block;
 use linera_execution::committee::ValidatorName;
@@ -114,6 +115,13 @@ impl ChainState {
 
     pub fn known_key_pairs(&self) -> &BTreeMap<Owner, KeyPair> {
         &self.known_key_pairs
+    }
+
+    /// Returns whether the given ownership includes anyone whose secret key we don't have.
+    pub fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
+        ownership
+            .all_owners()
+            .any(|owner| !self.known_key_pairs.contains_key(owner))
     }
 
     pub(super) fn insert_known_key_pair(&mut self, key_pair: KeyPair) -> PublicKey {
