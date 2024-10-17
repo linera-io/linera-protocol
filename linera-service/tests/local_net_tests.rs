@@ -74,7 +74,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let network = config.external_network;
+    let network = config.network.external;
     let (mut net, client) = config.instantiate().await?;
 
     let faucet_client = net.make_client().await;
