@@ -617,9 +617,9 @@ enum ReceiveCertificateMode {
 }
 
 enum HandleCertificateResult {
-    OldEpoch(Certificate),
-    New(Certificate),
-    FutureEpoch(Certificate),
+    OldEpoch,
+    New,
+    FutureEpoch,
 }
 
 impl<P, S> ChainClient<P, S>
@@ -1187,10 +1187,10 @@ where
                 .await?;
 
             match self
-                .check_certificate(max_epoch, &committees, certificate)
+                .check_certificate(max_epoch, &committees, &certificate)
                 .await?
             {
-                HandleCertificateResult::FutureEpoch(certificate) => {
+                HandleCertificateResult::FutureEpoch => {
                     warn!("Postponing received certificate from {:.8} at height {} from future epoch {}",
                           entry.chain_id, entry.height, certificate.value().epoch());
                     // Stop the synchronization here. Do not increment the tracker further so
@@ -1198,7 +1198,7 @@ where
                     // is updated.
                     break;
                 }
-                HandleCertificateResult::OldEpoch(certificate) => {
+                HandleCertificateResult::OldEpoch => {
                     // This epoch is not recognized any more. Let's skip the certificate.
                     // If a higher block with a recognized epoch comes up later from the
                     // same chain, the call to `receive_certificate` below will download
@@ -1209,7 +1209,7 @@ where
                     );
                     new_tracker += 1;
                 }
-                HandleCertificateResult::New(certificate) => {
+                HandleCertificateResult::New => {
                     certificates.push(certificate);
                     new_tracker += 1;
                 }
@@ -1222,7 +1222,7 @@ where
         &self,
         highest_known_epoch: Epoch,
         committees: &BTreeMap<Epoch, Committee>,
-        incoming_certificate: Certificate,
+        incoming_certificate: &Certificate,
     ) -> Result<HandleCertificateResult, NodeError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = incoming_certificate.value()
         else {
@@ -1231,16 +1231,16 @@ where
         let block = &executed_block.block;
         // Check that certificates are valid w.r.t one of our trusted committees.
         if block.epoch > highest_known_epoch {
-            return Ok(HandleCertificateResult::FutureEpoch(incoming_certificate));
+            return Ok(HandleCertificateResult::FutureEpoch);
         }
         if let Some(known_committee) = committees.get(&block.epoch) {
             // This epoch is recognized by our chain. Let's verify the
             // certificate.
             let _ = incoming_certificate.check(known_committee)?;
-            Ok(HandleCertificateResult::New(incoming_certificate))
+            Ok(HandleCertificateResult::New)
         } else {
             // We don't accept a certificate from a committee that was retired.
-            return Ok(HandleCertificateResult::OldEpoch(incoming_certificate));
+            return Ok(HandleCertificateResult::OldEpoch);
         }
     }
 
