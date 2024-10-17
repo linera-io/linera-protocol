@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Server implementation of the HTTP/2 protocol."><title>h2::server - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="h2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../h2/index.html">h2</a><span class="version">0.4.6</span></h2></div><h2 class="location"><a href="#">Module server</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate h2</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">h2</a>::<wbr><a class="mod" href="#">server</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/h2/server.rs.html#1-1638">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Server implementation of the HTTP/2 protocol.</p>
+<h2 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting started</h2>
+<p>Running an HTTP/2 server requires the caller to manage accepting the
+connections as well as getting the connections to a state that is ready to
+begin the HTTP/2 handshake. See <a href="../index.html#handshake">here</a> for more
+details.</p>
+<p>This could be as basic as using Tokio’s <a href="https://docs.rs/tokio-core/0.1/tokio_core/net/struct.TcpListener.html"><code>TcpListener</code></a> to accept
+connections, but usually it means using either ALPN or HTTP/1.1 protocol
+upgrades.</p>
+<p>Once a connection is obtained, it is passed to <a href="fn.handshake.html"><code>handshake</code></a>,
+which will begin the <a href="http://httpwg.org/specs/rfc7540.html#ConnectionHeader">HTTP/2 handshake</a>. This returns a future that
+completes once the handshake process is performed and HTTP/2 streams may
+be received.</p>
+<p><a href="fn.handshake.html"><code>handshake</code></a> uses default configuration values. There are a number of
+settings that can be changed by using <a href="struct.Builder.html"><code>Builder</code></a> instead.</p>
+<h2 id="inbound-streams"><a class="doc-anchor" href="#inbound-streams">§</a>Inbound streams</h2>
+<p>The <a href="struct.Connection.html"><code>Connection</code></a> instance is used to accept inbound HTTP/2 streams. It
+does this by implementing <a href="https://docs.rs/futures/0.1/futures/stream/trait.Stream.html"><code>futures::Stream</code></a>. When a new stream is
+received, a call to <a href="struct.Connection.html#method.accept" title="method h2::server::Connection::accept"><code>Connection::accept</code></a> will return <code>(request, response)</code>.
+The <code>request</code> handle (of type <a href="../struct.RecvStream.html"><code>http::Request&lt;RecvStream&gt;</code></a>) contains the
+HTTP request head as well as provides a way to receive the inbound data
+stream and the trailers. The <code>response</code> handle (of type <a href="struct.SendResponse.html" title="struct h2::server::SendResponse"><code>SendResponse</code></a>)
+allows responding to the request, stream the response payload, send
+trailers, and send push promises.</p>
+<p>The send (<a href="../struct.SendStream.html"><code>SendStream</code></a>) and receive (<a href="../struct.RecvStream.html"><code>RecvStream</code></a>) halves of the stream
+can be operated independently.</p>
+<h2 id="managing-the-connection"><a class="doc-anchor" href="#managing-the-connection">§</a>Managing the connection</h2>
+<p>The <a href="struct.Connection.html"><code>Connection</code></a> instance is used to manage connection state. The caller
+is required to call either <a href="struct.Connection.html#method.accept" title="method h2::server::Connection::accept"><code>Connection::accept</code></a> or
+<a href="struct.Connection.html#method.poll_close"><code>Connection::poll_close</code></a> in order to advance the connection state. Simply
+operating on <a href="../struct.SendStream.html"><code>SendStream</code></a> or <a href="../struct.RecvStream.html"><code>RecvStream</code></a> will have no effect unless the
+connection state is advanced.</p>
+<p>It is not required to call <strong>both</strong> <a href="struct.Connection.html#method.accept" title="method h2::server::Connection::accept"><code>Connection::accept</code></a> and
+<a href="struct.Connection.html#method.poll_close"><code>Connection::poll_close</code></a>. If the caller is ready to accept a new stream,
+then only <a href="struct.Connection.html#method.accept" title="method h2::server::Connection::accept"><code>Connection::accept</code></a> should be called. When the caller <strong>does
+not</strong> want to accept a new stream, <a href="struct.Connection.html#method.poll_close"><code>Connection::poll_close</code></a> should be
+called.</p>
+<p>The <a href="struct.Connection.html"><code>Connection</code></a> instance should only be dropped once
+<a href="struct.Connection.html#method.poll_close"><code>Connection::poll_close</code></a> returns <code>Ready</code>. Once <a href="struct.Connection.html#method.accept" title="method h2::server::Connection::accept"><code>Connection::accept</code></a>
+returns <code>Ready(None)</code>, there will no longer be any more inbound streams. At
+this point, only <a href="struct.Connection.html#method.poll_close"><code>Connection::poll_close</code></a> should be called.</p>
+<h2 id="shutting-down-the-server"><a class="doc-anchor" href="#shutting-down-the-server">§</a>Shutting down the server</h2>
+<p>Graceful shutdown of the server is <a href="https://github.com/hyperium/h2/issues/69">not yet
+implemented</a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>A basic HTTP/2 server example that runs over TCP and assumes <a href="http://httpwg.org/specs/rfc7540.html#known-http">prior
+knowledge</a>, i.e. both the client and the server assume that the TCP socket
+will use the HTTP/2 protocol without prior negotiation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>h2::server;
+<span class="kw">use </span>http::{Response, StatusCode};
+<span class="kw">use </span>tokio::net::TcpListener;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">pub async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:5928"</span>).<span class="kw">await</span>.unwrap();
+
+    <span class="comment">// Accept all incoming TCP connections.
+    </span><span class="kw">loop </span>{
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>((socket, _peer_addr)) = listener.accept().<span class="kw">await </span>{
+            <span class="comment">// Spawn a new task to process each connection.
+            </span>tokio::spawn(<span class="kw">async </span>{
+                <span class="comment">// Start the HTTP/2 connection handshake
+                </span><span class="kw">let </span><span class="kw-2">mut </span>h2 = server::handshake(socket).<span class="kw">await</span>.unwrap();
+                <span class="comment">// Accept all inbound HTTP/2 streams sent over the
+                // connection.
+                </span><span class="kw">while let </span><span class="prelude-val">Some</span>(request) = h2.accept().<span class="kw">await </span>{
+                    <span class="kw">let </span>(request, <span class="kw-2">mut </span>respond) = request.unwrap();
+                    <span class="macro">println!</span>(<span class="string">"Received request: {:?}"</span>, request);
+
+                    <span class="comment">// Build a response with no body
+                    </span><span class="kw">let </span>response = Response::builder()
+                        .status(StatusCode::OK)
+                        .body(())
+                        .unwrap();
+
+                    <span class="comment">// Send the response back to the client
+                    </span>respond.send_response(response, <span class="bool-val">true</span>)
+                        .unwrap();
+                }
+
+            });
+        }
+    }
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct h2::server::Builder">Builder</a></div><div class="desc docblock-short">Builds server connections with custom configuration values.</div></li><li><div class="item-name"><a class="struct" href="struct.Connection.html" title="struct h2::server::Connection">Connection</a></div><div class="desc docblock-short">Accepts inbound HTTP/2 streams on a connection.</div></li><li><div class="item-name"><a class="struct" href="struct.Handshake.html" title="struct h2::server::Handshake">Handshake</a></div><div class="desc docblock-short">In progress HTTP/2 connection handshake future.</div></li><li><div class="item-name"><a class="struct" href="struct.SendPushedResponse.html" title="struct h2::server::SendPushedResponse">SendPushedResponse</a></div><div class="desc docblock-short">Send a response to a promised request</div></li><li><div class="item-name"><a class="struct" href="struct.SendResponse.html" title="struct h2::server::SendResponse">SendResponse</a></div><div class="desc docblock-short">Send a response back to the client</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.handshake.html" title="fn h2::server::handshake">handshake</a></div><div class="desc docblock-short">Creates a new configured HTTP/2 server with default configuration
+values backed by <code>io</code>.</div></li></ul></section></div></main></body></html>

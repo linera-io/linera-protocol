@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Interfaces for working with Errors."><title>wasmtime_environ::__core::error - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Module error</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a class="mod" href="#">error</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.81.0">1.81.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/lib.rs.html#372">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Interfaces for working with Errors.</p>
+<h2 id="error-handling-in-rust"><a class="doc-anchor" href="#error-handling-in-rust">§</a>Error Handling In Rust</h2>
+<p>The Rust language provides two complementary systems for constructing /
+representing, reporting, propagating, reacting to, and discarding errors.
+These responsibilities are collectively known as “error handling.” The
+components of the first system, the panic runtime and interfaces, are most
+commonly used to represent bugs that have been detected in your program. The
+components of the second system, <code>Result</code>, the error traits, and user
+defined types, are used to represent anticipated runtime failure modes of
+your program.</p>
+<h3 id="the-panic-interfaces"><a class="doc-anchor" href="#the-panic-interfaces">§</a>The Panic Interfaces</h3>
+<p>The following are the primary interfaces of the panic system and the
+responsibilities they cover:</p>
+<ul>
+<li><a href="../macro.panic.html" title="macro wasmtime_environ::__core::panic"><code>panic!</code></a> and <a href="../../std/panic/fn.panic_any.html"><code>panic_any</code></a> (Constructing, Propagated automatically)</li>
+<li><a href="../../std/panic/fn.set_hook.html"><code>set_hook</code></a>, <a href="../../std/panic/fn.take_hook.html"><code>take_hook</code></a>, and <a href="../../std/panic/struct.PanicHookInfo.html"><code>PanicHookInfo</code></a> (Reporting)</li>
+<li><a href="https://doc.rust-lang.org/nomicon/panic-handler.html"><code>#[panic_handler]</code></a> and <a href="../panic/struct.PanicInfo.html" title="struct wasmtime_environ::__core::panic::PanicInfo"><code>PanicInfo</code></a> (Reporting in no_std)</li>
+<li><a href="../../std/panic/fn.catch_unwind.html"><code>catch_unwind</code></a> and <a href="../../std/panic/fn.resume_unwind.html"><code>resume_unwind</code></a> (Discarding, Propagating)</li>
+</ul>
+<p>The following are the primary interfaces of the error system and the
+responsibilities they cover:</p>
+<ul>
+<li><a href="../fmt/type.Result.html" title="type wasmtime_environ::__core::fmt::Result"><code>Result</code></a> (Propagating, Reacting)</li>
+<li>The <a href="trait.Error.html" title="trait wasmtime_environ::__core::error::Error"><code>Error</code></a> trait (Reporting)</li>
+<li>User defined types (Constructing / Representing)</li>
+<li><a href="../../std/keyword.match.html"><code>match</code></a> and <a href="trait.Error.html" title="trait wasmtime_environ::__core::error::Error"><code>downcast</code></a> (Reacting)</li>
+<li>The question mark operator (<a href="../../std/result/index.html#the-question-mark-operator-"><code>?</code></a>) (Propagating)</li>
+<li>The partially stable <a href="../ops/trait.Try.html" title="trait wasmtime_environ::__core::ops::Try"><code>Try</code></a> traits (Propagating, Constructing)</li>
+<li><a href="../../std/process/trait.Termination.html"><code>Termination</code></a> (Reporting)</li>
+</ul>
+<h3 id="converting-errors-into-panics"><a class="doc-anchor" href="#converting-errors-into-panics">§</a>Converting Errors into Panics</h3>
+<p>The panic and error systems are not entirely distinct. Often times errors
+that are anticipated runtime failures in an API might instead represent bugs
+to a caller. For these situations the standard library provides APIs for
+constructing panics with an <code>Error</code> as its source.</p>
+<ul>
+<li><a href="../result/enum.Result.html#method.unwrap" title="method wasmtime_environ::__core::result::Result::unwrap"><code>Result::unwrap</code></a></li>
+<li><a href="../result/enum.Result.html#method.expect" title="method wasmtime_environ::__core::result::Result::expect"><code>Result::expect</code></a></li>
+</ul>
+<p>These functions are equivalent, they either return the inner value if the
+<code>Result</code> is <code>Ok</code> or panic if the <code>Result</code> is <code>Err</code> printing the inner error
+as the source. The only difference between them is that with <code>expect</code> you
+provide a panic error message to be printed alongside the source, whereas
+<code>unwrap</code> has a default message indicating only that you unwrapped an <code>Err</code>.</p>
+<p>Of the two, <code>expect</code> is generally preferred since its <code>msg</code> field allows you
+to convey your intent and assumptions which makes tracking down the source
+of a panic easier. <code>unwrap</code> on the other hand can still be a good fit in
+situations where you can trivially show that a piece of code will never
+panic, such as <code>"127.0.0.1".parse::&lt;std::net::IpAddr&gt;().unwrap()</code> or early
+prototyping.</p>
+<h2 id="common-message-styles"><a class="doc-anchor" href="#common-message-styles">§</a>Common Message Styles</h2>
+<p>There are two common styles for how people word <code>expect</code> messages. Using
+the message to present information to users encountering a panic
+(“expect as error message”) or using the message to present information
+to developers debugging the panic (“expect as precondition”).</p>
+<p>In the former case the expect message is used to describe the error that
+has occurred which is considered a bug. Consider the following example:</p>
+
+<div class="example-wrap should_panic"><a href="#" class="tooltip" title="This example panics">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Read environment variable, panic if it is not present
+</span><span class="kw">let </span>path = std::env::var(<span class="string">"IMPORTANT_PATH"</span>).unwrap();</code></pre></div>
+<p>In the “expect as error message” style we would use expect to describe
+that the environment variable was not set when it should have been:</p>
+
+<div class="example-wrap should_panic"><a href="#" class="tooltip" title="This example panics">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>path = std::env::var(<span class="string">"IMPORTANT_PATH"</span>)
+    .expect(<span class="string">"env variable `IMPORTANT_PATH` is not set"</span>);</code></pre></div>
+<p>In the “expect as precondition” style, we would instead describe the
+reason we <em>expect</em> the <code>Result</code> should be <code>Ok</code>. With this style we would
+prefer to write:</p>
+
+<div class="example-wrap should_panic"><a href="#" class="tooltip" title="This example panics">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>path = std::env::var(<span class="string">"IMPORTANT_PATH"</span>)
+    .expect(<span class="string">"env variable `IMPORTANT_PATH` should be set by `wrapper_script.sh`"</span>);</code></pre></div>
+<p>The “expect as error message” style does not work as well with the
+default output of the std panic hooks, and often ends up repeating
+information that is already communicated by the source error being
+unwrapped:</p>
+<div class="example-wrap"><pre class="language-text"><code>thread &#39;main&#39; panicked at src/main.rs:4:6:
+env variable `IMPORTANT_PATH` is not set: NotPresent
+</code></pre></div>
+<p>In this example we end up mentioning that an env variable is not set,
+followed by our source message that says the env is not present, the
+only additional information we’re communicating is the name of the
+environment variable being checked.</p>
+<p>The “expect as precondition” style instead focuses on source code
+readability, making it easier to understand what must have gone wrong in
+situations where panics are being used to represent bugs exclusively.
+Also, by framing our expect in terms of what “SHOULD” have happened to
+prevent the source error, we end up introducing new information that is
+independent from our source error.</p>
+<div class="example-wrap"><pre class="language-text"><code>thread &#39;main&#39; panicked at src/main.rs:4:6:
+env variable `IMPORTANT_PATH` should be set by `wrapper_script.sh`: NotPresent
+</code></pre></div>
+<p>In this example we are communicating not only the name of the
+environment variable that should have been set, but also an explanation
+for why it should have been set, and we let the source error display as
+a clear contradiction to our expectation.</p>
+<p><strong>Hint</strong>: If you’re having trouble remembering how to phrase
+expect-as-precondition style error messages remember to focus on the word
+“should” as in “env variable should be set by blah” or “the given binary
+should be available and executable by the current user”.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short"><code>Request</code> supports generic, type-driven access to data. Its use is currently restricted to the
+standard library in cases where trait authors wish to allow trait implementors to share generic
+information across trait boundaries. The motivating and prototypical use case is
+<code>core::error::Error</code> which would otherwise require a method per concrete type (eg.
+<code>std::backtrace::Backtrace</code> instance that implementors want to expose to users).</div></li><li><div class="item-name"><a class="struct" href="struct.Source.html" title="struct wasmtime_environ::__core::error::Source">Source</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">An iterator over an <a href="trait.Error.html" title="trait wasmtime_environ::__core::error::Error"><code>Error</code></a> and its sources.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Error.html" title="trait wasmtime_environ::__core::error::Error">Error</a></div><div class="desc docblock-short"><code>Error</code> is a trait representing the basic expectations for error values,
+i.e., values of type <code>E</code> in <a href="../fmt/type.Result.html" title="type wasmtime_environ::__core::fmt::Result"><code>Result&lt;T, E&gt;</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.request_ref.html" title="fn wasmtime_environ::__core::error::request_ref">request_ref</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Request a reference of type <code>T</code> from the given <code>impl Error</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.request_value.html" title="fn wasmtime_environ::__core::error::request_value">request_value</a><span class="stab unstable" title="">Experimental</span></div><div class="desc docblock-short">Request a value of type <code>T</code> from the given <code>impl Error</code>.</div></li></ul></section></div></main></body></html>

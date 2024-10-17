@@ -1,0 +1,1 @@
+searchState.loadedDescShard("rkyv_derive", 0, "Procedural macros for <code>rkyv</code>.\nDerives <code>Archive</code> for the labeled type.\nDerives <code>Deserialize</code> for the labeled type.\nDerives <code>Serialize</code> for the labeled type.")

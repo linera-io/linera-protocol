@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ArithmeticError","BlobContent","DecompressionError","OracleResponse","ParseAmountError","Round"],"struct":["Amount","ApplicationPermissions","Blob","BlobBytes","BlockHeight","Bytecode","CompressedBytecode","Resources","SendMessageRequest","TimeDelta","Timestamp","UserApplicationDescription"]};

@@ -1,0 +1,1096 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides routines for searching strings for matches of a regular expression (aka “regex”). The regex syntax supported by this crate is similar to other regex engines, but it lacks several features that are not known how to implement efficiently. This includes, but is not limited to, look-around and backreferences. In exchange, all regex searches in this crate have worst case `O(m * n)` time complexity, where `m` is proportional to the size of the regex and `n` is proportional to the size of the string being searched."><title>regex - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="regex" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../regex/index.html">regex</a><span class="version">1.10.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">regex</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/regex/lib.rs.html#1-1346">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides routines for searching strings for matches of a <a href="https://en.wikipedia.org/wiki/Regular_expression">regular
+expression</a> (aka “regex”). The regex syntax supported by this crate is similar
+to other regex engines, but it lacks several features that are not known how to
+implement efficiently. This includes, but is not limited to, look-around and
+backreferences. In exchange, all regex searches in this crate have worst case
+<code>O(m * n)</code> time complexity, where <code>m</code> is proportional to the size of the regex
+and <code>n</code> is proportional to the size of the string being searched.</p>
+<p>If you just want API documentation, then skip to the <a href="struct.Regex.html" title="struct regex::Regex"><code>Regex</code></a> type. Otherwise,
+here’s a quick example showing one way of parsing the output of a grep-like
+program:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?m)^([^:]+):([0-9]+):(.+)$"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">"\
+path/to/foo:54:Blue Harvest
+path/to/bar:90:Something, Something, Something, Dark Side
+path/to/baz:3:It's a Trap!
+"</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
+<span class="kw">for </span>(<span class="kw">_</span>, [path, lineno, line]) <span class="kw">in </span>re.captures_iter(hay).map(|c| c.extract()) {
+    results.push((path, lineno.parse::&lt;u64&gt;()<span class="question-mark">?</span>, line));
+}
+<span class="macro">assert_eq!</span>(results, <span class="macro">vec!</span>[
+    (<span class="string">"path/to/foo"</span>, <span class="number">54</span>, <span class="string">"Blue Harvest"</span>),
+    (<span class="string">"path/to/bar"</span>, <span class="number">90</span>, <span class="string">"Something, Something, Something, Dark Side"</span>),
+    (<span class="string">"path/to/baz"</span>, <span class="number">3</span>, <span class="string">"It's a Trap!"</span>),
+]);</code></pre></div>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>The primary type in this crate is a <a href="struct.Regex.html" title="struct regex::Regex"><code>Regex</code></a>. Its most important methods are
+as follows:</p>
+<ul>
+<li><a href="struct.Regex.html#method.new" title="associated function regex::Regex::new"><code>Regex::new</code></a> compiles a regex using the default configuration. A
+<a href="struct.RegexBuilder.html" title="struct regex::RegexBuilder"><code>RegexBuilder</code></a> permits setting a non-default configuration. (For example,
+case insensitive matching, verbose mode and others.)</li>
+<li><a href="struct.Regex.html#method.is_match" title="method regex::Regex::is_match"><code>Regex::is_match</code></a> reports whether a match exists in a particular haystack.</li>
+<li><a href="struct.Regex.html#method.find" title="method regex::Regex::find"><code>Regex::find</code></a> reports the byte offsets of a match in a haystack, if one
+exists. <a href="struct.Regex.html#method.find_iter" title="method regex::Regex::find_iter"><code>Regex::find_iter</code></a> returns an iterator over all such matches.</li>
+<li><a href="struct.Regex.html#method.captures" title="method regex::Regex::captures"><code>Regex::captures</code></a> returns a <a href="struct.Captures.html" title="struct regex::Captures"><code>Captures</code></a>, which reports both the byte
+offsets of a match in a haystack and the byte offsets of each matching capture
+group from the regex in the haystack.
+<a href="struct.Regex.html#method.captures_iter" title="method regex::Regex::captures_iter"><code>Regex::captures_iter</code></a> returns an iterator over all such matches.</li>
+</ul>
+<p>There is also a <a href="struct.RegexSet.html" title="struct regex::RegexSet"><code>RegexSet</code></a>, which permits searching for multiple regex
+patterns simultaneously in a single search. However, it currently only reports
+which patterns match and <em>not</em> the byte offsets of a match.</p>
+<p>Otherwise, this top-level crate documentation is organized as follows:</p>
+<ul>
+<li><a href="#usage">Usage</a> shows how to add the <code>regex</code> crate to your Rust project.</li>
+<li><a href="#examples">Examples</a> provides a limited selection of regex search examples.</li>
+<li><a href="#performance">Performance</a> provides a brief summary of how to optimize regex
+searching speed.</li>
+<li><a href="#unicode">Unicode</a> discusses support for non-ASCII patterns.</li>
+<li><a href="#syntax">Syntax</a> enumerates the specific regex syntax supported by this
+crate.</li>
+<li><a href="#untrusted-input">Untrusted input</a> discusses how this crate deals with regex
+patterns or haystacks that are untrusted.</li>
+<li><a href="#crate-features">Crate features</a> documents the Cargo features that can be
+enabled or disabled for this crate.</li>
+<li><a href="#other-crates">Other crates</a> links to other crates in the <code>regex</code> family.</li>
+</ul>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>The <code>regex</code> crate is <a href="https://crates.io/crates/regex">on crates.io</a> and can be
+used by adding <code>regex</code> to your dependencies in your project’s <code>Cargo.toml</code>.
+Or more simply, just run <code>cargo add regex</code>.</p>
+<p>Here is a complete example that creates a new Rust project, adds a dependency
+on <code>regex</code>, creates the source code for a regex search and then runs the
+program.</p>
+<p>First, create the project in a new directory:</p>
+<div class="example-wrap"><pre class="language-text"><code>$ mkdir regex-example
+$ cd regex-example
+$ cargo init
+</code></pre></div>
+<p>Second, add a dependency on <code>regex</code>:</p>
+<div class="example-wrap"><pre class="language-text"><code>$ cargo add regex
+</code></pre></div>
+<p>Third, edit <code>src/main.rs</code>. Delete what’s there and replace it with this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>re = Regex::new(<span class="string">r"Hello (?&lt;name&gt;\w+)!"</span>).unwrap();
+    <span class="kw">let </span><span class="prelude-val">Some</span>(caps) = re.captures(<span class="string">"Hello Murphy!"</span>) <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"no match!"</span>);
+        <span class="kw">return</span>;
+    };
+    <span class="macro">println!</span>(<span class="string">"The name is: {}"</span>, <span class="kw-2">&amp;</span>caps[<span class="string">"name"</span>]);
+}</code></pre></div>
+<p>Fourth, run it with <code>cargo run</code>:</p>
+<div class="example-wrap"><pre class="language-text"><code>$ cargo run
+   Compiling memchr v2.5.0
+   Compiling regex-syntax v0.7.1
+   Compiling aho-corasick v1.0.1
+   Compiling regex v1.8.1
+   Compiling regex-example v0.1.0 (/tmp/regex-example)
+    Finished dev [unoptimized + debuginfo] target(s) in 4.22s
+     Running `target/debug/regex-example`
+The name is: Murphy
+</code></pre></div>
+<p>The first time you run the program will show more output like above. But
+subsequent runs shouldn’t have to re-compile the dependencies.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This section provides a few examples, in tutorial style, showing how to
+search a haystack with a regex. There are more examples throughout the API
+documentation.</p>
+<p>Before starting though, it’s worth defining a few terms:</p>
+<ul>
+<li>A <strong>regex</strong> is a Rust value whose type is <code>Regex</code>. We use <code>re</code> as a
+variable name for a regex.</li>
+<li>A <strong>pattern</strong> is the string that is used to build a regex. We use <code>pat</code> as
+a variable name for a pattern.</li>
+<li>A <strong>haystack</strong> is the string that is searched by a regex. We use <code>hay</code> as a
+variable name for a haystack.</li>
+</ul>
+<p>Sometimes the words “regex” and “pattern” are used interchangeably.</p>
+<p>General use of regular expressions in this crate proceeds by compiling a
+<strong>pattern</strong> into a <strong>regex</strong>, and then using that regex to search, split or
+replace parts of a <strong>haystack</strong>.</p>
+<h4 id="example-find-a-middle-initial"><a class="doc-anchor" href="#example-find-a-middle-initial">§</a>Example: find a middle initial</h4>
+<p>We’ll start off with a very simple example: a regex that looks for a specific
+name but uses a wildcard to match a middle initial. Our pattern serves as
+something like a template that will match a particular name with <em>any</em> middle
+initial.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="comment">// We use 'unwrap()' here because it would be a bug in our program if the
+// pattern failed to compile to a regex. Panicking in the presence of a bug
+// is okay.
+</span><span class="kw">let </span>re = Regex::new(<span class="string">r"Homer (.)\. Simpson"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">"Homer J. Simpson"</span>;
+<span class="kw">let </span><span class="prelude-val">Some</span>(caps) = re.captures(hay) <span class="kw">else </span>{ <span class="kw">return </span>};
+<span class="macro">assert_eq!</span>(<span class="string">"J"</span>, <span class="kw-2">&amp;</span>caps[<span class="number">1</span>]);</code></pre></div>
+<p>There are a few things worth noticing here in our first example:</p>
+<ul>
+<li>The <code>.</code> is a special pattern meta character that means “match any single
+character except for new lines.” (More precisely, in this crate, it means
+“match any UTF-8 encoding of any Unicode scalar value other than <code>\n</code>.”)</li>
+<li>We can match an actual <code>.</code> literally by escaping it, i.e., <code>\.</code>.</li>
+<li>We use Rust’s <a href="https://doc.rust-lang.org/stable/reference/tokens.html#raw-string-literals">raw strings</a> to avoid needing to deal with escape sequences in
+both the regex pattern syntax and in Rust’s string literal syntax. If we didn’t
+use raw strings here, we would have had to use <code>\\.</code> to match a literal <code>.</code>
+character. That is, <code>r"\."</code> and <code>"\\."</code> are equivalent patterns.</li>
+<li>We put our wildcard <code>.</code> instruction in parentheses. These parentheses have a
+special meaning that says, “make whatever part of the haystack matches within
+these parentheses available as a capturing group.” After finding a match, we
+access this capture group with <code>&amp;caps[1]</code>.</li>
+</ul>
+<p>Otherwise, we execute a search using <code>re.captures(hay)</code> and return from our
+function if no match occurred. We then reference the middle initial by asking
+for the part of the haystack that matched the capture group indexed at <code>1</code>.
+(The capture group at index 0 is implicit and always corresponds to the entire
+match. In this case, that’s <code>Homer J. Simpson</code>.)</p>
+<h4 id="example-named-capture-groups"><a class="doc-anchor" href="#example-named-capture-groups">§</a>Example: named capture groups</h4>
+<p>Continuing from our middle initial example above, we can tweak the pattern
+slightly to give a name to the group that matches the middle initial:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="comment">// Note that (?P&lt;middle&gt;.) is a different way to spell the same thing.
+</span><span class="kw">let </span>re = Regex::new(<span class="string">r"Homer (?&lt;middle&gt;.)\. Simpson"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">"Homer J. Simpson"</span>;
+<span class="kw">let </span><span class="prelude-val">Some</span>(caps) = re.captures(hay) <span class="kw">else </span>{ <span class="kw">return </span>};
+<span class="macro">assert_eq!</span>(<span class="string">"J"</span>, <span class="kw-2">&amp;</span>caps[<span class="string">"middle"</span>]);</code></pre></div>
+<p>Giving a name to a group can be useful when there are multiple groups in
+a pattern. It makes the code referring to those groups a bit easier to
+understand.</p>
+<h4 id="example-validating-a-particular-date-format"><a class="doc-anchor" href="#example-validating-a-particular-date-format">§</a>Example: validating a particular date format</h4>
+<p>This examples shows how to confirm whether a haystack, in its entirety, matches
+a particular date format:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"^\d{4}-\d{2}-\d{2}$"</span>).unwrap();
+<span class="macro">assert!</span>(re.is_match(<span class="string">"2010-03-14"</span>));</code></pre></div>
+<p>Notice the use of the <code>^</code> and <code>$</code> anchors. In this crate, every regex search is
+run with an implicit <code>(?s:.)*?</code> at the beginning of its pattern, which allows
+the regex to match anywhere in a haystack. Anchors, as above, can be used to
+ensure that the full haystack matches a pattern.</p>
+<p>This crate is also Unicode aware by default, which means that <code>\d</code> might match
+more than you might expect it to. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"^\d{4}-\d{2}-\d{2}$"</span>).unwrap();
+<span class="macro">assert!</span>(re.is_match(<span class="string">"𝟚𝟘𝟙𝟘-𝟘𝟛-𝟙𝟜"</span>));</code></pre></div>
+<p>To only match an ASCII decimal digit, all of the following are equivalent:</p>
+<ul>
+<li><code>[0-9]</code></li>
+<li><code>(?-u:\d)</code></li>
+<li><code>[[:digit:]]</code></li>
+<li><code>[\d&amp;&amp;\p{ascii}]</code></li>
+</ul>
+<h4 id="example-finding-dates-in-a-haystack"><a class="doc-anchor" href="#example-finding-dates-in-a-haystack">§</a>Example: finding dates in a haystack</h4>
+<p>In the previous example, we showed how one might validate that a haystack,
+in its entirety, corresponded to a particular date format. But what if we wanted
+to extract all things that look like dates in a specific format from a haystack?
+To do this, we can use an iterator API to find all matches (notice that we’ve
+removed the anchors and switched to looking for ASCII-only digits):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"[0-9]{4}-[0-9]{2}-[0-9]{2}"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">"What do 1865-04-14, 1881-07-02, 1901-09-06 and 1963-11-22 have in common?"</span>;
+<span class="comment">// 'm' is a 'Match', and 'as_str()' returns the matching part of the haystack.
+</span><span class="kw">let </span>dates: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = re.find_iter(hay).map(|m| m.as_str()).collect();
+<span class="macro">assert_eq!</span>(dates, <span class="macro">vec!</span>[
+    <span class="string">"1865-04-14"</span>,
+    <span class="string">"1881-07-02"</span>,
+    <span class="string">"1901-09-06"</span>,
+    <span class="string">"1963-11-22"</span>,
+]);</code></pre></div>
+<p>We can also iterate over <a href="struct.Captures.html" title="struct regex::Captures"><code>Captures</code></a> values instead of <a href="struct.Match.html" title="struct regex::Match"><code>Match</code></a> values, and
+that in turn permits accessing each component of the date via capturing groups:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?&lt;y&gt;[0-9]{4})-(?&lt;m&gt;[0-9]{2})-(?&lt;d&gt;[0-9]{2})"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">"What do 1865-04-14, 1881-07-02, 1901-09-06 and 1963-11-22 have in common?"</span>;
+<span class="comment">// 'm' is a 'Match', and 'as_str()' returns the matching part of the haystack.
+</span><span class="kw">let </span>dates: Vec&lt;(<span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str)&gt; = re.captures_iter(hay).map(|caps| {
+    <span class="comment">// The unwraps are okay because every capture group must match if the whole
+    // regex matches, and in this context, we know we have a match.
+    //
+    // Note that we use `caps.name("y").unwrap().as_str()` instead of
+    // `&amp;caps["y"]` because the lifetime of the former is the same as the
+    // lifetime of `hay` above, but the lifetime of the latter is tied to the
+    // lifetime of `caps` due to how the `Index` trait is defined.
+    </span><span class="kw">let </span>year = caps.name(<span class="string">"y"</span>).unwrap().as_str();
+    <span class="kw">let </span>month = caps.name(<span class="string">"m"</span>).unwrap().as_str();
+    <span class="kw">let </span>day = caps.name(<span class="string">"d"</span>).unwrap().as_str();
+    (year, month, day)
+}).collect();
+<span class="macro">assert_eq!</span>(dates, <span class="macro">vec!</span>[
+    (<span class="string">"1865"</span>, <span class="string">"04"</span>, <span class="string">"14"</span>),
+    (<span class="string">"1881"</span>, <span class="string">"07"</span>, <span class="string">"02"</span>),
+    (<span class="string">"1901"</span>, <span class="string">"09"</span>, <span class="string">"06"</span>),
+    (<span class="string">"1963"</span>, <span class="string">"11"</span>, <span class="string">"22"</span>),
+]);</code></pre></div>
+<h4 id="example-simpler-capture-group-extraction"><a class="doc-anchor" href="#example-simpler-capture-group-extraction">§</a>Example: simpler capture group extraction</h4>
+<p>One can use <a href="struct.Captures.html#method.extract" title="method regex::Captures::extract"><code>Captures::extract</code></a> to make the code from the previous example a
+bit simpler in this case:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"([0-9]{4})-([0-9]{2})-([0-9]{2})"</span>).unwrap();
+<span class="kw">let </span>hay = <span class="string">"What do 1865-04-14, 1881-07-02, 1901-09-06 and 1963-11-22 have in common?"</span>;
+<span class="kw">let </span>dates: Vec&lt;(<span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str)&gt; = re.captures_iter(hay).map(|caps| {
+    <span class="kw">let </span>(<span class="kw">_</span>, [year, month, day]) = caps.extract();
+    (year, month, day)
+}).collect();
+<span class="macro">assert_eq!</span>(dates, <span class="macro">vec!</span>[
+    (<span class="string">"1865"</span>, <span class="string">"04"</span>, <span class="string">"14"</span>),
+    (<span class="string">"1881"</span>, <span class="string">"07"</span>, <span class="string">"02"</span>),
+    (<span class="string">"1901"</span>, <span class="string">"09"</span>, <span class="string">"06"</span>),
+    (<span class="string">"1963"</span>, <span class="string">"11"</span>, <span class="string">"22"</span>),
+]);</code></pre></div>
+<p><code>Captures::extract</code> works by ensuring that the number of matching groups match
+the number of groups requested via the <code>[year, month, day]</code> syntax. If they do,
+then the substrings for each corresponding capture group are automatically
+returned in an appropriately sized array. Rust’s syntax for pattern matching
+arrays does the rest.</p>
+<h4 id="example-replacement-with-named-capture-groups"><a class="doc-anchor" href="#example-replacement-with-named-capture-groups">§</a>Example: replacement with named capture groups</h4>
+<p>Building on the previous example, perhaps we’d like to rearrange the date
+formats. This can be done by finding each match and replacing it with
+something different. The <a href="struct.Regex.html#method.replace_all" title="method regex::Regex::replace_all"><code>Regex::replace_all</code></a> routine provides a convenient
+way to do this, including by supporting references to named groups in the
+replacement string:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?&lt;y&gt;\d{4})-(?&lt;m&gt;\d{2})-(?&lt;d&gt;\d{2})"</span>).unwrap();
+<span class="kw">let </span>before = <span class="string">"1973-01-05, 1975-08-25 and 1980-10-18"</span>;
+<span class="kw">let </span>after = re.replace_all(before, <span class="string">"$m/$d/$y"</span>);
+<span class="macro">assert_eq!</span>(after, <span class="string">"01/05/1973, 08/25/1975 and 10/18/1980"</span>);</code></pre></div>
+<p>The replace methods are actually polymorphic in the replacement, which
+provides more flexibility than is seen here. (See the documentation for
+<a href="struct.Regex.html#method.replace" title="method regex::Regex::replace"><code>Regex::replace</code></a> for more details.)</p>
+<h4 id="example-verbose-mode"><a class="doc-anchor" href="#example-verbose-mode">§</a>Example: verbose mode</h4>
+<p>When your regex gets complicated, you might consider using something other
+than regex. But if you stick with regex, you can use the <code>x</code> flag to enable
+insignificant whitespace mode or “verbose mode.” In this mode, whitespace
+is treated as insignificant and one may write comments. This may make your
+patterns easier to comprehend.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?x)
+  (?P&lt;y&gt;\d{4}) # the year, including all Unicode digits
+  -
+  (?P&lt;m&gt;\d{2}) # the month, including all Unicode digits
+  -
+  (?P&lt;d&gt;\d{2}) # the day, including all Unicode digits
+"</span>).unwrap();
+
+<span class="kw">let </span>before = <span class="string">"1973-01-05, 1975-08-25 and 1980-10-18"</span>;
+<span class="kw">let </span>after = re.replace_all(before, <span class="string">"$m/$d/$y"</span>);
+<span class="macro">assert_eq!</span>(after, <span class="string">"01/05/1973, 08/25/1975 and 10/18/1980"</span>);</code></pre></div>
+<p>If you wish to match against whitespace in this mode, you can still use <code>\s</code>,
+<code>\n</code>, <code>\t</code>, etc. For escaping a single space character, you can escape it
+directly with <code>\ </code>, use its hex character code <code>\x20</code> or temporarily disable
+the <code>x</code> flag, e.g., <code>(?-x: )</code>.</p>
+<h4 id="example-match-multiple-regular-expressions-simultaneously"><a class="doc-anchor" href="#example-match-multiple-regular-expressions-simultaneously">§</a>Example: match multiple regular expressions simultaneously</h4>
+<p>This demonstrates how to use a <a href="struct.RegexSet.html" title="struct regex::RegexSet"><code>RegexSet</code></a> to match multiple (possibly
+overlapping) regexes in a single scan of a haystack:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::RegexSet;
+
+<span class="kw">let </span>set = RegexSet::new(<span class="kw-2">&amp;</span>[
+    <span class="string">r"\w+"</span>,
+    <span class="string">r"\d+"</span>,
+    <span class="string">r"\pL+"</span>,
+    <span class="string">r"foo"</span>,
+    <span class="string">r"bar"</span>,
+    <span class="string">r"barfoo"</span>,
+    <span class="string">r"foobar"</span>,
+]).unwrap();
+
+<span class="comment">// Iterate over and collect all of the matches. Each match corresponds to the
+// ID of the matching pattern.
+</span><span class="kw">let </span>matches: Vec&lt;<span class="kw">_</span>&gt; = set.matches(<span class="string">"foobar"</span>).into_iter().collect();
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">6</span>]);
+
+<span class="comment">// You can also test whether a particular regex matched:
+</span><span class="kw">let </span>matches = set.matches(<span class="string">"foobar"</span>);
+<span class="macro">assert!</span>(!matches.matched(<span class="number">5</span>));
+<span class="macro">assert!</span>(matches.matched(<span class="number">6</span>));</code></pre></div>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p>This section briefly discusses a few concerns regarding the speed and resource
+usage of regexes.</p>
+<h4 id="only-ask-for-what-you-need"><a class="doc-anchor" href="#only-ask-for-what-you-need">§</a>Only ask for what you need</h4>
+<p>When running a search with a regex, there are generally three different types
+of information one can ask for:</p>
+<ol>
+<li>Does a regex match in a haystack?</li>
+<li>Where does a regex match in a haystack?</li>
+<li>Where do each of the capturing groups match in a haystack?</li>
+</ol>
+<p>Generally speaking, this crate could provide a function to answer only #3,
+which would subsume #1 and #2 automatically. However, it can be significantly
+more expensive to compute the location of capturing group matches, so it’s best
+not to do it if you don’t need to.</p>
+<p>Therefore, only ask for what you need. For example, don’t use <a href="struct.Regex.html#method.find" title="method regex::Regex::find"><code>Regex::find</code></a>
+if you only need to test if a regex matches a haystack. Use <a href="struct.Regex.html#method.is_match" title="method regex::Regex::is_match"><code>Regex::is_match</code></a>
+instead.</p>
+<h4 id="unicode-can-impact-memory-usage-and-search-speed"><a class="doc-anchor" href="#unicode-can-impact-memory-usage-and-search-speed">§</a>Unicode can impact memory usage and search speed</h4>
+<p>This crate has first class support for Unicode and it is <strong>enabled by default</strong>.
+In many cases, the extra memory required to support it will be negligible and
+it typically won’t impact search speed. But it can in some cases.</p>
+<p>With respect to memory usage, the impact of Unicode principally manifests
+through the use of Unicode character classes. Unicode character classes
+tend to be quite large. For example, <code>\w</code> by default matches around 140,000
+distinct codepoints. This requires additional memory, and tends to slow down
+regex compilation. While a <code>\w</code> here and there is unlikely to be noticed,
+writing <code>\w{100}</code> will for example result in quite a large regex by default.
+Indeed, <code>\w</code> is considerably larger than its ASCII-only version, so if your
+requirements are satisfied by ASCII, it’s probably a good idea to stick to
+ASCII classes. The ASCII-only version of <code>\w</code> can be spelled in a number of
+ways. All of the following are equivalent:</p>
+<ul>
+<li><code>[0-9A-Za-z_]</code></li>
+<li><code>(?-u:\w)</code></li>
+<li><code>[[:word:]]</code></li>
+<li><code>[\w&amp;&amp;\p{ascii}]</code></li>
+</ul>
+<p>With respect to search speed, Unicode tends to be handled pretty well, even when
+using large Unicode character classes. However, some of the faster internal
+regex engines cannot handle a Unicode aware word boundary assertion. So if you
+don’t need Unicode-aware word boundary assertions, you might consider using
+<code>(?-u:\b)</code> instead of <code>\b</code>, where the former uses an ASCII-only definition of
+a word character.</p>
+<h4 id="literals-might-accelerate-searches"><a class="doc-anchor" href="#literals-might-accelerate-searches">§</a>Literals might accelerate searches</h4>
+<p>This crate tends to be quite good at recognizing literals in a regex pattern
+and using them to accelerate a search. If it is at all possible to include
+some kind of literal in your pattern, then it might make search substantially
+faster. For example, in the regex <code>\w+@\w+</code>, the engine will look for
+occurrences of <code>@</code> and then try a reverse match for <code>\w+</code> to find the start
+position.</p>
+<h4 id="avoid-re-compiling-regexes-especially-in-a-loop"><a class="doc-anchor" href="#avoid-re-compiling-regexes-especially-in-a-loop">§</a>Avoid re-compiling regexes, especially in a loop</h4>
+<p>It is an anti-pattern to compile the same pattern in a loop since regex
+compilation is typically expensive. (It takes anywhere from a few microseconds
+to a few <strong>milliseconds</strong> depending on the size of the pattern.) Not only is
+compilation itself expensive, but this also prevents optimizations that reuse
+allocations internally to the regex engine.</p>
+<p>In Rust, it can sometimes be a pain to pass regexes around if they’re used from
+inside a helper function. Instead, we recommend using crates like <a href="https://crates.io/crates/once_cell"><code>once_cell</code></a>
+and <a href="https://crates.io/crates/lazy_static"><code>lazy_static</code></a> to ensure that patterns are compiled exactly once.</p>
+<p>This example shows how to use <code>once_cell</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>{
+    once_cell::sync::Lazy,
+    regex::Regex,
+};
+
+<span class="kw">fn </span>some_helper_function(haystack: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    <span class="kw">static </span>RE: Lazy&lt;Regex&gt; = Lazy::new(|| Regex::new(<span class="string">r"..."</span>).unwrap());
+    RE.is_match(haystack)
+}
+
+<span class="kw">fn </span>main() {
+    <span class="macro">assert!</span>(some_helper_function(<span class="string">"abc"</span>));
+    <span class="macro">assert!</span>(!some_helper_function(<span class="string">"ac"</span>));
+}</code></pre></div>
+<p>Specifically, in this example, the regex will be compiled when it is used for
+the first time. On subsequent uses, it will reuse the previously built <code>Regex</code>.
+Notice how one can define the <code>Regex</code> locally to a specific function.</p>
+<h4 id="sharing-a-regex-across-threads-can-result-in-contention"><a class="doc-anchor" href="#sharing-a-regex-across-threads-can-result-in-contention">§</a>Sharing a regex across threads can result in contention</h4>
+<p>While a single <code>Regex</code> can be freely used from multiple threads simultaneously,
+there is a small synchronization cost that must be paid. Generally speaking,
+one shouldn’t expect to observe this unless the principal task in each thread
+is searching with the regex <em>and</em> most searches are on short haystacks. In this
+case, internal contention on shared resources can spike and increase latency,
+which in turn may slow down each individual search.</p>
+<p>One can work around this by cloning each <code>Regex</code> before sending it to another
+thread. The cloned regexes will still share the same internal read-only portion
+of its compiled state (it’s reference counted), but each thread will get
+optimized access to the mutable space that is used to run a search. In general,
+there is no additional cost in memory to doing this. The only cost is the added
+code complexity required to explicitly clone the regex. (If you share the same
+<code>Regex</code> across multiple threads, each thread still gets its own mutable space,
+but accessing that space is slower.)</p>
+<h2 id="unicode"><a class="doc-anchor" href="#unicode">§</a>Unicode</h2>
+<p>This section discusses what kind of Unicode support this regex library has.
+Before showing some examples, we’ll summarize the relevant points:</p>
+<ul>
+<li>This crate almost fully implements “Basic Unicode Support” (Level 1) as
+specified by the <a href="https://unicode.org/reports/tr18/">Unicode Technical Standard #18</a>. The full details
+of what is supported are documented in <a href="https://github.com/rust-lang/regex/blob/master/UNICODE.md">UNICODE.md</a> in the root of the regex
+crate repository. There is virtually no support for “Extended Unicode Support”
+(Level 2) from UTS#18.</li>
+<li>The top-level <a href="struct.Regex.html" title="struct regex::Regex"><code>Regex</code></a> runs searches <em>as if</em> iterating over each of the
+codepoints in the haystack. That is, the fundamental atom of matching is a
+single codepoint.</li>
+<li><a href="bytes/struct.Regex.html" title="struct regex::bytes::Regex"><code>bytes::Regex</code></a>, in contrast, permits disabling Unicode mode for part of all
+of your pattern in all cases. When Unicode mode is disabled, then a search is
+run <em>as if</em> iterating over each byte in the haystack. That is, the fundamental
+atom of matching is a single byte. (A top-level <code>Regex</code> also permits disabling
+Unicode and thus matching <em>as if</em> it were one byte at a time, but only when
+doing so wouldn’t permit matching invalid UTF-8.)</li>
+<li>When Unicode mode is enabled (the default), <code>.</code> will match an entire Unicode
+scalar value, even when it is encoded using multiple bytes. When Unicode mode
+is disabled (e.g., <code>(?-u:.)</code>), then <code>.</code> will match a single byte in all cases.</li>
+<li>The character classes <code>\w</code>, <code>\d</code> and <code>\s</code> are all Unicode-aware by default.
+Use <code>(?-u:\w)</code>, <code>(?-u:\d)</code> and <code>(?-u:\s)</code> to get their ASCII-only definitions.</li>
+<li>Similarly, <code>\b</code> and <code>\B</code> use a Unicode definition of a “word” character.
+To get ASCII-only word boundaries, use <code>(?-u:\b)</code> and <code>(?-u:\B)</code>. This also
+applies to the special word boundary assertions. (That is, <code>\b{start}</code>,
+<code>\b{end}</code>, <code>\b{start-half}</code>, <code>\b{end-half}</code>.)</li>
+<li><code>^</code> and <code>$</code> are <strong>not</strong> Unicode-aware in multi-line mode. Namely, they only
+recognize <code>\n</code> (assuming CRLF mode is not enabled) and not any of the other
+forms of line terminators defined by Unicode.</li>
+<li>Case insensitive searching is Unicode-aware and uses simple case folding.</li>
+<li>Unicode general categories, scripts and many boolean properties are available
+by default via the <code>\p{property name}</code> syntax.</li>
+<li>In all cases, matches are reported using byte offsets. Or more precisely,
+UTF-8 code unit offsets. This permits constant time indexing and slicing of the
+haystack.</li>
+</ul>
+<p>Patterns themselves are <strong>only</strong> interpreted as a sequence of Unicode scalar
+values. This means you can use Unicode characters directly in your pattern:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?i)Δ+"</span>).unwrap();
+<span class="kw">let </span>m = re.find(<span class="string">"ΔδΔ"</span>).unwrap();
+<span class="macro">assert_eq!</span>((<span class="number">0</span>, <span class="number">6</span>), (m.start(), m.end()));
+<span class="comment">// alternatively:
+</span><span class="macro">assert_eq!</span>(<span class="number">0</span>..<span class="number">6</span>, m.range());</code></pre></div>
+<p>As noted above, Unicode general categories, scripts, script extensions, ages
+and a smattering of boolean properties are available as character classes. For
+example, you can match a sequence of numerals, Greek or Cherokee letters:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"[\pN\p{Greek}\p{Cherokee}]+"</span>).unwrap();
+<span class="kw">let </span>m = re.find(<span class="string">"abcΔᎠβⅠᏴγδⅡxyz"</span>).unwrap();
+<span class="macro">assert_eq!</span>(<span class="number">3</span>..<span class="number">23</span>, m.range());</code></pre></div>
+<p>While not specific to Unicode, this library also supports character class set
+operations. Namely, one can nest character classes arbitrarily and perform set
+operations on them. Those set operations are union (the default), intersection,
+difference and symmetric difference. These set operations tend to be most
+useful with Unicode character classes. For example, to match any codepoint
+that is both in the <code>Greek</code> script and in the <code>Letter</code> general category:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"[\p{Greek}&amp;&amp;\pL]+"</span>).unwrap();
+<span class="kw">let </span>subs: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = re.find_iter(<span class="string">"ΔδΔ𐅌ΔδΔ"</span>).map(|m| m.as_str()).collect();
+<span class="macro">assert_eq!</span>(subs, <span class="macro">vec!</span>[<span class="string">"ΔδΔ"</span>, <span class="string">"ΔδΔ"</span>]);
+
+<span class="comment">// If we just matches on Greek, then all codepoints would match!
+</span><span class="kw">let </span>re = Regex::new(<span class="string">r"\p{Greek}+"</span>).unwrap();
+<span class="kw">let </span>subs: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = re.find_iter(<span class="string">"ΔδΔ𐅌ΔδΔ"</span>).map(|m| m.as_str()).collect();
+<span class="macro">assert_eq!</span>(subs, <span class="macro">vec!</span>[<span class="string">"ΔδΔ𐅌ΔδΔ"</span>]);</code></pre></div>
+<h4 id="opt-out-of-unicode-support"><a class="doc-anchor" href="#opt-out-of-unicode-support">§</a>Opt out of Unicode support</h4>
+<p>The <a href="bytes/struct.Regex.html" title="struct regex::bytes::Regex"><code>bytes::Regex</code></a> type that can be used to search <code>&amp;[u8]</code> haystacks. By
+default, haystacks are conventionally treated as UTF-8 just like it is with the
+main <code>Regex</code> type. However, this behavior can be disabled by turning off the
+<code>u</code> flag, even if doing so could result in matching invalid UTF-8. For example,
+when the <code>u</code> flag is disabled, <code>.</code> will match any byte instead of any Unicode
+scalar value.</p>
+<p>Disabling the <code>u</code> flag is also possible with the standard <code>&amp;str</code>-based <code>Regex</code>
+type, but it is only allowed where the UTF-8 invariant is maintained. For
+example, <code>(?-u:\w)</code> is an ASCII-only <code>\w</code> character class and is legal in an
+<code>&amp;str</code>-based <code>Regex</code>, but <code>(?-u:\W)</code> will attempt to match <em>any byte</em> that
+isn’t in <code>(?-u:\w)</code>, which in turn includes bytes that are invalid UTF-8.
+Similarly, <code>(?-u:\xFF)</code> will attempt to match the raw byte <code>\xFF</code> (instead of
+<code>U+00FF</code>), which is invalid UTF-8 and therefore is illegal in <code>&amp;str</code>-based
+regexes.</p>
+<p>Finally, since Unicode support requires bundling large Unicode data
+tables, this crate exposes knobs to disable the compilation of those
+data tables, which can be useful for shrinking binary size and reducing
+compilation times. For details on how to do that, see the section on <a href="#crate-features">crate
+features</a>.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>The syntax supported in this crate is documented below.</p>
+<p>Note that the regular expression parser and abstract syntax are exposed in
+a separate crate, <a href="https://docs.rs/regex-syntax"><code>regex-syntax</code></a>.</p>
+<h4 id="matching-one-character"><a class="doc-anchor" href="#matching-one-character">§</a>Matching one character</h4><pre class="rust">
+.             any character except new line (includes new line with s flag)
+[0-9]         any ASCII digit
+\d            digit (\p{Nd})
+\D            not digit
+\pX           Unicode character class identified by a one-letter name
+\p{Greek}     Unicode character class (general category or script)
+\PX           Negated Unicode character class identified by a one-letter name
+\P{Greek}     negated Unicode character class (general category or script)
+</pre>
+<h4 id="character-classes"><a class="doc-anchor" href="#character-classes">§</a>Character classes</h4><pre class="rust">
+[xyz]         A character class matching either x, y or z (union).
+[^xyz]        A character class matching any character except x, y and z.
+[a-z]         A character class matching any character in range a-z.
+[[:alpha:]]   ASCII character class ([A-Za-z])
+[[:^alpha:]]  Negated ASCII character class ([^A-Za-z])
+[x[^xyz]]     Nested/grouping character class (matching any character except y and z)
+[a-y&&xyz]    Intersection (matching x or y)
+[0-9&&[^4]]   Subtraction using intersection and negation (matching 0-9 except 4)
+[0-9--4]      Direct subtraction (matching 0-9 except 4)
+[a-g~~b-h]    Symmetric difference (matching `a` and `h` only)
+[\[\]]        Escaping in character classes (matching [ or ])
+[a&&b]        An empty character class matching nothing
+</pre>
+<p>Any named character class may appear inside a bracketed <code>[...]</code> character
+class. For example, <code>[\p{Greek}[:digit:]]</code> matches any ASCII digit or any
+codepoint in the <code>Greek</code> script. <code>[\p{Greek}&amp;&amp;\pL]</code> matches Greek letters.</p>
+<p>Precedence in character classes, from most binding to least:</p>
+<ol>
+<li>Ranges: <code>[a-cd]</code> == <code>[[a-c]d]</code></li>
+<li>Union: <code>[ab&amp;&amp;bc]</code> == <code>[[ab]&amp;&amp;[bc]]</code></li>
+<li>Intersection, difference, symmetric difference. All three have equivalent
+precedence, and are evaluated in left-to-right order. For example,
+<code>[\pL--\p{Greek}&amp;&amp;\p{Uppercase}]</code> == <code>[[\pL--\p{Greek}]&amp;&amp;\p{Uppercase}]</code>.</li>
+<li>Negation: <code>[^a-z&amp;&amp;b]</code> == <code>[^[a-z&amp;&amp;b]]</code>.</li>
+</ol>
+<h4 id="composites"><a class="doc-anchor" href="#composites">§</a>Composites</h4><pre class="rust">
+xy    concatenation (x followed by y)
+x|y   alternation (x or y, prefer x)
+</pre>
+<p>This example shows how an alternation works, and what it means to prefer a
+branch in the alternation over subsequent branches.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>haystack = <span class="string">"samwise"</span>;
+<span class="comment">// If 'samwise' comes first in our alternation, then it is
+// preferred as a match, even if the regex engine could
+// technically detect that 'sam' led to a match earlier.
+</span><span class="kw">let </span>re = Regex::new(<span class="string">r"samwise|sam"</span>).unwrap();
+<span class="macro">assert_eq!</span>(<span class="string">"samwise"</span>, re.find(haystack).unwrap().as_str());
+<span class="comment">// But if 'sam' comes first, then it will match instead.
+// In this case, it is impossible for 'samwise' to match
+// because 'sam' is a prefix of it.
+</span><span class="kw">let </span>re = Regex::new(<span class="string">r"sam|samwise"</span>).unwrap();
+<span class="macro">assert_eq!</span>(<span class="string">"sam"</span>, re.find(haystack).unwrap().as_str());</code></pre></div>
+<h4 id="repetitions"><a class="doc-anchor" href="#repetitions">§</a>Repetitions</h4><pre class="rust">
+x*        zero or more of x (greedy)
+x+        one or more of x (greedy)
+x?        zero or one of x (greedy)
+x*?       zero or more of x (ungreedy/lazy)
+x+?       one or more of x (ungreedy/lazy)
+x??       zero or one of x (ungreedy/lazy)
+x{n,m}    at least n x and at most m x (greedy)
+x{n,}     at least n x (greedy)
+x{n}      exactly n x
+x{n,m}?   at least n x and at most m x (ungreedy/lazy)
+x{n,}?    at least n x (ungreedy/lazy)
+x{n}?     exactly n x
+</pre>
+<h4 id="empty-matches"><a class="doc-anchor" href="#empty-matches">§</a>Empty matches</h4><pre class="rust">
+^               the beginning of a haystack (or start-of-line with multi-line mode)
+$               the end of a haystack (or end-of-line with multi-line mode)
+\A              only the beginning of a haystack (even with multi-line mode enabled)
+\z              only the end of a haystack (even with multi-line mode enabled)
+\b              a Unicode word boundary (\w on one side and \W, \A, or \z on other)
+\B              not a Unicode word boundary
+\b{start}, \<   a Unicode start-of-word boundary (\W|\A on the left, \w on the right)
+\b{end}, \>     a Unicode end-of-word boundary (\w on the left, \W|\z on the right))
+\b{start-half}  half of a Unicode start-of-word boundary (\W|\A on the left)
+\b{end-half}    half of a Unicode end-of-word boundary (\W|\z on the right)
+</pre>
+<p>The empty regex is valid and matches the empty string. For example, the
+empty regex matches <code>abc</code> at positions <code>0</code>, <code>1</code>, <code>2</code> and <code>3</code>. When using the
+top-level <a href="struct.Regex.html" title="struct regex::Regex"><code>Regex</code></a> on <code>&amp;str</code> haystacks, an empty match that splits a codepoint
+is guaranteed to never be returned. However, such matches are permitted when
+using a <a href="bytes/struct.Regex.html" title="struct regex::bytes::Regex"><code>bytes::Regex</code></a>. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>re = regex::Regex::new(<span class="string">r""</span>).unwrap();
+<span class="kw">let </span>ranges: Vec&lt;<span class="kw">_</span>&gt; = re.find_iter(<span class="string">"💩"</span>).map(|m| m.range()).collect();
+<span class="macro">assert_eq!</span>(ranges, <span class="macro">vec!</span>[<span class="number">0</span>..<span class="number">0</span>, <span class="number">4</span>..<span class="number">4</span>]);
+
+<span class="kw">let </span>re = regex::bytes::Regex::new(<span class="string">r""</span>).unwrap();
+<span class="kw">let </span>ranges: Vec&lt;<span class="kw">_</span>&gt; = re.find_iter(<span class="string">"💩"</span>.as_bytes()).map(|m| m.range()).collect();
+<span class="macro">assert_eq!</span>(ranges, <span class="macro">vec!</span>[<span class="number">0</span>..<span class="number">0</span>, <span class="number">1</span>..<span class="number">1</span>, <span class="number">2</span>..<span class="number">2</span>, <span class="number">3</span>..<span class="number">3</span>, <span class="number">4</span>..<span class="number">4</span>]);</code></pre></div>
+<p>Note that an empty regex is distinct from a regex that can never match.
+For example, the regex <code>[a&amp;&amp;b]</code> is a character class that represents the
+intersection of <code>a</code> and <code>b</code>. That intersection is empty, which means the
+character class is empty. Since nothing is in the empty set, <code>[a&amp;&amp;b]</code> matches
+nothing, not even the empty string.</p>
+<h4 id="grouping-and-flags"><a class="doc-anchor" href="#grouping-and-flags">§</a>Grouping and flags</h4><pre class="rust">
+(exp)          numbered capture group (indexed by opening parenthesis)
+(?P&lt;name&gt;exp)  named (also numbered) capture group (names must be alpha-numeric)
+(?&lt;name&gt;exp)   named (also numbered) capture group (names must be alpha-numeric)
+(?:exp)        non-capturing group
+(?flags)       set flags within current group
+(?flags:exp)   set flags for exp (non-capturing)
+</pre>
+<p>Capture group names must be any sequence of alpha-numeric Unicode codepoints,
+in addition to <code>.</code>, <code>_</code>, <code>[</code> and <code>]</code>. Names must start with either an <code>_</code> or
+an alphabetic codepoint. Alphabetic codepoints correspond to the <code>Alphabetic</code>
+Unicode property, while numeric codepoints correspond to the union of the
+<code>Decimal_Number</code>, <code>Letter_Number</code> and <code>Other_Number</code> general categories.</p>
+<p>Flags are each a single character. For example, <code>(?x)</code> sets the flag <code>x</code>
+and <code>(?-x)</code> clears the flag <code>x</code>. Multiple flags can be set or cleared at
+the same time: <code>(?xy)</code> sets both the <code>x</code> and <code>y</code> flags and <code>(?x-y)</code> sets
+the <code>x</code> flag and clears the <code>y</code> flag.</p>
+<p>All flags are by default disabled unless stated otherwise. They are:</p>
+<pre class="rust">
+i     case-insensitive: letters match both upper and lower case
+m     multi-line mode: ^ and $ match begin/end of line
+s     allow . to match \n
+R     enables CRLF mode: when multi-line mode is enabled, \r\n is used
+U     swap the meaning of x* and x*?
+u     Unicode support (enabled by default)
+x     verbose mode, ignores whitespace and allow line comments (starting with `#`)
+</pre>
+<p>Note that in verbose mode, whitespace is ignored everywhere, including within
+character classes. To insert whitespace, use its escaped form or a hex literal.
+For example, <code>\ </code> or <code>\x20</code> for an ASCII space.</p>
+<p>Flags can be toggled within a pattern. Here’s an example that matches
+case-insensitively for the first part but case-sensitively for the second part:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?i)a+(?-i)b+"</span>).unwrap();
+<span class="kw">let </span>m = re.find(<span class="string">"AaAaAbbBBBb"</span>).unwrap();
+<span class="macro">assert_eq!</span>(m.as_str(), <span class="string">"AaAaAbb"</span>);</code></pre></div>
+<p>Notice that the <code>a+</code> matches either <code>a</code> or <code>A</code>, but the <code>b+</code> only matches
+<code>b</code>.</p>
+<p>Multi-line mode means <code>^</code> and <code>$</code> no longer match just at the beginning/end of
+the input, but also at the beginning/end of lines:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?m)^line \d+"</span>).unwrap();
+<span class="kw">let </span>m = re.find(<span class="string">"line one\nline 2\n"</span>).unwrap();
+<span class="macro">assert_eq!</span>(m.as_str(), <span class="string">"line 2"</span>);</code></pre></div>
+<p>Note that <code>^</code> matches after new lines, even at the end of input:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?m)^"</span>).unwrap();
+<span class="kw">let </span>m = re.find_iter(<span class="string">"test\n"</span>).last().unwrap();
+<span class="macro">assert_eq!</span>((m.start(), m.end()), (<span class="number">5</span>, <span class="number">5</span>));</code></pre></div>
+<p>When both CRLF mode and multi-line mode are enabled, then <code>^</code> and <code>$</code> will
+match either <code>\r</code> and <code>\n</code>, but never in the middle of a <code>\r\n</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?mR)^foo$"</span>).unwrap();
+<span class="kw">let </span>m = re.find(<span class="string">"\r\nfoo\r\n"</span>).unwrap();
+<span class="macro">assert_eq!</span>(m.as_str(), <span class="string">"foo"</span>);</code></pre></div>
+<p>Unicode mode can also be selectively disabled, although only when the result
+<em>would not</em> match invalid UTF-8. One good example of this is using an ASCII
+word boundary instead of a Unicode word boundary, which might make some regex
+searches run faster:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex::Regex;
+
+<span class="kw">let </span>re = Regex::new(<span class="string">r"(?-u:\b).+(?-u:\b)"</span>).unwrap();
+<span class="kw">let </span>m = re.find(<span class="string">"$$abc$$"</span>).unwrap();
+<span class="macro">assert_eq!</span>(m.as_str(), <span class="string">"abc"</span>);</code></pre></div>
+<h4 id="escape-sequences"><a class="doc-anchor" href="#escape-sequences">§</a>Escape sequences</h4>
+<p>Note that this includes all possible escape sequences, even ones that are
+documented elsewhere.</p>
+<pre class="rust">
+\*              literal *, applies to all ASCII except [0-9A-Za-z<>]
+\a              bell (\x07)
+\f              form feed (\x0C)
+\t              horizontal tab
+\n              new line
+\r              carriage return
+\v              vertical tab (\x0B)
+\A              matches at the beginning of a haystack
+\z              matches at the end of a haystack
+\b              word boundary assertion
+\B              negated word boundary assertion
+\b{start}, \<   start-of-word boundary assertion
+\b{end}, \>     end-of-word boundary assertion
+\b{start-half}  half of a start-of-word boundary assertion
+\b{end-half}    half of a end-of-word boundary assertion
+\123            octal character code, up to three digits (when enabled)
+\x7F            hex character code (exactly two digits)
+\x{10FFFF}      any hex character code corresponding to a Unicode code point
+\u007F          hex character code (exactly four digits)
+\u{7F}          any hex character code corresponding to a Unicode code point
+\U0000007F      hex character code (exactly eight digits)
+\U{7F}          any hex character code corresponding to a Unicode code point
+\p{Letter}      Unicode character class
+\P{Letter}      negated Unicode character class
+\d, \s, \w      Perl character class
+\D, \S, \W      negated Perl character class
+</pre>
+<h4 id="perl-character-classes-unicode-friendly"><a class="doc-anchor" href="#perl-character-classes-unicode-friendly">§</a>Perl character classes (Unicode friendly)</h4>
+<p>These classes are based on the definitions provided in
+<a href="https://www.unicode.org/reports/tr18/#Compatibility_Properties">UTS#18</a>:</p>
+<pre class="rust">
+\d     digit (\p{Nd})
+\D     not digit
+\s     whitespace (\p{White_Space})
+\S     not whitespace
+\w     word character (\p{Alphabetic} + \p{M} + \d + \p{Pc} + \p{Join_Control})
+\W     not word character
+</pre>
+<h4 id="ascii-character-classes"><a class="doc-anchor" href="#ascii-character-classes">§</a>ASCII character classes</h4>
+<p>These classes are based on the definitions provided in
+<a href="https://www.unicode.org/reports/tr18/#Compatibility_Properties">UTS#18</a>:</p>
+<pre class="rust">
+[[:alnum:]]    alphanumeric ([0-9A-Za-z])
+[[:alpha:]]    alphabetic ([A-Za-z])
+[[:ascii:]]    ASCII ([\x00-\x7F])
+[[:blank:]]    blank ([\t ])
+[[:cntrl:]]    control ([\x00-\x1F\x7F])
+[[:digit:]]    digits ([0-9])
+[[:graph:]]    graphical ([!-~])
+[[:lower:]]    lower case ([a-z])
+[[:print:]]    printable ([ -~])
+[[:punct:]]    punctuation ([!-/:-@\[-`{-~])
+[[:space:]]    whitespace ([\t\n\v\f\r ])
+[[:upper:]]    upper case ([A-Z])
+[[:word:]]     word characters ([0-9A-Za-z_])
+[[:xdigit:]]   hex digit ([0-9A-Fa-f])
+</pre>
+<h2 id="untrusted-input"><a class="doc-anchor" href="#untrusted-input">§</a>Untrusted input</h2>
+<p>This crate is meant to be able to run regex searches on untrusted haystacks
+without fear of <a href="https://en.wikipedia.org/wiki/ReDoS">ReDoS</a>. This crate also, to a certain extent, supports
+untrusted patterns.</p>
+<p>This crate differs from most (but not all) other regex engines in that it
+doesn’t use unbounded backtracking to run a regex search. In those cases,
+one generally cannot use untrusted patterns <em>or</em> untrusted haystacks because
+it can be very difficult to know whether a particular pattern will result in
+catastrophic backtracking or not.</p>
+<p>We’ll first discuss how this crate deals with untrusted inputs and then wrap
+it up with a realistic discussion about what practice really looks like.</p>
+<h4 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h4>
+<p>Outside of clearly documented cases, most APIs in this crate are intended to
+never panic regardless of the inputs given to them. For example, <code>Regex::new</code>,
+<code>Regex::is_match</code>, <code>Regex::find</code> and <code>Regex::captures</code> should never panic. That
+is, it is an API promise that those APIs will never panic no matter what inputs
+are given to them. With that said, regex engines are complicated beasts, and
+providing a rock solid guarantee that these APIs literally never panic is
+essentially equivalent to saying, “there are no bugs in this library.” That is
+a bold claim, and not really one that can be feasibly made with a straight
+face.</p>
+<p>Don’t get the wrong impression here. This crate is extensively tested, not just
+with unit and integration tests, but also via fuzz testing. For example, this
+crate is part of the <a href="https://android.googlesource.com/platform/external/oss-fuzz/+/refs/tags/android-t-preview-1/projects/rust-regex/">OSS-fuzz project</a>. Panics should be incredibly rare, but
+it is possible for bugs to exist, and thus possible for a panic to occur. If
+you need a rock solid guarantee against panics, then you should wrap calls into
+this library with <a href="https://doc.rust-lang.org/std/panic/fn.catch_unwind.html"><code>std::panic::catch_unwind</code></a>.</p>
+<p>It’s also worth pointing out that this library will <em>generally</em> panic when
+other regex engines would commit undefined behavior. When undefined behavior
+occurs, your program might continue as if nothing bad has happened, but it also
+might mean your program is open to the worst kinds of exploits. In contrast,
+the worst thing a panic can do is a denial of service.</p>
+<h4 id="untrusted-patterns"><a class="doc-anchor" href="#untrusted-patterns">§</a>Untrusted patterns</h4>
+<p>The principal way this crate deals with them is by limiting their size by
+default. The size limit can be configured via <a href="struct.RegexBuilder.html#method.size_limit" title="method regex::RegexBuilder::size_limit"><code>RegexBuilder::size_limit</code></a>. The
+idea of a size limit is that compiling a pattern into a <code>Regex</code> will fail if it
+becomes “too big.” Namely, while <em>most</em> resources consumed by compiling a regex
+are approximately proportional (albeit with some high constant factors in some
+cases, such as with Unicode character classes) to the length of the pattern
+itself, there is one particular exception to this: counted repetitions. Namely,
+this pattern:</p>
+<div class="example-wrap"><pre class="language-text"><code>a{5}{5}{5}{5}{5}{5}
+</code></pre></div>
+<p>Is equivalent to this pattern:</p>
+<div class="example-wrap"><pre class="language-text"><code>a{15625}
+</code></pre></div>
+<p>In both of these cases, the actual pattern string is quite small, but the
+resulting <code>Regex</code> value is quite large. Indeed, as the first pattern shows,
+it isn’t enough to locally limit the size of each repetition because they can
+be stacked in a way that results in exponential growth.</p>
+<p>To provide a bit more context, a simplified view of regex compilation looks
+like this:</p>
+<ul>
+<li>The pattern string is parsed into a structured representation called an AST.
+Counted repetitions are not expanded and Unicode character classes are not
+looked up in this stage. That is, the size of the AST is proportional to the
+size of the pattern with “reasonable” constant factors. In other words, one
+can reasonably limit the memory used by an AST by limiting the length of the
+pattern string.</li>
+<li>The AST is translated into an HIR. Counted repetitions are still <em>not</em>
+expanded at this stage, but Unicode character classes are embedded into the
+HIR. The memory usage of a HIR is still proportional to the length of the
+original pattern string, but the constant factors—mostly as a result of
+Unicode character classes—can be quite high. Still though, the memory used by
+an HIR can be reasonably limited by limiting the length of the pattern string.</li>
+<li>The HIR is compiled into a <a href="https://en.wikipedia.org/wiki/Thompson%27s_construction">Thompson NFA</a>. This is the stage at which
+something like <code>\w{5}</code> is rewritten to <code>\w\w\w\w\w</code>. Thus, this is the stage
+at which <a href="struct.RegexBuilder.html#method.size_limit" title="method regex::RegexBuilder::size_limit"><code>RegexBuilder::size_limit</code></a> is enforced. If the NFA exceeds the
+configured size, then this stage will fail.</li>
+</ul>
+<p>The size limit helps avoid two different kinds of exorbitant resource usage:</p>
+<ul>
+<li>It avoids permitting exponential memory usage based on the size of the
+pattern string.</li>
+<li>It avoids long search times. This will be discussed in more detail in the
+next section, but worst case search time <em>is</em> dependent on the size of the
+regex. So keeping regexes limited to a reasonable size is also a way of keeping
+search times reasonable.</li>
+</ul>
+<p>Finally, it’s worth pointing out that regex compilation is guaranteed to take
+worst case <code>O(m)</code> time, where <code>m</code> is proportional to the size of regex. The
+size of the regex here is <em>after</em> the counted repetitions have been expanded.</p>
+<p><strong>Advice for those using untrusted regexes</strong>: limit the pattern length to
+something small and expand it as needed. Configure <a href="struct.RegexBuilder.html#method.size_limit" title="method regex::RegexBuilder::size_limit"><code>RegexBuilder::size_limit</code></a>
+to something small and then expand it as needed.</p>
+<h4 id="untrusted-haystacks"><a class="doc-anchor" href="#untrusted-haystacks">§</a>Untrusted haystacks</h4>
+<p>The main way this crate guards against searches from taking a long time is by
+using algorithms that guarantee a <code>O(m * n)</code> worst case time and space bound.
+Namely:</p>
+<ul>
+<li><code>m</code> is proportional to the size of the regex, where the size of the regex
+includes the expansion of all counted repetitions. (See the previous section on
+untrusted patterns.)</li>
+<li><code>n</code> is proportional to the length, in bytes, of the haystack.</li>
+</ul>
+<p>In other words, if you consider <code>m</code> to be a constant (for example, the regex
+pattern is a literal in the source code), then the search can be said to run
+in “linear time.” Or equivalently, “linear time with respect to the size of the
+haystack.”</p>
+<p>But the <code>m</code> factor here is important not to ignore. If a regex is
+particularly big, the search times can get quite slow. This is why, in part,
+<a href="struct.RegexBuilder.html#method.size_limit" title="method regex::RegexBuilder::size_limit"><code>RegexBuilder::size_limit</code></a> exists.</p>
+<p><strong>Advice for those searching untrusted haystacks</strong>: As long as your regexes
+are not enormous, you should expect to be able to search untrusted haystacks
+without fear. If you aren’t sure, you should benchmark it. Unlike backtracking
+engines, if your regex is so big that it’s likely to result in slow searches,
+this is probably something you’ll be able to observe regardless of what the
+haystack is made up of.</p>
+<h4 id="iterating-over-matches"><a class="doc-anchor" href="#iterating-over-matches">§</a>Iterating over matches</h4>
+<p>One thing that is perhaps easy to miss is that the worst case time
+complexity bound of <code>O(m * n)</code> applies to methods like <a href="struct.Regex.html#method.is_match" title="method regex::Regex::is_match"><code>Regex::is_match</code></a>,
+<a href="struct.Regex.html#method.find" title="method regex::Regex::find"><code>Regex::find</code></a> and <a href="struct.Regex.html#method.captures" title="method regex::Regex::captures"><code>Regex::captures</code></a>. It does <strong>not</strong> apply to
+<a href="struct.Regex.html#method.find_iter" title="method regex::Regex::find_iter"><code>Regex::find_iter</code></a> or <a href="struct.Regex.html#method.captures_iter" title="method regex::Regex::captures_iter"><code>Regex::captures_iter</code></a>. Namely, since iterating over
+all matches can execute many searches, and each search can scan the entire
+haystack, the worst case time complexity for iterators is <code>O(m * n^2)</code>.</p>
+<p>One example of where this occurs is when a pattern consists of an alternation,
+where an earlier branch of the alternation requires scanning the entire
+haystack only to discover that there is no match. It also requires a later
+branch of the alternation to have matched at the beginning of the search. For
+example, consider the pattern <code>.*[^A-Z]|[A-Z]</code> and the haystack <code>AAAAA</code>. The
+first search will scan to the end looking for matches of <code>.*[^A-Z]</code> even though
+a finite automata engine (as in this crate) knows that <code>[A-Z]</code> has already
+matched the first character of the haystack. This is due to the greedy nature
+of regex searching. That first search will report a match at the first <code>A</code> only
+after scanning to the end to discover that no other match exists. The next
+search then begins at the second <code>A</code> and the behavior repeats.</p>
+<p>There is no way to avoid this. This means that if both patterns and haystacks
+are untrusted and you’re iterating over all matches, you’re susceptible to
+worst case quadratic time complexity. One possible way to mitigate this
+is to drop down to the lower level <code>regex-automata</code> crate and use its
+<code>meta::Regex</code> iterator APIs. There, you can configure the search to operate
+in “earliest” mode by passing a <code>Input::new(haystack).earliest(true)</code> to
+<code>meta::Regex::find_iter</code> (for example). By enabling this mode, you give up
+the normal greedy match semantics of regex searches and instead ask the regex
+engine to immediately stop as soon as a match has been found. Enabling this
+mode will thus restore the worst case <code>O(m * n)</code> time complexity bound, but at
+the cost of different semantics.</p>
+<h4 id="untrusted-inputs-in-practice"><a class="doc-anchor" href="#untrusted-inputs-in-practice">§</a>Untrusted inputs in practice</h4>
+<p>While providing a <code>O(m * n)</code> worst case time bound on all searches goes a long
+way toward preventing <a href="https://en.wikipedia.org/wiki/ReDoS">ReDoS</a>, that doesn’t mean every search you can possibly
+run will complete without burning CPU time. In general, there are a few ways
+for the <code>m * n</code> time bound to still bite you:</p>
+<ul>
+<li>You are searching an exceptionally long haystack. No matter how you slice
+it, a longer haystack will take more time to search. This crate may often make
+very quick work of even long haystacks because of its literal optimizations,
+but those aren’t available for all regexes.</li>
+<li>Unicode character classes can cause searches to be quite slow in some cases.
+This is especially true when they are combined with counted repetitions. While
+the regex size limit above will protect you from the most egregious cases,
+the default size limit still permits pretty big regexes that can execute more
+slowly than one might expect.</li>
+<li>While routines like <a href="struct.Regex.html#method.find" title="method regex::Regex::find"><code>Regex::find</code></a> and <a href="struct.Regex.html#method.captures" title="method regex::Regex::captures"><code>Regex::captures</code></a> guarantee
+worst case <code>O(m * n)</code> search time, routines like <a href="struct.Regex.html#method.find_iter" title="method regex::Regex::find_iter"><code>Regex::find_iter</code></a> and
+<a href="struct.Regex.html#method.captures_iter" title="method regex::Regex::captures_iter"><code>Regex::captures_iter</code></a> actually have worst case <code>O(m * n^2)</code> search time.
+This is because <code>find_iter</code> runs many searches, and each search takes worst
+case <code>O(m * n)</code> time. Thus, iteration of all matches in a haystack has
+worst case <code>O(m * n^2)</code>. A good example of a pattern that exhibits this is
+<code>(?:A+){1000}|</code> or even <code>.*[^A-Z]|[A-Z]</code>.</li>
+</ul>
+<p>In general, unstrusted haystacks are easier to stomach than untrusted patterns.
+Untrusted patterns give a lot more control to the caller to impact the
+performance of a search. In many cases, a regex search will actually execute in
+average case <code>O(n)</code> time (i.e., not dependent on the size of the regex), but
+this can’t be guaranteed in general. Therefore, permitting untrusted patterns
+means that your only line of defense is to put a limit on how big <code>m</code> (and
+perhaps also <code>n</code>) can be in <code>O(m * n)</code>. <code>n</code> is limited by simply inspecting
+the length of the haystack while <code>m</code> is limited by <em>both</em> applying a limit to
+the length of the pattern <em>and</em> a limit on the compiled size of the regex via
+<a href="struct.RegexBuilder.html#method.size_limit" title="method regex::RegexBuilder::size_limit"><code>RegexBuilder::size_limit</code></a>.</p>
+<p>It bears repeating: if you’re accepting untrusted patterns, it would be a good
+idea to start with conservative limits on <code>m</code> and <code>n</code>, and then carefully
+increase them as needed.</p>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<p>By default, this crate tries pretty hard to make regex matching both as fast
+as possible and as correct as it can be. This means that there is a lot of
+code dedicated to performance, the handling of Unicode data and the Unicode
+data itself. Overall, this leads to more dependencies, larger binaries and
+longer compile times. This trade off may not be appropriate in all cases, and
+indeed, even when all Unicode and performance features are disabled, one is
+still left with a perfectly serviceable regex engine that will work well in
+many cases. (Note that code is not arbitrarily reducible, and for this reason,
+the <a href="https://docs.rs/regex-lite"><code>regex-lite</code></a> crate exists to provide an even
+more minimal experience by cutting out Unicode and performance, but still
+maintaining the linear search time bound.)</p>
+<p>This crate exposes a number of features for controlling that trade off. Some
+of these features are strictly performance oriented, such that disabling them
+won’t result in a loss of functionality, but may result in worse performance.
+Other features, such as the ones controlling the presence or absence of Unicode
+data, can result in a loss of functionality. For example, if one disables the
+<code>unicode-case</code> feature (described below), then compiling the regex <code>(?i)a</code>
+will fail since Unicode case insensitivity is enabled by default. Instead,
+callers must use <code>(?i-u)a</code> to disable Unicode case folding. Stated differently,
+enabling or disabling any of the features below can only add or subtract from
+the total set of valid regular expressions. Enabling or disabling a feature
+will never modify the match semantics of a regular expression.</p>
+<p>Most features below are enabled by default. Features that aren’t enabled by
+default are noted.</p>
+<h4 id="ecosystem-features"><a class="doc-anchor" href="#ecosystem-features">§</a>Ecosystem features</h4>
+<ul>
+<li><strong>std</strong> -
+When enabled, this will cause <code>regex</code> to use the standard library. In terms
+of APIs, <code>std</code> causes error types to implement the <code>std::error::Error</code>
+trait. Enabling <code>std</code> will also result in performance optimizations,
+including SIMD and faster synchronization primitives. Notably, <strong>disabling
+the <code>std</code> feature will result in the use of spin locks</strong>. To use a regex
+engine without <code>std</code> and without spin locks, you’ll need to drop down to
+the <a href="https://docs.rs/regex-automata"><code>regex-automata</code></a> crate.</li>
+<li><strong>logging</strong> -
+When enabled, the <code>log</code> crate is used to emit messages about regex
+compilation and search strategies. This is <strong>disabled by default</strong>. This is
+typically only useful to someone working on this crate’s internals, but might
+be useful if you’re doing some rabbit hole performance hacking. Or if you’re
+just interested in the kinds of decisions being made by the regex engine.</li>
+</ul>
+<h4 id="performance-features"><a class="doc-anchor" href="#performance-features">§</a>Performance features</h4>
+<ul>
+<li><strong>perf</strong> -
+Enables all performance related features except for <code>perf-dfa-full</code>. This
+feature is enabled by default is intended to cover all reasonable features
+that improve performance, even if more are added in the future.</li>
+<li><strong>perf-dfa</strong> -
+Enables the use of a lazy DFA for matching. The lazy DFA is used to compile
+portions of a regex to a very fast DFA on an as-needed basis. This can
+result in substantial speedups, usually by an order of magnitude on large
+haystacks. The lazy DFA does not bring in any new dependencies, but it can
+make compile times longer.</li>
+<li><strong>perf-dfa-full</strong> -
+Enables the use of a full DFA for matching. Full DFAs are problematic because
+they have worst case <code>O(2^n)</code> construction time. For this reason, when this
+feature is enabled, full DFAs are only used for very small regexes and a
+very small space bound is used during determinization to avoid the DFA
+from blowing up. This feature is not enabled by default, even as part of
+<code>perf</code>, because it results in fairly sizeable increases in binary size and
+compilation time. It can result in faster search times, but they tend to be
+more modest and limited to non-Unicode regexes.</li>
+<li><strong>perf-onepass</strong> -
+Enables the use of a one-pass DFA for extracting the positions of capture
+groups. This optimization applies to a subset of certain types of NFAs and
+represents the fastest engine in this crate for dealing with capture groups.</li>
+<li><strong>perf-backtrack</strong> -
+Enables the use of a bounded backtracking algorithm for extracting the
+positions of capture groups. This usually sits between the slowest engine
+(the PikeVM) and the fastest engine (one-pass DFA) for extracting capture
+groups. It’s used whenever the regex is not one-pass and is small enough.</li>
+<li><strong>perf-inline</strong> -
+Enables the use of aggressive inlining inside match routines. This reduces
+the overhead of each match. The aggressive inlining, however, increases
+compile times and binary size.</li>
+<li><strong>perf-literal</strong> -
+Enables the use of literal optimizations for speeding up matches. In some
+cases, literal optimizations can result in speedups of <em>several</em> orders of
+magnitude. Disabling this drops the <code>aho-corasick</code> and <code>memchr</code> dependencies.</li>
+<li><strong>perf-cache</strong> -
+This feature used to enable a faster internal cache at the cost of using
+additional dependencies, but this is no longer an option. A fast internal
+cache is now used unconditionally with no additional dependencies. This may
+change in the future.</li>
+</ul>
+<h4 id="unicode-features"><a class="doc-anchor" href="#unicode-features">§</a>Unicode features</h4>
+<ul>
+<li><strong>unicode</strong> -
+Enables all Unicode features. This feature is enabled by default, and will
+always cover all Unicode features, even if more are added in the future.</li>
+<li><strong>unicode-age</strong> -
+Provide the data for the
+<a href="https://www.unicode.org/reports/tr44/tr44-24.html#Character_Age">Unicode <code>Age</code> property</a>.
+This makes it possible to use classes like <code>\p{Age:6.0}</code> to refer to all
+codepoints first introduced in Unicode 6.0</li>
+<li><strong>unicode-bool</strong> -
+Provide the data for numerous Unicode boolean properties. The full list
+is not included here, but contains properties like <code>Alphabetic</code>, <code>Emoji</code>,
+<code>Lowercase</code>, <code>Math</code>, <code>Uppercase</code> and <code>White_Space</code>.</li>
+<li><strong>unicode-case</strong> -
+Provide the data for case insensitive matching using
+<a href="https://www.unicode.org/reports/tr18/#Simple_Loose_Matches">Unicode’s “simple loose matches” specification</a>.</li>
+<li><strong>unicode-gencat</strong> -
+Provide the data for
+<a href="https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values">Unicode general categories</a>.
+This includes, but is not limited to, <code>Decimal_Number</code>, <code>Letter</code>,
+<code>Math_Symbol</code>, <code>Number</code> and <code>Punctuation</code>.</li>
+<li><strong>unicode-perl</strong> -
+Provide the data for supporting the Unicode-aware Perl character classes,
+corresponding to <code>\w</code>, <code>\s</code> and <code>\d</code>. This is also necessary for using
+Unicode-aware word boundary assertions. Note that if this feature is
+disabled, the <code>\s</code> and <code>\d</code> character classes are still available if the
+<code>unicode-bool</code> and <code>unicode-gencat</code> features are enabled, respectively.</li>
+<li><strong>unicode-script</strong> -
+Provide the data for
+<a href="https://www.unicode.org/reports/tr24/">Unicode scripts and script extensions</a>.
+This includes, but is not limited to, <code>Arabic</code>, <code>Cyrillic</code>, <code>Hebrew</code>,
+<code>Latin</code> and <code>Thai</code>.</li>
+<li><strong>unicode-segment</strong> -
+Provide the data necessary to provide the properties used to implement the
+<a href="https://www.unicode.org/reports/tr29/">Unicode text segmentation algorithms</a>.
+This enables using classes like <code>\p{gcb=Extend}</code>, <code>\p{wb=Katakana}</code> and
+<code>\p{sb=ATerm}</code>.</li>
+</ul>
+<h2 id="other-crates"><a class="doc-anchor" href="#other-crates">§</a>Other crates</h2>
+<p>This crate has two required dependencies and several optional dependencies.
+This section briefly describes them with the goal of raising awareness of how
+different components of this crate may be used independently.</p>
+<p>It is somewhat unusual for a regex engine to have dependencies, as most regex
+libraries are self contained units with no dependencies other than a particular
+environment’s standard library. Indeed, for other similarly optimized regex
+engines, most or all of the code in the dependencies of this crate would
+normally just be unseparable or coupled parts of the crate itself. But since
+Rust and its tooling ecosystem make the use of dependencies so easy, it made
+sense to spend some effort de-coupling parts of this crate and making them
+independently useful.</p>
+<p>We only briefly describe each crate here.</p>
+<ul>
+<li><a href="https://docs.rs/regex-lite"><code>regex-lite</code></a> is not a dependency of <code>regex</code>,
+but rather, a standalone zero-dependency simpler version of <code>regex</code> that
+prioritizes compile times and binary size. In exchange, it eschews Unicode
+support and performance. Its match semantics are as identical as possible to
+the <code>regex</code> crate, and for the things it supports, its APIs are identical to
+the APIs in this crate. In other words, for a lot of use cases, it is a drop-in
+replacement.</li>
+<li><a href="https://docs.rs/regex-syntax"><code>regex-syntax</code></a> provides a regular expression
+parser via <code>Ast</code> and <code>Hir</code> types. It also provides routines for extracting
+literals from a pattern. Folks can use this crate to do analysis, or even to
+build their own regex engine without having to worry about writing a parser.</li>
+<li><a href="https://docs.rs/regex-automata"><code>regex-automata</code></a> provides the regex engines
+themselves. One of the downsides of finite automata based regex engines is that
+they often need multiple internal engines in order to have similar or better
+performance than an unbounded backtracking engine in practice. <code>regex-automata</code>
+in particular provides public APIs for a PikeVM, a bounded backtracker, a
+one-pass DFA, a lazy DFA, a fully compiled DFA and a meta regex engine that
+combines all them together. It also has native multi-pattern support and
+provides a way to compile and serialize full DFAs such that they can be loaded
+and searched in a no-std no-alloc environment. <code>regex-automata</code> itself doesn’t
+even have a required dependency on <code>regex-syntax</code>!</li>
+<li><a href="https://docs.rs/memchr"><code>memchr</code></a> provides low level SIMD vectorized
+routines for quickly finding the location of single bytes or even substrings
+in a haystack. In other words, it provides fast <code>memchr</code> and <code>memmem</code> routines.
+These are used by this crate in literal optimizations.</li>
+<li><a href="https://docs.rs/aho-corasick"><code>aho-corasick</code></a> provides multi-substring
+search. It also provides SIMD vectorized routines in the case where the number
+of substrings to search for is relatively small. The <code>regex</code> crate also uses
+this for literal optimizations.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="bytes/index.html" title="mod regex::bytes">bytes</a></div><div class="desc docblock-short">Search for regex matches in <code>&amp;[u8]</code> haystacks.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.CaptureLocations.html" title="struct regex::CaptureLocations">CaptureLocations</a></div><div class="desc docblock-short">A low level representation of the byte offsets of each capture group.</div></li><li><div class="item-name"><a class="struct" href="struct.CaptureMatches.html" title="struct regex::CaptureMatches">CaptureMatches</a></div><div class="desc docblock-short">An iterator over all non-overlapping capture matches in a haystack.</div></li><li><div class="item-name"><a class="struct" href="struct.CaptureNames.html" title="struct regex::CaptureNames">CaptureNames</a></div><div class="desc docblock-short">An iterator over the names of all capture groups in a regex.</div></li><li><div class="item-name"><a class="struct" href="struct.Captures.html" title="struct regex::Captures">Captures</a></div><div class="desc docblock-short">Represents the capture groups for a single match.</div></li><li><div class="item-name"><a class="struct" href="struct.Match.html" title="struct regex::Match">Match</a></div><div class="desc docblock-short">Represents a single match of a regex in a haystack.</div></li><li><div class="item-name"><a class="struct" href="struct.Matches.html" title="struct regex::Matches">Matches</a></div><div class="desc docblock-short">An iterator over all non-overlapping matches in a haystack.</div></li><li><div class="item-name"><a class="struct" href="struct.NoExpand.html" title="struct regex::NoExpand">NoExpand</a></div><div class="desc docblock-short">A helper type for forcing literal string replacement.</div></li><li><div class="item-name"><a class="struct" href="struct.Regex.html" title="struct regex::Regex">Regex</a></div><div class="desc docblock-short">A compiled regular expression for searching Unicode haystacks.</div></li><li><div class="item-name"><a class="struct" href="struct.RegexBuilder.html" title="struct regex::RegexBuilder">RegexBuilder</a></div><div class="desc docblock-short">A configurable builder for a <a href="struct.Regex.html" title="struct regex::Regex"><code>Regex</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.RegexSet.html" title="struct regex::RegexSet">RegexSet</a></div><div class="desc docblock-short">Match multiple, possibly overlapping, regexes in a single search.</div></li><li><div class="item-name"><a class="struct" href="struct.RegexSetBuilder.html" title="struct regex::RegexSetBuilder">RegexSetBuilder</a></div><div class="desc docblock-short">A configurable builder for a <a href="struct.RegexSet.html" title="struct regex::RegexSet"><code>RegexSet</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ReplacerRef.html" title="struct regex::ReplacerRef">ReplacerRef</a></div><div class="desc docblock-short">A by-reference adaptor for a <a href="trait.Replacer.html" title="trait regex::Replacer"><code>Replacer</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.SetMatches.html" title="struct regex::SetMatches">SetMatches</a></div><div class="desc docblock-short">A set of matches returned by a regex set.</div></li><li><div class="item-name"><a class="struct" href="struct.SetMatchesIntoIter.html" title="struct regex::SetMatchesIntoIter">SetMatchesIntoIter</a></div><div class="desc docblock-short">An owned iterator over the set of matches from a regex set.</div></li><li><div class="item-name"><a class="struct" href="struct.SetMatchesIter.html" title="struct regex::SetMatchesIter">SetMatchesIter</a></div><div class="desc docblock-short">A borrowed iterator over the set of matches from a regex set.</div></li><li><div class="item-name"><a class="struct" href="struct.Split.html" title="struct regex::Split">Split</a></div><div class="desc docblock-short">An iterator over all substrings delimited by a regex match.</div></li><li><div class="item-name"><a class="struct" href="struct.SplitN.html" title="struct regex::SplitN">SplitN</a></div><div class="desc docblock-short">An iterator over at most <code>N</code> substrings delimited by a regex match.</div></li><li><div class="item-name"><a class="struct" href="struct.SubCaptureMatches.html" title="struct regex::SubCaptureMatches">SubCaptureMatches</a></div><div class="desc docblock-short">An iterator over all group matches in a <a href="struct.Captures.html" title="struct regex::Captures"><code>Captures</code></a> value.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum regex::Error">Error</a></div><div class="desc docblock-short">An error that occurred during parsing or compiling a regular expression.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Replacer.html" title="trait regex::Replacer">Replacer</a></div><div class="desc docblock-short">A trait for types that can be used to replace matches in a haystack.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.escape.html" title="fn regex::escape">escape</a></div><div class="desc docblock-short">Escapes all regular expression meta characters in <code>pattern</code>.</div></li></ul></section></div></main></body></html>

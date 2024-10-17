@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides literal extraction from `Hir` expressions."><title>regex_syntax::hir::literal - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_syntax" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_syntax/index.html">regex_syntax</a><span class="version">0.8.4</span></h2></div><h2 class="location"><a href="#">Module literal</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In regex_syntax::hir</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">regex_syntax</a>::<wbr><a href="../index.html">hir</a>::<wbr><a class="mod" href="#">literal</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_syntax/hir/literal.rs.html#1-3214">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides literal extraction from <code>Hir</code> expressions.</p>
+<p>An <a href="struct.Extractor.html" title="struct regex_syntax::hir::literal::Extractor"><code>Extractor</code></a> pulls literals out of <a href="../struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>Hir</code></a> expressions and returns a
+<a href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq"><code>Seq</code></a> of <a href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal"><code>Literal</code></a>s.</p>
+<p>The purpose of literal extraction is generally to provide avenues for
+optimizing regex searches. The main idea is that substring searches can be an
+order of magnitude faster than a regex search. Therefore, if one can execute
+a substring search to find candidate match locations and only run the regex
+search at those locations, then it is possible for huge improvements in
+performance to be realized.</p>
+<p>With that said, literal optimizations are generally a black art because even
+though substring search is generally faster, if the number of candidates
+produced is high, then it can create a lot of overhead by ping-ponging between
+the substring search and the regex search.</p>
+<p>Here are some heuristics that might be used to help increase the chances of
+effective literal optimizations:</p>
+<ul>
+<li>Stick to small <a href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq"><code>Seq</code></a>s. If you search for too many literals, it’s likely
+to lead to substring search that is only a little faster than a regex search,
+and thus the overhead of using literal optimizations in the first place might
+make things slower overall.</li>
+<li>The literals in your <a href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq"><code>Seq</code></a> shouldn’t be too short. In general, longer is
+better. A sequence corresponding to single bytes that occur frequently in the
+haystack, for example, is probably a bad literal optimization because it’s
+likely to produce many false positive candidates. Longer literals are less
+likely to match, and thus probably produce fewer false positives.</li>
+<li>If it’s possible to estimate the approximate frequency of each byte according
+to some pre-computed background distribution, it is possible to compute a score
+of how “good” a <code>Seq</code> is. If a <code>Seq</code> isn’t good enough, you might consider
+skipping the literal optimization and just use the regex engine.</li>
+</ul>
+<p>(It should be noted that there are always pathological cases that can make
+any kind of literal optimization be a net slower result. This is why it
+might be a good idea to be conservative, or to even provide a means for
+literal optimizations to be dynamically disabled if they are determined to be
+ineffective according to some measure.)</p>
+<p>You’re encouraged to explore the methods on <a href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq"><code>Seq</code></a>, which permit shrinking
+the size of sequences in a preference-order preserving fashion.</p>
+<p>Finally, note that it isn’t strictly necessary to use an <a href="struct.Extractor.html" title="struct regex_syntax::hir::literal::Extractor"><code>Extractor</code></a>. Namely,
+an <code>Extractor</code> only uses public APIs of the <a href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq"><code>Seq</code></a> and <a href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal"><code>Literal</code></a> types,
+so it is possible to implement your own extractor. For example, for n-grams
+or “inner” literals (i.e., not prefix or suffix literals). The <code>Extractor</code>
+is mostly responsible for the case analysis over <code>Hir</code> expressions. Much of
+the “trickier” parts are how to combine literal sequences, and that is all
+implemented on <a href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq"><code>Seq</code></a>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Extractor.html" title="struct regex_syntax::hir::literal::Extractor">Extractor</a></div><div class="desc docblock-short">Extracts prefix or suffix literal sequences from <a href="../struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>Hir</code></a> expressions.</div></li><li><div class="item-name"><a class="struct" href="struct.Literal.html" title="struct regex_syntax::hir::literal::Literal">Literal</a></div><div class="desc docblock-short">A single literal extracted from an <a href="../struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>Hir</code></a> expression.</div></li><li><div class="item-name"><a class="struct" href="struct.Seq.html" title="struct regex_syntax::hir::literal::Seq">Seq</a></div><div class="desc docblock-short">A sequence of literals.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ExtractKind.html" title="enum regex_syntax::hir::literal::ExtractKind">ExtractKind</a></div><div class="desc docblock-short">The kind of literals to extract from an <a href="../struct.Hir.html" title="struct regex_syntax::hir::Hir"><code>Hir</code></a> expression.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.rank.html" title="fn regex_syntax::hir::literal::rank">rank</a></div><div class="desc docblock-short">Returns the “rank” of the given byte.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A compiler memory fence."><title>compiler_fence in wasmtime_environ::__core::sync::atomic - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::sync::atomic</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">sync</a>::<wbr><a href="index.html">atomic</a>::<wbr><a class="fn" href="#">compiler_fence</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.21.0">1.21.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/sync/atomic.rs.html#3735">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn compiler_fence(order: <a class="enum" href="enum.Ordering.html" title="enum wasmtime_environ::__core::sync::atomic::Ordering">Ordering</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A compiler memory fence.</p>
+<p><code>compiler_fence</code> does not emit any machine code, but restricts the kinds
+of memory re-ordering the compiler is allowed to do. Specifically, depending on
+the given <a href="enum.Ordering.html" title="enum wasmtime_environ::__core::sync::atomic::Ordering"><code>Ordering</code></a> semantics, the compiler may be disallowed from moving reads
+or writes from before or after the call to the other side of the call to
+<code>compiler_fence</code>. Note that it does <strong>not</strong> prevent the <em>hardware</em>
+from doing such re-ordering. This is not a problem in a single-threaded,
+execution context, but when other threads may modify memory at the same
+time, stronger synchronization primitives such as <a href="fn.fence.html" title="fn wasmtime_environ::__core::sync::atomic::fence"><code>fence</code></a> are required.</p>
+<p>The re-ordering prevented by the different ordering semantics are:</p>
+<ul>
+<li>with <a href="enum.Ordering.html#variant.SeqCst" title="variant wasmtime_environ::__core::sync::atomic::Ordering::SeqCst"><code>SeqCst</code></a>, no re-ordering of reads and writes across this point is allowed.</li>
+<li>with <a href="enum.Ordering.html#variant.Release" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Release"><code>Release</code></a>, preceding reads and writes cannot be moved past subsequent writes.</li>
+<li>with <a href="enum.Ordering.html#variant.Acquire" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Acquire"><code>Acquire</code></a>, subsequent reads and writes cannot be moved ahead of preceding reads.</li>
+<li>with <a href="enum.Ordering.html#variant.AcqRel" title="variant wasmtime_environ::__core::sync::atomic::Ordering::AcqRel"><code>AcqRel</code></a>, both of the above rules are enforced.</li>
+</ul>
+<p><code>compiler_fence</code> is generally only useful for preventing a thread from
+racing <em>with itself</em>. That is, if a given thread is executing one piece
+of code, and is then interrupted, and starts executing code elsewhere
+(while still in the same thread, and conceptually still on the same
+core). In traditional programs, this can only occur when a signal
+handler is registered. In more low-level code, such situations can also
+arise when handling interrupts, when implementing green threads with
+pre-emption, etc. Curious readers are encouraged to read the Linux kernel’s
+discussion of <a href="https://www.kernel.org/doc/Documentation/memory-barriers.txt">memory barriers</a>.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if <code>order</code> is <a href="enum.Ordering.html#variant.Relaxed" title="variant wasmtime_environ::__core::sync::atomic::Ordering::Relaxed"><code>Relaxed</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Without <code>compiler_fence</code>, the <code>assert_eq!</code> in following code
+is <em>not</em> guaranteed to succeed, despite everything happening in a single thread.
+To see why, remember that the compiler is free to swap the stores to
+<code>IMPORTANT_VARIABLE</code> and <code>IS_READY</code> since they are both
+<code>Ordering::Relaxed</code>. If it does, and the signal handler is invoked right
+after <code>IS_READY</code> is updated, then the signal handler will see
+<code>IS_READY=1</code>, but <code>IMPORTANT_VARIABLE=0</code>.
+Using a <code>compiler_fence</code> remedies this situation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::atomic::{AtomicBool, AtomicUsize};
+<span class="kw">use </span>std::sync::atomic::Ordering;
+<span class="kw">use </span>std::sync::atomic::compiler_fence;
+
+<span class="kw">static </span>IMPORTANT_VARIABLE: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+<span class="kw">static </span>IS_READY: AtomicBool = AtomicBool::new(<span class="bool-val">false</span>);
+
+<span class="kw">fn </span>main() {
+    IMPORTANT_VARIABLE.store(<span class="number">42</span>, Ordering::Relaxed);
+    <span class="comment">// prevent earlier writes from being moved beyond this point
+    </span>compiler_fence(Ordering::Release);
+    IS_READY.store(<span class="bool-val">true</span>, Ordering::Relaxed);
+}
+
+<span class="kw">fn </span>signal_handler() {
+    <span class="kw">if </span>IS_READY.load(Ordering::Relaxed) {
+        <span class="macro">assert_eq!</span>(IMPORTANT_VARIABLE.load(Ordering::Relaxed), <span class="number">42</span>);
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

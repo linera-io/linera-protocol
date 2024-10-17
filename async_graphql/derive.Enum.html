@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Define a GraphQL enum"><title>Enum in async_graphql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">async_graphql</a>::<wbr><a class="derive" href="#">Enum</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/async_graphql_derive/lib.rs.html#87">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(Enum)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[graphql]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Define a GraphQL enum</p>
+<p><em><a href="https://async-graphql.github.io/async-graphql/en/define_enum.html">See also the Book</a>.</em></p>
+<h2 id="macro-attributes"><a class="doc-anchor" href="#macro-attributes">§</a>Macro attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Enum name</td><td>string</td><td>Y</td></tr>
+<tr><td>name_type</td><td>If <code>true</code>, the enum name will be specified from <a href="https://docs.rs/async-graphql/latest/async_graphql/trait.TypeName.html"><code>async_graphql::TypeName</code></a> trait</td><td>bool</td><td>Y</td></tr>
+<tr><td>rename_items</td><td>Rename all the fields according to the given case convention. The possible values are “lowercase”, “UPPERCASE”, “PascalCase”, “camelCase”, “snake_case”, “SCREAMING_SNAKE_CASE”.</td><td>string</td><td>Y</td></tr>
+<tr><td>remote</td><td>Derive a remote enum</td><td>string</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>inaccessible</td><td>Indicate that an enum is not accessible from a supergraph when using Apollo Federation</td><td>bool</td><td>Y</td></tr>
+<tr><td>tag</td><td>Arbitrary string metadata that will be propagated to the supergraph when using Apollo Federation. This attribute is repeatable</td><td>string</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="item-attributes"><a class="doc-anchor" href="#item-attributes">§</a>Item attributes</h2><div><table><thead><tr><th>Attribute</th><th>description</th><th>Type</th><th>Optional</th></tr></thead><tbody>
+<tr><td>name</td><td>Item name</td><td>string</td><td>Y</td></tr>
+<tr><td>deprecation</td><td>Item deprecated</td><td>bool</td><td>Y</td></tr>
+<tr><td>deprecation</td><td>Item deprecation reason</td><td>string</td><td>Y</td></tr>
+<tr><td>visible</td><td>If <code>false</code>, it will not be displayed in introspection. <em><a href="https://async-graphql.github.io/async-graphql/en/visibility.html">See also the Book</a>.</em></td><td>bool</td><td>Y</td></tr>
+<tr><td>visible</td><td>Call the specified function. If the return value is <code>false</code>, it will not be displayed in introspection.</td><td>string</td><td>Y</td></tr>
+<tr><td>inaccessible</td><td>Indicate that an item is not accessible from a supergraph when using Apollo Federation</td><td>bool</td><td>Y</td></tr>
+<tr><td>tag</td><td>Arbitrary string metadata that will be propagated to the supergraph when using Apollo Federation. This attribute is repeatable</td><td>string</td><td>Y</td></tr>
+</tbody></table>
+</div><h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+</span><span class="kw">enum </span>MyEnum {
+    A,
+    <span class="attr">#[graphql(name = <span class="string">"b"</span>)] </span>B,
+}
+
+<span class="kw">struct </span>Query {
+    value1: MyEnum,
+    value2: MyEnum,
+}
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="doccomment">/// value1
+    </span><span class="kw">async fn </span>value1(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MyEnum {
+        <span class="self">self</span>.value1
+    }
+
+    <span class="doccomment">/// value2
+    </span><span class="kw">async fn </span>value2(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MyEnum {
+        <span class="self">self</span>.value2
+    }
+}
+
+<span class="kw">let </span>schema = Schema::new(Query{ value1: MyEnum::A, value2: MyEnum::B }, EmptyMutation, EmptySubscription);
+<span class="kw">let </span>res = schema.execute(<span class="string">"{ value1 value2 }"</span>).<span class="kw">await</span>.into_result().unwrap().data;
+<span class="macro">assert_eq!</span>(res, <span class="macro">value!</span>({ <span class="string">"value1"</span>: <span class="string">"A"</span>, <span class="string">"value2"</span>: <span class="string">"b" </span>}));</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: Cryptographic Big Integers"><title>crypto_bigint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crypto_bigint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../crypto_bigint/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../crypto_bigint/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg" alt="logo"></a><h2><a href="../crypto_bigint/index.html">crypto_bigint</a><span class="version">0.5.5</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">crypto_bigint</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crypto_bigint/lib.rs.html#1-217">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-cryptographic-big-integers"><a class="doc-anchor" href="#rustcrypto-cryptographic-big-integers">§</a><a href="https://github.com/rustcrypto">RustCrypto</a>: Cryptographic Big Integers</h2>
+<p><a href="https://crates.io/crates/crypto-bigint"><img src="https://buildstats.info/crate/crypto-bigint" alt="crate" /></a>
+<a href="https://docs.rs/crypto-bigint/"><img src="https://docs.rs/crypto-bigint/badge.svg" alt="Docs" /></a>
+<a href="https://github.com/RustCrypto/crypto-bigint/actions/workflows/crypto-bigint.yml"><img src="https://github.com/RustCrypto/crypto-bigint/actions/workflows/crypto-bigint.yml/badge.svg" alt="Build Status" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache2/MIT licensed" />
+<img src="https://img.shields.io/badge/rustc-1.65+-blue.svg" alt="Rust Version" />
+<a href="https://rustcrypto.zulipchat.com/#narrow/stream/300602-crypto-bigint"><img src="https://img.shields.io/badge/zulip-join_chat-blue.svg" alt="Project Chat" /></a></p>
+<p>Pure Rust implementation of a big integer library which has been designed from
+the ground-up for use in cryptographic applications.</p>
+<p>Provides constant-time, <code>no_std</code>-friendly implementations of modern formulas
+using const generics.</p>
+<p><a href="https://docs.rs/crypto-bigint/">Documentation</a></p>
+<h3 id="goals"><a class="doc-anchor" href="#goals">§</a>Goals</h3>
+<ul>
+<li>Supports <code>no_std</code>-friendly const generic stack-allocated big integers.</li>
+<li>Constant-time by default. Variable-time functions are explicitly marked as such.</li>
+<li>Leverage what is possible today with const generics on <code>stable</code> rust.</li>
+<li>Support <code>const fn</code> as much as possible, including decoding big integers from
+bytes/hex and performing arithmetic operations on them, with the goal of
+being able to compute values at compile-time.</li>
+</ul>
+<h3 id="security-notes"><a class="doc-anchor" href="#security-notes">§</a>Security Notes</h3>
+<p>This crate has been <a href="https://research.nccgroup.com/2023/08/30/public-report-entropy-rust-cryptography-review/">audited by NCC Group</a> with no significant
+findings. We would like to thank <a href="https://entropy.xyz/">Entropy</a> for funding the audit.</p>
+<p>All functions contained in the crate are designed to execute in constant
+time unless explicitly specified otherwise (via a <code>*_vartime</code> name suffix).</p>
+<p>This library is not suitable for use on processors with a variable-time
+multiplication operation (e.g. short circuit on multiply-by-zero /
+multiply-by-one, such as certain 32-bit PowerPC CPUs and some non-ARM
+microcontrollers).</p>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>This crate requires <strong>Rust 1.65</strong> at a minimum.</p>
+<p>We may change the MSRV in the future, but it will be accompanied by a minor
+version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>This crate defines a <a href="struct.Uint.html" title="struct crypto_bigint::Uint"><code>Uint</code></a> type which is const generic around an inner
+<a href="struct.Limb.html" title="struct crypto_bigint::Limb"><code>Limb</code></a> array, where a <a href="struct.Limb.html" title="struct crypto_bigint::Limb"><code>Limb</code></a> is a newtype for a word-sized integer.
+Thus large integers are represented as arrays of smaller integers which
+are sized appropriately for the CPU, giving us some assurances of how
+arithmetic operations over those smaller integers will behave.</p>
+<p>To obtain appropriately sized integers regardless of what a given CPU’s
+word size happens to be, a number of portable type aliases are provided for
+integer sizes commonly used in cryptography, for example:
+<a href="type.U128.html" title="type crypto_bigint::U128"><code>U128</code></a>, <a href="type.U384.html" title="type crypto_bigint::U384"><code>U384</code></a>, <a href="type.U256.html" title="type crypto_bigint::U256"><code>U256</code></a>, <a href="type.U2048.html" title="type crypto_bigint::U2048"><code>U2048</code></a>, <a href="type.U3072.html" title="type crypto_bigint::U3072"><code>U3072</code></a>, <a href="type.U4096.html" title="type crypto_bigint::U4096"><code>U4096</code></a>.</p>
+<h4 id="const-fn-usage"><a class="doc-anchor" href="#const-fn-usage">§</a><code>const fn</code> usage</h4>
+<p>The <a href="struct.Uint.html" title="struct crypto_bigint::Uint"><code>Uint</code></a> type provides a number of <code>const fn</code> inherent methods which
+can be used for initializing and performing arithmetic on big integers in
+const contexts:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crypto_bigint::U256;
+
+<span class="comment">// Parse a constant from a big endian hexadecimal string.
+</span><span class="kw">pub const </span>MODULUS: U256 =
+    U256::from_be_hex(<span class="string">"ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"</span>);
+
+<span class="comment">// Compute `MODULUS` shifted right by 1 at compile time
+</span><span class="kw">pub const </span>MODULUS_SHR1: U256 = MODULUS.shr_vartime(<span class="number">1</span>);</code></pre></div>
+<p>Note that large constant computations may accidentally trigger a the <code>const_eval_limit</code> of the compiler.
+The current way to deal with this problem is to either simplify this computation,
+or increase the compiler’s limit (currently a nightly feature).
+One can completely remove the compiler’s limit using:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(const_eval_limit)]
+#![const_eval_limit = <span class="string">"0"</span>]</span></code></pre></div>
+<h4 id="trait-based-usage"><a class="doc-anchor" href="#trait-based-usage">§</a>Trait-based usage</h4>
+<p>The <a href="struct.Uint.html" title="struct crypto_bigint::Uint"><code>Uint</code></a> type itself does not implement the standard arithmetic traits
+such as <a href="https://doc.rust-lang.org/1.81.0/core/ops/arith/trait.Add.html" title="trait core::ops::arith::Add"><code>Add</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/ops/arith/trait.Sub.html" title="trait core::ops::arith::Sub"><code>Sub</code></a>, <a href="https://doc.rust-lang.org/1.81.0/core/ops/arith/trait.Mul.html" title="trait core::ops::arith::Mul"><code>Mul</code></a>, and <a href="https://doc.rust-lang.org/1.81.0/core/ops/arith/trait.Div.html" title="trait core::ops::arith::Div"><code>Div</code></a>.</p>
+<p>To use these traits you must first pick a wrapper type which determines
+overflow behavior: <a href="struct.Wrapping.html" title="struct crypto_bigint::Wrapping"><code>Wrapping</code></a> or <a href="struct.Checked.html" title="struct crypto_bigint::Checked"><code>Checked</code></a>.</p>
+<h5 id="wrapping-arithmetic"><a class="doc-anchor" href="#wrapping-arithmetic">§</a>Wrapping arithmetic</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crypto_bigint::{U256, Wrapping};
+
+<span class="kw">let </span>a = Wrapping(U256::MAX);
+<span class="kw">let </span>b = Wrapping(U256::ONE);
+<span class="kw">let </span>c = a + b;
+
+<span class="comment">// `MAX` + 1 wraps back around to zero
+</span><span class="macro">assert_eq!</span>(c.<span class="number">0</span>, U256::ZERO);</code></pre></div>
+<h5 id="checked-arithmetic"><a class="doc-anchor" href="#checked-arithmetic">§</a>Checked arithmetic</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crypto_bigint::{U256, Checked};
+
+<span class="kw">let </span>a = Checked::new(U256::ONE);
+<span class="kw">let </span>b = Checked::new(U256::from(<span class="number">2u8</span>));
+<span class="kw">let </span>c = a + b;
+<span class="macro">assert_eq!</span>(c.<span class="number">0</span>.unwrap(), U256::from(<span class="number">3u8</span>))</code></pre></div>
+<h4 id="modular-arithmetic"><a class="doc-anchor" href="#modular-arithmetic">§</a>Modular arithmetic</h4>
+<p>This library has initial support for modular arithmetic in the form of the
+<a href="prelude/trait.AddMod.html" title="trait crypto_bigint::prelude::AddMod"><code>AddMod</code></a>, <a href="prelude/trait.SubMod.html" title="trait crypto_bigint::prelude::SubMod"><code>SubMod</code></a>, <a href="prelude/trait.NegMod.html" title="trait crypto_bigint::prelude::NegMod"><code>NegMod</code></a>, and <a href="prelude/trait.MulMod.html" title="trait crypto_bigint::prelude::MulMod"><code>MulMod</code></a> traits, as well as the
+support for the <a href="https://doc.rust-lang.org/1.81.0/core/ops/arith/trait.Rem.html" title="trait core::ops::arith::Rem"><code>Rem</code></a> trait when used with a <a href="struct.NonZero.html" title="struct crypto_bigint::NonZero"><code>NonZero</code></a> operand.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crypto_bigint::{AddMod, U256};
+
+<span class="comment">// mod 3
+</span><span class="kw">let </span>modulus = U256::from(<span class="number">3u8</span>);
+
+<span class="comment">// 1 + 1 mod 3 = 2
+</span><span class="kw">let </span>a = U256::ONE.add_mod(<span class="kw-2">&amp;</span>U256::ONE, <span class="kw-2">&amp;</span>modulus);
+<span class="macro">assert_eq!</span>(a, U256::from(<span class="number">2u8</span>));
+
+<span class="comment">// 2 + 1 mod 3 = 0
+</span><span class="kw">let </span>b = a.add_mod(<span class="kw-2">&amp;</span>U256::ONE, <span class="kw-2">&amp;</span>modulus);
+<span class="macro">assert_eq!</span>(b, U256::ZERO);</code></pre></div>
+<p>It also supports modular arithmetic over constant moduli using <code>Residue</code>,
+and over moduli set at runtime using <code>DynResidue</code>.
+That includes modular exponentiation and multiplicative inverses.
+These features are described in the <a href="modular/index.html" title="mod crypto_bigint::modular"><code>modular</code></a> module.</p>
+<h4 id="random-number-generation"><a class="doc-anchor" href="#random-number-generation">§</a>Random number generation</h4>
+<p>When the <code>rand_core</code> or <code>rand</code> features of this crate are enabled, it’s
+possible to generate random numbers using any CSRNG by using the
+<a href="prelude/trait.Random.html" title="trait crypto_bigint::prelude::Random"><code>Random</code></a> trait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crypto_bigint::{Random, U256, rand_core::OsRng};
+
+<span class="kw">let </span>n = U256::random(<span class="kw-2">&amp;mut </span>OsRng);</code></pre></div>
+<h5 id="modular-random-number-generation"><a class="doc-anchor" href="#modular-random-number-generation">§</a>Modular random number generation</h5>
+<p>The <a href="prelude/trait.RandomMod.html" title="trait crypto_bigint::prelude::RandomMod"><code>RandomMod</code></a> trait supports generating random numbers with a uniform
+distribution around a given <a href="struct.NonZero.html" title="struct crypto_bigint::NonZero"><code>NonZero</code></a> modulus.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crypto_bigint::{NonZero, RandomMod, U256, rand_core::OsRng};
+
+<span class="kw">let </span>modulus = NonZero::new(U256::from(<span class="number">3u8</span>)).unwrap();
+<span class="kw">let </span>n = U256::random_mod(<span class="kw-2">&amp;mut </span>OsRng, <span class="kw-2">&amp;</span>modulus);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.subtle"><code>pub use <a class="mod" href="../subtle/index.html" title="mod subtle">subtle</a>;</code></div></li><li><div class="item-name" id="reexport.generic_array"><code>pub use <a class="mod" href="../generic_array/index.html" title="mod generic_array">generic_array</a>;</code></div></li><li><div class="item-name" id="reexport.rand_core"><code>pub use <a class="mod" href="../rand_core/index.html" title="mod rand_core">rand_core</a>;</code></div></li><li><div class="item-name" id="reexport.zeroize"><code>pub use <a class="mod" href="../zeroize/index.html" title="mod zeroize">zeroize</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="consts/index.html" title="mod crypto_bigint::consts">consts</a></div><div class="desc docblock-short">Type aliases for many constants.</div></li><li><div class="item-name"><a class="mod" href="modular/index.html" title="mod crypto_bigint::modular">modular</a></div><div class="desc docblock-short">Implements modular arithmetic for constant moduli.</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod crypto_bigint::prelude">prelude</a></div><div class="desc docblock-short">Import prelude for this crate: includes important traits.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.const_assert_eq.html" title="macro crypto_bigint::const_assert_eq">const_assert_eq</a></div><div class="desc docblock-short">Const-friendly assertion that two values are equal.</div></li><li><div class="item-name"><a class="macro" href="macro.const_assert_ne.html" title="macro crypto_bigint::const_assert_ne">const_assert_ne</a></div><div class="desc docblock-short">Const-friendly assertion that two values are NOT equal.</div></li><li><div class="item-name"><a class="macro" href="macro.const_residue.html" title="macro crypto_bigint::const_residue">const_residue</a></div><div class="desc docblock-short">Creates a <code>Residue</code> with the given value for a specific modulus.
+For example, <code>residue!(U256::from(105u64), MyModulus);</code> creates a <code>Residue</code> for 105 mod <code>MyModulus</code>.
+The modulus <em>must</em> be odd, or this will panic.</div></li><li><div class="item-name"><a class="macro" href="macro.impl_modulus.html" title="macro crypto_bigint::impl_modulus">impl_modulus</a></div><div class="desc docblock-short">Implements a modulus with the given name, type, and value, in that specific order. Please <code>use crypto_bigint::traits::Encoding</code> to make this work.
+For example, <code>impl_modulus!(MyModulus, U256, "73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001");</code> implements a 256-bit modulus named <code>MyModulus</code>.
+The modulus <em>must</em> be odd, or this will panic.</div></li><li><div class="item-name"><a class="macro" href="macro.nlimbs.html" title="macro crypto_bigint::nlimbs">nlimbs</a></div><div class="desc docblock-short">Calculate the number of limbs required to represent the given number of bits.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Checked.html" title="struct crypto_bigint::Checked">Checked</a></div><div class="desc docblock-short">Provides intentionally-checked arithmetic on <code>T</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.CtChoice.html" title="struct crypto_bigint::CtChoice">CtChoice</a></div><div class="desc docblock-short">A boolean value returned by constant-time <code>const fn</code>s.</div></li><li><div class="item-name"><a class="struct" href="struct.Limb.html" title="struct crypto_bigint::Limb">Limb</a></div><div class="desc docblock-short">Big integers are represented as an array of smaller CPU word-size integers
+called “limbs”.</div></li><li><div class="item-name"><a class="struct" href="struct.NonZero.html" title="struct crypto_bigint::NonZero">NonZero</a></div><div class="desc docblock-short">Wrapper type for non-zero integers.</div></li><li><div class="item-name"><a class="struct" href="struct.Reciprocal.html" title="struct crypto_bigint::Reciprocal">Reciprocal</a></div><div class="desc docblock-short">A pre-calculated reciprocal for division by a single limb.</div></li><li><div class="item-name"><a class="struct" href="struct.Uint.html" title="struct crypto_bigint::Uint">Uint</a></div><div class="desc docblock-short">Stack-allocated big unsigned integer.</div></li><li><div class="item-name"><a class="struct" href="struct.Wrapping.html" title="struct crypto_bigint::Wrapping">Wrapping</a></div><div class="desc docblock-short">Provides intentionally-wrapped arithmetic on <code>T</code>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.AddMod.html" title="trait crypto_bigint::AddMod">AddMod</a></div><div class="desc docblock-short">Compute <code>self + rhs mod p</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.ArrayDecoding.html" title="trait crypto_bigint::ArrayDecoding">ArrayDecoding</a></div><div class="desc docblock-short">Support for decoding a <code>GenericArray</code> as a big integer.</div></li><li><div class="item-name"><a class="trait" href="trait.ArrayEncoding.html" title="trait crypto_bigint::ArrayEncoding">ArrayEncoding</a></div><div class="desc docblock-short">Support for encoding a big integer as a <code>GenericArray</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.Bounded.html" title="trait crypto_bigint::Bounded">Bounded</a></div><div class="desc docblock-short">Integers whose representation takes a bounded amount of space.</div></li><li><div class="item-name"><a class="trait" href="trait.CheckedAdd.html" title="trait crypto_bigint::CheckedAdd">CheckedAdd</a></div><div class="desc docblock-short">Checked addition.</div></li><li><div class="item-name"><a class="trait" href="trait.CheckedMul.html" title="trait crypto_bigint::CheckedMul">CheckedMul</a></div><div class="desc docblock-short">Checked multiplication.</div></li><li><div class="item-name"><a class="trait" href="trait.CheckedSub.html" title="trait crypto_bigint::CheckedSub">CheckedSub</a></div><div class="desc docblock-short">Checked subtraction.</div></li><li><div class="item-name"><a class="trait" href="trait.Concat.html" title="trait crypto_bigint::Concat">Concat</a></div><div class="desc docblock-short">Concatenate two numbers into a “wide” double-width value, using the <code>lo</code>
+value as the least significant value.</div></li><li><div class="item-name"><a class="trait" href="trait.ConcatMixed.html" title="trait crypto_bigint::ConcatMixed">ConcatMixed</a></div><div class="desc docblock-short">Concatenate two numbers into a “wide” combined-width value, using the <code>lo</code>
+value as the least significant value.</div></li><li><div class="item-name"><a class="trait" href="trait.Encoding.html" title="trait crypto_bigint::Encoding">Encoding</a></div><div class="desc docblock-short">Encoding support.</div></li><li><div class="item-name"><a class="trait" href="trait.Integer.html" title="trait crypto_bigint::Integer">Integer</a></div><div class="desc docblock-short">Integer type.</div></li><li><div class="item-name"><a class="trait" href="trait.Invert.html" title="trait crypto_bigint::Invert">Invert</a></div><div class="desc docblock-short">Constant-time inversion.</div></li><li><div class="item-name"><a class="trait" href="trait.MulMod.html" title="trait crypto_bigint::MulMod">MulMod</a></div><div class="desc docblock-short">Compute <code>self * rhs mod p</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.MultiExponentiate.html" title="trait crypto_bigint::MultiExponentiate">MultiExponentiate</a></div><div class="desc docblock-short">Performs modular multi-exponentiation using Montgomery’s ladder.</div></li><li><div class="item-name"><a class="trait" href="trait.MultiExponentiateBoundedExp.html" title="trait crypto_bigint::MultiExponentiateBoundedExp">MultiExponentiateBoundedExp</a></div><div class="desc docblock-short">Performs modular multi-exponentiation using Montgomery’s ladder.
+<code>exponent_bits</code> represents the number of bits to take into account for the exponent.</div></li><li><div class="item-name"><a class="trait" href="trait.NegMod.html" title="trait crypto_bigint::NegMod">NegMod</a></div><div class="desc docblock-short">Compute <code>-self mod p</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.Pow.html" title="trait crypto_bigint::Pow">Pow</a></div><div class="desc docblock-short">Constant-time exponentiation.</div></li><li><div class="item-name"><a class="trait" href="trait.PowBoundedExp.html" title="trait crypto_bigint::PowBoundedExp">PowBoundedExp</a></div><div class="desc docblock-short">Constant-time exponentiation with exponent of a bounded bit size.</div></li><li><div class="item-name"><a class="trait" href="trait.Random.html" title="trait crypto_bigint::Random">Random</a></div><div class="desc docblock-short">Random number generation support.</div></li><li><div class="item-name"><a class="trait" href="trait.RandomMod.html" title="trait crypto_bigint::RandomMod">RandomMod</a></div><div class="desc docblock-short">Modular random number generation support.</div></li><li><div class="item-name"><a class="trait" href="trait.Split.html" title="trait crypto_bigint::Split">Split</a></div><div class="desc docblock-short">Split a number in half, returning the most significant half followed by
+the least significant.</div></li><li><div class="item-name"><a class="trait" href="trait.SplitMixed.html" title="trait crypto_bigint::SplitMixed">SplitMixed</a></div><div class="desc docblock-short">Split a number into parts, returning the most significant part followed by
+the least significant.</div></li><li><div class="item-name"><a class="trait" href="trait.Square.html" title="trait crypto_bigint::Square">Square</a></div><div class="desc docblock-short">Support for optimized squaring</div></li><li><div class="item-name"><a class="trait" href="trait.SubMod.html" title="trait crypto_bigint::SubMod">SubMod</a></div><div class="desc docblock-short">Compute <code>self - rhs mod p</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.Zero.html" title="trait crypto_bigint::Zero">Zero</a></div><div class="desc docblock-short">Zero values.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ByteArray.html" title="type crypto_bigint::ByteArray">ByteArray</a></div><div class="desc docblock-short">Alias for a byte array whose size is defined by <a href="prelude/trait.ArrayEncoding.html#associatedtype.ByteSize" title="associated type crypto_bigint::prelude::ArrayEncoding::ByteSize"><code>ArrayEncoding::ByteSize</code></a>.</div></li><li><div class="item-name"><a class="type" href="type.U64.html" title="type crypto_bigint::U64">U64</a></div><div class="desc docblock-short">64-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U128.html" title="type crypto_bigint::U128">U128</a></div><div class="desc docblock-short">128-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U192.html" title="type crypto_bigint::U192">U192</a></div><div class="desc docblock-short">192-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U256.html" title="type crypto_bigint::U256">U256</a></div><div class="desc docblock-short">256-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U320.html" title="type crypto_bigint::U320">U320</a></div><div class="desc docblock-short">320-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U384.html" title="type crypto_bigint::U384">U384</a></div><div class="desc docblock-short">384-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U448.html" title="type crypto_bigint::U448">U448</a></div><div class="desc docblock-short">448-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U512.html" title="type crypto_bigint::U512">U512</a></div><div class="desc docblock-short">512-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U576.html" title="type crypto_bigint::U576">U576</a></div><div class="desc docblock-short">576-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U640.html" title="type crypto_bigint::U640">U640</a></div><div class="desc docblock-short">640-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U704.html" title="type crypto_bigint::U704">U704</a></div><div class="desc docblock-short">704-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U768.html" title="type crypto_bigint::U768">U768</a></div><div class="desc docblock-short">768-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U832.html" title="type crypto_bigint::U832">U832</a></div><div class="desc docblock-short">832-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U896.html" title="type crypto_bigint::U896">U896</a></div><div class="desc docblock-short">896-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U960.html" title="type crypto_bigint::U960">U960</a></div><div class="desc docblock-short">960-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U1024.html" title="type crypto_bigint::U1024">U1024</a></div><div class="desc docblock-short">1024-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U1280.html" title="type crypto_bigint::U1280">U1280</a></div><div class="desc docblock-short">1280-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U1536.html" title="type crypto_bigint::U1536">U1536</a></div><div class="desc docblock-short">1536-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U1792.html" title="type crypto_bigint::U1792">U1792</a></div><div class="desc docblock-short">1792-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U2048.html" title="type crypto_bigint::U2048">U2048</a></div><div class="desc docblock-short">2048-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U3072.html" title="type crypto_bigint::U3072">U3072</a></div><div class="desc docblock-short">3072-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U3584.html" title="type crypto_bigint::U3584">U3584</a></div><div class="desc docblock-short">3584-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U4096.html" title="type crypto_bigint::U4096">U4096</a></div><div class="desc docblock-short">4096-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U4224.html" title="type crypto_bigint::U4224">U4224</a></div><div class="desc docblock-short">4224-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U4352.html" title="type crypto_bigint::U4352">U4352</a></div><div class="desc docblock-short">4352-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U6144.html" title="type crypto_bigint::U6144">U6144</a></div><div class="desc docblock-short">6144-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U8192.html" title="type crypto_bigint::U8192">U8192</a></div><div class="desc docblock-short">8192-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U16384.html" title="type crypto_bigint::U16384">U16384</a></div><div class="desc docblock-short">16384-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.U32768.html" title="type crypto_bigint::U32768">U32768</a></div><div class="desc docblock-short">32768-bit
+unsigned big integer.</div></li><li><div class="item-name"><a class="type" href="type.WideWord.html" title="type crypto_bigint::WideWord">WideWord</a></div><div class="desc docblock-short">Wide integer type: double the width of <a href="type.Word.html" title="type crypto_bigint::Word"><code>Word</code></a>.</div></li><li><div class="item-name"><a class="type" href="type.Word.html" title="type crypto_bigint::Word">Word</a></div><div class="desc docblock-short">Unsigned integer type that the <a href="struct.Limb.html" title="struct crypto_bigint::Limb"><code>Limb</code></a> newtype wraps.</div></li></ul></section></div></main></body></html>

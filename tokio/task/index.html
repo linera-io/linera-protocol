@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Asynchronous green-threads."><title>tokio::task - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Module task</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate tokio</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tokio</a>::<wbr><a class="mod" href="#">task</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/task/mod.rs.html#1-375">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Asynchronous green-threads.</p>
+<h3 id="what-are-tasks"><a class="doc-anchor" href="#what-are-tasks">§</a>What are Tasks?</h3>
+<p>A <em>task</em> is a light weight, non-blocking unit of execution. A task is similar
+to an OS thread, but rather than being managed by the OS scheduler, they are
+managed by the <a href="../runtime/index.html" title="mod tokio::runtime">Tokio runtime</a>. Another name for this general pattern is
+<a href="https://en.wikipedia.org/wiki/Green_threads">green threads</a>. If you are familiar with <a href="https://tour.golang.org/concurrency/1">Go’s goroutines</a>, <a href="https://kotlinlang.org/docs/reference/coroutines-overview.html">Kotlin’s
+coroutines</a>, or <a href="http://erlang.org/doc/getting_started/conc_prog.html#processes">Erlang’s processes</a>, you can think of Tokio’s tasks as
+something similar.</p>
+<p>Key points about tasks include:</p>
+<ul>
+<li>
+<p>Tasks are <strong>light weight</strong>. Because tasks are scheduled by the Tokio
+runtime rather than the operating system, creating new tasks or switching
+between tasks does not require a context switch and has fairly low
+overhead. Creating, running, and destroying large numbers of tasks is
+quite cheap, especially compared to OS threads.</p>
+</li>
+<li>
+<p>Tasks are scheduled <strong>cooperatively</strong>. Most operating systems implement
+<em>preemptive multitasking</em>. This is a scheduling technique where the
+operating system allows each thread to run for a period of time, and then
+<em>preempts</em> it, temporarily pausing that thread and switching to another.
+Tasks, on the other hand, implement <em>cooperative multitasking</em>. In
+cooperative multitasking, a task is allowed to run until it <em>yields</em>,
+indicating to the Tokio runtime’s scheduler that it cannot currently
+continue executing. When a task yields, the Tokio runtime switches to
+executing the next task.</p>
+</li>
+<li>
+<p>Tasks are <strong>non-blocking</strong>. Typically, when an OS thread performs I/O or
+must synchronize with another thread, it <em>blocks</em>, allowing the OS to
+schedule another thread. When a task cannot continue executing, it must
+yield instead, allowing the Tokio runtime to schedule another task. Tasks
+should generally not perform system calls or other operations that could
+block a thread, as this would prevent other tasks running on the same
+thread from executing as well. Instead, this module provides APIs for
+running blocking operations in an asynchronous context.</p>
+</li>
+</ul>
+<h3 id="working-with-tasks"><a class="doc-anchor" href="#working-with-tasks">§</a>Working with Tasks</h3>
+<p>This module provides the following APIs for working with tasks:</p>
+<h4 id="spawning"><a class="doc-anchor" href="#spawning">§</a>Spawning</h4>
+<p>Perhaps the most important function in this module is <a href="fn.spawn.html" title="fn tokio::task::spawn"><code>task::spawn</code></a>. This
+function can be thought of as an async equivalent to the standard library’s
+<a href="https://doc.rust-lang.org/1.81.0/std/thread/fn.spawn.html" title="fn std::thread::spawn"><code>thread::spawn</code></a>. It takes an <code>async</code> block or other
+<a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">future</a>, and creates a new task to run that work concurrently:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+task::spawn(<span class="kw">async </span>{
+    <span class="comment">// perform some work here...
+</span>});</code></pre></div>
+<p>Like <a href="https://doc.rust-lang.org/1.81.0/std/thread/fn.spawn.html" title="fn std::thread::spawn"><code>std::thread::spawn</code></a>, <code>task::spawn</code> returns a <a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> struct.
+A <code>JoinHandle</code> is itself a future which may be used to await the output of
+the spawned task. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="kw">let </span>join = task::spawn(<span class="kw">async </span>{
+    <span class="comment">// ...
+    </span><span class="string">"hello world!"
+</span>});
+
+<span class="comment">// ...
+
+// Await the result of the spawned task.
+</span><span class="kw">let </span>result = join.<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(result, <span class="string">"hello world!"</span>);</code></pre></div>
+<p>Again, like <code>std::thread</code>’s <a href="https://doc.rust-lang.org/1.81.0/std/thread/struct.JoinHandle.html" title="struct std::thread::JoinHandle"><code>JoinHandle</code> type</a>, if the spawned
+task panics, awaiting its <code>JoinHandle</code> will return a <a href="struct.JoinError.html" title="struct tokio::task::JoinError"><code>JoinError</code></a>. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="kw">let </span>join = task::spawn(<span class="kw">async </span>{
+    <span class="macro">panic!</span>(<span class="string">"something bad happened!"</span>)
+});
+
+<span class="comment">// The returned result indicates that the task failed.
+</span><span class="macro">assert!</span>(join.<span class="kw">await</span>.is_err());</code></pre></div>
+<p><code>spawn</code>, <code>JoinHandle</code>, and <code>JoinError</code> are present when the “rt”
+feature flag is enabled.</p>
+<h5 id="cancellation"><a class="doc-anchor" href="#cancellation">§</a>Cancellation</h5>
+<p>Spawned tasks may be cancelled using the <a href="struct.JoinHandle.html#method.abort" title="method tokio::task::JoinHandle::abort"><code>JoinHandle::abort</code></a> or
+<a href="struct.AbortHandle.html#method.abort" title="method tokio::task::AbortHandle::abort"><code>AbortHandle::abort</code></a> methods. When one of these methods are called, the
+task is signalled to shut down next time it yields at an <code>.await</code> point. If
+the task is already idle, then it will be shut down as soon as possible
+without running again before being shut down. Additionally, shutting down a
+Tokio runtime (e.g. by returning from <code>#[tokio::main]</code>) immediately cancels
+all tasks on it.</p>
+<p>When tasks are shut down, it will stop running at whichever <code>.await</code> it has
+yielded at. All local variables are destroyed by running their destructor.
+Once shutdown has completed, awaiting the <a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> will fail with a
+<a href="struct.JoinError.html#method.is_cancelled" title="method tokio::task::JoinError::is_cancelled">cancelled error</a>.</p>
+<p>Note that aborting a task does not guarantee that it fails with a cancelled
+error, since it may complete normally first. For example, if the task does
+not yield to the runtime at any point between the call to <code>abort</code> and the
+end of the task, then the <a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> will instead report that the task
+exited normally.</p>
+<p>Be aware that tasks spawned using <a href="fn.spawn_blocking.html" title="fn tokio::task::spawn_blocking"><code>spawn_blocking</code></a> cannot be aborted
+because they are not async. If you call <code>abort</code> on a <code>spawn_blocking</code>
+task, then this <em>will not have any effect</em>, and the task will continue
+running normally. The exception is if the task has not started running
+yet; in that case, calling <code>abort</code> may prevent the task from starting.</p>
+<p>Be aware that calls to <a href="struct.JoinHandle.html#method.abort" title="method tokio::task::JoinHandle::abort"><code>JoinHandle::abort</code></a> just schedule the task for
+cancellation, and will return before the cancellation has completed. To wait
+for cancellation to complete, wait for the task to finish by awaiting the
+<a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a>. Similarly, the <a href="struct.JoinHandle.html#method.is_finished" title="method tokio::task::JoinHandle::is_finished"><code>JoinHandle::is_finished</code></a> method does not
+return <code>true</code> until the cancellation has finished.</p>
+<p>Calling <a href="struct.JoinHandle.html#method.abort" title="method tokio::task::JoinHandle::abort"><code>JoinHandle::abort</code></a> multiple times has the same effect as calling
+it once.</p>
+<p>Tokio also provides an <a href="struct.AbortHandle.html" title="struct tokio::task::AbortHandle"><code>AbortHandle</code></a>, which is like the <a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a>,
+except that it does not provide a mechanism to wait for the task to finish.
+Each task can only have one <a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a>, but it can have more than one
+<a href="struct.AbortHandle.html" title="struct tokio::task::AbortHandle"><code>AbortHandle</code></a>.</p>
+<h4 id="blocking-and-yielding"><a class="doc-anchor" href="#blocking-and-yielding">§</a>Blocking and Yielding</h4>
+<p>As we discussed above, code running in asynchronous tasks should not perform
+operations that can block. A blocking operation performed in a task running
+on a thread that is also running other tasks would block the entire thread,
+preventing other tasks from running.</p>
+<p>Instead, Tokio provides two APIs for running blocking operations in an
+asynchronous context: <a href="fn.spawn_blocking.html" title="fn tokio::task::spawn_blocking"><code>task::spawn_blocking</code></a> and <a href="fn.block_in_place.html" title="fn tokio::task::block_in_place"><code>task::block_in_place</code></a>.</p>
+<p>Be aware that if you call a non-async method from async code, that non-async
+method is still inside the asynchronous context, so you should also avoid
+blocking operations there. This includes destructors of objects destroyed in
+async code.</p>
+<h5 id="spawn_blocking"><a class="doc-anchor" href="#spawn_blocking">§</a><code>spawn_blocking</code></h5>
+<p>The <code>task::spawn_blocking</code> function is similar to the <code>task::spawn</code> function
+discussed in the previous section, but rather than spawning an
+<em>non-blocking</em> future on the Tokio runtime, it instead spawns a
+<em>blocking</em> function on a dedicated thread pool for blocking tasks. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+task::spawn_blocking(|| {
+    <span class="comment">// do some compute-heavy work or call synchronous code
+</span>});</code></pre></div>
+<p>Just like <code>task::spawn</code>, <code>task::spawn_blocking</code> returns a <code>JoinHandle</code>
+which we can use to await the result of the blocking operation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>join = task::spawn_blocking(|| {
+    <span class="comment">// do some compute-heavy work or call synchronous code
+    </span><span class="string">"blocking completed"
+</span>});
+
+<span class="kw">let </span>result = join.<span class="kw">await</span><span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(result, <span class="string">"blocking completed"</span>);</code></pre></div>
+<h5 id="block_in_place"><a class="doc-anchor" href="#block_in_place">§</a><code>block_in_place</code></h5>
+<p>When using the <a href="../runtime/index.html#threaded-scheduler">multi-threaded runtime</a>, the <a href="fn.block_in_place.html" title="fn tokio::task::block_in_place"><code>task::block_in_place</code></a>
+function is also available. Like <code>task::spawn_blocking</code>, this function
+allows running a blocking operation from an asynchronous context. Unlike
+<code>spawn_blocking</code>, however, <code>block_in_place</code> works by transitioning the
+<em>current</em> worker thread to a blocking thread, moving other tasks running on
+that thread to another worker thread. This can improve performance by avoiding
+context switches.</p>
+<p>For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="kw">let </span>result = task::block_in_place(|| {
+    <span class="comment">// do some compute-heavy work or call synchronous code
+    </span><span class="string">"blocking completed"
+</span>});
+
+<span class="macro">assert_eq!</span>(result, <span class="string">"blocking completed"</span>);</code></pre></div>
+<h5 id="yield_now"><a class="doc-anchor" href="#yield_now">§</a><code>yield_now</code></h5>
+<p>In addition, this module provides a <a href="fn.yield_now.html" title="fn tokio::task::yield_now"><code>task::yield_now</code></a> async function
+that is analogous to the standard library’s <a href="https://doc.rust-lang.org/1.81.0/std/thread/fn.yield_now.html" title="fn std::thread::yield_now"><code>thread::yield_now</code></a>. Calling
+and <code>await</code>ing this function will cause the current task to yield to the
+Tokio runtime’s scheduler, allowing other tasks to be
+scheduled. Eventually, the yielding task will be polled again, allowing it
+to execute. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
+
+<span class="kw">async </span>{
+    task::spawn(<span class="kw">async </span>{
+        <span class="comment">// ...
+        </span><span class="macro">println!</span>(<span class="string">"spawned task done!"</span>)
+    });
+
+    <span class="comment">// Yield, allowing the newly-spawned task to execute first.
+    </span>task::yield_now().<span class="kw">await</span>;
+    <span class="macro">println!</span>(<span class="string">"main task done!"</span>);
+}</code></pre></div>
+<h4 id="cooperative-scheduling"><a class="doc-anchor" href="#cooperative-scheduling">§</a>Cooperative scheduling</h4>
+<p>A single call to <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#tymethod.poll" title="method core::future::future::Future::poll"><code>poll</code></a> on a top-level task may potentially do a lot of
+work before it returns <code>Poll::Pending</code>. If a task runs for a long period of
+time without yielding back to the executor, it can starve other tasks
+waiting on that executor to execute them, or drive underlying resources.
+Since Rust does not have a runtime, it is difficult to forcibly preempt a
+long-running task. Instead, this module provides an opt-in mechanism for
+futures to collaborate with the executor to avoid starvation.</p>
+<p>Consider a future like this one:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>drop_all&lt;I: Stream + Unpin&gt;(<span class="kw-2">mut </span>input: I) {
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) = input.next().<span class="kw">await </span>{}
+}</code></pre></div>
+<p>It may look harmless, but consider what happens under heavy load if the
+input stream is <em>always</em> ready. If we spawn <code>drop_all</code>, the task will never
+yield, and will starve other tasks and resources on the same executor.</p>
+<p>To account for this, Tokio has explicit yield points in a number of library
+functions, which force tasks to return to the executor periodically.</p>
+<h5 id="unconstrained"><a class="doc-anchor" href="#unconstrained">§</a>unconstrained</h5>
+<p>If necessary, <a href="fn.unconstrained.html" title="fn tokio::task::unconstrained"><code>task::unconstrained</code></a> lets you opt a future out of Tokio’s cooperative
+scheduling. When a future is wrapped with <code>unconstrained</code>, it will never be forced to yield to
+Tokio. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::{task, sync::mpsc};
+
+<span class="kw">let </span>fut = <span class="kw">async </span>{
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel();
+
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">1000 </span>{
+        <span class="kw">let _ </span>= tx.send(());
+        <span class="comment">// This will always be ready. If coop was in effect, this code would be forced to yield
+        // periodically. However, if left unconstrained, then this code will never yield.
+        </span>rx.recv().<span class="kw">await</span>;
+    }
+};
+
+task::unconstrained(fut).<span class="kw">await</span>;</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="futures/index.html" title="mod tokio::task::futures">futures</a></div><div class="desc docblock-short">Task-related futures.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AbortHandle.html" title="struct tokio::task::AbortHandle">AbortHandle</a></div><div class="desc docblock-short">An owned permission to abort a spawned task, without awaiting its completion.</div></li><li><div class="item-name"><a class="struct" href="struct.JoinError.html" title="struct tokio::task::JoinError">JoinError</a></div><div class="desc docblock-short">Task failed to execute to completion.</div></li><li><div class="item-name"><a class="struct" href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle">JoinHandle</a></div><div class="desc docblock-short">An owned permission to join on a task (await its termination).</div></li><li><div class="item-name"><a class="struct" href="struct.JoinSet.html" title="struct tokio::task::JoinSet">JoinSet</a></div><div class="desc docblock-short">A collection of tasks spawned on a Tokio runtime.</div></li><li><div class="item-name"><a class="struct" href="struct.LocalEnterGuard.html" title="struct tokio::task::LocalEnterGuard">LocalEnterGuard</a></div><div class="desc docblock-short">Context guard for <code>LocalSet</code></div></li><li><div class="item-name"><a class="struct" href="struct.LocalKey.html" title="struct tokio::task::LocalKey">LocalKey</a></div><div class="desc docblock-short">A key for task-local data.</div></li><li><div class="item-name"><a class="struct" href="struct.LocalSet.html" title="struct tokio::task::LocalSet">LocalSet</a></div><div class="desc docblock-short">A set of tasks which are executed on the same thread.</div></li><li><div class="item-name"><a class="struct" href="struct.Unconstrained.html" title="struct tokio::task::Unconstrained">Unconstrained</a></div><div class="desc docblock-short">Future for the <a href="fn.unconstrained.html" title="fn tokio::task::unconstrained"><code>unconstrained</code></a> method.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.block_in_place.html" title="fn tokio::task::block_in_place">block_in_place</a></div><div class="desc docblock-short">Runs the provided blocking function on the current thread without
+blocking the executor.</div></li><li><div class="item-name"><a class="fn" href="fn.consume_budget.html" title="fn tokio::task::consume_budget">consume_budget</a></div><div class="desc docblock-short">Consumes a unit of budget and returns the execution back to the Tokio
+runtime <em>if</em> the task’s coop budget was exhausted.</div></li><li><div class="item-name"><a class="fn" href="fn.spawn.html" title="fn tokio::task::spawn">spawn</a></div><div class="desc docblock-short">Spawns a new asynchronous task, returning a
+<a href="struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> for it.</div></li><li><div class="item-name"><a class="fn" href="fn.spawn_blocking.html" title="fn tokio::task::spawn_blocking">spawn_blocking</a></div><div class="desc docblock-short">Runs the provided closure on a thread where blocking is acceptable.</div></li><li><div class="item-name"><a class="fn" href="fn.spawn_local.html" title="fn tokio::task::spawn_local">spawn_local</a></div><div class="desc docblock-short">Spawns a <code>!Send</code> future on the current <a href="struct.LocalSet.html" title="struct tokio::task::LocalSet"><code>LocalSet</code></a>.</div></li><li><div class="item-name"><a class="fn" href="fn.unconstrained.html" title="fn tokio::task::unconstrained">unconstrained</a></div><div class="desc docblock-short">Turn off cooperative scheduling for a future. The future will never be forced to yield by
+Tokio. Using this exposes your service to starvation if the unconstrained future never yields
+otherwise.</div></li><li><div class="item-name"><a class="fn" href="fn.yield_now.html" title="fn tokio::task::yield_now">yield_now</a></div><div class="desc docblock-short">Yields execution back to the Tokio runtime.</div></li></ul></section></div></main></body></html>

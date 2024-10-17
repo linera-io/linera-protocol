@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Provides abstractions for working with bytes."><title>bytes - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="bytes" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../bytes/index.html">bytes</a><span class="version">1.7.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">bytes</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/bytes/lib.rs.html#1-165">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Provides abstractions for working with bytes.</p>
+<p>The <code>bytes</code> crate provides an efficient byte buffer structure
+(<a href="struct.Bytes.html" title="struct bytes::Bytes"><code>Bytes</code></a>) and traits for working with buffer
+implementations (<a href="buf/trait.Buf.html" title="trait bytes::buf::Buf"><code>Buf</code></a>, <a href="buf/trait.BufMut.html" title="trait bytes::buf::BufMut"><code>BufMut</code></a>).</p>
+<h2 id="bytes"><a class="doc-anchor" href="#bytes">§</a><code>Bytes</code></h2>
+<p><code>Bytes</code> is an efficient container for storing and operating on contiguous
+slices of memory. It is intended for use primarily in networking code, but
+could have applications elsewhere as well.</p>
+<p><code>Bytes</code> values facilitate zero-copy network programming by allowing multiple
+<code>Bytes</code> objects to point to the same underlying memory. This is managed by
+using a reference count to track when the memory is no longer needed and can
+be freed.</p>
+<p>A <code>Bytes</code> handle can be created directly from an existing byte store (such as <code>&amp;[u8]</code>
+or <code>Vec&lt;u8&gt;</code>), but usually a <code>BytesMut</code> is used first and written to. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>bytes::{BytesMut, BufMut};
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = BytesMut::with_capacity(<span class="number">1024</span>);
+buf.put(<span class="kw-2">&amp;</span><span class="string">b"hello world"</span>[..]);
+buf.put_u16(<span class="number">1234</span>);
+
+<span class="kw">let </span>a = buf.split();
+<span class="macro">assert_eq!</span>(a, <span class="string">b"hello world\x04\xD2"</span>[..]);
+
+buf.put(<span class="kw-2">&amp;</span><span class="string">b"goodbye world"</span>[..]);
+
+<span class="kw">let </span>b = buf.split();
+<span class="macro">assert_eq!</span>(b, <span class="string">b"goodbye world"</span>[..]);
+
+<span class="macro">assert_eq!</span>(buf.capacity(), <span class="number">998</span>);</code></pre></div>
+<p>In the above example, only a single buffer of 1024 is allocated. The handles
+<code>a</code> and <code>b</code> will share the underlying buffer and maintain indices tracking
+the view into the buffer represented by the handle.</p>
+<p>See the <a href="struct.Bytes.html" title="struct bytes::Bytes">struct docs</a> for more details.</p>
+<h2 id="buf-bufmut"><a class="doc-anchor" href="#buf-bufmut">§</a><code>Buf</code>, <code>BufMut</code></h2>
+<p>These two traits provide read and write access to buffers. The underlying
+storage may or may not be in contiguous memory. For example, <code>Bytes</code> is a
+buffer that guarantees contiguous memory, but a <a href="https://en.wikipedia.org/wiki/Rope_(data_structure)">rope</a> stores the bytes in
+disjoint chunks. <code>Buf</code> and <code>BufMut</code> maintain cursors tracking the current
+position in the underlying byte storage. When bytes are read or written, the
+cursor is advanced.</p>
+<h3 id="relation-with-read-and-write"><a class="doc-anchor" href="#relation-with-read-and-write">§</a>Relation with <code>Read</code> and <code>Write</code></h3>
+<p>At first glance, it may seem that <code>Buf</code> and <code>BufMut</code> overlap in
+functionality with <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read"><code>std::io::Read</code></a> and <a href="https://doc.rust-lang.org/1.81.0/std/io/trait.Write.html" title="trait std::io::Write"><code>std::io::Write</code></a>. However, they
+serve different purposes. A buffer is the value that is provided as an
+argument to <code>Read::read</code> and <code>Write::write</code>. <code>Read</code> and <code>Write</code> may then
+perform a syscall, which has the potential of failing. Operations on <code>Buf</code>
+and <code>BufMut</code> are infallible.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Buf"><code>pub use crate::buf::<a class="trait" href="buf/trait.Buf.html" title="trait bytes::buf::Buf">Buf</a>;</code></div></li><li><div class="item-name" id="reexport.BufMut"><code>pub use crate::buf::<a class="trait" href="buf/trait.BufMut.html" title="trait bytes::buf::BufMut">BufMut</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="buf/index.html" title="mod bytes::buf">buf</a></div><div class="desc docblock-short">Utilities for working with buffers.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Bytes.html" title="struct bytes::Bytes">Bytes</a></div><div class="desc docblock-short">A cheaply cloneable and sliceable chunk of contiguous memory.</div></li><li><div class="item-name"><a class="struct" href="struct.BytesMut.html" title="struct bytes::BytesMut">BytesMut</a></div><div class="desc docblock-short">A unique reference to a contiguous slice of memory.</div></li></ul></section></div></main></body></html>

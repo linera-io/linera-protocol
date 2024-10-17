@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Debug"],"enum":["Alignment"],"fn":["write"],"struct":["Arguments","DebugList","DebugMap","DebugSet","DebugStruct","DebugTuple","Error","Formatter","FormatterFn"],"trait":["Binary","Debug","Display","LowerExp","LowerHex","Octal","Pointer","UpperExp","UpperHex","Write"],"type":["Result"]};

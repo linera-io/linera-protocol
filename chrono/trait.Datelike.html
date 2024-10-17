@@ -1,0 +1,171 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The common set of methods for date component."><title>Datelike in chrono - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="chrono" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../chrono/index.html">chrono</a><span class="version">0.4.38</span></h2></div><h2 class="location"><a href="#">Datelike</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.day">day</a></li><li><a href="#tymethod.day0">day0</a></li><li><a href="#tymethod.iso_week">iso_week</a></li><li><a href="#tymethod.month">month</a></li><li><a href="#tymethod.month0">month0</a></li><li><a href="#tymethod.ordinal">ordinal</a></li><li><a href="#tymethod.ordinal0">ordinal0</a></li><li><a href="#tymethod.weekday">weekday</a></li><li><a href="#tymethod.with_day">with_day</a></li><li><a href="#tymethod.with_day0">with_day0</a></li><li><a href="#tymethod.with_month">with_month</a></li><li><a href="#tymethod.with_month0">with_month0</a></li><li><a href="#tymethod.with_ordinal">with_ordinal</a></li><li><a href="#tymethod.with_ordinal0">with_ordinal0</a></li><li><a href="#tymethod.with_year">with_year</a></li><li><a href="#tymethod.year">year</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.num_days_from_ce">num_days_from_ce</a></li><li><a href="#method.year_ce">year_ce</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate chrono</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">chrono</a>::<wbr><a class="trait" href="#">Datelike</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/chrono/traits.rs.html#31-264">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Datelike: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 18 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.year" class="fn">year</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.month" class="fn">month</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.month0" class="fn">month0</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.day" class="fn">day</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.day0" class="fn">day0</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.ordinal" class="fn">ordinal</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.ordinal0" class="fn">ordinal0</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.weekday" class="fn">weekday</a>(&amp;self) -&gt; <a class="enum" href="enum.Weekday.html" title="enum chrono::Weekday">Weekday</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.iso_week" class="fn">iso_week</a>(&amp;self) -&gt; <a class="struct" href="naive/struct.IsoWeek.html" title="struct chrono::naive::IsoWeek">IsoWeek</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_year" class="fn">with_year</a>(&amp;self, year: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_month" class="fn">with_month</a>(&amp;self, month: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_month0" class="fn">with_month0</a>(&amp;self, month0: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_day" class="fn">with_day</a>(&amp;self, day: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_day0" class="fn">with_day0</a>(&amp;self, day0: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_ordinal" class="fn">with_ordinal</a>(&amp;self, ordinal: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.with_ordinal0" class="fn">with_ordinal0</a>(&amp;self, ordinal0: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;;
+
+    // Provided methods
+    fn <a href="#method.year_ce" class="fn">year_ce</a>(&amp;self) -&gt; (<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.num_days_from_ce" class="fn">num_days_from_ce</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a> { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The common set of methods for date component.</p>
+<p>Methods such as <a href="trait.Datelike.html#tymethod.year" title="method chrono::Datelike::year"><code>year</code></a>, <a href="trait.Datelike.html#tymethod.month" title="method chrono::Datelike::month"><code>month</code></a>, <a href="trait.Datelike.html#tymethod.day" title="method chrono::Datelike::day"><code>day</code></a> and <a href="trait.Datelike.html#tymethod.weekday" title="method chrono::Datelike::weekday"><code>weekday</code></a> can be used to get basic
+information about the date.</p>
+<p>The <code>with_*</code> methods can change the date.</p>
+<h2 id="warning"><a class="doc-anchor" href="#warning">§</a>Warning</h2>
+<p>The <code>with_*</code> methods can be convenient to change a single component of a date, but they must be
+used with some care. Examples to watch out for:</p>
+<ul>
+<li><a href="trait.Datelike.html#tymethod.with_year" title="method chrono::Datelike::with_year"><code>with_year</code></a> changes the year component of a year-month-day value. Don’t use this method if
+you want the ordinal to stay the same after changing the year, of if you want the week and
+weekday values to stay the same.</li>
+<li>Don’t combine two <code>with_*</code> methods to change two components of the date. For example to
+change both the year and month components of a date. This could fail because an intermediate
+value does not exist, while the final date would be valid.</li>
+</ul>
+<p>For more complex changes to a date, it is best to use the methods on <a href="naive/struct.NaiveDate.html" title="struct chrono::naive::NaiveDate"><code>NaiveDate</code></a> to create a
+new value instead of altering an existing date.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.year" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#33">source</a><h4 class="code-header">fn <a href="#tymethod.year" class="fn">year</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></h4></section></summary><div class="docblock"><p>Returns the year number in the <a href="./naive/struct.NaiveDate.html#calendar-date">calendar date</a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.month" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#50">source</a><h4 class="code-header">fn <a href="#tymethod.month" class="fn">month</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Returns the month number starting from 1.</p>
+<p>The return value ranges from 1 to 12.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.month0" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#55">source</a><h4 class="code-header">fn <a href="#tymethod.month0" class="fn">month0</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Returns the month number starting from 0.</p>
+<p>The return value ranges from 0 to 11.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.day" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#60">source</a><h4 class="code-header">fn <a href="#tymethod.day" class="fn">day</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Returns the day of month starting from 1.</p>
+<p>The return value ranges from 1 to 31. (The last day of month differs by months.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.day0" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#65">source</a><h4 class="code-header">fn <a href="#tymethod.day0" class="fn">day0</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Returns the day of month starting from 0.</p>
+<p>The return value ranges from 0 to 30. (The last day of month differs by months.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.ordinal" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#70">source</a><h4 class="code-header">fn <a href="#tymethod.ordinal" class="fn">ordinal</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Returns the day of year starting from 1.</p>
+<p>The return value ranges from 1 to 366. (The last day of year differs by years.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.ordinal0" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#75">source</a><h4 class="code-header">fn <a href="#tymethod.ordinal0" class="fn">ordinal0</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Returns the day of year starting from 0.</p>
+<p>The return value ranges from 0 to 365. (The last day of year differs by years.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.weekday" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#78">source</a><h4 class="code-header">fn <a href="#tymethod.weekday" class="fn">weekday</a>(&amp;self) -&gt; <a class="enum" href="enum.Weekday.html" title="enum chrono::Weekday">Weekday</a></h4></section></summary><div class="docblock"><p>Returns the day of week.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.iso_week" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#81">source</a><h4 class="code-header">fn <a href="#tymethod.iso_week" class="fn">iso_week</a>(&amp;self) -&gt; <a class="struct" href="naive/struct.IsoWeek.html" title="struct chrono::naive::IsoWeek">IsoWeek</a></h4></section></summary><div class="docblock"><p>Returns the ISO week.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_year" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#119">source</a><h4 class="code-header">fn <a href="#tymethod.with_year" class="fn">with_year</a>(&amp;self, year: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the year number changed, while keeping the same month and day.</p>
+<p>This method assumes you want to work on the date as a year-month-day value. Don’t use it if
+you want the ordinal to stay the same after changing the year, of if you want the week and
+weekday values to stay the same.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (February 29 in a non-leap year).</li>
+<li>The year is out of range for <a href="naive/struct.NaiveDate.html" title="struct chrono::naive::NaiveDate"><code>NaiveDate</code></a>.</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+</ul>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>chrono::{Datelike, NaiveDate};
+
+<span class="macro">assert_eq!</span>(
+    NaiveDate::from_ymd_opt(<span class="number">2020</span>, <span class="number">5</span>, <span class="number">13</span>).unwrap().with_year(<span class="number">2023</span>).unwrap(),
+    NaiveDate::from_ymd_opt(<span class="number">2023</span>, <span class="number">5</span>, <span class="number">13</span>).unwrap()
+);
+<span class="comment">// Resulting date 2023-02-29 does not exist:
+</span><span class="macro">assert!</span>(NaiveDate::from_ymd_opt(<span class="number">2020</span>, <span class="number">2</span>, <span class="number">29</span>).unwrap().with_year(<span class="number">2023</span>).is_none());
+
+<span class="comment">// Don't use `with_year` if you want the ordinal date to stay the same:
+</span><span class="macro">assert_ne!</span>(
+    NaiveDate::from_yo_opt(<span class="number">2020</span>, <span class="number">100</span>).unwrap().with_year(<span class="number">2023</span>).unwrap(),
+    NaiveDate::from_yo_opt(<span class="number">2023</span>, <span class="number">100</span>).unwrap() <span class="comment">// result is 2023-101
+</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_month" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#164">source</a><h4 class="code-header">fn <a href="#tymethod.with_month" class="fn">with_month</a>(&amp;self, month: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the month number (starting from 1) changed.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (for example <code>month(4)</code> when day of the month is 31).</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+<li>The value for <code>month</code> is out of range.</li>
+</ul>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>chrono::{Datelike, NaiveDate};
+
+<span class="macro">assert_eq!</span>(
+    NaiveDate::from_ymd_opt(<span class="number">2023</span>, <span class="number">5</span>, <span class="number">12</span>).unwrap().with_month(<span class="number">9</span>).unwrap(),
+    NaiveDate::from_ymd_opt(<span class="number">2023</span>, <span class="number">9</span>, <span class="number">12</span>).unwrap()
+);
+<span class="comment">// Resulting date 2023-09-31 does not exist:
+</span><span class="macro">assert!</span>(NaiveDate::from_ymd_opt(<span class="number">2023</span>, <span class="number">5</span>, <span class="number">31</span>).unwrap().with_month(<span class="number">9</span>).is_none());</code></pre></div>
+<p>Don’t combine multiple <code>Datelike::with_*</code> methods. The intermediate value may not exist.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>chrono::{Datelike, NaiveDate};
+
+<span class="kw">fn </span>with_year_month(date: NaiveDate, year: i32, month: u32) -&gt; <span class="prelude-ty">Option</span>&lt;NaiveDate&gt; {
+    date.with_year(year)<span class="question-mark">?</span>.with_month(month)
+}
+<span class="kw">let </span>d = NaiveDate::from_ymd_opt(<span class="number">2020</span>, <span class="number">2</span>, <span class="number">29</span>).unwrap();
+<span class="macro">assert!</span>(with_year_month(d, <span class="number">2019</span>, <span class="number">1</span>).is_none()); <span class="comment">// fails because of invalid intermediate value
+
+// Correct version:
+</span><span class="kw">fn </span>with_year_month_fixed(date: NaiveDate, year: i32, month: u32) -&gt; <span class="prelude-ty">Option</span>&lt;NaiveDate&gt; {
+    NaiveDate::from_ymd_opt(year, month, date.day())
+}
+<span class="kw">let </span>d = NaiveDate::from_ymd_opt(<span class="number">2020</span>, <span class="number">2</span>, <span class="number">29</span>).unwrap();
+<span class="macro">assert_eq!</span>(with_year_month_fixed(d, <span class="number">2019</span>, <span class="number">1</span>), NaiveDate::from_ymd_opt(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">29</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_month0" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#178">source</a><h4 class="code-header">fn <a href="#tymethod.with_month0" class="fn">with_month0</a>(&amp;self, month0: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the month number (starting from 0) changed.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (for example <code>month0(3)</code> when day of the month is 31).</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+<li>The value for <code>month0</code> is out of range.</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_day" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#192">source</a><h4 class="code-header">fn <a href="#tymethod.with_day" class="fn">with_day</a>(&amp;self, day: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the day of month (starting from 1) changed.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (for example <code>day(31)</code> in April).</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+<li>The value for <code>day</code> is out of range.</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_day0" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#206">source</a><h4 class="code-header">fn <a href="#tymethod.with_day0" class="fn">with_day0</a>(&amp;self, day0: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the day of month (starting from 0) changed.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (for example <code>day0(30)</code> in April).</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+<li>The value for <code>day0</code> is out of range.</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_ordinal" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#220">source</a><h4 class="code-header">fn <a href="#tymethod.with_ordinal" class="fn">with_ordinal</a>(&amp;self, ordinal: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the day of year (starting from 1) changed.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (<code>with_ordinal(366)</code> in a non-leap year).</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+<li>The value for <code>ordinal</code> is out of range.</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.with_ordinal0" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#234">source</a><h4 class="code-header">fn <a href="#tymethod.with_ordinal0" class="fn">with_ordinal0</a>(&amp;self, ordinal0: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Makes a new value with the day of year (starting from 0) changed.</p>
+<h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
+<p>Returns <code>None</code> when:</p>
+<ul>
+<li>The resulting date does not exist (<code>with_ordinal0(365)</code> in a non-leap year).</li>
+<li>In case of <a href="struct.DateTime.html" title="struct chrono::DateTime"><code>DateTime&lt;Tz&gt;</code></a> if the resulting date and time fall within a timezone
+transition such as from DST to standard time.</li>
+<li>The value for <code>ordinal0</code> is out of range.</li>
+</ul>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.year_ce" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#38-45">source</a><h4 class="code-header">fn <a href="#method.year_ce" class="fn">year_ce</a>(&amp;self) -&gt; (<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>)</h4></section></summary><div class="docblock"><p>Returns the absolute year number starting from 1 with a boolean flag,
+which is false when the year predates the epoch (BCE/BC) and true otherwise (CE/AD).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.num_days_from_ce" class="method"><a class="src rightside" href="../src/chrono/traits.rs.html#248-263">source</a><h4 class="code-header">fn <a href="#method.num_days_from_ce" class="fn">num_days_from_ce</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></h4></section></summary><div class="docblock"><p>Counts the days in the proleptic Gregorian calendar, with January 1, Year 1 (CE) as day 1.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>chrono::{Datelike, NaiveDate};
+
+<span class="macro">assert_eq!</span>(NaiveDate::from_ymd_opt(<span class="number">1970</span>, <span class="number">1</span>, <span class="number">1</span>).unwrap().num_days_from_ce(), <span class="number">719_163</span>);
+<span class="macro">assert_eq!</span>(NaiveDate::from_ymd_opt(<span class="number">2</span>, <span class="number">1</span>, <span class="number">1</span>).unwrap().num_days_from_ce(), <span class="number">366</span>);
+<span class="macro">assert_eq!</span>(NaiveDate::from_ymd_opt(<span class="number">1</span>, <span class="number">1</span>, <span class="number">1</span>).unwrap().num_days_from_ce(), <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(NaiveDate::from_ymd_opt(<span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>).unwrap().num_days_from_ce(), -<span class="number">365</span>);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Datelike-for-NaiveDate" class="impl"><a class="src rightside" href="../src/chrono/naive/date/mod.rs.html#1442-1865">source</a><a href="#impl-Datelike-for-NaiveDate" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Datelike.html" title="trait chrono::Datelike">Datelike</a> for <a class="struct" href="naive/struct.NaiveDate.html" title="struct chrono::naive::NaiveDate">NaiveDate</a></h3></section><section id="impl-Datelike-for-NaiveDateTime" class="impl"><a class="src rightside" href="../src/chrono/naive/datetime/mod.rs.html#968-1355">source</a><a href="#impl-Datelike-for-NaiveDateTime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Datelike.html" title="trait chrono::Datelike">Datelike</a> for <a class="struct" href="naive/struct.NaiveDateTime.html" title="struct chrono::naive::NaiveDateTime">NaiveDateTime</a></h3></section><section id="impl-Datelike-for-Date%3CTz%3E" class="impl"><a class="src rightside" href="../src/chrono/date.rs.html#392-464">source</a><a href="#impl-Datelike-for-Date%3CTz%3E" class="anchor">§</a><h3 class="code-header">impl&lt;Tz: <a class="trait" href="trait.TimeZone.html" title="trait chrono::TimeZone">TimeZone</a>&gt; <a class="trait" href="trait.Datelike.html" title="trait chrono::Datelike">Datelike</a> for <a class="struct" href="struct.Date.html" title="struct chrono::Date">Date</a>&lt;Tz&gt;</h3></section><section id="impl-Datelike-for-DateTime%3CTz%3E" class="impl"><a class="src rightside" href="../src/chrono/datetime/mod.rs.html#1172-1327">source</a><a href="#impl-Datelike-for-DateTime%3CTz%3E" class="anchor">§</a><h3 class="code-header">impl&lt;Tz: <a class="trait" href="trait.TimeZone.html" title="trait chrono::TimeZone">TimeZone</a>&gt; <a class="trait" href="trait.Datelike.html" title="trait chrono::Datelike">Datelike</a> for <a class="struct" href="struct.DateTime.html" title="struct chrono::DateTime">DateTime</a>&lt;Tz&gt;</h3></section></div><script src="../trait.impl/chrono/traits/trait.Datelike.js" async></script></section></div></main></body></html>

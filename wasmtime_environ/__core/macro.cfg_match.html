@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A macro for defining `#[cfg]` match-like statements."><title>cfg_match in wasmtime_environ::__core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime_environ</a>::<wbr><a href="index.html">__core</a>::<wbr><a class="macro" href="#">cfg_match</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#211">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="kw">pub macro </span>cfg_match {
+    (
+        $(cfg(<span class="macro-nonterminal">$initial_meta</span>:meta) =&gt; { $(<span class="macro-nonterminal">$initial_tokens</span>:item)* })+ <span class="kw">_ </span>=&gt; {
+        $(<span class="macro-nonterminal">$extra_tokens</span>:item)* }
+    ) =&gt; { ... },
+    ($(cfg(<span class="macro-nonterminal">$extra_meta</span>:meta) =&gt; { $(<span class="macro-nonterminal">$extra_tokens</span>:item)* })<span class="kw-2">*</span>) =&gt; { ... },
+    (@ __items($(<span class="macro-nonterminal">$</span><span class="kw">_</span>:<span class="macro-nonterminal">meta</span>,)<span class="kw-2">*</span>);) =&gt; { ... },
+    (
+        @ __items($(<span class="macro-nonterminal">$no</span>:meta,)<span class="kw-2">*</span>); (($(<span class="macro-nonterminal">$yes</span>:meta)<span class="question-mark">?</span>) ($(<span class="macro-nonterminal">$tokens</span>:item)<span class="kw-2">*</span>)),
+        $(<span class="macro-nonterminal">$rest</span>:tt,)*
+    ) =&gt; { ... },
+    (@ __identity $(<span class="macro-nonterminal">$tokens</span>:item)<span class="kw-2">*</span>) =&gt; { ... },
+}</pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>cfg_match</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A macro for defining <code>#[cfg]</code> match-like statements.</p>
+<p>It is similar to the <code>if/elif</code> C preprocessor macro by allowing definition of a cascade of
+<code>#[cfg]</code> cases, emitting the implementation which matches first.</p>
+<p>This allows you to conveniently provide a long list <code>#[cfg]</code>’d blocks of code
+without having to rewrite each clause multiple times.</p>
+<p>Trailing <code>_</code> wildcard match arms are <strong>optional</strong> and they indicate a fallback branch when
+all previous declarations do not evaluate to true.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(cfg_match)]
+
+</span><span class="macro">cfg_match!</span> {
+    cfg(unix) =&gt; {
+        <span class="kw">fn </span>foo() { <span class="comment">/* unix specific functionality */ </span>}
+    }
+    cfg(target_pointer_width = <span class="string">"32"</span>) =&gt; {
+        <span class="kw">fn </span>foo() { <span class="comment">/* non-unix, 32-bit functionality */ </span>}
+    }
+    <span class="kw">_ </span>=&gt; {
+        <span class="kw">fn </span>foo() { <span class="comment">/* fallback implementation */ </span>}
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

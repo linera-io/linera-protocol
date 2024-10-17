@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create an `Arg` from a usage string."><title>arg in clap - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="clap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../clap/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../clap/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt="logo"></a><h2><a href="../clap/index.html">clap</a><span class="version">4.5.18</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">clap</a>::<wbr><a class="macro" href="#">arg</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/clap_builder/macros.rs.html#516">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> arg {
+    ( <span class="macro-nonterminal">$name</span>:ident: $(<span class="macro-nonterminal">$tail</span>:tt)+ ) =&gt; { ... };
+    ( $(<span class="macro-nonterminal">$tail</span>:tt)+ ) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create an <a href="struct.Arg.html" title="struct clap::Arg"><code>Arg</code></a> from a usage string.</p>
+<p>Allows creation of basic settings for the <a href="struct.Arg.html" title="struct clap::Arg"><code>Arg</code></a>.</p>
+<p><strong>NOTE</strong>: Not all settings may be set using the usage string method. Some properties are
+only available via the builder pattern.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>Usage strings typically following the form:</p>
+<div class="example-wrap"><pre class="language-notrust"><code>[explicit name] [short] [long] [value names] [...] [help string]
+</code></pre></div><h4 id="explicit-name"><a class="doc-anchor" href="#explicit-name">§</a>Explicit Name</h4>
+<p>The name may be either a bare-word or a string, followed by a <code>:</code>, like <code>name:</code> or
+<code>"name":</code>.</p>
+<p><em>Note:</em> This is an optional field, if it’s omitted the argument will use one of the additional
+fields as the name using the following priority order:</p>
+<ol>
+<li>Explicit Name</li>
+<li>Long</li>
+<li>Value Name</li>
+</ol>
+<p>See <a href="struct.Arg.html#method.id" title="method clap::Arg::id"><code>Arg::id</code></a>.</p>
+<h4 id="short"><a class="doc-anchor" href="#short">§</a>Short</h4>
+<p>A short flag is a <code>-</code> followed by either a bare-character or quoted character, like <code>-f</code> or
+<code>-'f'</code>.</p>
+<p>See <a href="struct.Arg.html#method.short" title="method clap::Arg::short"><code>Arg::short</code></a>.</p>
+<h4 id="long"><a class="doc-anchor" href="#long">§</a>Long</h4>
+<p>A long flag is a <code>--</code> followed by either a bare-word or a string, like <code>--foo</code> or
+<code>--"foo"</code>.</p>
+<p><strong>NOTE:</strong> Dashes in the long name (e.g. <code>--foo-bar</code>) is not supported and quoting is required
+(e.g. <code>--"foo-bar"</code>).</p>
+<p>See <a href="struct.Arg.html#method.long" title="method clap::Arg::long"><code>Arg::long</code></a>.</p>
+<h4 id="values-value-notation"><a class="doc-anchor" href="#values-value-notation">§</a>Values (Value Notation)</h4>
+<p>This is set by placing bare-word between:</p>
+<ul>
+<li><code>[]</code> like <code>[FOO]</code>
+<ul>
+<li>Positional argument: optional</li>
+<li>Named argument: optional value</li>
+</ul>
+</li>
+<li><code>&lt;&gt;</code> like <code>&lt;FOO&gt;</code>: required</li>
+</ul>
+<p>See <a href="struct.Arg.html#method.value_name" title="method clap::Arg::value_name"><code>Arg::value_name</code></a>.</p>
+<h4 id=""><a class="doc-anchor" href="#">§</a><code>...</code></h4>
+<p><code>...</code> (three consecutive dots/periods) specifies that this argument may occur multiple
+times (not to be confused with multiple values per occurrence).</p>
+<p>See <a href="enum.ArgAction.html#variant.Count" title="variant clap::ArgAction::Count"><code>ArgAction::Count</code></a> and <a href="enum.ArgAction.html#variant.Append" title="variant clap::ArgAction::Append"><code>ArgAction::Append</code></a>.</p>
+<h4 id="help-string"><a class="doc-anchor" href="#help-string">§</a>Help String</h4>
+<p>The help string is denoted between a pair of double quotes <code>""</code> and may contain any
+characters.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>cmd = Command::new(<span class="string">"prog"</span>)
+    .args(<span class="kw-2">&amp;</span>[
+        <span class="macro">arg!</span>(--config &lt;FILE&gt; <span class="string">"a required file for the configuration and no short"</span>),
+        <span class="macro">arg!</span>(-d --debug ... <span class="string">"turns on debugging information and allows multiples"</span>),
+        <span class="macro">arg!</span>([input] <span class="string">"an optional input file to use"</span>)
+    ]);
+
+<span class="kw">let </span>m = cmd.try_get_matches_from([<span class="string">"prog"</span>, <span class="string">"--config"</span>, <span class="string">"file.toml"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(m.get_one::&lt;String&gt;(<span class="string">"config"</span>).unwrap(), <span class="string">"file.toml"</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">*</span>m.get_one::&lt;u8&gt;(<span class="string">"debug"</span>).unwrap(), <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(m.get_one::&lt;String&gt;(<span class="string">"input"</span>), <span class="prelude-val">None</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

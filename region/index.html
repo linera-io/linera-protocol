@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Cross-platform virtual memory API."><title>region - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="region" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../region/index.html">region</a><span class="version">3.0.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">region</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/region/lib.rs.html#1-430">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Cross-platform virtual memory API.</p>
+<p>This crate provides a cross-platform Rust API for querying and manipulating
+virtual memory. It is a thin abstraction, with the underlying interaction
+implemented using platform specific APIs (e.g <code>VirtualQuery</code>, <code>VirtualLock</code>,
+<code>mprotect</code>, <code>mlock</code>). Albeit not all OS specific quirks are abstracted away;
+for instance, some OSs enforce memory pages to be readable, whilst other may
+prevent pages from becoming executable (i.e DEP).</p>
+<p>This implementation operates with memory pages, which are aligned to the
+operating system’s page size. On some systems, but not all, the system calls
+for these operations require input to be aligned to a page boundary. To
+remedy this inconsistency, whenever applicable, input is aligned to its
+closest page boundary.</p>
+<p><em>Note: a region is a collection of one or more pages laying consecutively in
+memory, with the same properties.</em></p>
+<h2 id="parallelism"><a class="doc-anchor" href="#parallelism">§</a>Parallelism</h2>
+<p>The properties of virtual memory pages can change at any time, unless all
+threads that are unaccounted for in a process are stopped. Therefore to
+obtain, e.g., a true picture of a process’ virtual memory, all other threads
+must be halted. Otherwise, a region descriptor only represents a snapshot in
+time.</p>
+<h2 id="installation"><a class="doc-anchor" href="#installation">§</a>Installation</h2>
+<p>This crate is <a href="https://crates.io/crates/region">on crates.io</a> and can be
+used by adding <code>region</code> to your dependencies in your project’s <code>Cargo.toml</code>.</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+region = &quot;3.0.2&quot;
+</code></pre></div><h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<ul>
+<li>
+<p>Cross-platform equivalents.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>data = [<span class="number">0xDE</span>, <span class="number">0xAD</span>, <span class="number">0xBE</span>, <span class="number">0xEF</span>];
+
+<span class="comment">// Page size
+</span><span class="kw">let </span>pz = region::page::size();
+<span class="kw">let </span>pc = region::page::ceil(data.as_ptr());
+<span class="kw">let </span>pf = region::page::floor(data.as_ptr());
+
+<span class="comment">// VirtualQuery | '/proc/self/maps'
+</span><span class="kw">let </span>q  = region::query(data.as_ptr())<span class="question-mark">?</span>;
+<span class="kw">let </span>qr = region::query_range(data.as_ptr(), data.len())<span class="question-mark">?</span>;
+
+<span class="comment">// VirtualAlloc | mmap
+</span><span class="kw">let </span>alloc = region::alloc(<span class="number">100</span>, Protection::READ_WRITE)<span class="question-mark">?</span>;
+
+<span class="comment">// VirtualProtect | mprotect
+</span>region::protect(data.as_ptr(), data.len(), Protection::READ_WRITE_EXECUTE)<span class="question-mark">?</span>;
+
+<span class="comment">// ... you can also temporarily change one or more pages' protection
+</span><span class="kw">let </span>handle = region::protect_with_handle(data.as_ptr(), data.len(), Protection::READ_WRITE_EXECUTE)<span class="question-mark">?</span>;
+
+<span class="comment">// VirtualLock | mlock
+</span><span class="kw">let </span>guard = region::lock(data.as_ptr(), data.len())<span class="question-mark">?</span>;</code></pre></div>
+</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="page/index.html" title="mod region::page">page</a></div><div class="desc docblock-short">Page related functions.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Allocation.html" title="struct region::Allocation">Allocation</a></div><div class="desc docblock-short">A handle to an owned region of memory.</div></li><li><div class="item-name"><a class="struct" href="struct.LockGuard.html" title="struct region::LockGuard">LockGuard</a></div><div class="desc docblock-short">A RAII implementation of a scoped lock.</div></li><li><div class="item-name"><a class="struct" href="struct.ProtectGuard.html" title="struct region::ProtectGuard">ProtectGuard</a></div><div class="desc docblock-short">A RAII implementation of a scoped protection guard.</div></li><li><div class="item-name"><a class="struct" href="struct.Protection.html" title="struct region::Protection">Protection</a></div><div class="desc docblock-short">A bitflag of zero or more protection attributes.</div></li><li><div class="item-name"><a class="struct" href="struct.QueryIter.html" title="struct region::QueryIter">QueryIter</a></div><div class="desc docblock-short">An iterator over the <a href="struct.Region.html" title="struct region::Region"><code>Region</code></a>s that encompass an address range.</div></li><li><div class="item-name"><a class="struct" href="struct.Region.html" title="struct region::Region">Region</a></div><div class="desc docblock-short">A descriptor for a mapped memory region.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum region::Error">Error</a></div><div class="desc docblock-short">A collection of possible errors.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.alloc.html" title="fn region::alloc">alloc</a></div><div class="desc docblock-short">Allocates one or more pages of memory, with a defined protection.</div></li><li><div class="item-name"><a class="fn" href="fn.alloc_at.html" title="fn region::alloc_at">alloc_at</a></div><div class="desc docblock-short">Allocates one or more pages of memory, at a specific address, with a defined
+protection.</div></li><li><div class="item-name"><a class="fn" href="fn.lock.html" title="fn region::lock">lock</a></div><div class="desc docblock-short">Locks one or more memory regions to RAM.</div></li><li><div class="item-name"><a class="fn" href="fn.protect.html" title="fn region::protect">protect</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Changes the memory protection of one or more pages.</div></li><li><div class="item-name"><a class="fn" href="fn.protect_with_handle.html" title="fn region::protect_with_handle">protect_with_handle</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Temporarily changes the memory protection of one or more pages.</div></li><li><div class="item-name"><a class="fn" href="fn.query.html" title="fn region::query">query</a></div><div class="desc docblock-short">Queries the OS with an address, returning the region it resides within.</div></li><li><div class="item-name"><a class="fn" href="fn.query_range.html" title="fn region::query_range">query_range</a></div><div class="desc docblock-short">Queries the OS for mapped regions that overlap with the specified range.</div></li><li><div class="item-name"><a class="fn" href="fn.unlock.html" title="fn region::unlock">unlock</a></div><div class="desc docblock-short">Unlocks one or more memory regions from RAM.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type region::Result">Result</a></div><div class="desc docblock-short">The result type used by this library.</div></li></ul></section></div></main></body></html>

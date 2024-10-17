@@ -1,0 +1,398 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Synchronization primitives for use in asynchronous contexts."><title>tokio::sync - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Module sync</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate tokio</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tokio</a>::<wbr><a class="mod" href="#">sync</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/sync/mod.rs.html#1-504">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Synchronization primitives for use in asynchronous contexts.</p>
+<p>Tokio programs tend to be organized as a set of <a href="../task/index.html" title="mod tokio::task">tasks</a> where each task
+operates independently and may be executed on separate physical threads. The
+synchronization primitives provided in this module permit these independent
+tasks to communicate together.</p>
+<h2 id="message-passing"><a class="doc-anchor" href="#message-passing">§</a>Message passing</h2>
+<p>The most common form of synchronization in a Tokio program is message
+passing. Two tasks operate independently and send messages to each other to
+synchronize. Doing so has the advantage of avoiding shared state.</p>
+<p>Message passing is implemented using channels. A channel supports sending a
+message from one producer task to one or more consumer tasks. There are a
+few flavors of channels provided by Tokio. Each channel flavor supports
+different message passing patterns. When a channel supports multiple
+producers, many separate tasks may <strong>send</strong> messages. When a channel
+supports multiple consumers, many different separate tasks may <strong>receive</strong>
+messages.</p>
+<p>Tokio provides many different channel flavors as different message passing
+patterns are best handled with different implementations.</p>
+<h3 id="oneshot-channel"><a class="doc-anchor" href="#oneshot-channel">§</a><code>oneshot</code> channel</h3>
+<p>The <a href="oneshot/index.html" title="mod tokio::sync::oneshot"><code>oneshot</code> channel</a> supports sending a <strong>single</strong> value from a
+single producer to a single consumer. This channel is usually used to send
+the result of a computation to a waiter.</p>
+<p><strong>Example:</strong> using a <a href="oneshot/index.html" title="mod tokio::sync::oneshot"><code>oneshot</code> channel</a> to receive the result of a
+computation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::oneshot;
+
+<span class="kw">async fn </span>some_computation() -&gt; String {
+    <span class="string">"represents the result of the computation"</span>.to_string()
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, rx) = oneshot::channel();
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span>res = some_computation().<span class="kw">await</span>;
+        tx.send(res).unwrap();
+    });
+
+    <span class="comment">// Do other work while the computation is happening in the background
+
+    // Wait for the computation result
+    </span><span class="kw">let </span>res = rx.<span class="kw">await</span>.unwrap();
+}</code></pre></div>
+<p>Note, if the task produces a computation result as its final
+action before terminating, the <a href="../task/struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> can be used to
+receive that value instead of allocating resources for the
+<code>oneshot</code> channel. Awaiting on <a href="../task/struct.JoinHandle.html" title="struct tokio::task::JoinHandle"><code>JoinHandle</code></a> returns <code>Result</code>. If
+the task panics, the <code>Joinhandle</code> yields <code>Err</code> with the panic
+cause.</p>
+<p><strong>Example:</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>some_computation() -&gt; String {
+    <span class="string">"the result of the computation"</span>.to_string()
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>join_handle = tokio::spawn(<span class="kw">async move </span>{
+        some_computation().<span class="kw">await
+    </span>});
+
+    <span class="comment">// Do other work while the computation is happening in the background
+
+    // Wait for the computation result
+    </span><span class="kw">let </span>res = join_handle.<span class="kw">await</span>.unwrap();
+}</code></pre></div>
+<h3 id="mpsc-channel"><a class="doc-anchor" href="#mpsc-channel">§</a><code>mpsc</code> channel</h3>
+<p>The <a href="mpsc/index.html" title="mod tokio::sync::mpsc"><code>mpsc</code> channel</a> supports sending <strong>many</strong> values from <strong>many</strong>
+producers to a single consumer. This channel is often used to send work to a
+task or to receive the result of many computations.</p>
+<p>This is also the channel you should use if you want to send many messages
+from a single producer to a single consumer. There is no dedicated spsc
+channel.</p>
+<p><strong>Example:</strong> using an mpsc to incrementally stream the results of a series
+of computations.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="kw">async fn </span>some_computation(input: u32) -&gt; String {
+    <span class="macro">format!</span>(<span class="string">"the result of computation {}"</span>, input)
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel(<span class="number">100</span>);
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">10 </span>{
+            <span class="kw">let </span>res = some_computation(i).<span class="kw">await</span>;
+            tx.send(res).<span class="kw">await</span>.unwrap();
+        }
+    });
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(res) = rx.recv().<span class="kw">await </span>{
+        <span class="macro">println!</span>(<span class="string">"got = {}"</span>, res);
+    }
+}</code></pre></div>
+<p>The argument to <code>mpsc::channel</code> is the channel capacity. This is the maximum
+number of values that can be stored in the channel pending receipt at any
+given time. Properly setting this value is key in implementing robust
+programs as the channel capacity plays a critical part in handling back
+pressure.</p>
+<p>A common concurrency pattern for resource management is to spawn a task
+dedicated to managing that resource and using message passing between other
+tasks to interact with the resource. The resource may be anything that may
+not be concurrently used. Some examples include a socket and program state.
+For example, if multiple tasks need to send data over a single socket, spawn
+a task to manage the socket and use a channel to synchronize.</p>
+<p><strong>Example:</strong> sending data from many tasks over a single socket using message
+passing.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{<span class="self">self</span>, AsyncWriteExt};
+<span class="kw">use </span>tokio::net::TcpStream;
+<span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>socket = TcpStream::connect(<span class="string">"www.example.com:1234"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel(<span class="number">100</span>);
+
+    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        <span class="comment">// Each task needs its own `tx` handle. This is done by cloning the
+        // original handle.
+        </span><span class="kw">let </span>tx = tx.clone();
+
+        tokio::spawn(<span class="kw">async move </span>{
+            tx.send(<span class="kw-2">&amp;</span><span class="string">b"data to write"</span>[..]).<span class="kw">await</span>.unwrap();
+        });
+    }
+
+    <span class="comment">// The `rx` half of the channel returns `None` once **all** `tx` clones
+    // drop. To ensure `None` is returned, drop the handle owned by the
+    // current task. If this `tx` handle is not dropped, there will always
+    // be a single outstanding `tx` handle.
+    </span>drop(tx);
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(res) = rx.recv().<span class="kw">await </span>{
+        socket.write_all(res).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>The <a href="mpsc/index.html" title="mod tokio::sync::mpsc"><code>mpsc</code></a> and <a href="oneshot/index.html" title="mod tokio::sync::oneshot"><code>oneshot</code></a> channels can be combined to provide a request /
+response type synchronization pattern with a shared resource. A task is
+spawned to synchronize a resource and waits on commands received on a
+<a href="mpsc/index.html" title="mod tokio::sync::mpsc"><code>mpsc</code></a> channel. Each command includes a <a href="oneshot/index.html" title="mod tokio::sync::oneshot"><code>oneshot</code></a> <code>Sender</code> on which the
+result of the command is sent.</p>
+<p><strong>Example:</strong> use a task to synchronize a <code>u64</code> counter. Each task sends an
+“fetch and increment” command. The counter value <strong>before</strong> the increment is
+sent over the provided <code>oneshot</code> channel.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::{oneshot, mpsc};
+<span class="kw">use </span>Command::Increment;
+
+<span class="kw">enum </span>Command {
+    Increment,
+    <span class="comment">// Other commands can be added here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(cmd_tx, <span class="kw-2">mut </span>cmd_rx) = mpsc::channel::&lt;(Command, oneshot::Sender&lt;u64&gt;)&gt;(<span class="number">100</span>);
+
+    <span class="comment">// Spawn a task to manage the counter
+    </span>tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>counter: u64 = <span class="number">0</span>;
+
+        <span class="kw">while let </span><span class="prelude-val">Some</span>((cmd, response)) = cmd_rx.recv().<span class="kw">await </span>{
+            <span class="kw">match </span>cmd {
+                Increment =&gt; {
+                    <span class="kw">let </span>prev = counter;
+                    counter += <span class="number">1</span>;
+                    response.send(prev).unwrap();
+                }
+            }
+        }
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>join_handles = <span class="macro">vec!</span>[];
+
+    <span class="comment">// Spawn tasks that will send the increment command.
+    </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+        <span class="kw">let </span>cmd_tx = cmd_tx.clone();
+
+        join_handles.push(tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span>(resp_tx, resp_rx) = oneshot::channel();
+
+            cmd_tx.send((Increment, resp_tx)).<span class="kw">await</span>.ok().unwrap();
+            <span class="kw">let </span>res = resp_rx.<span class="kw">await</span>.unwrap();
+
+            <span class="macro">println!</span>(<span class="string">"previous value = {}"</span>, res);
+        }));
+    }
+
+    <span class="comment">// Wait for all tasks to complete
+    </span><span class="kw">for </span>join_handle <span class="kw">in </span>join_handles.drain(..) {
+        join_handle.<span class="kw">await</span>.unwrap();
+    }
+}</code></pre></div>
+<h3 id="broadcast-channel"><a class="doc-anchor" href="#broadcast-channel">§</a><code>broadcast</code> channel</h3>
+<p>The <a href="broadcast/index.html" title="mod tokio::sync::broadcast"><code>broadcast</code> channel</a> supports sending <strong>many</strong> values from
+<strong>many</strong> producers to <strong>many</strong> consumers. Each consumer will receive
+<strong>each</strong> value. This channel can be used to implement “fan out” style
+patterns common with pub / sub or “chat” systems.</p>
+<p>This channel tends to be used less often than <code>oneshot</code> and <code>mpsc</code> but still
+has its use cases.</p>
+<p>This is also the channel you should use if you want to broadcast values from
+a single producer to many consumers. There is no dedicated spmc broadcast
+channel.</p>
+<p>Basic usage</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::broadcast;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx1) = broadcast::channel(<span class="number">16</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>rx2 = tx.subscribe();
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">assert_eq!</span>(rx1.recv().<span class="kw">await</span>.unwrap(), <span class="number">10</span>);
+        <span class="macro">assert_eq!</span>(rx1.recv().<span class="kw">await</span>.unwrap(), <span class="number">20</span>);
+    });
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">assert_eq!</span>(rx2.recv().<span class="kw">await</span>.unwrap(), <span class="number">10</span>);
+        <span class="macro">assert_eq!</span>(rx2.recv().<span class="kw">await</span>.unwrap(), <span class="number">20</span>);
+    });
+
+    tx.send(<span class="number">10</span>).unwrap();
+    tx.send(<span class="number">20</span>).unwrap();
+}</code></pre></div>
+<h3 id="watch-channel"><a class="doc-anchor" href="#watch-channel">§</a><code>watch</code> channel</h3>
+<p>The <a href="watch/index.html" title="mod tokio::sync::watch"><code>watch</code> channel</a> supports sending <strong>many</strong> values from a <strong>many</strong>
+producer to <strong>many</strong> consumers. However, only the <strong>most recent</strong> value is
+stored in the channel. Consumers are notified when a new value is sent, but
+there is no guarantee that consumers will see <strong>all</strong> values.</p>
+<p>The <a href="watch/index.html" title="mod tokio::sync::watch"><code>watch</code> channel</a> is similar to a <a href="broadcast/index.html" title="mod tokio::sync::broadcast"><code>broadcast</code> channel</a> with capacity 1.</p>
+<p>Use cases for the <a href="watch/index.html" title="mod tokio::sync::watch"><code>watch</code> channel</a> include broadcasting configuration
+changes or signalling program state changes, such as transitioning to
+shutdown.</p>
+<p><strong>Example:</strong> use a <a href="watch/index.html" title="mod tokio::sync::watch"><code>watch</code> channel</a> to notify tasks of configuration
+changes. In this example, a configuration file is checked periodically. When
+the file changes, the configuration changes are signalled to consumers.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tokio::time::{<span class="self">self</span>, Duration, Instant};
+
+<span class="kw">use </span>std::io;
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+</span><span class="kw">struct </span>Config {
+    timeout: Duration,
+}
+
+<span class="kw">impl </span>Config {
+    <span class="kw">async fn </span>load_from_file() -&gt; io::Result&lt;Config&gt; {
+        <span class="comment">// file loading and deserialization logic here
+    </span>}
+}
+
+<span class="kw">async fn </span>my_async_operation() {
+    <span class="comment">// Do something here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="comment">// Load initial configuration value
+    </span><span class="kw">let </span><span class="kw-2">mut </span>config = Config::load_from_file().<span class="kw">await</span>.unwrap();
+
+    <span class="comment">// Create the watch channel, initialized with the loaded configuration
+    </span><span class="kw">let </span>(tx, rx) = watch::channel(config.clone());
+
+    <span class="comment">// Spawn a task to monitor the file.
+    </span>tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">loop </span>{
+            <span class="comment">// Wait 10 seconds between checks
+            </span>time::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
+
+            <span class="comment">// Load the configuration file
+            </span><span class="kw">let </span>new_config = Config::load_from_file().<span class="kw">await</span>.unwrap();
+
+            <span class="comment">// If the configuration changed, send the new config value
+            // on the watch channel.
+            </span><span class="kw">if </span>new_config != config {
+                tx.send(new_config.clone()).unwrap();
+                config = new_config;
+            }
+        }
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>handles = <span class="macro">vec!</span>[];
+
+    <span class="comment">// Spawn tasks that runs the async operation for at most `timeout`. If
+    // the timeout elapses, restart the operation.
+    //
+    // The task simultaneously watches the `Config` for changes. When the
+    // timeout duration changes, the timeout is updated without restarting
+    // the in-flight operation.
+    </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">5 </span>{
+        <span class="comment">// Clone a config watch handle for use in this task
+        </span><span class="kw">let </span><span class="kw-2">mut </span>rx = rx.clone();
+
+        <span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
+            <span class="comment">// Start the initial operation and pin the future to the stack.
+            // Pinning to the stack is required to resume the operation
+            // across multiple calls to `select!`
+            </span><span class="kw">let </span>op = my_async_operation();
+            <span class="macro">tokio::pin!</span>(op);
+
+            <span class="comment">// Get the initial config value
+            </span><span class="kw">let </span><span class="kw-2">mut </span>conf = rx.borrow().clone();
+
+            <span class="kw">let </span><span class="kw-2">mut </span>op_start = Instant::now();
+            <span class="kw">let </span>sleep = time::sleep_until(op_start + conf.timeout);
+            <span class="macro">tokio::pin!</span>(sleep);
+
+            <span class="kw">loop </span>{
+                <span class="macro">tokio::select!</span> {
+                    <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>sleep =&gt; {
+                        <span class="comment">// The operation elapsed. Restart it
+                        </span>op.set(my_async_operation());
+
+                        <span class="comment">// Track the new start time
+                        </span>op_start = Instant::now();
+
+                        <span class="comment">// Restart the timeout
+                        </span>sleep.set(time::sleep_until(op_start + conf.timeout));
+                    }
+                    <span class="kw">_ </span>= rx.changed() =&gt; {
+                        conf = rx.borrow_and_update().clone();
+
+                        <span class="comment">// The configuration has been updated. Update the
+                        // `sleep` using the new `timeout` value.
+                        </span>sleep.as_mut().reset(op_start + conf.timeout);
+                    }
+                    <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>op =&gt; {
+                        <span class="comment">// The operation completed!
+                        </span><span class="kw">return
+                    </span>}
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    <span class="kw">for </span>handle <span class="kw">in </span>handles.drain(..) {
+        handle.<span class="kw">await</span>.unwrap();
+    }
+}</code></pre></div>
+<h2 id="state-synchronization"><a class="doc-anchor" href="#state-synchronization">§</a>State synchronization</h2>
+<p>The remaining synchronization primitives focus on synchronizing state.
+These are asynchronous equivalents to versions provided by <code>std</code>. They
+operate in a similar way as their <code>std</code> counterparts but will wait
+asynchronously instead of blocking the thread.</p>
+<ul>
+<li>
+<p><a href="struct.Barrier.html" title="struct tokio::sync::Barrier"><code>Barrier</code></a> Ensures multiple tasks will wait for each other to reach a
+point in the program, before continuing execution all together.</p>
+</li>
+<li>
+<p><a href="struct.Mutex.html" title="struct tokio::sync::Mutex"><code>Mutex</code></a> Mutual Exclusion mechanism, which ensures that at most one
+thread at a time is able to access some data.</p>
+</li>
+<li>
+<p><a href="struct.Notify.html" title="struct tokio::sync::Notify"><code>Notify</code></a> Basic task notification. <code>Notify</code> supports notifying a
+receiving task without sending data. In this case, the task wakes up and
+resumes processing.</p>
+</li>
+<li>
+<p><a href="struct.RwLock.html" title="struct tokio::sync::RwLock"><code>RwLock</code></a> Provides a mutual exclusion mechanism which allows multiple
+readers at the same time, while allowing only one writer at a time. In
+some cases, this can be more efficient than a mutex.</p>
+</li>
+<li>
+<p><a href="struct.Semaphore.html" title="struct tokio::sync::Semaphore"><code>Semaphore</code></a> Limits the amount of concurrency. A semaphore holds a
+number of permits, which tasks may request in order to enter a critical
+section. Semaphores are useful for implementing limiting or bounding of
+any kind.</p>
+</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="broadcast/index.html" title="mod tokio::sync::broadcast">broadcast</a></div><div class="desc docblock-short">A multi-producer, multi-consumer broadcast queue. Each sent value is seen by
+all consumers.</div></li><li><div class="item-name"><a class="mod" href="futures/index.html" title="mod tokio::sync::futures">futures</a></div><div class="desc docblock-short">Named future types.</div></li><li><div class="item-name"><a class="mod" href="mpsc/index.html" title="mod tokio::sync::mpsc">mpsc</a></div><div class="desc docblock-short">A multi-producer, single-consumer queue for sending values between
+asynchronous tasks.</div></li><li><div class="item-name"><a class="mod" href="oneshot/index.html" title="mod tokio::sync::oneshot">oneshot</a></div><div class="desc docblock-short">A one-shot channel is used for sending a single message between
+asynchronous tasks. The <a href="oneshot/fn.channel.html" title="fn tokio::sync::oneshot::channel"><code>channel</code></a> function is used to create a
+<a href="oneshot/struct.Sender.html" title="struct tokio::sync::oneshot::Sender"><code>Sender</code></a> and <a href="oneshot/struct.Receiver.html" title="struct tokio::sync::oneshot::Receiver"><code>Receiver</code></a> handle pair that form the channel.</div></li><li><div class="item-name"><a class="mod" href="watch/index.html" title="mod tokio::sync::watch">watch</a></div><div class="desc docblock-short">A multi-producer, multi-consumer channel that only retains the <em>last</em> sent
+value.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AcquireError.html" title="struct tokio::sync::AcquireError">AcquireError</a></div><div class="desc docblock-short">Error returned from the <a href="struct.Semaphore.html#method.acquire" title="method tokio::sync::Semaphore::acquire"><code>Semaphore::acquire</code></a> function.</div></li><li><div class="item-name"><a class="struct" href="struct.Barrier.html" title="struct tokio::sync::Barrier">Barrier</a></div><div class="desc docblock-short">A barrier enables multiple tasks to synchronize the beginning of some computation.</div></li><li><div class="item-name"><a class="struct" href="struct.BarrierWaitResult.html" title="struct tokio::sync::BarrierWaitResult">BarrierWaitResult</a></div><div class="desc docblock-short">A <code>BarrierWaitResult</code> is returned by <code>wait</code> when all tasks in the <code>Barrier</code> have rendezvoused.</div></li><li><div class="item-name"><a class="struct" href="struct.MappedMutexGuard.html" title="struct tokio::sync::MappedMutexGuard">MappedMutexGuard</a></div><div class="desc docblock-short">A handle to a held <code>Mutex</code> that has had a function applied to it via <a href="struct.MutexGuard.html#method.map" title="associated function tokio::sync::MutexGuard::map"><code>MutexGuard::map</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Mutex.html" title="struct tokio::sync::Mutex">Mutex</a></div><div class="desc docblock-short">An asynchronous <code>Mutex</code>-like type.</div></li><li><div class="item-name"><a class="struct" href="struct.MutexGuard.html" title="struct tokio::sync::MutexGuard">MutexGuard</a></div><div class="desc docblock-short">A handle to a held <code>Mutex</code>. The guard can be held across any <code>.await</code> point
+as it is <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send"><code>Send</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Notify.html" title="struct tokio::sync::Notify">Notify</a></div><div class="desc docblock-short">Notifies a single task to wake up.</div></li><li><div class="item-name"><a class="struct" href="struct.OnceCell.html" title="struct tokio::sync::OnceCell">OnceCell</a></div><div class="desc docblock-short">A thread-safe cell that can be written to only once.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedMappedMutexGuard.html" title="struct tokio::sync::OwnedMappedMutexGuard">OwnedMappedMutexGuard</a></div><div class="desc docblock-short">A owned handle to a held <code>Mutex</code> that has had a function applied to it via
+<a href="struct.OwnedMutexGuard.html#method.map" title="associated function tokio::sync::OwnedMutexGuard::map"><code>OwnedMutexGuard::map</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedMutexGuard.html" title="struct tokio::sync::OwnedMutexGuard">OwnedMutexGuard</a></div><div class="desc docblock-short">An owned handle to a held <code>Mutex</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedRwLockMappedWriteGuard.html" title="struct tokio::sync::OwnedRwLockMappedWriteGuard">OwnedRwLockMappedWriteGuard</a></div><div class="desc docblock-short">Owned RAII structure used to release the exclusive write access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedRwLockReadGuard.html" title="struct tokio::sync::OwnedRwLockReadGuard">OwnedRwLockReadGuard</a></div><div class="desc docblock-short">Owned RAII structure used to release the shared read access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedRwLockWriteGuard.html" title="struct tokio::sync::OwnedRwLockWriteGuard">OwnedRwLockWriteGuard</a></div><div class="desc docblock-short">Owned RAII structure used to release the exclusive write access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.OwnedSemaphorePermit.html" title="struct tokio::sync::OwnedSemaphorePermit">OwnedSemaphorePermit</a></div><div class="desc docblock-short">An owned permit from the semaphore.</div></li><li><div class="item-name"><a class="struct" href="struct.RwLock.html" title="struct tokio::sync::RwLock">RwLock</a></div><div class="desc docblock-short">An asynchronous reader-writer lock.</div></li><li><div class="item-name"><a class="struct" href="struct.RwLockMappedWriteGuard.html" title="struct tokio::sync::RwLockMappedWriteGuard">RwLockMappedWriteGuard</a></div><div class="desc docblock-short">RAII structure used to release the exclusive write access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.RwLockReadGuard.html" title="struct tokio::sync::RwLockReadGuard">RwLockReadGuard</a></div><div class="desc docblock-short">RAII structure used to release the shared read access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.RwLockWriteGuard.html" title="struct tokio::sync::RwLockWriteGuard">RwLockWriteGuard</a></div><div class="desc docblock-short">RAII structure used to release the exclusive write access of a lock when
+dropped.</div></li><li><div class="item-name"><a class="struct" href="struct.Semaphore.html" title="struct tokio::sync::Semaphore">Semaphore</a></div><div class="desc docblock-short">Counting semaphore performing asynchronous permit acquisition.</div></li><li><div class="item-name"><a class="struct" href="struct.SemaphorePermit.html" title="struct tokio::sync::SemaphorePermit">SemaphorePermit</a></div><div class="desc docblock-short">A permit from the semaphore.</div></li><li><div class="item-name"><a class="struct" href="struct.TryLockError.html" title="struct tokio::sync::TryLockError">TryLockError</a></div><div class="desc docblock-short">Error returned from the <a href="struct.Mutex.html#method.try_lock" title="method tokio::sync::Mutex::try_lock"><code>Mutex::try_lock</code></a>, <a href="struct.RwLock.html#method.try_read" title="method tokio::sync::RwLock::try_read"><code>RwLock::try_read</code></a> and
+<a href="struct.RwLock.html#method.try_write" title="method tokio::sync::RwLock::try_write"><code>RwLock::try_write</code></a> functions.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.SetError.html" title="enum tokio::sync::SetError">SetError</a></div><div class="desc docblock-short">Errors that can be returned from <a href="struct.OnceCell.html#method.set" title="method tokio::sync::OnceCell::set"><code>OnceCell::set</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.TryAcquireError.html" title="enum tokio::sync::TryAcquireError">TryAcquireError</a></div><div class="desc docblock-short">Error returned from the <a href="struct.Semaphore.html#method.try_acquire" title="method tokio::sync::Semaphore::try_acquire"><code>Semaphore::try_acquire</code></a> function.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BlanketMessagePolicy","ChainClientError"],"struct":["AbortOnDrop","ChainClient","ChainClientOptions","Client","MessagePolicy","Unsend"],"type":["ChainGuard","ChainGuardMapped","ChainGuardMut"]};

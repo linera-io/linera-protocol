@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Graphql Parser"><title>graphql_parser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="graphql_parser" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../graphql_parser/index.html">graphql_parser</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">graphql_parser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/graphql_parser/lib.rs.html#1-109">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="graphql-parser"><a class="doc-anchor" href="#graphql-parser">§</a>Graphql Parser</h2>
+<p>This library contains full parser and formatter of the graphql
+query language as well as AST types.</p>
+<p><a href="https://docs.rs/graphql-parser/">Docs</a> |
+<a href="https://github.com/graphql-rust/graphql-parser/">Github</a> |
+<a href="https://crates.io/crates/graphql-parser">Crate</a></p>
+<p>Current this library supports full graphql syntax, and the following
+extensions:</p>
+<ol>
+<li>Subscriptions</li>
+<li>Block (triple quoted) strings</li>
+<li>Schema definition language a/k/a IDL (which is still in RFC)</li>
+</ol>
+<h3 id="example-parse-and-format-query"><a class="doc-anchor" href="#example-parse-and-format-query">§</a>Example: Parse and Format Query</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>graphql_parser::query::{parse_query, ParseError};
+
+<span class="kw">let </span>ast = parse_query::&lt;<span class="kw-2">&amp;</span>str&gt;(<span class="string">"query MyQuery { field1, field2 }"</span>)<span class="question-mark">?</span>;
+<span class="comment">// Format canonical representation
+</span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{}"</span>, ast), <span class="string">"\
+query MyQuery {
+  field1
+  field2
+}
+"</span>);</code></pre></div>
+<h3 id="example-parse-and-format-schema"><a class="doc-anchor" href="#example-parse-and-format-schema">§</a>Example: Parse and Format Schema</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>graphql_parser::schema::{parse_schema, ParseError};
+
+<span class="kw">let </span>ast = parse_schema::&lt;String&gt;(<span class="string">r#"
+    schema {
+        query: Query
+    }
+    type Query {
+        users: [User!]!,
+    }
+    """
+       Example user object
+
+       This is just a demo comment.
+    """
+    type User {
+        name: String!,
+    }
+"#</span>)<span class="question-mark">?</span>.to_owned();
+<span class="comment">// Format canonical representation
+</span><span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{}"</span>, ast), <span class="string">"\
+schema {
+  query: Query
+}
+
+type Query {
+  users: [User!]!
+}
+
+\"\"\"
+  Example user object
+
+  This is just a demo comment.
+\"\"\"
+type User {
+  name: String!
+}
+"</span>);</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.parse_query"><code>pub use crate::query::<a class="fn" href="query/fn.parse_query.html" title="fn graphql_parser::query::parse_query">parse_query</a>;</code></div></li><li><div class="item-name" id="reexport.parse_schema"><code>pub use crate::schema::<a class="fn" href="schema/fn.parse_schema.html" title="fn graphql_parser::schema::parse_schema">parse_schema</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="query/index.html" title="mod graphql_parser::query">query</a></div><div class="desc docblock-short">Query language AST and parsing utilities</div></li><li><div class="item-name"><a class="mod" href="schema/index.html" title="mod graphql_parser::schema">schema</a></div><div class="desc docblock-short">Schema definition language AST and utility</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Pos.html" title="struct graphql_parser::Pos">Pos</a></div><div class="desc docblock-short">Original position of element in source code</div></li><li><div class="item-name"><a class="struct" href="struct.Style.html" title="struct graphql_parser::Style">Style</a></div><div class="desc docblock-short">A configuration of formatting style</div></li></ul></section></div></main></body></html>

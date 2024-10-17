@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Compile time for loops with a `const` variable for testing."><title>const_for in ruint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ruint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ruint/index.html">ruint</a><span class="version">1.12.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">ruint</a>::<wbr><a class="macro" href="#">const_for</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/ruint/const_for.rs.html#44-68">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> const_for {
+    (<span class="macro-nonterminal">$C</span>:ident <span class="kw">in </span>[ $( <span class="macro-nonterminal">$n</span>:literal ),* ] <span class="macro-nonterminal">$x</span>:block) =&gt; { ... };
+    (<span class="macro-nonterminal">$C</span>:ident <span class="kw">in </span>SIZES <span class="macro-nonterminal">$x</span>:block) =&gt; { ... };
+    (<span class="macro-nonterminal">$C</span>:ident <span class="kw">in </span>NON_ZERO <span class="macro-nonterminal">$x</span>:block) =&gt; { ... };
+    (<span class="macro-nonterminal">$C</span>:ident <span class="kw">in </span>BENCH <span class="macro-nonterminal">$x</span>:block) =&gt; { ... };
+    (<span class="macro-nonterminal">$C</span>:ident <span class="kw">in </span><span class="macro-nonterminal">$S</span>:ident <span class="kw">if </span>( <span class="macro-nonterminal">$c</span>:expr ) <span class="macro-nonterminal">$x</span>:block) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compile time for loops with a <code>const</code> variable for testing.</p>
+<p>Repeats a block of code with different values assigned to a constant.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">const_for!</span>(BITS <span class="kw">in </span>[<span class="number">0</span>, <span class="number">10</span>, <span class="number">100</span>] {
+    <span class="kw">const </span>LIMBS: usize = nlimbs(BITS);
+    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, Uint::&lt;BITS, LIMBS&gt;::MAX);
+});</code></pre></div>
+<p>is equivalent to</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">println!</span>(<span class="string">"{:?}"</span>, Uint::&lt;<span class="number">0</span>, <span class="number">0</span>&gt;::MAX);
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, Uint::&lt;<span class="number">10</span>, <span class="number">1</span>&gt;::MAX);
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, Uint::&lt;<span class="number">100</span>, <span class="number">2</span>&gt;::MAX);</code></pre></div>
+<p>It comes with two built-in lists: <code>NON_ZERO</code> which is equivalent to</p>
+<div class="example-wrap"><pre class="language-text"><code>[1, 2, 63, 64, 65, 127, 128, 129, 256, 384, 512, 4096]
+</code></pre></div>
+<p>and <code>SIZES</code> which is the same but also has <code>0</code> as a value.</p>
+<p>In combination with [<code>proptest!</code>][proptest::proptest] this allows for
+testing over a large range of <a href="struct.Uint.html" title="struct ruint::Uint"><code>Uint</code></a> types and values:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">const_for!</span>(BITS <span class="kw">in </span>SIZES {
+   <span class="kw">const </span>LIMBS: usize = nlimbs(BITS);
+   <span class="macro">proptest!</span>(|(value: Uint&lt;BITS, LIMBS&gt;)| {
+        <span class="comment">// ... test code
+    </span>});
+});</code></pre></div>
+</div></details></section></div></main></body></html>

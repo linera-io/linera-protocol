@@ -1,0 +1,154 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Objects that have a notion of successor and predecessor operations."><title>Step in wasmtime_environ::__core::range - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Step</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.backward_checked">backward_checked</a></li><li><a href="#tymethod.forward_checked">forward_checked</a></li><li><a href="#tymethod.steps_between">steps_between</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.backward">backward</a></li><li><a href="#method.backward_unchecked">backward_unchecked</a></li><li><a href="#method.forward">forward</a></li><li><a href="#method.forward_unchecked">forward_unchecked</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In wasmtime_environ::__core::range</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">range</a>::<wbr><a class="trait" href="#">Step</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#25">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Step: <a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a> + <a class="trait" href="../clone/trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a> + <a class="trait" href="../cmp/trait.PartialOrd.html" title="trait wasmtime_environ::__core::cmp::PartialOrd">PartialOrd</a> {
+    // Required methods
+    fn <a href="#tymethod.steps_between" class="fn">steps_between</a>(start: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>, end: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.forward_checked" class="fn">forward_checked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.backward_checked" class="fn">backward_checked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;;
+
+    // Provided methods
+    fn <a href="#method.forward" class="fn">forward</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.forward_unchecked" class="fn">forward_unchecked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.backward" class="fn">backward</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self { ... }
+<span class="item-spacer"></span>    unsafe fn <a href="#method.backward_unchecked" class="fn">backward_unchecked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self { ... }
+}</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Objects that have a notion of <em>successor</em> and <em>predecessor</em> operations.</p>
+<p>The <em>successor</em> operation moves towards values that compare greater.
+The <em>predecessor</em> operation moves towards values that compare lesser.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.steps_between" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#42">source</a><h4 class="code-header">fn <a href="#tymethod.steps_between" class="fn">steps_between</a>(start: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>, end: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the number of <em>successor</em> steps required to get from <code>start</code> to <code>end</code>.</p>
+<p>Returns <code>None</code> if the number of steps would overflow <code>usize</code>
+(or is infinite, or if <code>end</code> would never be reached).</p>
+<h5 id="invariants"><a class="doc-anchor" href="#invariants">§</a>Invariants</h5>
+<p>For any <code>a</code>, <code>b</code>, and <code>n</code>:</p>
+<ul>
+<li><code>steps_between(&amp;a, &amp;b) == Some(n)</code> if and only if <code>Step::forward_checked(&amp;a, n) == Some(b)</code></li>
+<li><code>steps_between(&amp;a, &amp;b) == Some(n)</code> if and only if <code>Step::backward_checked(&amp;b, n) == Some(a)</code></li>
+<li><code>steps_between(&amp;a, &amp;b) == Some(n)</code> only if <code>a &lt;= b</code>
+<ul>
+<li>Corollary: <code>steps_between(&amp;a, &amp;b) == Some(0)</code> if and only if <code>a == b</code></li>
+<li>Note that <code>a &lt;= b</code> does <em>not</em> imply <code>steps_between(&amp;a, &amp;b) != None</code>;
+this is the case when it would require more than <code>usize::MAX</code> steps to get to <code>b</code></li>
+</ul>
+</li>
+<li><code>steps_between(&amp;a, &amp;b) == None</code> if <code>a &gt; b</code></li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.forward_checked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#60">source</a><h4 class="code-header">fn <a href="#tymethod.forward_checked" class="fn">forward_checked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the value that would be obtained by taking the <em>successor</em>
+of <code>self</code> <code>count</code> times.</p>
+<p>If this would overflow the range of values supported by <code>Self</code>, returns <code>None</code>.</p>
+<h5 id="invariants-1"><a class="doc-anchor" href="#invariants-1">§</a>Invariants</h5>
+<p>For any <code>a</code>, <code>n</code>, and <code>m</code>:</p>
+<ul>
+<li><code>Step::forward_checked(a, n).and_then(|x| Step::forward_checked(x, m)) == Step::forward_checked(a, m).and_then(|x| Step::forward_checked(x, n))</code></li>
+<li><code>Step::forward_checked(a, n).and_then(|x| Step::forward_checked(x, m)) == try { Step::forward_checked(a, n.checked_add(m)) }</code></li>
+</ul>
+<p>For any <code>a</code> and <code>n</code>:</p>
+<ul>
+<li><code>Step::forward_checked(a, n) == (0..n).try_fold(a, |x, _| Step::forward_checked(&amp;x, 1))</code>
+<ul>
+<li>Corollary: <code>Step::forward_checked(a, 0) == Some(a)</code></li>
+</ul>
+</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.backward_checked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#130">source</a><h4 class="code-header">fn <a href="#tymethod.backward_checked" class="fn">backward_checked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;Self&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the value that would be obtained by taking the <em>predecessor</em>
+of <code>self</code> <code>count</code> times.</p>
+<p>If this would overflow the range of values supported by <code>Self</code>, returns <code>None</code>.</p>
+<h5 id="invariants-2"><a class="doc-anchor" href="#invariants-2">§</a>Invariants</h5>
+<p>For any <code>a</code>, <code>n</code>, and <code>m</code>:</p>
+<ul>
+<li><code>Step::backward_checked(a, n).and_then(|x| Step::backward_checked(x, m)) == n.checked_add(m).and_then(|x| Step::backward_checked(a, x))</code></li>
+<li><code>Step::backward_checked(a, n).and_then(|x| Step::backward_checked(x, m)) == try { Step::backward_checked(a, n.checked_add(m)?) }</code></li>
+</ul>
+<p>For any <code>a</code> and <code>n</code>:</p>
+<ul>
+<li><code>Step::backward_checked(a, n) == (0..n).try_fold(a, |x, _| Step::backward_checked(x, 1))</code>
+<ul>
+<li>Corollary: <code>Step::backward_checked(a, 0) == Some(a)</code></li>
+</ul>
+</li>
+</ul>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.forward" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#85">source</a><h4 class="code-header">fn <a href="#method.forward" class="fn">forward</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the value that would be obtained by taking the <em>successor</em>
+of <code>self</code> <code>count</code> times.</p>
+<p>If this would overflow the range of values supported by <code>Self</code>,
+this function is allowed to panic, wrap, or saturate.
+The suggested behavior is to panic when debug assertions are enabled,
+and to wrap or saturate otherwise.</p>
+<p>Unsafe code should not rely on the correctness of behavior after overflow.</p>
+<h5 id="invariants-3"><a class="doc-anchor" href="#invariants-3">§</a>Invariants</h5>
+<p>For any <code>a</code>, <code>n</code>, and <code>m</code>, where no overflow occurs:</p>
+<ul>
+<li><code>Step::forward(Step::forward(a, n), m) == Step::forward(a, n + m)</code></li>
+</ul>
+<p>For any <code>a</code> and <code>n</code>, where no overflow occurs:</p>
+<ul>
+<li><code>Step::forward_checked(a, n) == Some(Step::forward(a, n))</code></li>
+<li><code>Step::forward(a, n) == (0..n).fold(a, |x, _| Step::forward(x, 1))</code>
+<ul>
+<li>Corollary: <code>Step::forward(a, 0) == a</code></li>
+</ul>
+</li>
+<li><code>Step::forward(a, n) &gt;= a</code></li>
+<li><code>Step::backward(Step::forward(a, n), n) == a</code></li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.forward_unchecked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#110">source</a><h4 class="code-header">unsafe fn <a href="#method.forward_unchecked" class="fn">forward_unchecked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the value that would be obtained by taking the <em>successor</em>
+of <code>self</code> <code>count</code> times.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>It is undefined behavior for this operation to overflow the
+range of values supported by <code>Self</code>. If you cannot guarantee that this
+will not overflow, use <code>forward</code> or <code>forward_checked</code> instead.</p>
+<h5 id="invariants-4"><a class="doc-anchor" href="#invariants-4">§</a>Invariants</h5>
+<p>For any <code>a</code>:</p>
+<ul>
+<li>if there exists <code>b</code> such that <code>b &gt; a</code>, it is safe to call <code>Step::forward_unchecked(a, 1)</code></li>
+<li>if there exists <code>b</code>, <code>n</code> such that <code>steps_between(&amp;a, &amp;b) == Some(n)</code>,
+it is safe to call <code>Step::forward_unchecked(a, m)</code> for any <code>m &lt;= n</code>.
+<ul>
+<li>Corollary: <code>Step::forward_unchecked(a, 0)</code> is always safe.</li>
+</ul>
+</li>
+</ul>
+<p>For any <code>a</code> and <code>n</code>, where no overflow occurs:</p>
+<ul>
+<li><code>Step::forward_unchecked(a, n)</code> is equivalent to <code>Step::forward(a, n)</code></li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.backward" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#155">source</a><h4 class="code-header">fn <a href="#method.backward" class="fn">backward</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the value that would be obtained by taking the <em>predecessor</em>
+of <code>self</code> <code>count</code> times.</p>
+<p>If this would overflow the range of values supported by <code>Self</code>,
+this function is allowed to panic, wrap, or saturate.
+The suggested behavior is to panic when debug assertions are enabled,
+and to wrap or saturate otherwise.</p>
+<p>Unsafe code should not rely on the correctness of behavior after overflow.</p>
+<h5 id="invariants-5"><a class="doc-anchor" href="#invariants-5">§</a>Invariants</h5>
+<p>For any <code>a</code>, <code>n</code>, and <code>m</code>, where no overflow occurs:</p>
+<ul>
+<li><code>Step::backward(Step::backward(a, n), m) == Step::backward(a, n + m)</code></li>
+</ul>
+<p>For any <code>a</code> and <code>n</code>, where no overflow occurs:</p>
+<ul>
+<li><code>Step::backward_checked(a, n) == Some(Step::backward(a, n))</code></li>
+<li><code>Step::backward(a, n) == (0..n).fold(a, |x, _| Step::backward(x, 1))</code>
+<ul>
+<li>Corollary: <code>Step::backward(a, 0) == a</code></li>
+</ul>
+</li>
+<li><code>Step::backward(a, n) &lt;= a</code></li>
+<li><code>Step::forward(Step::backward(a, n), n) == a</code></li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.backward_unchecked" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#180">source</a><h4 class="code-header">unsafe fn <a href="#method.backward_unchecked" class="fn">backward_unchecked</a>(start: Self, count: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; Self</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>step_trait</code>)</span></div></span></summary><div class="docblock"><p>Returns the value that would be obtained by taking the <em>predecessor</em>
+of <code>self</code> <code>count</code> times.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>It is undefined behavior for this operation to overflow the
+range of values supported by <code>Self</code>. If you cannot guarantee that this
+will not overflow, use <code>backward</code> or <code>backward_checked</code> instead.</p>
+<h5 id="invariants-6"><a class="doc-anchor" href="#invariants-6">§</a>Invariants</h5>
+<p>For any <code>a</code>:</p>
+<ul>
+<li>if there exists <code>b</code> such that <code>b &lt; a</code>, it is safe to call <code>Step::backward_unchecked(a, 1)</code></li>
+<li>if there exists <code>b</code>, <code>n</code> such that <code>steps_between(&amp;b, &amp;a) == Some(n)</code>,
+it is safe to call <code>Step::backward_unchecked(a, m)</code> for any <code>m &lt;= n</code>.
+<ul>
+<li>Corollary: <code>Step::backward_unchecked(a, 0)</code> is always safe.</li>
+</ul>
+</li>
+</ul>
+<p>For any <code>a</code> and <code>n</code>, where no overflow occurs:</p>
+<ul>
+<li><code>Step::backward_unchecked(a, n)</code> is equivalent to <code>Step::backward(a, n)</code></li>
+</ul>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Step-for-Char" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#514">source</a><a href="#impl-Step-for-Char" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="enum" href="../ascii/enum.Char.html" title="enum wasmtime_environ::__core::ascii::Char">AsciiChar</a></h3></section><section id="impl-Step-for-char" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#435">source</a><a href="#impl-Step-for-char" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.char.html">char</a></h3></section><section id="impl-Step-for-i8" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-i8" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a></h3></section><section id="impl-Step-for-i16" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-i16" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a></h3></section><section id="impl-Step-for-i32" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-i32" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a></h3></section><section id="impl-Step-for-i64" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-i64" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a></h3></section><section id="impl-Step-for-i128" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-i128" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a></h3></section><section id="impl-Step-for-isize" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-isize" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.isize.html">isize</a></h3></section><section id="impl-Step-for-u8" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-u8" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a></h3></section><section id="impl-Step-for-u16" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-u16" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a></h3></section><section id="impl-Step-for-u32" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-u32" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a></h3></section><section id="impl-Step-for-u64" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-u64" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a></h3></section><section id="impl-Step-for-u128" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-u128" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a></h3></section><section id="impl-Step-for-usize" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#417-420">source</a><a href="#impl-Step-for-usize" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h3></section><section id="impl-Step-for-Ipv4Addr" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#556">source</a><a href="#impl-Step-for-Ipv4Addr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="struct" href="../net/struct.Ipv4Addr.html" title="struct wasmtime_environ::__core::net::Ipv4Addr">Ipv4Addr</a></h3></section><section id="impl-Step-for-Ipv6Addr" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/iter/range.rs.html#588">source</a><a href="#impl-Step-for-Ipv6Addr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Step.html" title="trait wasmtime_environ::__core::range::Step">Step</a> for <a class="struct" href="../net/struct.Ipv6Addr.html" title="struct wasmtime_environ::__core::net::Ipv6Addr">Ipv6Addr</a></h3></section></div><script src="../../../trait.impl/core/iter/range/trait.Step.js" data-ignore-extern-crates="std,core" async></script></section></div></main></body></html>

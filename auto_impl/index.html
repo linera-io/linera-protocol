@@ -1,0 +1,168 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A proc-macro attribute for automatically implementing a trait for references, some common smart pointers and closures."><title>auto_impl - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="auto_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../auto_impl/index.html">auto_impl</a><span class="version">1.2.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#attributes">Attribute Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">auto_impl</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/auto_impl/lib.rs.html#1-243">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A proc-macro attribute for automatically implementing a trait for
+references, some common smart pointers and closures.</p>
+<h3 id="simple-example"><a class="doc-anchor" href="#simple-example">§</a>Simple example</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>auto_impl::auto_impl;
+
+<span class="comment">// This will generate two additional impl blocks: one `for &amp;T` and one
+// `for Box&lt;T&gt;` where `T: Foo`.
+</span><span class="attr">#[auto_impl(<span class="kw-2">&amp;</span>, Box)]
+</span><span class="kw">trait </span>Foo {
+    <span class="kw">fn </span>foo(<span class="kw-2">&amp;</span><span class="self">self</span>);
+}
+
+<span class="kw">impl </span>Foo <span class="kw">for </span>i32 {
+    <span class="kw">fn </span>foo(<span class="kw-2">&amp;</span><span class="self">self</span>) {}
+}
+
+<span class="kw">fn </span>requires_foo(<span class="kw">_</span>: <span class="kw">impl </span>Foo) {}
+
+
+requires_foo(<span class="number">0i32</span>);  <span class="comment">// works: through the impl we defined above
+</span>requires_foo(<span class="kw-2">&amp;</span><span class="number">0i32</span>); <span class="comment">// works: through the generated impl
+</span>requires_foo(Box::new(<span class="number">0i32</span>)); <span class="comment">// works: through the generated impl</span></code></pre></div>
+<h2 id="basic-syntax-and-supported-types"><a class="doc-anchor" href="#basic-syntax-and-supported-types">§</a>Basic syntax and supported types</h2>
+<p>You can annotate your trait with the <code>#[auto_impl(...)]</code> attribute. That
+attribute can only be used on traits and not on structs, enums or anything
+else.</p>
+<p>In the attribute, you have to specify all so called <em>proxy types</em> (the
+types you want to generate impls for) as a comma separated list. Each proxy
+type has a short abbreviation that you have to list there.</p>
+<p>Currently the following proxy types are supported:</p>
+<div><table><thead><tr><th>Abbreviation</th><th>Example generated impl</th></tr></thead><tbody>
+<tr><td><code>&amp;</code></td><td><code>impl&lt;T: Trait&gt; Trait for &amp;T</code></td></tr>
+<tr><td><code>&amp;mut</code></td><td><code>impl&lt;T: Trait&gt; Trait for &amp;mut T</code></td></tr>
+<tr><td><code>Box</code></td><td><code>impl&lt;T: Trait&gt; Trait for Box&lt;T&gt;</code></td></tr>
+<tr><td><code>Rc</code></td><td><code>impl&lt;T: Trait&gt; Trait for Rc&lt;T&gt;</code></td></tr>
+<tr><td><code>Arc</code></td><td><code>impl&lt;T: Trait&gt; Trait for Arc&lt;T&gt;</code></td></tr>
+<tr><td><code>Fn</code></td><td><code>impl&lt;T: Fn()&gt; Trait for T</code></td></tr>
+<tr><td><code>FnMut</code></td><td><code>impl&lt;T: FnMut()&gt; Trait for T</code></td></tr>
+<tr><td><code>FnOnce</code></td><td><code>impl&lt;T: FnOnce()&gt; Trait for T</code></td></tr>
+</tbody></table>
+</div><h2 id="more-examples"><a class="doc-anchor" href="#more-examples">§</a>More examples</h2>
+<p>More examples can be found in <a href="https://github.com/auto-impl-rs/auto_impl/tree/master/examples">the examples folder</a>. In
+particular, the <code>greet_closure</code> example shows how to use the <code>Fn*</code> proxy
+types.</p>
+<p>The following example shows that a trait can contain associated consts,
+associated types and complex methods (with generics, bounds, …).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>auto_impl::auto_impl;
+<span class="kw">use </span>std::{fmt, rc::Rc};
+
+
+<span class="attr">#[auto_impl(<span class="kw-2">&amp;</span>, <span class="kw-2">&amp;mut</span>, Box, Rc)]
+</span><span class="kw">trait </span>Animal {
+    <span class="kw">const </span>NUMBER_OF_LEGS: u8;
+
+    <span class="kw">type </span>Name: fmt::Display;
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Name;
+
+    <span class="kw">fn </span>select_favorite&lt;<span class="lifetime">'a</span>, I&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, toys: I) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str
+    <span class="kw">where
+        </span>I: Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt;;
+}
+
+<span class="kw">struct </span>Dog(String);
+
+<span class="kw">impl </span>Animal <span class="kw">for </span>Dog {
+    <span class="kw">const </span>NUMBER_OF_LEGS: u8 = <span class="number">4</span>;
+
+    <span class="kw">type </span>Name = String;
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Name {
+        <span class="self">self</span>.<span class="number">0</span>.clone()
+    }
+
+    <span class="kw">fn </span>select_favorite&lt;<span class="lifetime">'a</span>, I&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>toys: I) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str
+    <span class="kw">where
+        </span>I: Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt;
+    {
+        toys.next().unwrap()
+    }
+}
+
+<span class="kw">fn </span>require_animal(<span class="kw">_</span>: <span class="kw">impl </span>Animal) {}
+
+<span class="comment">// All these calls work, as the `#[auto_impl]` attribute generated four
+// impls for all those proxy types
+</span>require_animal(Dog(<span class="string">"Doggo"</span>.into()));
+require_animal(<span class="kw-2">&amp;</span>Dog(<span class="string">"Doggo"</span>.into()));
+require_animal(<span class="kw-2">&amp;mut </span>Dog(<span class="string">"Doggo"</span>.into()));
+require_animal(Box::new(Dog(<span class="string">"Doggo"</span>.into())));
+require_animal(Rc::new(Dog(<span class="string">"Doggo"</span>.into())));</code></pre></div>
+<h2 id="restriction-of-references-and-smart-pointers"><a class="doc-anchor" href="#restriction-of-references-and-smart-pointers">§</a>Restriction of references and smart pointers</h2>
+<p>Not every trait can be implemented for every proxy type. As an easy
+example, consider this trait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">trait </span>Bar {
+    <span class="kw">fn </span>bar(<span class="kw-2">&amp;mut </span><span class="self">self</span>);
+}</code></pre></div>
+<p>If we try to implement it for immutable references via <code>#[auto_impl(&amp;)]</code>
+the following impl would be generated:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;T: Bar&gt; Bar <span class="kw">for </span><span class="kw-2">&amp;</span>T {
+    <span class="kw">fn </span>bar(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        T::bar(<span class="kw-2">*</span><span class="self">self</span>)  <span class="comment">// fails to compile
+    </span>}
+}</code></pre></div>
+<p>As you can easily see, this won’t work because we can’t call <code>bar</code> through
+an immutable reference. There are similar restrictions for many other
+smart pointers and references.</p>
+<p>In the following table you can see which methods can be implemented for
+which proxy type. If a trait contains at least one method that cannot be
+implemented for a proxy type, you cannot implement the trait for that proxy
+type.</p>
+<div><table><thead><tr><th>Trait contains method with…</th><th><code>&amp;</code></th><th><code>&amp;mut</code></th><th><code>Box</code></th><th><code>Rc</code></th><th><code>Arc</code></th></tr></thead><tbody>
+<tr><td><code>&amp;self</code> receiver</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+<tr><td><code>&amp;mut self</code> receiver</td><td>✗</td><td>✔</td><td>✔</td><td>✗</td><td>✗</td></tr>
+<tr><td><code>self</code> receiver</td><td>✗</td><td>✗</td><td>✔</td><td>✗</td><td>✗</td></tr>
+<tr><td>no <code>self</code> receiver</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+</tbody></table>
+</div>
+<p>References and smart pointers have <strong>no restriction in regard to associated
+types and associated consts</strong>! Meaning: traits with associated types/consts
+can always be implemented for references and smart pointers as long as the
+methods of that trait can be implemented.</p>
+<h2 id="restriction-of-closure-types-fn-traits"><a class="doc-anchor" href="#restriction-of-closure-types-fn-traits">§</a>Restriction of closure types (<code>Fn*</code> traits)</h2>
+<p>The <code>Fn*</code> proxy types have a lot more restrictions than references and
+smart pointer:</p>
+<ul>
+<li>the trait must not define any associated types or consts</li>
+<li>the trait must define <strong>exactly one</strong> method
+<ul>
+<li>the method must have a <code>self</code> receiver</li>
+<li>the method must not return anything borrowed from <code>self</code></li>
+<li>the method must not have generic type or const parameters</li>
+</ul>
+</li>
+</ul>
+<p>Additionally, some <code>Fn*</code> traits cannot be implemented for all <code>self</code>
+receiver types:</p>
+<div><table><thead><tr><th><code>self</code> Receiver</th><th><code>Fn</code></th><th><code>FnMut</code></th><th><code>FnOnce</code></th></tr></thead><tbody>
+<tr><td><code>&amp;self</code></td><td>✔</td><td>✗</td><td>✗</td></tr>
+<tr><td><code>&amp;mut self</code></td><td>✔</td><td>✔</td><td>✗</td></tr>
+<tr><td><code>self</code></td><td>✔</td><td>✔</td><td>✔</td></tr>
+</tbody></table>
+</div>
+<p>Lastly, the impls generated for the <code>Fn*</code> proxy types contain <code>for T</code>. This
+is the most general blanket impl. So just be aware of the problems with
+coherence and orphan rules that can emerge due to this impl.</p>
+<h2 id="the-keep_default_for-attribute-for-methods"><a class="doc-anchor" href="#the-keep_default_for-attribute-for-methods">§</a>The <code>keep_default_for</code> attribute for methods</h2>
+<p>By default, the impls generated by <code>auto_impl</code> will overwrite all methods
+of the trait, even those with default implementation. Sometimes, you want
+to not overwrite default methods and instead use the default
+implementation. You can do that by adding the
+<code>#[auto_impl(keep_default_for(...))]</code> attribute to a default method. In the
+parenthesis you need to list all proxy types for which the default method
+should be kept.</p>
+<p>From <a href="https://github.com/auto-impl-rs/auto_impl/blob/master/examples/keep_default_for.rs">the <code>keep_default_for</code> example</a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[auto_impl(<span class="kw-2">&amp;</span>, Box)]
+</span><span class="kw">trait </span>Foo {
+    <span class="kw">fn </span>required(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String;
+
+    <span class="comment">// The generated impl for `&amp;T` will not override this method.
+    </span><span class="attr">#[auto_impl(keep_default_for(<span class="kw-2">&amp;</span>))]
+    </span><span class="kw">fn </span>provided(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">println!</span>(<span class="string">"Hello {}"</span>, <span class="self">self</span>.required());
+    }
+}</code></pre></div>
+</div></details><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="attr" href="attr.auto_impl.html" title="attr auto_impl::auto_impl">auto_impl</a></div><div class="desc docblock-short">See crate documentation for more information.</div></li></ul></section></div></main></body></html>

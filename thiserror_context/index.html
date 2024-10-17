@@ -1,0 +1,221 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This library provides a wrapper around a [thiserror] enum, from which you can add additional context, similar to how you would with the [anyhow] crate."><title>thiserror_context - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="thiserror_context" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../thiserror_context/index.html">thiserror_context</a><span class="version">0.1.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">thiserror_context</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/thiserror_context/lib.rs.html#1-503">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This library provides a wrapper around a [thiserror] enum, from which
+you can add additional context, similar to how you would with the [anyhow]
+crate.</p>
+<p>This crate is meant to bridge the gap and provide the best of both worlds between
+[thiserror] and [anyhow], in that you retain the type of the underlying root error,
+while allowing you to add additional context to it.</p>
+<h2 id="problem"><a class="doc-anchor" href="#problem">§</a>Problem</h2><h3 id="with-thiserror"><a class="doc-anchor" href="#with-thiserror">§</a>With [thiserror]</h3>
+<p>Using [thiserror], you can end up with errors similar to</p>
+<div class="example-wrap"><pre class="language-text"><code>Sqlx(RowNotFound)
+</code></pre></div>
+<p>which is not helpful in debugging.</p>
+<h3 id="with-anyhow"><a class="doc-anchor" href="#with-anyhow">§</a>With [anyhow]</h3>
+<p>Using [anyhow] gives you much more helpful context:</p>
+<div class="example-wrap"><pre class="language-text"><code>Sqlx(RowNotFound)
+
+Caused by:
+  0: loading user id 1
+  1: authentication
+</code></pre></div>
+<p>But it comes at the expense of erasing the underlying error type.</p>
+<p>This type erasure is problematic in a few ways:</p>
+<ul>
+<li>if you want to preserve the ability to use your [thiserror] type, it
+forces you to convert all your errors in your [thiserror] type. This
+is particularly easy to forget to do, as [anyhow] will happily accept
+any error.</li>
+<li>if you forget to convert an error into your [thiserror] type and you want
+to have something approximating the match on your [thiserror] type, then
+you need to attempt to downcast all the possible variants of the [thiserror]
+type. In turn, that means you need to add a downcast attempt for any new
+variants you add to your [thiserror] type. This introduces an easy thing
+to forget to do.</li>
+</ul>
+<p>In a happy case, <em>if</em> you remember to convert <em>all</em> your errors into your [thiserror]
+type, then you can downcast directly to the [thiserror] type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>ThisError {
+    <span class="attr">#[error(<span class="string">"placeholder err"</span>)]
+    </span>Placeholder,
+
+    <span class="attr">#[error(<span class="string">"sqlx err: {0}"</span>)]
+    </span>Sqlx(<span class="attr">#[from] </span>sqlx::Error),
+}
+
+<span class="kw">async fn </span>my_fn() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async </span>{
+        <span class="comment">// Some db query or something
+       </span><span class="prelude-val">Err</span>(sqlx::Error::RowNotFound)
+    }.<span class="kw">await
+        </span>.map_err(ThisError::from) <span class="comment">// &lt;-------------- Important!
+        </span>.context(<span class="string">"my_fn"</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>caller() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>r: anyhow::Result&lt;()&gt; = my_fn().<span class="kw">await</span>;
+
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = r {
+        <span class="comment">// So even though we can't match on an anyhow error
+        // match r {
+        //     Placeholder =&gt; { },
+        //     Sqlx(_) =&gt; { },
+        // }
+
+        // We can downcast it to a ThisError, then match on that
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(x) = e.downcast_ref::&lt;ThisError&gt;() {
+            <span class="kw">match </span>x {
+                ThisError::Placeholder =&gt; {},
+                ThisError::Sqlx(<span class="kw">_</span>) =&gt; {},
+            }
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>But, if you forget to convert your error into your [thiserror] type,
+then things start to get messy.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>ThisError {
+    <span class="attr">#[error(<span class="string">"placeholder err"</span>)]
+    </span>Placeholder,
+
+    <span class="attr">#[error(<span class="string">"sqlx err: {0}"</span>)]
+    </span>Sqlx(<span class="attr">#[from] </span>sqlx::Error),
+}
+
+<span class="kw">async fn </span>my_fn() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async </span>{
+        <span class="comment">// Some db query or something
+       </span><span class="prelude-val">Err</span>(sqlx::Error::RowNotFound)
+    }.<span class="kw">await
+        </span>.context(<span class="string">"my_fn"</span>)<span class="question-mark">?</span>; <span class="comment">// &lt;----------- No intermediary conversion into ThisError
+    </span><span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>caller() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>r: anyhow::Result&lt;()&gt; = my_fn().<span class="kw">await</span>;
+
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = r {
+        <span class="comment">// We still can't match on an anyhow error
+        // match r {
+        //     Placeholder =&gt; { },
+        //     Sqlx(_) =&gt; { },
+        // }
+
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(x) = e.downcast_ref::&lt;ThisError&gt;() {
+            <span class="comment">// We forgot to explicitly convert our error,
+            // so this will never run
+            </span><span class="macro">unreachable!</span>(<span class="string">"This will never run"</span>);
+        }
+
+        <span class="comment">// So, to be safe, we can start attempting to downcast
+        // all the error types that `ThisError` supports?
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(x) = e.downcast_ref::&lt;sqlx::Error&gt;() {
+            <span class="comment">// That's okay if ThisError is relatively small,
+            // but it's error prone in that we have to remember
+            // to add another downcast attempt for any new
+            // error variants that are added to `ThisError`
+        </span>}
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h2 id="solution"><a class="doc-anchor" href="#solution">§</a>Solution</h2>
+<p>This crate bridges the two worlds, allowing you to add context to your [thiserror] type
+while preserving the ergonomics and accessibility of the underlying error enum.</p>
+<p>This crate is intended to be used with [thiserror] enums, but should work with any error type.</p>
+<p>** Example **</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>error_context::{Context, impl_context};
+
+<span class="comment">// A normal, run-of-the-mill thiserror enum
+</span><span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>ThisErrorInner {
+    <span class="attr">#[error(<span class="string">"placeholder err"</span>)]
+    </span>Placeholder,
+
+    <span class="attr">#[error(<span class="string">"sqlx err: {0}"</span>)]
+    </span>Sqlx(<span class="attr">#[from] </span>sqlx::Error),
+}
+
+<span class="comment">// Defines a new type, `ThisErr`, that wraps `ThisErrorInner` and allows
+// additional context to be added.
+</span><span class="macro">impl_context!</span>(ThisError(ThisErrorInner));
+
+<span class="comment">// We are returning the wrapped new type, `ThisError`, instead of the
+// underlying `ThisErrorInner`.
+</span><span class="kw">async fn </span>my_fn() -&gt; <span class="prelude-ty">Result</span>&lt;(), ThisError&gt; {
+    <span class="kw">async </span>{
+        <span class="comment">// Some db query or something
+       </span><span class="prelude-val">Err</span>(sqlx::Error::RowNotFound)
+    }.<span class="kw">await
+        </span>.context(<span class="string">"my_fn"</span>)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>caller() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>r: <span class="prelude-ty">Result</span>&lt;(), ThisError&gt; = my_fn().<span class="kw">await</span>;
+
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = r {
+        <span class="comment">// We can now match on the error type!
+        </span><span class="kw">match </span>e.as_ref() {
+            ThisErrorInner::Placeholder =&gt; {},
+            ThisErrorInner::Sqlx(<span class="kw">_</span>) =&gt; {},
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>Similar to [context], this crate provides a <a href="trait.Context.html" title="trait thiserror_context::Context">Context</a> trait that extends
+the <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a> type with two methods: <code>context</code> and <code>with_context</code>.</p>
+<p><a href="trait.Context.html#tymethod.context" title="method thiserror_context::Context::context">context</a> adds static context to the error, while
+<a href="trait.Context.html#tymethod.with_context" title="method thiserror_context::Context::with_context">with_context</a> adds dynamic context to the error.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>error_context::{Context, impl_context};
+
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">enum </span>ThisErrorInner {
+    <span class="attr">#[error(<span class="string">"placeholder err"</span>)]
+    </span>Placeholder,
+}
+<span class="macro">impl_context!</span>(ThisError(ThisErrorInner));
+
+<span class="kw">fn </span>f(id: i64) -&gt; <span class="prelude-ty">Result</span>&lt;(), ThisError&gt; {
+    <span class="prelude-val">Err</span>(ThisErrorInner::Placeholder.into())
+}
+
+<span class="kw">fn </span>t(id: i64) -&gt; <span class="prelude-ty">Result</span>&lt;(), ThisError&gt; {
+    f(id)
+        .context(<span class="string">"some static context"</span>)
+        .with_context(|| <span class="macro">format!</span>(<span class="string">"for id {}"</span>, id))
+}
+
+<span class="kw">let </span>res = t(<span class="number">1</span>);
+<span class="macro">assert!</span>(res.is_err());
+<span class="kw">let </span>err = res.unwrap_err();
+<span class="kw">let </span>debug_repr = <span class="macro">format!</span>(<span class="string">"{:#?}"</span>, err);
+<span class="macro">assert_eq!</span>(<span class="string">r#"Placeholder
+
+Caused by:
+    0: for id 1
+    1: some static context
+"#</span>, debug_repr);</code></pre></div>
+<h2 id="nesting"><a class="doc-anchor" href="#nesting">§</a>Nesting</h2>
+<p>Context enriched errors can be nested and they will preserve their
+context messages when converting from a child error type to a parent.</p>
+<p>See <a href="composition/macro.impl_from_carry_context.html" title="macro thiserror_context::composition::impl_from_carry_context">impl_from_carry_context</a> for more information.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="composition/index.html" title="mod thiserror_context::composition">composition</a></div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.impl_context.html" title="macro thiserror_context::impl_context">impl_context</a></div><div class="desc docblock-short">Defines a new struct that wraps the error type, allowing additional
+context to be added.</div></li><li><div class="item-name"><a class="macro" href="macro.impl_from_carry_context.html" title="macro thiserror_context::impl_from_carry_context">impl_from_carry_context</a></div><div class="desc docblock-short">Allows for converting from a child error type to a parent
+error type while preserving any context on the child error.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Context.html" title="trait thiserror_context::Context">Context</a></div></li></ul></section></div></main></body></html>

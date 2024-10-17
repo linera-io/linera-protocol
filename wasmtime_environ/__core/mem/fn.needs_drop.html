@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns `true` if dropping values of type `T` matters."><title>needs_drop in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::mem</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a>::<wbr><a class="fn" href="#">needs_drop</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.21.0, const since 1.36.0">1.21.0 (const: 1.36.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/mod.rs.html#600">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const fn needs_drop&lt;T&gt;() -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns <code>true</code> if dropping values of type <code>T</code> matters.</p>
+<p>This is purely an optimization hint, and may be implemented conservatively:
+it may return <code>true</code> for types that don’t actually need to be dropped.
+As such always returning <code>true</code> would be a valid implementation of
+this function. However if this function actually returns <code>false</code>, then you
+can be certain dropping <code>T</code> has no side effect.</p>
+<p>Low level implementations of things like collections, which need to manually
+drop their data, should use this function to avoid unnecessarily
+trying to drop all their contents when they are destroyed. This might not
+make a difference in release builds (where a loop that has no side-effects
+is easily detected and eliminated), but is often a big win for debug builds.</p>
+<p>Note that <a href="../ptr/fn.drop_in_place.html" title="fn wasmtime_environ::__core::ptr::drop_in_place"><code>drop_in_place</code></a> already performs this check, so if your workload
+can be reduced to some small number of <a href="../ptr/fn.drop_in_place.html" title="fn wasmtime_environ::__core::ptr::drop_in_place"><code>drop_in_place</code></a> calls, using this is
+unnecessary. In particular note that you can <a href="../ptr/fn.drop_in_place.html" title="fn wasmtime_environ::__core::ptr::drop_in_place"><code>drop_in_place</code></a> a slice, and that
+will do a single needs_drop check for all the values.</p>
+<p>Types like Vec therefore just <code>drop_in_place(&amp;mut self[..])</code> without using
+<code>needs_drop</code> explicitly. Types like <a href="../../std/collections/struct.HashMap.html"><code>HashMap</code></a>, on the other hand, have to drop
+values one at a time and should use this API.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Here’s an example of how a collection might make use of <code>needs_drop</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{mem, ptr};
+
+<span class="kw">pub struct </span>MyCollection&lt;T&gt; {
+    <span class="comment">/* ... */
+</span>}
+
+<span class="kw">impl</span>&lt;T&gt; Drop <span class="kw">for </span>MyCollection&lt;T&gt; {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">unsafe </span>{
+            <span class="comment">// drop the data
+            </span><span class="kw">if </span>mem::needs_drop::&lt;T&gt;() {
+                <span class="kw">for </span>x <span class="kw">in </span><span class="self">self</span>.iter_mut() {
+                    ptr::drop_in_place(x);
+                }
+            }
+            <span class="self">self</span>.free_buffer();
+        }
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

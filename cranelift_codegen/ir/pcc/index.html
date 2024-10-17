@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Proof-carrying code. We attach “facts” to values and then check that they remain true after compilation."><title>cranelift_codegen::ir::pcc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cranelift_codegen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../cranelift_codegen/index.html">cranelift_codegen</a><span class="version">0.112.1</span></h2></div><h2 class="location"><a href="#">Module pcc</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In cranelift_codegen::ir</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">cranelift_codegen</a>::<wbr><a href="../index.html">ir</a>::<wbr><a class="mod" href="#">pcc</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/cranelift_codegen/ir/pcc.rs.html#1-1682">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Proof-carrying code. We attach “facts” to values and then check
+that they remain true after compilation.</p>
+<p>A few key design principle of this approach are:</p>
+<ul>
+<li>
+<p>The producer of the IR provides the axioms. All “ground truth”,
+such as what memory is accessible – is meant to come by way of
+facts on the function arguments and global values. In some
+sense, all we are doing here is validating the “internal
+consistency” of the facts that are provided on values, and the
+actions performed on those values.</p>
+</li>
+<li>
+<p>We do not derive and forward-propagate facts eagerly. Rather,
+the producer needs to provide breadcrumbs – a “proof witness”
+of sorts – to allow the checking to complete. That means that
+as an address is computed, or pointer chains are dereferenced,
+each intermediate value will likely have some fact attached.</p>
+<p>This does create more verbose IR, but a significant positive
+benefit is that it avoids unnecessary work: we do not build up a
+knowledge base that effectively encodes the integer ranges of
+many or most values in the program. Rather, we only check
+specifically the memory-access sequences. In practice, each such
+sequence is likely to be a carefully-controlled sequence of IR
+operations from, e.g., a sandboxing compiler (such as
+<code>cranelift-wasm</code>) so adding annotations here to communicate
+intent (ranges, bounds-checks, and the like) is no problem.</p>
+</li>
+</ul>
+<p>Facts are attached to SSA values in CLIF, and are maintained
+through optimizations and through lowering. They are thus also
+present on VRegs in the VCode. In theory, facts could be checked
+at either level, though in practice it is most useful to check
+them at the VCode level if the goal is an end-to-end verification
+of certain properties (e.g., memory sandboxing).</p>
+<p>Checking facts entails visiting each instruction that defines a
+value with a fact, and checking the result’s fact against the
+facts on arguments and the operand. For VCode, this is
+fundamentally a question of the target ISA’s semantics, so we call
+into the <code>LowerBackend</code> for this. Note that during checking there
+is also limited forward propagation / inference, but only within
+an instruction: for example, an addressing mode commonly can
+include an addition, multiplication/shift, or extend operation,
+and there is no way to attach facts to the intermediate values
+“inside” the instruction, so instead the backend can use
+<code>FactContext::add()</code> and friends to forward-propagate facts.</p>
+<p>TODO:</p>
+<p>Deployment:</p>
+<ul>
+<li>Add to fuzzing</li>
+<li>Turn on during wasm spec-tests</li>
+</ul>
+<p>More checks:</p>
+<ul>
+<li>Check that facts on <code>vmctx</code> GVs are subsumed by the actual facts
+on the vmctx arg in block0 (function arg).</li>
+</ul>
+<p>Generality:</p>
+<ul>
+<li>facts on outputs (in func signature)?</li>
+<li>Implement checking at the CLIF level as well.</li>
+<li>Check instructions that can trap as well?</li>
+</ul>
+<p>Nicer errors:</p>
+<ul>
+<li>attach instruction index or some other identifier to errors</li>
+</ul>
+<p>Text format cleanup:</p>
+<ul>
+<li>make the bitwidth on <code>max</code> facts optional in the CLIF text
+format?</li>
+<li>make offset in <code>mem</code> fact optional in the text format?</li>
+</ul>
+<p>Bikeshed colors (syntax):</p>
+<ul>
+<li>Put fact bang-annotations after types?
+<code>v0: i64 ! fact(..)</code> vs. <code>v0 ! fact(..): i64</code></li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Expr.html" title="struct cranelift_codegen::ir::pcc::Expr">Expr</a></div><div class="desc docblock-short">A bound expression.</div></li><li><div class="item-name"><a class="struct" href="struct.FactContext.html" title="struct cranelift_codegen::ir::pcc::FactContext">FactContext</a></div><div class="desc docblock-short">A “context” in which we can evaluate and derive facts. This
+context carries environment/global properties, such as the machine
+pointer width.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BaseExpr.html" title="enum cranelift_codegen::ir::pcc::BaseExpr">BaseExpr</a></div><div class="desc docblock-short">The base part of a bound expression.</div></li><li><div class="item-name"><a class="enum" href="enum.Fact.html" title="enum cranelift_codegen::ir::pcc::Fact">Fact</a></div><div class="desc docblock-short">A fact on a value.</div></li><li><div class="item-name"><a class="enum" href="enum.InequalityKind.html" title="enum cranelift_codegen::ir::pcc::InequalityKind">InequalityKind</a></div><div class="desc docblock-short">The two kinds of inequalities: “strict” (<code>&lt;</code>, <code>&gt;</code>) and “loose”
+(<code>&lt;=</code>, <code>&gt;=</code>), the latter of which admit equality.</div></li><li><div class="item-name"><a class="enum" href="enum.PccError.html" title="enum cranelift_codegen::ir::pcc::PccError">PccError</a></div><div class="desc docblock-short">An error or inconsistency discovered when checking proof-carrying
+code.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.check_vcode_facts.html" title="fn cranelift_codegen::ir::pcc::check_vcode_facts">check_vcode_facts</a></div><div class="desc docblock-short">Top-level entry point after compilation: this checks the facts in
+VCode.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.PccResult.html" title="type cranelift_codegen::ir::pcc::PccResult">PccResult</a></div><div class="desc docblock-short">The result of checking proof-carrying-code facts.</div></li></ul></section></div></main></body></html>

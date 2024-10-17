@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DatabaseToolCommand"],"fn":["evaluate_options","main"],"struct":["DatabaseToolOptions"]};

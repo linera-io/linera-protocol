@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"linera_alloy_consensus":[["impl <a class=\"trait\" href=\"linera_alloy_eips/eip7685/trait.Decodable7685.html\" title=\"trait linera_alloy_eips::eip7685::Decodable7685\">Decodable7685</a> for <a class=\"enum\" href=\"linera_alloy_consensus/enum.Request.html\" title=\"enum linera_alloy_consensus::Request\">Request</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

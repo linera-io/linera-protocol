@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="String-like wrappers around Bytes and BytesMut."><title>bytes_utils::string - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="bytes_utils" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../bytes_utils/index.html">bytes_utils</a><span class="version">0.1.4</span></h2></div><h2 class="location"><a href="#">Module string</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate bytes_utils</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">bytes_utils</a>::<wbr><a class="mod" href="#">string</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/bytes_utils/string/mod.rs.html#1-1075">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>-like wrappers around <a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes">Bytes</a> and <a href="../../bytes/bytes_mut/struct.BytesMut.html" title="struct bytes::bytes_mut::BytesMut">BytesMut</a>.</p>
+<p>The <a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes">Bytes</a> and <a href="../../bytes/bytes_mut/struct.BytesMut.html" title="struct bytes::bytes_mut::BytesMut">BytesMut</a> provide a buffer of bytes with ability to create owned slices into
+the same shared memory allocation. This allows cheap manipulation of data.</p>
+<p>Strings are mostly just byte buffers with extra APIs to manipulate them. The standard <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>
+type is built as a wrapper around <a href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>. We build similar wrappers around the <a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes">Bytes</a> and
+<a href="../../bytes/bytes_mut/struct.BytesMut.html" title="struct bytes::bytes_mut::BytesMut">BytesMut</a>, gaining the ability to create owned shared slices for textual data as well.</p>
+<p>Users are expected to use the <a href="type.Str.html" title="type bytes_utils::string::Str">Str</a> and <a href="type.StrMut.html" title="type bytes_utils::string::StrMut">StrMut</a> types. Note that these are type aliases around
+the <a href="struct.StrInner.html" title="struct bytes_utils::string::StrInner">StrInner</a> type. The latter is means to implement both in one go and contains all the
+documentation, but is not meant to be used directly.</p>
+<h2 id="splitting"><a class="doc-anchor" href="#splitting">§</a>Splitting</h2>
+<p>The <a href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html" title="primitive str">str</a> type from standard library (which the types here dereference to) allows for
+slicing and splitting in many convenient ways. They, however, return borrowed string slices
+(<code>&amp;str</code>), which might pose some problems.</p>
+<p>The <a href="type.Str.html" title="type bytes_utils::string::Str">Str</a>, and to certain extent, the <a href="type.StrMut.html" title="type bytes_utils::string::StrMut">StrMut</a> type additionally allow cheap splitting and
+slicing that produce owned <a href="type.Str.html" title="type bytes_utils::string::Str">Str</a> and <a href="type.StrMut.html" title="type bytes_utils::string::StrMut">StrMut</a> respectively. They are slightly more expensive
+than the slicing than the ones returning <code>&amp;str</code>, but only by incrementing internal reference
+counts. They do not clone the actual string data, like <code>.to_owned()</code> on the standard library
+methods would. These methods are available in addition to the standard ones.</p>
+<p>There are three ways how this can be done:</p>
+<ul>
+<li>By dedicated methods, like <a href="struct.StrInner.html#method.lines_bytes" title="method bytes_utils::string::StrInner::lines_bytes">lines_bytes</a> (in general, the name of the
+standard method suffixed with <code>_bytes</code>).</li>
+<li>By using the <a href="struct.BytesIter.html" title="struct bytes_utils::string::BytesIter">BytesIter</a> iterator manually.</li>
+<li>By using the standard-library methods, producing <code>&amp;str</code> and translating it back to <a href="type.Str.html" title="type bytes_utils::string::Str">Str</a> with
+<a href="struct.StrInner.html#method.slice" title="method bytes_utils::string::StrInner::slice">slice</a> or <a href="struct.StrInner.html#method.slice_ref" title="method bytes_utils::string::StrInner::slice_ref">StrInner::slice_ref</a>.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>builder = StrMut::new();
+builder += <span class="string">"Hello"</span>;
+builder.push(<span class="string">' '</span>);
+builder.push_str(<span class="string">"World"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"Hello World"</span>, builder);
+
+<span class="kw">let </span>s1 = builder.split_built().freeze();
+<span class="comment">// This is a cheap copy, in the form of incrementing a reference count.
+</span><span class="kw">let </span>s2 = s1.clone();
+<span class="macro">assert_eq!</span>(<span class="string">"Hello World"</span>, s1);
+<span class="macro">assert_eq!</span>(<span class="string">"Hello World"</span>, s2);
+<span class="comment">// Slicing is cheap as well, even though the returned things are Str and therefore owned too.
+</span><span class="macro">assert_eq!</span>(<span class="string">"ello"</span>, s1.slice(<span class="number">1</span>..<span class="number">5</span>));
+<span class="comment">// We have taken the data out of the builder, but the rest of its capacity can be used for
+// further things.
+</span><span class="macro">assert_eq!</span>(<span class="string">""</span>, builder);
+
+<span class="comment">// Creating from strings and similar works
+</span><span class="kw">let </span>a = Str::from(<span class="string">"Hello"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"Hello"</span>, a);
+
+<span class="kw">let </span>e = Str::new();
+<span class="macro">assert_eq!</span>(<span class="string">""</span>, e);
+
+<span class="comment">// And from static str in O(1)
+</span><span class="kw">let </span>b = Str::from_static(<span class="string">"World"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"World"</span>, b);
+
+<span class="comment">// And from Bytes too.
+</span><span class="kw">let </span>b = Str::try_from(Bytes::from_static(<span class="string">b"World"</span>)).expect(<span class="string">"Must be utf8"</span>);
+<span class="macro">assert_eq!</span>(<span class="string">"World"</span>, b);
+<span class="comment">// Invalid utf8 is refused.
+</span>Str::try_from(Bytes::from_static(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">255</span>])).unwrap_err();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.BytesIter.html" title="struct bytes_utils::string::BytesIter">BytesIter</a></div><div class="desc docblock-short">Manual splitting iterator.</div></li><li><div class="item-name"><a class="struct" href="struct.StrInner.html" title="struct bytes_utils::string::StrInner">StrInner</a></div><div class="desc docblock-short">Implementation of the <a href="type.Str.html" title="type bytes_utils::string::Str">Str</a> and <a href="type.StrMut.html" title="type bytes_utils::string::StrMut">StrMut</a> types.</div></li><li><div class="item-name"><a class="struct" href="struct.Utf8Error.html" title="struct bytes_utils::string::Utf8Error">Utf8Error</a></div><div class="desc docblock-short">Error when creating <a href="type.Str.html" title="type bytes_utils::string::Str">Str</a> or <a href="type.StrMut.html" title="type bytes_utils::string::StrMut">StrMut</a> from invalid UTF8 data.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Direction.html" title="enum bytes_utils::string::Direction">Direction</a></div><div class="desc docblock-short">Direction of iteration.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Storage.html" title="trait bytes_utils::string::Storage">Storage</a></div><div class="desc docblock-short">The backing storage for <a href="struct.StrInner.html" title="struct bytes_utils::string::StrInner">StrInner</a></div></li><li><div class="item-name"><a class="trait" href="trait.StorageMut.html" title="trait bytes_utils::string::StorageMut">StorageMut</a></div><div class="desc docblock-short">Trait for extra functionality of a mutable storage.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Str.html" title="type bytes_utils::string::Str">Str</a></div><div class="desc docblock-short">An immutable variant of <a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes">Bytes</a>-backed string.</div></li><li><div class="item-name"><a class="type" href="type.StrMut.html" title="type bytes_utils::string::StrMut">StrMut</a></div><div class="desc docblock-short">A mutable variant of <a href="../../bytes/bytes_mut/struct.BytesMut.html" title="struct bytes::bytes_mut::BytesMut">BytesMut</a>-backed string.</div></li></ul></section></div></main></body></html>

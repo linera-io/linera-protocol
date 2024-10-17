@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Solidity type modeling and ABI and EIP-712 codec implementation."><title>linera_alloy::sol_types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../crates.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../linera_alloy/index.html">linera_alloy</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a href="../index.html">linera_alloy</a>::<wbr><a class="mod" href="#">sol_types</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/linera_alloy_sol_types/lib.rs.html#10-266">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Solidity type modeling and <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> codec implementation.</p>
+<p>This crate provides tools for expressing Solidity types in Rust, and for
+encoding these representations into ABI blobs suitable for smart contract
+processing. In other words, you can represent your smart contract args in
+native Rust, easily encode them to pass to a smart contract, and easily
+decode the smart contract return values.</p>
+<p>We do this by representing Solidity types in rust via the <a href="trait.SolType.html" title="trait linera_alloy::sol_types::SolType"><code>SolType</code></a> trait.
+This trait maps Solidity types to Rust types via the associated
+<a href="trait.SolType.html#associatedtype.RustType" title="associated type linera_alloy::sol_types::SolType::RustType"><code>SolType::RustType</code></a>.</p>
+<p>The ABI encoding and decoding is implemented in the <a href="abi/index.html" title="mod linera_alloy::sol_types::abi"><code>abi</code></a> module, see <a href="abi/index.html" title="mod linera_alloy::sol_types::abi">its
+documentation</a> to learn how it works.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_sol_types::{sol_data::<span class="kw-2">*</span>, SolType, SolValue};
+
+<span class="comment">// Represent a Solidity type in rust
+</span><span class="kw">type </span>MySolType = FixedArray&lt;Bool, <span class="number">2</span>&gt;;
+
+<span class="kw">let </span>data = [<span class="bool-val">true</span>, <span class="bool-val">false</span>];
+<span class="kw">let </span>validate = <span class="bool-val">true</span>;
+
+<span class="comment">// SolTypes expose their Solidity name :)
+</span><span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>MySolType::sol_type_name(), <span class="string">"bool[2]"</span>);
+
+<span class="comment">// SolTypes are used to transform Rust into ABI blobs, and back.
+</span><span class="kw">let </span>encoded: Vec&lt;u8&gt; = MySolType::abi_encode(<span class="kw-2">&amp;</span>data);
+<span class="kw">let </span>decoded: [bool; <span class="number">2</span>] = MySolType::abi_decode(<span class="kw-2">&amp;</span>encoded, validate)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(data, decoded);
+
+<span class="comment">// This is more easily done with the `SolValue` trait:
+</span><span class="kw">let </span>encoded: Vec&lt;u8&gt; = data.abi_encode();
+<span class="kw">let </span>decoded: [bool; <span class="number">2</span>] = &lt;[bool; <span class="number">2</span>]&gt;::abi_decode(<span class="kw-2">&amp;</span>encoded, validate)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(data, decoded);</code></pre></div>
+<h3 id="sol"><a class="doc-anchor" href="#sol">§</a><a href="macro.sol.html" title="macro linera_alloy::sol_types::sol"><code>sol!</code></a></h3>
+<p>The <a href="macro.sol.html" title="macro linera_alloy::sol_types::sol"><code>sol!</code></a> procedural macro provides a convenient way to define
+custom <a href="trait.SolType.html" title="trait linera_alloy::sol_types::SolType"><code>SolType</code></a>s and reference primitive ones. See
+<a href="macro.sol.html" title="macro linera_alloy::sol_types::sol">its documentation</a> for details on how to use it.</p>
+<h3 id="solstruct"><a class="doc-anchor" href="#solstruct">§</a><a href="trait.SolStruct.html" title="trait linera_alloy::sol_types::SolStruct"><code>SolStruct</code></a></h3>
+<p>The <a href="trait.SolStruct.html" title="trait linera_alloy::sol_types::SolStruct"><code>SolStruct</code></a> trait primarily provides EIP-712 signing support.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// `sol!` allows you to define struct types!
+// You can just paste Solidity into the macro and it should work :)
+</span><span class="macro">sol!</span> {
+    <span class="kw">struct </span>MyStruct {
+        uint256 a;
+        bytes32 b;
+        address[] c;
+    }
+}
+
+<span class="macro">sol!</span> {
+    <span class="kw">struct </span>MyStruct2 {
+        MyStruct a;
+        bytes32 b;
+        address[] c;
+    }
+}
+
+<span class="comment">// All structs generated with `sol!` implement `crate::SolType` &amp;
+// `crate::SolStruct`. This means you get eip-712 signing for freeeeee
+</span><span class="kw">let </span>my_struct = MyStruct {
+    a: U256::from(<span class="number">1</span>),
+    b: [<span class="number">0</span>; <span class="number">32</span>].into(),
+    c: <span class="macro">vec!</span>[Default::default()],
+};
+
+<span class="comment">// The `eip712_domain` macro lets you easily define an EIP-712 domain
+// object :)
+</span><span class="kw">let </span>my_domain = <span class="macro">linera_alloy_sol_types::eip712_domain!</span>(
+   name: <span class="string">"MyDomain"</span>,
+   version: <span class="string">"1"</span>,
+);
+
+<span class="comment">// Because all the hard work is done by the `sol!` macro, EIP-712 is as easy
+// as calling `eip712_signing_hash` with your domain
+</span><span class="kw">let </span>signing_hash = my_struct.eip712_signing_hash(<span class="kw-2">&amp;</span>my_domain);</code></pre></div>
+<h4 id="sol-user-defined-value-types"><a class="doc-anchor" href="#sol-user-defined-value-types">§</a><a href="macro.sol.html" title="macro linera_alloy::sol_types::sol"><code>sol!</code></a> User-defined Value Types</h4>
+<p>Support for user-defined value types is new! These are currently
+implemented as wrapper types. Watch this space for more
+features!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// We also also support Solidity value types
+</span><span class="macro">sol!</span> {
+    <span class="kw">type </span>MyValueType is uint256;
+}
+
+<span class="comment">// UDTs are encoded as their underlying type
+</span><span class="kw">let </span>mvt = MyValueType::from(U256::from(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(mvt.abi_encode(), sol_data::Uint::&lt;<span class="number">256</span>&gt;::abi_encode(<span class="kw-2">&amp;</span>U256::from(<span class="number">1</span>)));</code></pre></div>
+<h3 id="tokenizationdetokenization"><a class="doc-anchor" href="#tokenizationdetokenization">§</a>Tokenization/Detokenization</h3>
+<p>The process of converting from a Rust type to a to an abi token is called
+“Tokenization”. Typical users will not access tokenizaiton directly.
+Power users should use the <a href="trait.SolType.html#method.tokenize" title="associated function linera_alloy::sol_types::SolType::tokenize"><code>SolType::tokenize()</code></a> and
+<a href="trait.SolType.html#tymethod.detokenize" title="associated function linera_alloy::sol_types::SolType::detokenize"><code>SolType::detokenize()</code></a> methods.</p>
+<p>When implementing your own <a href="trait.SolType.html" title="trait linera_alloy::sol_types::SolType"><code>SolType</code></a>, a variety of <code>From</code> impls have been
+provided on the token structs to aid in converting from Rust data to tokens.</p>
+<h3 id="encodingdecoding"><a class="doc-anchor" href="#encodingdecoding">§</a>Encoding/Decoding</h3>
+<p>The process of converting from a <a href="abi/trait.Token.html" title="trait linera_alloy::sol_types::abi::Token"><code>Token</code></a> to a serialized ABI blob is
+called “Encoding”. It is the reciprocal of decoding.</p>
+<p>ABI encoding and decoding operates on sequences of tokens.</p>
+<p>The <a href="trait.SolType.html" title="trait linera_alloy::sol_types::SolType"><code>SolType</code></a> encoding and decoding methods operate on Rust types. We
+recommend users use them wherever possible. We do not recommend that users
+interact with Tokens, except when implementing their own <a href="trait.SolType.html" title="trait linera_alloy::sol_types::SolType"><code>SolType</code></a>.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="abi/index.html" title="mod linera_alloy::sol_types::abi">abi</a></div><div class="desc docblock-short">Ethereum ABI codec implementation.</div></li><li><div class="item-name"><a class="mod" href="sol_data/index.html" title="mod linera_alloy::sol_types::sol_data">sol_data</a></div><div class="desc docblock-short">Solidity types.</div></li><li><div class="item-name"><a class="mod" href="utils/index.html" title="mod linera_alloy::sol_types::utils">utils</a></div><div class="desc docblock-short">Utilities used by different modules.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.eip712_domain.html" title="macro linera_alloy::sol_types::eip712_domain">eip712_domain</a></div><div class="desc docblock-short">Convenience macro to instantiate an <a href="struct.Eip712Domain.html" title="struct linera_alloy::sol_types::Eip712Domain">EIP-712 domain</a>.</div></li><li><div class="item-name"><a class="macro" href="macro.sol.html" title="macro linera_alloy::sol_types::sol">sol</a></div><div class="desc docblock-short">Generate types that implement <a href="https://docs.rs/linera-alloy-sol-types"><code>linera-alloy-sol-types</code></a> traits, which can be used
+for type-safe <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> serialization to interface with Ethereum
+smart contracts.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Eip712Domain.html" title="struct linera_alloy::sol_types::Eip712Domain">Eip712Domain</a></div><div class="desc docblock-short">EIP-712 domain attributes used in determining the domain separator.</div></li><li><div class="item-name"><a class="struct" href="struct.Panic.html" title="struct linera_alloy::sol_types::Panic">Panic</a></div><div class="desc docblock-short">A <a href="https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require">Solidity panic</a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Revert.html" title="struct linera_alloy::sol_types::Revert">Revert</a></div><div class="desc docblock-short">Represents a standard Solidity revert. These are thrown by <code>revert(reason)</code>
+or <code>require(condition, reason)</code> statements in Solidity.</div></li><li><div class="item-name"><a class="struct" href="struct.Selectors.html" title="struct linera_alloy::sol_types::Selectors">Selectors</a></div><div class="desc docblock-short">Iterator over the function or error selectors of a <a href="trait.SolInterface.html" title="trait linera_alloy::sol_types::SolInterface"><code>SolInterface</code></a> type.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ContractError.html" title="enum linera_alloy::sol_types::ContractError">ContractError</a></div><div class="desc docblock-short">A generic contract error.</div></li><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum linera_alloy::sol_types::Error">Error</a></div><div class="desc docblock-short">ABI Encoding and Decoding errors.</div></li><li><div class="item-name"><a class="enum" href="enum.PanicKind.html" title="enum linera_alloy::sol_types::PanicKind">PanicKind</a></div><div class="desc docblock-short">Represents a <a href="https://docs.soliditylang.org/en/latest/control-structures.html#panic-via-assert-and-error-via-require">Solidity panic</a>.
+Same as the <a href="https://github.com/ethereum/solidity/blob/9eaa5cebdb1458457135097efdca1a3573af17c8/libsolutil/ErrorCodes.h#L25-L37">Solidity definition</a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.EventTopic.html" title="trait linera_alloy::sol_types::EventTopic">EventTopic</a></div><div class="desc docblock-short">A Solidity event topic.</div></li><li><div class="item-name"><a class="trait" href="trait.JsonAbiExt.html" title="trait linera_alloy::sol_types::JsonAbiExt">JsonAbiExt</a></div><div class="desc docblock-short">Extension trait for ABI representation.</div></li><li><div class="item-name"><a class="trait" href="trait.SolCall.html" title="trait linera_alloy::sol_types::SolCall">SolCall</a></div><div class="desc docblock-short">A Solidity function call.</div></li><li><div class="item-name"><a class="trait" href="trait.SolConstructor.html" title="trait linera_alloy::sol_types::SolConstructor">SolConstructor</a></div><div class="desc docblock-short">A Solidity constructor.</div></li><li><div class="item-name"><a class="trait" href="trait.SolEnum.html" title="trait linera_alloy::sol_types::SolEnum">SolEnum</a></div><div class="desc docblock-short">A Solidity enum. This is always a wrapper around a <a href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html" title="primitive u8"><code>u8</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.SolError.html" title="trait linera_alloy::sol_types::SolError">SolError</a></div><div class="desc docblock-short">A Solidity custom error.</div></li><li><div class="item-name"><a class="trait" href="trait.SolEvent.html" title="trait linera_alloy::sol_types::SolEvent">SolEvent</a></div><div class="desc docblock-short">Solidity event.</div></li><li><div class="item-name"><a class="trait" href="trait.SolEventInterface.html" title="trait linera_alloy::sol_types::SolEventInterface">SolEventInterface</a></div><div class="desc docblock-short">A collection of <a href="trait.SolEvent.html" title="trait linera_alloy::sol_types::SolEvent"><code>SolEvent</code></a>s.</div></li><li><div class="item-name"><a class="trait" href="trait.SolInterface.html" title="trait linera_alloy::sol_types::SolInterface">SolInterface</a></div><div class="desc docblock-short">A collection of ABI-encodable call-like types. This currently includes
+<a href="trait.SolCall.html" title="trait linera_alloy::sol_types::SolCall"><code>SolCall</code></a> and <a href="trait.SolError.html" title="trait linera_alloy::sol_types::SolError"><code>SolError</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.SolStruct.html" title="trait linera_alloy::sol_types::SolStruct">SolStruct</a></div><div class="desc docblock-short">A Solidity struct.</div></li><li><div class="item-name"><a class="trait" href="trait.SolType.html" title="trait linera_alloy::sol_types::SolType">SolType</a></div><div class="desc docblock-short">A Solidity type.</div></li><li><div class="item-name"><a class="trait" href="trait.SolValue.html" title="trait linera_alloy::sol_types::SolValue">SolValue</a></div><div class="desc docblock-short">A Solidity value.</div></li><li><div class="item-name"><a class="trait" href="trait.TopicList.html" title="trait linera_alloy::sol_types::TopicList">TopicList</a></div><div class="desc docblock-short">A list of Solidity event topics.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.decode_revert_reason.html" title="fn linera_alloy::sol_types::decode_revert_reason">decode_revert_reason</a></div><div class="desc docblock-short">Decodes and retrieves the reason for a revert from the provided output data.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.GenericContractError.html" title="type linera_alloy::sol_types::GenericContractError">GenericContractError</a></div><div class="desc docblock-short">A generic contract error.</div></li><li><div class="item-name"><a class="type" href="type.GenericRevertReason.html" title="type linera_alloy::sol_types::GenericRevertReason">GenericRevertReason</a></div><div class="desc docblock-short">Represents the reason for a revert in a generic contract error.</div></li><li><div class="item-name"><a class="type" href="type.Result.html" title="type linera_alloy::sol_types::Result">Result</a></div><div class="desc docblock-short">ABI result type.</div></li><li><div class="item-name"><a class="type" href="type.Word.html" title="type linera_alloy::sol_types::Word">Word</a></div><div class="desc docblock-short">The ABI word type.</div></li></ul></section></div></main></body></html>

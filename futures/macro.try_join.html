@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Polls multiple futures simultaneously, resolving to a `Result` containing either a tuple of the successful outputs or an error."><title>try_join in futures - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="futures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../futures/index.html">futures</a><span class="version">0.3.30</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">futures</a>::<wbr><a class="macro" href="#">try_join</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/futures_util/async_await/join_mod.rs.html#102">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> try_join {
+    ($(<span class="macro-nonterminal">$tokens</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Polls multiple futures simultaneously, resolving to a <a href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a> containing
+either a tuple of the successful outputs or an error.</p>
+<p><code>try_join!</code> is similar to <a href="macro.join.html" title="macro futures::join"><code>join!</code></a>, but completes immediately if any of
+the futures return an error.</p>
+<p>This macro is only usable inside of async functions, closures, and blocks.
+It is also gated behind the <code>async-await</code> feature of this library, which is
+activated by default.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>When used on multiple futures that return <code>Ok</code>, <code>try_join!</code> will return
+<code>Ok</code> of a tuple of the values:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::try_join;
+
+<span class="kw">let </span>a = <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>) };
+<span class="kw">let </span>b = <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">2</span>) };
+<span class="macro">assert_eq!</span>(<span class="macro">try_join!</span>(a, b), <span class="prelude-val">Ok</span>((<span class="number">1</span>, <span class="number">2</span>)));
+
+<span class="comment">// `try_join!` is variadic, so you can pass any number of futures
+</span><span class="kw">let </span>c = <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">3</span>) };
+<span class="kw">let </span>d = <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">4</span>) };
+<span class="kw">let </span>e = <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">5</span>) };
+<span class="macro">assert_eq!</span>(<span class="macro">try_join!</span>(c, d, e), <span class="prelude-val">Ok</span>((<span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>)));</code></pre></div>
+<p>If one of the futures resolves to an error, <code>try_join!</code> will return
+that error:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::try_join;
+
+<span class="kw">let </span>a = <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;i32, i32&gt;(<span class="number">1</span>) };
+<span class="kw">let </span>b = <span class="kw">async </span>{ <span class="prelude-val">Err</span>::&lt;u64, i32&gt;(<span class="number">2</span>) };
+
+<span class="macro">assert_eq!</span>(<span class="macro">try_join!</span>(a, b), <span class="prelude-val">Err</span>(<span class="number">2</span>));</code></pre></div>
+</div></details></section></div></main></body></html>

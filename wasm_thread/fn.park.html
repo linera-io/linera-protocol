@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Blocks unless or until the current thread’s token is made available."><title>park in wasm_thread - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasm_thread" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasm_thread/index.html">wasm_thread</a><span class="version">0.3.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">wasm_thread</a>::<wbr><a class="fn" href="#">park</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/thread/mod.rs.html#1122">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn park()</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Blocks unless or until the current thread’s token is made available.</p>
+<p>A call to <code>park</code> does not guarantee that the thread will remain parked
+forever, and callers should be prepared for this possibility. However,
+it is guaranteed that this function will not panic (it may abort the
+process if the implementation encounters some rare errors).</p>
+<h2 id="park-and-unpark"><a class="doc-anchor" href="#park-and-unpark">§</a><code>park</code> and <code>unpark</code></h2>
+<p>Every thread is equipped with some basic low-level blocking support, via the
+<a href="fn.park.html" title="fn wasm_thread::park"><code>thread::park</code></a> function and <a href="struct.Thread.html#method.unpark" title="method wasm_thread::Thread::unpark"><code>thread::Thread::unpark</code></a>
+method. <a href="fn.park.html" title="fn wasm_thread::park"><code>park</code></a> blocks the current thread, which can then be resumed from
+another thread by calling the <a href="struct.Thread.html#method.unpark" title="method wasm_thread::Thread::unpark"><code>unpark</code></a> method on the blocked thread’s
+handle.</p>
+<p>Conceptually, each <a href="struct.Thread.html" title="struct wasm_thread::Thread"><code>Thread</code></a> handle has an associated token, which is
+initially not present:</p>
+<ul>
+<li>
+<p>The <a href="fn.park.html" title="fn wasm_thread::park"><code>thread::park</code></a> function blocks the current thread unless or
+until the token is available for its thread handle, at which point it
+atomically consumes the token. It may also return <em>spuriously</em>, without
+consuming the token. <a href="fn.park_timeout.html" title="fn wasm_thread::park_timeout"><code>thread::park_timeout</code></a> does the same, but allows
+specifying a maximum time to block the thread for.</p>
+</li>
+<li>
+<p>The <a href="struct.Thread.html#method.unpark" title="method wasm_thread::Thread::unpark"><code>unpark</code></a> method on a <a href="struct.Thread.html" title="struct wasm_thread::Thread"><code>Thread</code></a> atomically makes the token available
+if it wasn’t already. Because the token is initially absent, <a href="struct.Thread.html#method.unpark" title="method wasm_thread::Thread::unpark"><code>unpark</code></a>
+followed by <a href="fn.park.html" title="fn wasm_thread::park"><code>park</code></a> will result in the second call returning immediately.</p>
+</li>
+</ul>
+<p>The API is typically used by acquiring a handle to the current thread,
+placing that handle in a shared data structure so that other threads can
+find it, and then <code>park</code>ing in a loop. When some desired condition is met, another
+thread calls <a href="struct.Thread.html#method.unpark" title="method wasm_thread::Thread::unpark"><code>unpark</code></a> on the handle.</p>
+<p>The motivation for this design is twofold:</p>
+<ul>
+<li>
+<p>It avoids the need to allocate mutexes and condvars when building new
+synchronization primitives; the threads already provide basic
+blocking/signaling.</p>
+</li>
+<li>
+<p>It can be implemented very efficiently on many platforms.</p>
+</li>
+</ul>
+<h2 id="memory-ordering"><a class="doc-anchor" href="#memory-ordering">§</a>Memory Ordering</h2>
+<p>Calls to <code>park</code> <em>synchronize-with</em> calls to <code>unpark</code>, meaning that memory
+operations performed before a call to <code>unpark</code> are made visible to the thread that
+consumes the token and returns from <code>park</code>. Note that all <code>park</code> and <code>unpark</code>
+operations for a given thread form a total order and <code>park</code> synchronizes-with
+<em>all</em> prior <code>unpark</code> operations.</p>
+<p>In atomic ordering terms, <code>unpark</code> performs a <code>Release</code> operation and <code>park</code>
+performs the corresponding <code>Acquire</code> operation. Calls to <code>unpark</code> for the same
+thread form a <a href="https://en.cppreference.com/w/cpp/atomic/memory_order#Release_sequence">release sequence</a>.</p>
+<p>Note that being unblocked does not imply a call was made to <code>unpark</code>, because
+wakeups can also be spurious. For example, a valid, but inefficient,
+implementation could have <code>park</code> and <code>unpark</code> return immediately without doing anything,
+making <em>all</em> wakeups spurious.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::sync::{Arc, atomic::{Ordering, AtomicBool}};
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">let </span>flag = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<span class="kw">let </span>flag2 = Arc::clone(<span class="kw-2">&amp;</span>flag);
+
+<span class="kw">let </span>parked_thread = thread::spawn(<span class="kw">move </span>|| {
+    <span class="comment">// We want to wait until the flag is set. We *could* just spin, but using
+    // park/unpark is more efficient.
+    </span><span class="kw">while </span>!flag2.load(Ordering::Relaxed) {
+        <span class="macro">println!</span>(<span class="string">"Parking thread"</span>);
+        thread::park();
+        <span class="comment">// We *could* get here spuriously, i.e., way before the 10ms below are over!
+        // But that is no problem, we are in a loop until the flag is set anyway.
+        </span><span class="macro">println!</span>(<span class="string">"Thread unparked"</span>);
+    }
+    <span class="macro">println!</span>(<span class="string">"Flag received"</span>);
+});
+
+<span class="comment">// Let some time pass for the thread to be spawned.
+</span>thread::sleep(Duration::from_millis(<span class="number">10</span>));
+
+<span class="comment">// Set the flag, and let the thread wake up.
+// There is no race condition here, if `unpark`
+// happens first, `park` will return immediately.
+// Hence there is no risk of a deadlock.
+</span>flag.store(<span class="bool-val">true</span>, Ordering::Relaxed);
+<span class="macro">println!</span>(<span class="string">"Unpark the thread"</span>);
+parked_thread.thread().unpark();
+
+parked_thread.join().unwrap();</code></pre></div>
+</div></details></section></div></main></body></html>

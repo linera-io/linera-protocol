@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["contract","ensure","service"],"mod":["abi","abis","base","contract","ethereum","graphql","service","test","util","views"],"struct":["ContractLogger","DataBlobHash","Resources","SendMessageRequest","ServiceLogger"],"trait":["Contract","FromBcsBytes","Service","ToBcsBytes"]};

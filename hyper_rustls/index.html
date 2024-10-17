@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="hyper-rustls"><title>hyper_rustls - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="hyper_rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../hyper_rustls/index.html">hyper_rustls</a><span class="version">0.24.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">hyper_rustls</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/hyper_rustls/lib.rs.html#1-115">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="hyper-rustls"><a class="doc-anchor" href="#hyper-rustls">§</a>hyper-rustls</h2>
+<p>A pure-Rust HTTPS connector for <a href="https://hyper.rs">hyper</a>, based on
+<a href="https://github.com/rustls/rustls">Rustls</a>.</p>
+<h3 id="example-client"><a class="doc-anchor" href="#example-client">§</a>Example client</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hyper::{Body, Client, StatusCode, Uri};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rt = tokio::runtime::Runtime::new().unwrap();
+<span class="kw">let </span>url = (<span class="string">"https://hyper.rs"</span>).parse().unwrap();
+<span class="kw">let </span>https = hyper_rustls::HttpsConnectorBuilder::new()
+    .with_native_roots()
+    .https_only()
+    .enable_http1()
+    .build();
+
+<span class="kw">let </span>client: Client&lt;<span class="kw">_</span>, hyper::Body&gt; = Client::builder().build(https);
+
+<span class="kw">let </span>res = rt.block_on(client.get(url)).unwrap();
+<span class="macro">assert_eq!</span>(res.status(), StatusCode::OK);</code></pre></div>
+<h3 id="example-server"><a class="doc-anchor" href="#example-server">§</a>Example server</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hyper::server::conn::AddrIncoming;
+<span class="kw">use </span>hyper::service::{make_service_fn, service_fn};
+<span class="kw">use </span>hyper::{Body, Method, Request, Response, Server, StatusCode};
+<span class="kw">use </span>hyper_rustls::TlsAcceptor;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::fs::File;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rt = tokio::runtime::Runtime::new().unwrap();
+<span class="kw">let </span>addr = <span class="string">"127.0.0.1:1337"</span>.parse().unwrap();
+
+<span class="comment">// Load public certificate.
+</span><span class="kw">let </span>certfile = File::open(<span class="string">"examples/sample.pem"</span>).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>reader = io::BufReader::new(certfile);
+
+<span class="comment">// Load and return certificate.
+</span><span class="kw">let </span>certs = rustls_pemfile::certs(<span class="kw-2">&amp;mut </span>reader).unwrap();
+<span class="kw">let </span>certs = certs.into_iter().map(rustls::Certificate).collect();
+
+<span class="comment">// Load private key. (see `examples/server.rs`)
+</span><span class="kw">let </span>keyfile = File::open(<span class="string">"examples/sample.rsa"</span>).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>reader = io::BufReader::new(keyfile);
+
+<span class="comment">// Load and return a single private key.
+</span><span class="kw">let </span>keys = rustls_pemfile::rsa_private_keys(<span class="kw-2">&amp;mut </span>reader).unwrap();
+<span class="kw">let </span>key = rustls::PrivateKey(keys[<span class="number">0</span>].clone());
+<span class="kw">let </span>https = hyper_rustls::HttpsConnectorBuilder::new()
+    .with_native_roots()
+    .https_only()
+    .enable_http1()
+    .build();
+
+<span class="kw">let </span>incoming = AddrIncoming::bind(<span class="kw-2">&amp;</span>addr).unwrap();
+<span class="kw">let </span>acceptor = TlsAcceptor::builder()
+    .with_single_cert(certs, key).unwrap()
+    .with_all_versions_alpn()
+    .with_incoming(incoming);
+<span class="kw">let </span>service = make_service_fn(|<span class="kw">_</span>| <span class="kw">async </span>{ <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, io::Error&gt;(service_fn(|_req|<span class="kw">async </span>{<span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, io::Error&gt;(Response::new(Body::empty()))})) });
+<span class="kw">let </span>server = Server::builder(acceptor).serve(service);
+<span class="comment">// server.await.unwrap();</span></code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.AcceptorBuilder"><code>pub use crate::acceptor::<a class="struct" href="acceptor/struct.AcceptorBuilder.html" title="struct hyper_rustls::acceptor::AcceptorBuilder">AcceptorBuilder</a>;</code></div></li><li><div class="item-name" id="reexport.TlsAcceptor"><code>pub use crate::acceptor::<a class="struct" href="acceptor/struct.TlsAcceptor.html" title="struct hyper_rustls::acceptor::TlsAcceptor">TlsAcceptor</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="acceptor/index.html" title="mod hyper_rustls::acceptor">acceptor</a></div><div class="desc docblock-short">TLS acceptor implementing hyper’s <code>Accept</code> trait.</div></li><li><div class="item-name"><a class="mod" href="builderstates/index.html" title="mod hyper_rustls::builderstates">builderstates</a></div><div class="desc docblock-short">The various states of the <a href="struct.HttpsConnectorBuilder.html" title="struct hyper_rustls::HttpsConnectorBuilder"><code>HttpsConnectorBuilder</code></a></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.HttpsConnector.html" title="struct hyper_rustls::HttpsConnector">HttpsConnector</a></div><div class="desc docblock-short">A Connector for the <code>https</code> scheme.</div></li><li><div class="item-name"><a class="struct" href="struct.HttpsConnectorBuilder.html" title="struct hyper_rustls::HttpsConnectorBuilder">HttpsConnectorBuilder</a></div><div class="desc docblock-short">A builder for an <a href="struct.HttpsConnector.html" title="struct hyper_rustls::HttpsConnector"><code>HttpsConnector</code></a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.MaybeHttpsStream.html" title="enum hyper_rustls::MaybeHttpsStream">MaybeHttpsStream</a></div><div class="desc docblock-short">A stream that might be protected with TLS.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ConfigBuilderExt.html" title="trait hyper_rustls::ConfigBuilderExt">ConfigBuilderExt</a></div><div class="desc docblock-short">Methods for configuring roots</div></li></ul></section></div></main></body></html>

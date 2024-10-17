@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate a new type with only the discriminant names."><title>EnumDiscriminants in strum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="strum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../strum/index.html">strum</a><span class="version">0.26.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">strum</a>::<wbr><a class="derive" href="#">EnumDiscriminants</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(EnumDiscriminants)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[strum]
+    #[strum_discriminants]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate a new type with only the discriminant names.</p>
+<p>Given an enum named <code>MyEnum</code>, generates another enum called <code>MyEnumDiscriminants</code> with the same
+variants but without any data fields. This is useful when you wish to determine the variant of
+an <code>enum</code> but one or more of the variants contains a non-<code>Default</code> field. <code>From</code>
+implementations are generated so that you can easily convert from <code>MyEnum</code> to
+<code>MyEnumDiscriminants</code>.</p>
+<p>By default, the generated enum has the following derives: <code>Clone, Copy, Debug, PartialEq, Eq</code>.
+You can add additional derives using the <code>#[strum_discriminants(derive(AdditionalDerive))]</code>
+attribute.</p>
+<p>Note, the variant attributes passed to the discriminant enum are filtered to avoid compilation
+errors due to the derives mismatches, thus only <code>#[doc]</code>, <code>#[cfg]</code>, <code>#[allow]</code>, and <code>#[deny]</code>
+are passed through by default. If you want to specify a custom attribute on the discriminant
+variant, wrap it with <code>#[strum_discriminants(...)]</code> attribute.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Bring trait into scope
+</span><span class="kw">use </span>std::str::FromStr;
+<span class="kw">use </span>strum::{IntoEnumIterator, EnumMessage};
+<span class="kw">use </span>strum_macros::{EnumDiscriminants, EnumIter, EnumString};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>NonDefault;
+
+<span class="comment">// simple example
+</span><span class="attr">#[derive(Debug, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumString, EnumMessage))]
+</span><span class="kw">enum </span>MyEnum {
+    <span class="attr">#[strum_discriminants(strum(message = <span class="string">"Variant zero"</span>))]
+    </span>Variant0(NonDefault),
+    Variant1 { a: NonDefault },
+}
+
+<span class="comment">// You can rename the generated enum using the `#[strum_discriminants(name(OtherName))]` attribute:
+</span><span class="attr">#[derive(Debug, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
+#[strum_discriminants(name(MyVariants))]
+</span><span class="kw">enum </span>MyEnumR {
+    Variant0(bool),
+    Variant1 { a: bool },
+}
+
+<span class="comment">// test simple example
+</span><span class="macro">assert_eq!</span>(
+    MyEnumDiscriminants::Variant0,
+    MyEnumDiscriminants::from_str(<span class="string">"Variant0"</span>).unwrap()
+);
+<span class="comment">// test rename example combined with EnumIter
+</span><span class="macro">assert_eq!</span>(
+    <span class="macro">vec!</span>[MyVariants::Variant0, MyVariants::Variant1],
+    MyVariants::iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+);
+
+<span class="comment">// Make use of the auto-From conversion to check whether an instance of `MyEnum` matches a
+// `MyEnumDiscriminants` discriminant.
+</span><span class="macro">assert_eq!</span>(
+    MyEnumDiscriminants::Variant0,
+    MyEnum::Variant0(NonDefault).into()
+);
+<span class="macro">assert_eq!</span>(
+    MyEnumDiscriminants::Variant0,
+    MyEnumDiscriminants::from(MyEnum::Variant0(NonDefault))
+);
+
+<span class="comment">// Make use of the EnumMessage on the `MyEnumDiscriminants` discriminant.
+</span><span class="macro">assert_eq!</span>(
+    MyEnumDiscriminants::Variant0.get_message(),
+    <span class="prelude-val">Some</span>(<span class="string">"Variant zero"</span>)
+);</code></pre></div>
+<p>It is also possible to specify the visibility (e.g. <code>pub</code>/<code>pub(crate)</code>/etc.)
+of the generated enum. By default, the generated enum inherits the
+visibility of the parent enum it was generated from.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>strum_macros::EnumDiscriminants;
+
+<span class="comment">// You can set the visibility of the generated enum using the `#[strum_discriminants(vis(..))]` attribute:
+</span><span class="kw">mod </span>inner {
+    <span class="kw">use </span>strum_macros::EnumDiscriminants;
+
+    <span class="attr">#[derive(Debug, EnumDiscriminants)]
+    #[strum_discriminants(vis(<span class="kw">pub</span>))]
+    #[strum_discriminants(name(PubDiscriminants))]
+    </span><span class="kw">enum </span>PrivateEnum {
+        Variant0(bool),
+        Variant1 { a: bool },
+    }
+}
+
+<span class="comment">// test visibility example, `PrivateEnum` should not be accessible here
+</span><span class="macro">assert_ne!</span>(
+    inner::PubDiscriminants::Variant0,
+    inner::PubDiscriminants::Variant1,
+);</code></pre></div>
+</div></details></section></div></main></body></html>

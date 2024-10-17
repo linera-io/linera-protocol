@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a bounded mpsc channel for communicating between asynchronous tasks with backpressure."><title>channel in tokio::sync::mpsc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tokio::sync::mpsc</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">sync</a>::<wbr><a href="index.html">mpsc</a>::<wbr><a class="fn" href="#">channel</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/sync/mpsc/bounded.rs.html#156-168">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn channel&lt;T&gt;(buffer: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; (<a class="struct" href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender">Sender</a>&lt;T&gt;, <a class="struct" href="struct.Receiver.html" title="struct tokio::sync::mpsc::Receiver">Receiver</a>&lt;T&gt;)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a bounded mpsc channel for communicating between asynchronous tasks
+with backpressure.</p>
+<p>The channel will buffer up to the provided number of messages.  Once the
+buffer is full, attempts to send new messages will wait until a message is
+received from the channel. The provided buffer capacity must be at least 1.</p>
+<p>All data sent on <code>Sender</code> will become available on <code>Receiver</code> in the same
+order as it was sent.</p>
+<p>The <code>Sender</code> can be cloned to <code>send</code> to the same channel from multiple code
+locations. Only one <code>Receiver</code> is supported.</p>
+<p>If the <code>Receiver</code> is disconnected while trying to <code>send</code>, the <code>send</code> method
+will return a <code>SendError</code>. Similarly, if <code>Sender</code> is disconnected while
+trying to <code>recv</code>, the <code>recv</code> method will return <code>None</code>.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>Panics if the buffer capacity is 0.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel(<span class="number">100</span>);
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">10 </span>{
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) = tx.send(i).<span class="kw">await </span>{
+                <span class="macro">println!</span>(<span class="string">"receiver dropped"</span>);
+                <span class="kw">return</span>;
+            }
+        }
+    });
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(i) = rx.recv().<span class="kw">await </span>{
+        <span class="macro">println!</span>(<span class="string">"got = {}"</span>, i);
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

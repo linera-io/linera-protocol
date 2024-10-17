@@ -1,0 +1,133 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generic data structure deserialization framework."><title>serde::de - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><h2 class="location"><a href="#">Module de</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate serde</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">serde</a>::<wbr><a class="mod" href="#">de</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/serde/de/mod.rs.html#1-2335">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generic data structure deserialization framework.</p>
+<p>The two most important traits in this module are <a href="../trait.Deserialize.html"><code>Deserialize</code></a> and
+<a href="../trait.Deserializer.html"><code>Deserializer</code></a>.</p>
+<ul>
+<li><strong>A type that implements <code>Deserialize</code> is a data structure</strong> that can be
+deserialized from any data format supported by Serde, and conversely</li>
+<li><strong>A type that implements <code>Deserializer</code> is a data format</strong> that can
+deserialize any data structure supported by Serde.</li>
+</ul>
+<h2 id="the-deserialize-trait"><a class="doc-anchor" href="#the-deserialize-trait">§</a>The Deserialize trait</h2>
+<p>Serde provides <a href="../trait.Deserialize.html"><code>Deserialize</code></a> implementations for many Rust primitive and
+standard library types. The complete list is below. All of these can be
+deserialized using Serde out of the box.</p>
+<p>Additionally, Serde provides a procedural macro called <a href="https://crates.io/crates/serde_derive"><code>serde_derive</code></a> to
+automatically generate <a href="../trait.Deserialize.html"><code>Deserialize</code></a> implementations for structs and enums
+in your program. See the <a href="https://serde.rs/derive.html">derive section of the manual</a> for how to use this.</p>
+<p>In rare cases it may be necessary to implement <a href="../trait.Deserialize.html"><code>Deserialize</code></a> manually for
+some type in your program. See the <a href="https://serde.rs/impl-deserialize.html">Implementing <code>Deserialize</code></a> section of
+the manual for more about this.</p>
+<p>Third-party crates may provide <a href="../trait.Deserialize.html"><code>Deserialize</code></a> implementations for types
+that they expose. For example the <a href="https://crates.io/crates/linked-hash-map"><code>linked-hash-map</code></a> crate provides a
+<a href="https://docs.rs/linked-hash-map/*/linked_hash_map/struct.LinkedHashMap.html"><code>LinkedHashMap&lt;K, V&gt;</code></a> type that is deserializable by Serde because the
+crate provides an implementation of <a href="../trait.Deserialize.html"><code>Deserialize</code></a> for it.</p>
+<h2 id="the-deserializer-trait"><a class="doc-anchor" href="#the-deserializer-trait">§</a>The Deserializer trait</h2>
+<p><a href="../trait.Deserializer.html"><code>Deserializer</code></a> implementations are provided by third-party crates, for
+example <a href="https://github.com/serde-rs/json"><code>serde_json</code></a>, <a href="https://github.com/dtolnay/serde-yaml"><code>serde_yaml</code></a> and <a href="https://github.com/jamesmunns/postcard"><code>postcard</code></a>.</p>
+<p>A partial list of well-maintained formats is given on the <a href="https://serde.rs/#data-formats">Serde
+website</a>.</p>
+<h2 id="implementations-of-deserialize-provided-by-serde"><a class="doc-anchor" href="#implementations-of-deserialize-provided-by-serde">§</a>Implementations of Deserialize provided by Serde</h2>
+<p>This is a slightly different set of types than what is supported for
+serialization. Some types can be serialized by Serde but not deserialized.
+One example is <code>OsStr</code>.</p>
+<ul>
+<li><strong>Primitive types</strong>:
+<ul>
+<li>bool</li>
+<li>i8, i16, i32, i64, i128, isize</li>
+<li>u8, u16, u32, u64, u128, usize</li>
+<li>f32, f64</li>
+<li>char</li>
+</ul>
+</li>
+<li><strong>Compound types</strong>:
+<ul>
+<li>[T; 0] through [T; 32]</li>
+<li>tuples up to size 16</li>
+</ul>
+</li>
+<li><strong>Common standard library types</strong>:
+<ul>
+<li>String</li>
+<li>Option&lt;T&gt;</li>
+<li>Result&lt;T, E&gt;</li>
+<li>PhantomData&lt;T&gt;</li>
+</ul>
+</li>
+<li><strong>Wrapper types</strong>:
+<ul>
+<li>Box&lt;T&gt;</li>
+<li>Box&lt;[T]&gt;</li>
+<li>Box&lt;str&gt;</li>
+<li>Cow&lt;’a, T&gt;</li>
+<li>Cell&lt;T&gt;</li>
+<li>RefCell&lt;T&gt;</li>
+<li>Mutex&lt;T&gt;</li>
+<li>RwLock&lt;T&gt;</li>
+<li>Rc&lt;T&gt; <em>(if</em> features = [“rc”] <em>is enabled)</em></li>
+<li>Arc&lt;T&gt; <em>(if</em> features = [“rc”] <em>is enabled)</em></li>
+</ul>
+</li>
+<li><strong>Collection types</strong>:
+<ul>
+<li>BTreeMap&lt;K, V&gt;</li>
+<li>BTreeSet&lt;T&gt;</li>
+<li>BinaryHeap&lt;T&gt;</li>
+<li>HashMap&lt;K, V, H&gt;</li>
+<li>HashSet&lt;T, H&gt;</li>
+<li>LinkedList&lt;T&gt;</li>
+<li>VecDeque&lt;T&gt;</li>
+<li>Vec&lt;T&gt;</li>
+</ul>
+</li>
+<li><strong>Zero-copy types</strong>:
+<ul>
+<li>&amp;str</li>
+<li>&amp;[u8]</li>
+</ul>
+</li>
+<li><strong>FFI types</strong>:
+<ul>
+<li>CString</li>
+<li>Box&lt;CStr&gt;</li>
+<li>OsString</li>
+</ul>
+</li>
+<li><strong>Miscellaneous standard library types</strong>:
+<ul>
+<li>Duration</li>
+<li>SystemTime</li>
+<li>Path</li>
+<li>PathBuf</li>
+<li>Range&lt;T&gt;</li>
+<li>RangeInclusive&lt;T&gt;</li>
+<li>Bound&lt;T&gt;</li>
+<li>num::NonZero*</li>
+<li><code>!</code> <em>(unstable)</em></li>
+</ul>
+</li>
+<li><strong>Net types</strong>:
+<ul>
+<li>IpAddr</li>
+<li>Ipv4Addr</li>
+<li>Ipv6Addr</li>
+<li>SocketAddr</li>
+<li>SocketAddrV4</li>
+<li>SocketAddrV6</li>
+</ul>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.StdError"><code>pub use std::error::<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> as StdError;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="value/index.html" title="mod serde::de::value">value</a></div><div class="desc docblock-short">Building blocks for deserializing basic values using the <code>IntoDeserializer</code>
+trait.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.IgnoredAny.html" title="struct serde::de::IgnoredAny">IgnoredAny</a></div><div class="desc docblock-short">An efficient way of discarding data from a deserializer.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Unexpected.html" title="enum serde::de::Unexpected">Unexpected</a></div><div class="desc docblock-short"><code>Unexpected</code> represents an unexpected invocation of any one of the <code>Visitor</code>
+trait methods.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Deserialize.html" title="trait serde::de::Deserialize">Deserialize</a></div><div class="desc docblock-short">A <strong>data structure</strong> that can be deserialized from any data format supported
+by Serde.</div></li><li><div class="item-name"><a class="trait" href="trait.DeserializeOwned.html" title="trait serde::de::DeserializeOwned">DeserializeOwned</a></div><div class="desc docblock-short">A data structure that can be deserialized without borrowing any data from
+the deserializer.</div></li><li><div class="item-name"><a class="trait" href="trait.DeserializeSeed.html" title="trait serde::de::DeserializeSeed">DeserializeSeed</a></div><div class="desc docblock-short"><code>DeserializeSeed</code> is the stateful form of the <code>Deserialize</code> trait. If you
+ever find yourself looking for a way to pass data into a <code>Deserialize</code> impl,
+this trait is the way to do it.</div></li><li><div class="item-name"><a class="trait" href="trait.Deserializer.html" title="trait serde::de::Deserializer">Deserializer</a></div><div class="desc docblock-short">A <strong>data format</strong> that can deserialize any data structure supported by
+Serde.</div></li><li><div class="item-name"><a class="trait" href="trait.EnumAccess.html" title="trait serde::de::EnumAccess">EnumAccess</a></div><div class="desc docblock-short">Provides a <code>Visitor</code> access to the data of an enum in the input.</div></li><li><div class="item-name"><a class="trait" href="trait.Error.html" title="trait serde::de::Error">Error</a></div><div class="desc docblock-short">The <code>Error</code> trait allows <code>Deserialize</code> implementations to create descriptive
+error messages belonging to the <code>Deserializer</code> against which they are
+currently running.</div></li><li><div class="item-name"><a class="trait" href="trait.Expected.html" title="trait serde::de::Expected">Expected</a></div><div class="desc docblock-short"><code>Expected</code> represents an explanation of what data a <code>Visitor</code> was expecting
+to receive.</div></li><li><div class="item-name"><a class="trait" href="trait.IntoDeserializer.html" title="trait serde::de::IntoDeserializer">IntoDeserializer</a></div><div class="desc docblock-short">Converts an existing value into a <code>Deserializer</code> from which other values can
+be deserialized.</div></li><li><div class="item-name"><a class="trait" href="trait.MapAccess.html" title="trait serde::de::MapAccess">MapAccess</a></div><div class="desc docblock-short">Provides a <code>Visitor</code> access to each entry of a map in the input.</div></li><li><div class="item-name"><a class="trait" href="trait.SeqAccess.html" title="trait serde::de::SeqAccess">SeqAccess</a></div><div class="desc docblock-short">Provides a <code>Visitor</code> access to each element of a sequence in the input.</div></li><li><div class="item-name"><a class="trait" href="trait.VariantAccess.html" title="trait serde::de::VariantAccess">VariantAccess</a></div><div class="desc docblock-short"><code>VariantAccess</code> is a visitor that is created by the <code>Deserializer</code> and
+passed to the <code>Deserialize</code> to deserialize the content of a particular enum
+variant.</div></li><li><div class="item-name"><a class="trait" href="trait.Visitor.html" title="trait serde::de::Visitor">Visitor</a></div><div class="desc docblock-short">This trait represents a visitor that walks through a deserializer.</div></li></ul></section></div></main></body></html>

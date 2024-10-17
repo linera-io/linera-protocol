@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>proc_macro2 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="proc_macro2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../proc_macro2/index.html">proc_macro2</a><span class="version">1.0.86</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">proc_macro2</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/proc_macro2/lib.rs.html#1-1369">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/proc-macro2"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/proc-macro2"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="index.html" title="mod proc_macro2"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>A wrapper around the procedural macro API of the compiler’s <a href="https://doc.rust-lang.org/proc_macro/"><code>proc_macro</code></a>
+crate. This library serves two purposes:</p>
+<ul>
+<li>
+<p><strong>Bring proc-macro-like functionality to other contexts like build.rs and
+main.rs.</strong> Types from <code>proc_macro</code> are entirely specific to procedural
+macros and cannot ever exist in code outside of a procedural macro.
+Meanwhile <code>proc_macro2</code> types may exist anywhere including non-macro code.
+By developing foundational libraries like <a href="https://github.com/dtolnay/syn">syn</a> and <a href="https://github.com/dtolnay/quote">quote</a> against
+<code>proc_macro2</code> rather than <code>proc_macro</code>, the procedural macro ecosystem
+becomes easily applicable to many other use cases and we avoid
+reimplementing non-macro equivalents of those libraries.</p>
+</li>
+<li>
+<p><strong>Make procedural macros unit testable.</strong> As a consequence of being
+specific to procedural macros, nothing that uses <code>proc_macro</code> can be
+executed from a unit test. In order for helper libraries or components of
+a macro to be testable in isolation, they must be implemented using
+<code>proc_macro2</code>.</p>
+</li>
+</ul>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>The skeleton of a typical procedural macro typically looks like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">extern crate </span>proc_macro;
+
+<span class="attr">#[proc_macro_derive(MyDerive)]
+</span><span class="kw">pub fn </span>my_derive(input: proc_macro::TokenStream) -&gt; proc_macro::TokenStream {
+    <span class="kw">let </span>input = proc_macro2::TokenStream::from(input);
+
+    <span class="kw">let </span>output: proc_macro2::TokenStream = {
+        <span class="comment">/* transform input */
+    </span>};
+
+    proc_macro::TokenStream::from(output)
+}</code></pre></div>
+<p>If parsing with <a href="https://github.com/dtolnay/syn">Syn</a>, you’ll use <a href="https://docs.rs/syn/2.0/syn/macro.parse_macro_input.html"><code>parse_macro_input!</code></a> instead to
+propagate parse errors correctly back to the compiler when parsing fails.</p>
+<h2 id="unstable-features"><a class="doc-anchor" href="#unstable-features">§</a>Unstable features</h2>
+<p>The default feature set of proc-macro2 tracks the most recent stable
+compiler API. Functionality in <code>proc_macro</code> that is not yet stable is not
+exposed by proc-macro2 by default.</p>
+<p>To opt into the additional APIs available in the most recent nightly
+compiler, the <code>procmacro2_semver_exempt</code> config flag must be passed to
+rustc. We will polyfill those nightly-only APIs back to Rust 1.56.0. As
+these are unstable APIs that track the nightly compiler, minor versions of
+proc-macro2 may make breaking changes to them at any time.</p>
+<div class="example-wrap"><pre class="language-sh"><code>RUSTFLAGS=&#39;--cfg procmacro2_semver_exempt&#39; cargo build
+</code></pre></div>
+<p>Note that this must not only be done for your crate, but for any crate that
+depends on your crate. This infectious nature is intentional, as it serves
+as a reminder that you are outside of the normal semver guarantees.</p>
+<p>Semver exempt methods are marked as such in the proc-macro2 documentation.</p>
+<h2 id="thread-safety"><a class="doc-anchor" href="#thread-safety">§</a>Thread-Safety</h2>
+<p>Most types in this crate are <code>!Sync</code> because the underlying compiler
+types make use of thread-local memory, meaning they cannot be accessed from
+a different thread.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="extra/index.html" title="mod proc_macro2::extra">extra</a></div><div class="desc docblock-short">Items which do not have a correspondence to any API in the proc_macro crate,
+but are necessary to include in proc-macro2.</div></li><li><div class="item-name"><a class="mod" href="token_stream/index.html" title="mod proc_macro2::token_stream">token_stream</a></div><div class="desc docblock-short">Public implementation details for the <code>TokenStream</code> type, such as iterators.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Group.html" title="struct proc_macro2::Group">Group</a></div><div class="desc docblock-short">A delimited token stream.</div></li><li><div class="item-name"><a class="struct" href="struct.Ident.html" title="struct proc_macro2::Ident">Ident</a></div><div class="desc docblock-short">A word of Rust code, which may be a keyword or legal variable name.</div></li><li><div class="item-name"><a class="struct" href="struct.LexError.html" title="struct proc_macro2::LexError">LexError</a></div><div class="desc docblock-short">Error returned from <code>TokenStream::from_str</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Literal.html" title="struct proc_macro2::Literal">Literal</a></div><div class="desc docblock-short">A literal string (<code>"hello"</code>), byte string (<code>b"hello"</code>), character (<code>'a'</code>),
+byte character (<code>b'a'</code>), an integer or floating point number with or without
+a suffix (<code>1</code>, <code>1u8</code>, <code>2.3</code>, <code>2.3f32</code>).</div></li><li><div class="item-name"><a class="struct" href="struct.Punct.html" title="struct proc_macro2::Punct">Punct</a></div><div class="desc docblock-short">A <code>Punct</code> is a single punctuation character like <code>+</code>, <code>-</code> or <code>#</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Span.html" title="struct proc_macro2::Span">Span</a></div><div class="desc docblock-short">A region of source code, along with macro expansion information.</div></li><li><div class="item-name"><a class="struct" href="struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a></div><div class="desc docblock-short">An abstract stream of tokens, or more concretely a sequence of token trees.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Delimiter.html" title="enum proc_macro2::Delimiter">Delimiter</a></div><div class="desc docblock-short">Describes how a sequence of token trees is delimited.</div></li><li><div class="item-name"><a class="enum" href="enum.Spacing.html" title="enum proc_macro2::Spacing">Spacing</a></div><div class="desc docblock-short">Whether a <code>Punct</code> is followed immediately by another <code>Punct</code> or followed by
+another token or whitespace.</div></li><li><div class="item-name"><a class="enum" href="enum.TokenTree.html" title="enum proc_macro2::TokenTree">TokenTree</a></div><div class="desc docblock-short">A single token or a delimited sequence of token trees (e.g. <code>[1, (), ..]</code>).</div></li></ul></section></div></main></body></html>

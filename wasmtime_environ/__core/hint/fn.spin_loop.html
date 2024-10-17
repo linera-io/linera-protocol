@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Emits a machine instruction to signal the processor that it is running in a busy-wait spin-loop (“spin lock”)."><title>spin_loop in wasmtime_environ::__core::hint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::hint</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">hint</a>::<wbr><a class="fn" href="#">spin_loop</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.49.0">1.49.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/hint.rs.html#268">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn spin_loop()</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Emits a machine instruction to signal the processor that it is running in
+a busy-wait spin-loop (“spin lock”).</p>
+<p>Upon receiving the spin-loop signal the processor can optimize its behavior by,
+for example, saving power or switching hyper-threads.</p>
+<p>This function is different from <a href="../../std/thread/fn.yield_now.html"><code>thread::yield_now</code></a> which directly
+yields to the system’s scheduler, whereas <code>spin_loop</code> does not interact
+with the operating system.</p>
+<p>A common use case for <code>spin_loop</code> is implementing bounded optimistic
+spinning in a CAS loop in synchronization primitives. To avoid problems
+like priority inversion, it is strongly recommended that the spin loop is
+terminated after a finite amount of iterations and an appropriate blocking
+syscall is made.</p>
+<p><strong>Note</strong>: On platforms that do not support receiving spin-loop hints this
+function does not do anything at all.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::atomic::{AtomicBool, Ordering};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::{hint, thread};
+
+<span class="comment">// A shared atomic value that threads will use to coordinate
+</span><span class="kw">let </span>live = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+
+<span class="comment">// In a background thread we'll eventually set the value
+</span><span class="kw">let </span>bg_work = {
+    <span class="kw">let </span>live = live.clone();
+    thread::spawn(<span class="kw">move </span>|| {
+        <span class="comment">// Do some work, then make the value live
+        </span>do_some_work();
+        live.store(<span class="bool-val">true</span>, Ordering::Release);
+    })
+};
+
+<span class="comment">// Back on our current thread, we wait for the value to be set
+</span><span class="kw">while </span>!live.load(Ordering::Acquire) {
+    <span class="comment">// The spin loop is a hint to the CPU that we're waiting, but probably
+    // not for very long
+    </span>hint::spin_loop();
+}
+
+<span class="comment">// The value is now set
+</span>do_some_work();
+bg_work.join()<span class="question-mark">?</span>;</code></pre></div>
+</div></details></section></div></main></body></html>

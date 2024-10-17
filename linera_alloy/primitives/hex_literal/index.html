@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="RustCrypto: hex-literal"><title>linera_alloy::primitives::hex_literal - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../crates.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../../linera_alloy/index.html">linera_alloy</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section><h2><a href="../index.html">In linera_alloy::primitives</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a href="../../index.html">linera_alloy</a>::<wbr><a href="../index.html">primitives</a>::<wbr><a class="mod" href="#">hex_literal</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/hex_literal/lib.rs.html#1-88">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rustcrypto-hex-literal"><a class="doc-anchor" href="#rustcrypto-hex-literal">§</a><a href="https://github.com/RustCrypto">RustCrypto</a>: hex-literal</h2>
+<p><a href="https://crates.io/crates/hex-literal"><img src="https://img.shields.io/crates/v/hex-literal.svg" alt="Crate" /></a>
+<a href="https://docs.rs/hex-literal/"><img src="https://docs.rs/hex-literal/badge.svg" alt="Docs" /></a>
+<img src="https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg" alt="Apache 2.0/MIT Licensed" />
+<img src="https://img.shields.io/badge/rustc-1.57+-blue.svg" alt="MSRV" />
+<a href="https://github.com/RustCrypto/utils/actions/workflows/hex-literal.yml"><img src="https://github.com/RustCrypto/utils/actions/workflows/hex-literal.yml/badge.svg" alt="Build Status" /></a></p>
+<p>This crate provides the <code>hex!</code> macro for converting hexadecimal string literals to a byte array at compile time.</p>
+<p>It accepts the following characters in the input string:</p>
+<ul>
+<li><code>'0'...'9'</code>, <code>'a'...'f'</code>, <code>'A'...'F'</code> — hex characters which will be used in construction of the output byte array</li>
+<li><code>' '</code>, <code>'\r'</code>, <code>'\n'</code>, <code>'\t'</code> — formatting characters which will be ignored</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hex_literal::hex;
+
+<span class="comment">// The macro can be used in const contexts
+</span><span class="kw">const </span>DATA: [u8; <span class="number">4</span>] = <span class="macro">hex!</span>(<span class="string">"01020304"</span>);
+<span class="macro">assert_eq!</span>(DATA, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
+
+<span class="comment">// Both upper and lower hex values are supported
+</span><span class="macro">assert_eq!</span>(<span class="macro">hex!</span>(<span class="string">"a1 b2 c3 d4"</span>), [<span class="number">0xA1</span>, <span class="number">0xB2</span>, <span class="number">0xC3</span>, <span class="number">0xD4</span>]);
+<span class="macro">assert_eq!</span>(<span class="macro">hex!</span>(<span class="string">"E5 E6 90 92"</span>), [<span class="number">0xE5</span>, <span class="number">0xE6</span>, <span class="number">0x90</span>, <span class="number">0x92</span>]);
+<span class="macro">assert_eq!</span>(<span class="macro">hex!</span>(<span class="string">"0a0B 0C0d"</span>), [<span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">13</span>]);
+
+<span class="comment">// Multi-line literals
+</span><span class="kw">let </span>bytes1 = <span class="macro">hex!</span>(<span class="string">"
+    00010203 04050607
+    08090a0b 0c0d0e0f
+"</span>);
+<span class="macro">assert_eq!</span>(
+    bytes1,
+    [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>, <span class="number">12</span>, <span class="number">13</span>, <span class="number">14</span>, <span class="number">15</span>],
+);
+
+<span class="comment">// It's possible to use several literals
+// (results will be concatenated)
+</span><span class="kw">let </span>bytes2 = <span class="macro">hex!</span>(
+    <span class="string">"00010203 04050607" </span><span class="comment">// first half
+    </span><span class="string">"08090a0b 0c0d0e0f" </span><span class="comment">// second half
+</span>);
+<span class="macro">assert_eq!</span>(bytes1, bytes2);</code></pre></div>
+<p>Using an unsupported character inside literals will result in a compilation error:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">hex_literal::hex!</span>(<span class="string">"АА"</span>); <span class="comment">// Cyrillic "А"
+</span><span class="macro">hex_literal::hex!</span>(<span class="string">"11　22"</span>); <span class="comment">// Japanese space</span></code></pre></div>
+<p>Сomments inside literals are not supported:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">hex_literal::hex!</span>(<span class="string">"0123 // foo"</span>);</code></pre></div>
+<p>Each literal must contain an even number of hex characters:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">hex_literal::hex!</span>(
+    <span class="string">"01234"
+    "567"
+</span>);</code></pre></div>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>Rust <strong>1.57</strong> or newer.</p>
+<p>In the future, we reserve the right to change MSRV (i.e. MSRV is out-of-scope for this crate’s SemVer guarantees), however when we do it will be accompanied by a minor version bump.</p>
+<h3 id="license"><a class="doc-anchor" href="#license">§</a>License</h3>
+<p>Licensed under either of:</p>
+<ul>
+<li><a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a></li>
+<li><a href="http://opensource.org/licenses/MIT">MIT license</a></li>
+</ul>
+<p>at your option.</p>
+<h4 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h4>
+<p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.hex.html" title="macro linera_alloy::primitives::hex_literal::hex">hex</a></div><div class="desc docblock-short">Macro for converting sequence of string literals containing hex-encoded data
+into an array of bytes.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns a new `SubscriberBuilder` for configuring a formatting subscriber."><title>fmt in tracing_subscriber::fmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tracing_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../../tracing_subscriber/index.html">tracing_subscriber</a><span class="version">0.3.18</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tracing_subscriber::fmt</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">tracing_subscriber</a>::<wbr><a href="index.html">fmt</a>::<wbr><a class="fn" href="#">fmt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tracing_subscriber/fmt/mod.rs.html#321-323">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn fmt() -&gt; <a class="struct" href="struct.SubscriberBuilder.html" title="struct tracing_subscriber::fmt::SubscriberBuilder">SubscriberBuilder</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns a new <a href="struct.SubscriberBuilder.html" title="struct tracing_subscriber::fmt::SubscriberBuilder"><code>SubscriberBuilder</code></a> for configuring a <a href="struct.Subscriber.html" title="struct tracing_subscriber::fmt::Subscriber">formatting subscriber</a>.</p>
+<p>This is essentially shorthand for [<code>SubscriberBuilder::default()]</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Using <a href="struct.SubscriberBuilder.html#method.init" title="method tracing_subscriber::fmt::SubscriberBuilder::init"><code>init</code></a> to set the default subscriber:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>tracing_subscriber::fmt().init();</code></pre></div>
+<p>Configuring the output format:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+tracing_subscriber::fmt()
+    <span class="comment">// Configure formatting settings.
+    </span>.with_target(<span class="bool-val">false</span>)
+    .with_timer(tracing_subscriber::fmt::time::uptime())
+    .with_level(<span class="bool-val">true</span>)
+    <span class="comment">// Set the subscriber as the default.
+    </span>.init();</code></pre></div>
+<p><a href="struct.SubscriberBuilder.html#method.try_init" title="method tracing_subscriber::fmt::SubscriberBuilder::try_init"><code>try_init</code></a> returns an error if the default subscriber could not be set:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::error::Error;
+
+<span class="kw">fn </span>init_subscriber() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error + Send + Sync + <span class="lifetime">'static</span>&gt;&gt; {
+    tracing_subscriber::fmt()
+        <span class="comment">// Configure the subscriber to emit logs in JSON format.
+        </span>.json()
+        <span class="comment">// Configure the subscriber to flatten event fields in the output JSON objects.
+        </span>.flatten_event(<span class="bool-val">true</span>)
+        <span class="comment">// Set the subscriber as the default, returning an error if this fails.
+        </span>.try_init()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>Rather than setting the subscriber as the default, <a href="struct.SubscriberBuilder.html#method.finish" title="method tracing_subscriber::fmt::SubscriberBuilder::finish"><code>finish</code></a> <em>returns</em> the
+constructed subscriber, which may then be passed to other functions:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>subscriber = tracing_subscriber::fmt()
+    .with_max_level(tracing::Level::DEBUG)
+    .compact()
+    .finish();
+
+tracing::subscriber::with_default(subscriber, || {
+    <span class="comment">// the subscriber will only be set as the default
+    // inside this closure...
+</span>})</code></pre></div>
+</div></details></section></div></main></body></html>

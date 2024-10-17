@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DynamoDbStoreInternalError","InvalidTableName"],"fn":["get_base_config","get_config","get_config_internal","get_localstack_config"],"struct":["DynamoDbKeyValues","DynamoDbKeys","DynamoDbStore","DynamoDbStoreConfig","DynamoDbStoreInternal","LocalStackTestContext"],"type":["Config","DynamoDbStoreError"]};

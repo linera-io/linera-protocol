@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generates a `unsafe fn unchecked_transmute_from(number: Primitive) -&gt; Self` associated function."><title>UnsafeFromPrimitive in num_enum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="num_enum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../num_enum/index.html">num_enum</a><span class="version">0.7.3</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">num_enum</a>::<wbr><a class="derive" href="#">UnsafeFromPrimitive</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(UnsafeFromPrimitive)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[num_enum]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates a <code>unsafe fn unchecked_transmute_from(number: Primitive) -&gt; Self</code>
+associated function.</p>
+<h3 id="allows-unsafely-turning-a-primitive-into-an-enum-with-unchecked_transmute_from"><a class="doc-anchor" href="#allows-unsafely-turning-a-primitive-into-an-enum-with-unchecked_transmute_from">§</a>Allows unsafely turning a primitive into an enum with unchecked_transmute_from</h3>
+<p>If you’re really certain a conversion will succeed, and want to avoid a small amount of overhead, you can use unsafe
+code to do this conversion. Unless you have data showing that the match statement generated in the <code>try_from</code> above is a
+bottleneck for you, you should avoid doing this, as the unsafe code has potential to cause serious memory issues in
+your program.</p>
+<p>Note that this derive ignores any <code>default</code>, <code>catch_all</code>, and <code>alternatives</code> attributes on the enum.
+If you need support for conversions from these values, you should use <code>TryFromPrimitive</code> or <code>FromPrimitive</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>num_enum::UnsafeFromPrimitive;
+
+<span class="attr">#[derive(Debug, Eq, PartialEq, UnsafeFromPrimitive)]
+#[repr(u8)]
+</span><span class="kw">enum </span>Number {
+    Zero,
+    One,
+}
+
+<span class="kw">fn </span>main() {
+    <span class="macro">assert_eq!</span>(
+        Number::Zero,
+        <span class="kw">unsafe </span>{ Number::unchecked_transmute_from(<span class="number">0_u8</span>) },
+    );
+    <span class="macro">assert_eq!</span>(
+        Number::One,
+        <span class="kw">unsafe </span>{ Number::unchecked_transmute_from(<span class="number">1_u8</span>) },
+    );
+}
+
+<span class="kw">unsafe fn </span>undefined_behavior() {
+    <span class="kw">let _ </span>= Number::unchecked_transmute_from(<span class="number">2</span>); <span class="comment">// 2 is not a valid discriminant!
+</span>}</code></pre></div>
+</div></details></section></div></main></body></html>

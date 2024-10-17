@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="linera-alloy-sol-type-parser"><title>linera_alloy::json_abi::parser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../crates.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../../linera_alloy/index.html">linera_alloy</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In linera_alloy::json_abi</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a href="../../index.html">linera_alloy</a>::<wbr><a href="../index.html">json_abi</a>::<wbr><a class="mod" href="#">parser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/linera_alloy_sol_type_parser/lib.rs.html#1-52">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="linera-alloy-sol-type-parser"><a class="doc-anchor" href="#linera-alloy-sol-type-parser">§</a>linera-alloy-sol-type-parser</h2>
+<p>Simple and light-weight Solidity type strings parser.</p>
+<p>This library is primarily a dependency for the user-facing APIs in
+<a href="https://docs.rs/linera-alloy-json-abi/latest/linera_alloy_json_abi/"><code>linera-alloy-json-abi</code></a> and <a href="https://docs.rs/linera-alloy-dyn-abi/latest/linera_alloy_dyn_abi/"><code>linera-alloy-dyn-abi</code></a>. Please see the documentation for
+those crates for more information.</p>
+<p>This parser generally follows the <a href="https://docs.soliditylang.org/en/latest/grammar.html#a4.SolidityParser.typeName">Solidity spec</a>, however, it supports only a
+subset of possible types, chosen to support ABI coding.</p>
+<h4 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h4>
+<p>The <code>TypeSpecifier</code> is the top-level type in this crate. It is a wrapper around
+a section of a string (called a <code>span</code>). It progressively breaks the strings
+down into subspans, and adds metadata about the type. E.g. it tracks the stem
+type as well as the sizes of array dimensions. A <code>TypeSpecifier</code> is expected to
+handle any valid Solidity type string.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_sol_type_parser::TypeSpecifier;
+<span class="kw">use </span>core::num::NonZeroUsize;
+
+<span class="comment">// Parse a type specifier from a string
+</span><span class="kw">let </span>my_type = TypeSpecifier::parse(<span class="string">"uint8[2][]"</span>).unwrap();
+
+<span class="comment">// Read the total span
+</span><span class="macro">assert_eq!</span>(
+    my_type.span(),
+    <span class="string">"uint8[2][]"
+</span>);
+
+<span class="comment">// A type specifier has a stem type. This is the type string, stripped of its
+// array dimensions.
+</span><span class="macro">assert_eq!</span>(my_type.stem.span(), <span class="string">"uint8"</span>);
+
+<span class="comment">// Arrays are represented as a vector of sizes. This allows for deep nesting.
+</span><span class="macro">assert_eq!</span>(
+    my_type.sizes,
+    <span class="comment">// `None` is used for dynamic sizes. This is equivalent to `[2][]`
+    </span><span class="macro">vec!</span>[NonZeroUsize::new(<span class="number">2</span>), <span class="prelude-val">None</span>]
+);
+
+<span class="comment">// Type specifiers also work for complex tuples!
+</span><span class="kw">let </span>my_tuple = TypeSpecifier::parse(<span class="string">"(uint8,(uint8[],bool))[39]"</span>).unwrap();
+<span class="macro">assert_eq!</span>(
+    my_tuple.stem.span(),
+    <span class="string">"(uint8,(uint8[],bool))"
+</span>);
+
+<span class="comment">// Types are NOT resolved, so you can parse custom structs just by name.
+</span><span class="kw">let </span>my_struct = TypeSpecifier::parse(<span class="string">"MyStruct"</span>).unwrap();</code></pre></div>
+<h4 id="why-not-support-parse"><a class="doc-anchor" href="#why-not-support-parse">§</a>Why not support <code>parse()</code>?</h4>
+<p>The <code>core::str::FromStr</code> trait is not implemented for <code>TypeSpecifier</code> because
+of lifetime constraints. Unfortunately, it is impossible to implement this for
+a type with a lifetime dependent on the input str. Instead, we recommend using
+the <code>parse</code> associated functions, or <code>TryFrom::&lt;&amp;str&gt;::try_from</code> if a trait is
+needed.</p>
+<h4 id="why-not-use-syn"><a class="doc-anchor" href="#why-not-use-syn">§</a>Why not use <code>syn</code>?</h4>
+<p>This is NOT a full syntax library, and is not intended to be used as a
+replacement for <a href="https://docs.rs/linera-alloy-syn-solidity/latest/linera_alloy_syn_solidity/"><code>linera-alloy-syn-solidity</code></a>. This crate is intended to be used for
+parsing type strings present in existing ecosystem tooling, and nothing else.
+It is not intended to be used for parsing Solidity source code.</p>
+<p>This crate is useful for:</p>
+<ul>
+<li>syntax-checking JSON ABI files</li>
+<li>providing known-good input to <a href="https://docs.rs/linera-alloy-dyn-abi/latest/linera_alloy_dyn_abi/"><code>linera-alloy-dyn-abi</code></a></li>
+<li>porting ethers.js code to rust</li>
+</ul>
+<p>It is NOT useful for:</p>
+<ul>
+<li>parsing Solidity source code</li>
+<li>generating Rust code from Solidity source code</li>
+<li>generating Solidity source code from rust code</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="utils/index.html" title="mod linera_alloy::json_abi::parser::utils">utils</a></div><div class="desc docblock-short">Generic <a href="../../../winnow/index.html" title="mod winnow"><code>winnow</code></a> parsing utilities.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct linera_alloy::json_abi::parser::Error">Error</a></div><div class="desc docblock-short">Parser error.</div></li><li><div class="item-name"><a class="struct" href="struct.ParameterSpecifier.html" title="struct linera_alloy::json_abi::parser::ParameterSpecifier">ParameterSpecifier</a></div><div class="desc docblock-short">Represents a function parameter.</div></li><li><div class="item-name"><a class="struct" href="struct.Parameters.html" title="struct linera_alloy::json_abi::parser::Parameters">Parameters</a></div><div class="desc docblock-short">Represents a list of function parameters.</div></li><li><div class="item-name"><a class="struct" href="struct.RootType.html" title="struct linera_alloy::json_abi::parser::RootType">RootType</a></div><div class="desc docblock-short">A root type, with no array suffixes. Corresponds to a single, non-sequence
+type. This is the most basic type specifier.</div></li><li><div class="item-name"><a class="struct" href="struct.TupleSpecifier.html" title="struct linera_alloy::json_abi::parser::TupleSpecifier">TupleSpecifier</a></div><div class="desc docblock-short">A tuple specifier, with no array suffixes. Corresponds to a sequence of
+types.</div></li><li><div class="item-name"><a class="struct" href="struct.TypeSpecifier.html" title="struct linera_alloy::json_abi::parser::TypeSpecifier">TypeSpecifier</a></div><div class="desc docblock-short">Represents a type-name. Consists of an identifier and optional array sizes.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Storage.html" title="enum linera_alloy::json_abi::parser::Storage">Storage</a></div><div class="desc docblock-short">Storage specifier.</div></li><li><div class="item-name"><a class="enum" href="enum.TypeStem.html" title="enum linera_alloy::json_abi::parser::TypeStem">TypeStem</a></div><div class="desc docblock-short">A stem of a Solidity array type. It is either a root type, or a tuple type.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.IDENT_REGEX.html" title="constant linera_alloy::json_abi::parser::IDENT_REGEX">IDENT_REGEX</a></div><div class="desc docblock-short">The regular expression for a Solidity identifier.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.is_id_continue.html" title="fn linera_alloy::json_abi::parser::is_id_continue">is_id_continue</a></div><div class="desc docblock-short">Returns <code>true</code> if the given character is valid in a Solidity identifier.</div></li><li><div class="item-name"><a class="fn" href="fn.is_id_start.html" title="fn linera_alloy::json_abi::parser::is_id_start">is_id_start</a></div><div class="desc docblock-short">Returns <code>true</code> if the given character is valid at the start of a Solidity
+identifier.</div></li><li><div class="item-name"><a class="fn" href="fn.is_valid_identifier.html" title="fn linera_alloy::json_abi::parser::is_valid_identifier">is_valid_identifier</a></div><div class="desc docblock-short">Returns <code>true</code> if the given string is a valid Solidity identifier.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type linera_alloy::json_abi::parser::Result">Result</a></div><div class="desc docblock-short">Parser result</div></li></ul></section></div></main></body></html>

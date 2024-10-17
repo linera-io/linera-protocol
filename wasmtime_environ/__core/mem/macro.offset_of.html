@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Expands to the offset in bytes of a field from the beginning of the given type."><title>offset_of in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::mem</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a>::<wbr><a class="macro" href="#">offset_of</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.77.0">1.77.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/mod.rs.html#1358">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="kw">pub macro </span>offset_of(<span class="macro-nonterminal">$Container</span>:ty, $(<span class="macro-nonterminal">$fields</span>:expr)+ $(,)<span class="question-mark">?</span>) {
+    ...
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Expands to the offset in bytes of a field from the beginning of the given type.</p>
+<p>Structs, enums, unions and tuples are supported.</p>
+<p>Nested field accesses may be used, but not array indexes.</p>
+<p>Enum variants may be traversed as if they were fields. Variants themselves do
+not have an offset.</p>
+<p>However, on stable only a single field name is supported, which blocks the use of
+enum support.</p>
+<p>Visibility is respected - all types and fields must be visible to the call site:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">mod </span>nested {
+    <span class="attr">#[repr(C)]
+    </span><span class="kw">pub struct </span>Struct {
+        private: u8,
+    }
+}
+
+<span class="comment">// assert_eq!(mem::offset_of!(nested::Struct, private), 0);
+// ^^^ error[E0616]: field `private` of struct `Struct` is private</span></code></pre></div>
+<p>Only <a href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized"><code>Sized</code></a> fields are supported, but the container may be unsized:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[repr(C)]
+</span><span class="kw">pub struct </span>Struct {
+    a: u8,
+    b: [u8],
+}
+
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(Struct, a), <span class="number">0</span>); <span class="comment">// OK
+// assert_eq!(mem::offset_of!(Struct, b), 1);
+// ^^^ error[E0277]: doesn't have a size known at compile-time</span></code></pre></div>
+<p>Note that type layout is, in general, <a href="https://doc.rust-lang.org/reference/type-layout.html">subject to change and
+platform-specific</a>. If
+layout stability is required, consider using an <a href="https://doc.rust-lang.org/reference/type-layout.html#representations">explicit <code>repr</code> attribute</a>.</p>
+<p>Rust guarantees that the offset of a given field within a given type will not
+change over the lifetime of the program. However, two different compilations of
+the same program may result in different layouts. Also, even within a single
+program execution, no guarantees are made about types which are <em>similar</em> but
+not <em>identical</em>, e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>Wrapper&lt;T, U&gt;(T, U);
+
+<span class="kw">type </span>A = Wrapper&lt;u8, u8&gt;;
+<span class="kw">type </span>B = Wrapper&lt;u8, i8&gt;;
+
+<span class="comment">// Not necessarily identical even though `u8` and `i8` have the same layout!
+// assert_eq!(mem::offset_of!(A, 1), mem::offset_of!(B, 1));
+
+</span><span class="attr">#[repr(transparent)]
+</span><span class="kw">struct </span>U8(u8);
+
+<span class="kw">type </span>C = Wrapper&lt;u8, U8&gt;;
+
+<span class="comment">// Not necessarily identical even though `u8` and `U8` have the same layout!
+// assert_eq!(mem::offset_of!(A, 1), mem::offset_of!(C, 1));
+
+</span><span class="kw">struct </span>Empty&lt;T&gt;(core::marker::PhantomData&lt;T&gt;);
+
+<span class="comment">// Not necessarily identical even though `PhantomData` always has the same layout!
+// assert_eq!(mem::offset_of!(Empty&lt;u8&gt;, 0), mem::offset_of!(Empty&lt;i8&gt;, 0));</span></code></pre></div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(offset_of_enum, offset_of_nested)]
+
+</span><span class="kw">use </span>std::mem;
+<span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>FieldStruct {
+    first: u8,
+    second: u16,
+    third: u8
+}
+
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(FieldStruct, first), <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(FieldStruct, second), <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(FieldStruct, third), <span class="number">4</span>);
+
+<span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>NestedA {
+    b: NestedB
+}
+
+<span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>NestedB(u8);
+
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(NestedA, b.<span class="number">0</span>), <span class="number">0</span>);
+
+<span class="attr">#[repr(u8)]
+</span><span class="kw">enum </span>Enum {
+    A(u8, u16),
+    B { one: u8, two: u16 },
+}
+
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(Enum, A.<span class="number">0</span>), <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(Enum, B.two), <span class="number">2</span>);
+
+<span class="macro">assert_eq!</span>(<span class="macro">mem::offset_of!</span>(<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>u8&gt;, <span class="prelude-val">Some</span>.<span class="number">0</span>), <span class="number">0</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

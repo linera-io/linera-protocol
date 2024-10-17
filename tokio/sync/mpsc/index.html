@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A multi-producer, single-consumer queue for sending values between asynchronous tasks."><title>tokio::sync::mpsc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Module mpsc</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In tokio::sync</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">sync</a>::<wbr><a class="mod" href="#">mpsc</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/sync/mpsc/mod.rs.html#1-140">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A multi-producer, single-consumer queue for sending values between
+asynchronous tasks.</p>
+<p>This module provides two variants of the channel: bounded and unbounded. The
+bounded variant has a limit on the number of messages that the channel can
+store, and if this limit is reached, trying to send another message will
+wait until a message is received from the channel. An unbounded channel has
+an infinite capacity, so the <code>send</code> method will always complete immediately.
+This makes the <a href="struct.UnboundedSender.html" title="struct tokio::sync::mpsc::UnboundedSender"><code>UnboundedSender</code></a> usable from both synchronous and
+asynchronous code.</p>
+<p>Similar to the <code>mpsc</code> channels provided by <code>std</code>, the channel constructor
+functions provide separate send and receive handles, <a href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender"><code>Sender</code></a> and
+<a href="struct.Receiver.html" title="struct tokio::sync::mpsc::Receiver"><code>Receiver</code></a> for the bounded channel, <a href="struct.UnboundedSender.html" title="struct tokio::sync::mpsc::UnboundedSender"><code>UnboundedSender</code></a> and
+<a href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver"><code>UnboundedReceiver</code></a> for the unbounded channel. If there is no message to read,
+the current task will be notified when a new value is sent. <a href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender"><code>Sender</code></a> and
+<a href="struct.UnboundedSender.html" title="struct tokio::sync::mpsc::UnboundedSender"><code>UnboundedSender</code></a> allow sending values into the channel. If the bounded
+channel is at capacity, the send is rejected and the task will be notified
+when additional capacity is available. In other words, the channel provides
+backpressure.</p>
+<p>This channel is also suitable for the single-producer single-consumer
+use-case. (Unless you only need to send one message, in which case you
+should use the <a href="../oneshot/index.html" title="mod tokio::sync::oneshot">oneshot</a> channel.)</p>
+<h2 id="disconnection"><a class="doc-anchor" href="#disconnection">§</a>Disconnection</h2>
+<p>When all <a href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender"><code>Sender</code></a> handles have been dropped, it is no longer
+possible to send values into the channel. This is considered the termination
+event of the stream. As such, <code>Receiver::poll</code> returns <code>Ok(Ready(None))</code>.</p>
+<p>If the <a href="struct.Receiver.html" title="struct tokio::sync::mpsc::Receiver"><code>Receiver</code></a> handle is dropped, then messages can no longer
+be read out of the channel. In this case, all further attempts to send will
+result in an error. Additionally, all unread messages will be drained from the
+channel and dropped.</p>
+<h2 id="clean-shutdown"><a class="doc-anchor" href="#clean-shutdown">§</a>Clean Shutdown</h2>
+<p>When the <a href="struct.Receiver.html" title="struct tokio::sync::mpsc::Receiver"><code>Receiver</code></a> is dropped, it is possible for unprocessed messages to
+remain in the channel. Instead, it is usually desirable to perform a “clean”
+shutdown. To do this, the receiver first calls <code>close</code>, which will prevent
+any further messages to be sent into the channel. Then, the receiver
+consumes the channel to completion, at which point the receiver can be
+dropped.</p>
+<h2 id="communicating-between-sync-and-async-code"><a class="doc-anchor" href="#communicating-between-sync-and-async-code">§</a>Communicating between sync and async code</h2>
+<p>When you want to communicate between synchronous and asynchronous code, there
+are two situations to consider:</p>
+<p><strong>Bounded channel</strong>: If you need a bounded channel, you should use a bounded
+Tokio <code>mpsc</code> channel for both directions of communication. Instead of calling
+the async <a href="struct.Sender.html#method.send" title="method tokio::sync::mpsc::Sender::send"><code>send</code></a> or <a href="struct.Receiver.html#method.recv" title="method tokio::sync::mpsc::Receiver::recv"><code>recv</code></a> methods, in
+synchronous code you will need to use the <a href="struct.Sender.html#method.blocking_send" title="method tokio::sync::mpsc::Sender::blocking_send"><code>blocking_send</code></a> or
+<a href="struct.Receiver.html#method.blocking_recv" title="method tokio::sync::mpsc::Receiver::blocking_recv"><code>blocking_recv</code></a> methods.</p>
+<p><strong>Unbounded channel</strong>: You should use the kind of channel that matches where
+the receiver is. So for sending a message <em>from async to sync</em>, you should
+use <a href="https://doc.rust-lang.org/1.81.0/std/sync/mpsc/fn.channel.html" title="fn std::sync::mpsc::channel">the standard library unbounded channel</a> or
+<a href="https://docs.rs/crossbeam/*/crossbeam/channel/fn.unbounded.html">crossbeam</a>.  Similarly, for sending a message <em>from sync
+to async</em>, you should use an unbounded Tokio <code>mpsc</code> channel.</p>
+<p>Please be aware that the above remarks were written with the <code>mpsc</code> channel
+in mind, but they can also be generalized to other kinds of channels. In
+general, any channel method that isn’t marked async can be called anywhere,
+including outside of the runtime. For example, sending a message on a
+<a href="../oneshot/index.html" title="mod tokio::sync::oneshot">oneshot</a> channel from outside the runtime is perfectly fine.</p>
+<h2 id="multiple-runtimes"><a class="doc-anchor" href="#multiple-runtimes">§</a>Multiple runtimes</h2>
+<p>The mpsc channel does not care about which runtime you use it in, and can be
+used to send messages from one runtime to another. It can also be used in
+non-Tokio runtimes.</p>
+<p>There is one exception to the above: the <a href="struct.Sender.html#method.send_timeout" title="method tokio::sync::mpsc::Sender::send_timeout"><code>send_timeout</code></a> must be used from
+within a Tokio runtime, however it is still not tied to one specific Tokio
+runtime, and the sender may be moved from one Tokio runtime to another.</p>
+<h2 id="allocation-behavior"><a class="doc-anchor" href="#allocation-behavior">§</a>Allocation behavior</h2><div class="warning">The implementation details described in this section may change in future
+Tokio releases.</div>
+<p>The mpsc channel stores elements in blocks. Blocks are organized in a linked list. Sending
+pushes new elements onto the block at the front of the list, and receiving pops them off the
+one at the back. A block can hold 32 messages on a 64-bit target and 16 messages on a 32-bit
+target. This number is independent of channel and message size. Each block also stores 4
+pointer-sized values for bookkeeping (so on a 64-bit machine, each message has 1 byte of
+overhead).</p>
+<p>When all values in a block have been received, it becomes empty. It will then be freed, unless
+the channel’s first block (where newly-sent elements are being stored) has no next block. In
+that case, the empty block is reused as the next block.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod tokio::sync::mpsc::error">error</a></div><div class="desc docblock-short">Channel error types.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.OwnedPermit.html" title="struct tokio::sync::mpsc::OwnedPermit">OwnedPermit</a></div><div class="desc docblock-short">Owned permit to send one value into the channel.</div></li><li><div class="item-name"><a class="struct" href="struct.Permit.html" title="struct tokio::sync::mpsc::Permit">Permit</a></div><div class="desc docblock-short">Permits to send one value into the channel.</div></li><li><div class="item-name"><a class="struct" href="struct.PermitIterator.html" title="struct tokio::sync::mpsc::PermitIterator">PermitIterator</a></div><div class="desc docblock-short">An <a href="https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator"><code>Iterator</code></a> of <a href="struct.Permit.html" title="struct tokio::sync::mpsc::Permit"><code>Permit</code></a> that can be used to hold <code>n</code> slots in the channel.</div></li><li><div class="item-name"><a class="struct" href="struct.Receiver.html" title="struct tokio::sync::mpsc::Receiver">Receiver</a></div><div class="desc docblock-short">Receives values from the associated <code>Sender</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender">Sender</a></div><div class="desc docblock-short">Sends values to the associated <code>Receiver</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a></div><div class="desc docblock-short">Receive values from the associated <code>UnboundedSender</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.UnboundedSender.html" title="struct tokio::sync::mpsc::UnboundedSender">UnboundedSender</a></div><div class="desc docblock-short">Send values to the associated <code>UnboundedReceiver</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.WeakSender.html" title="struct tokio::sync::mpsc::WeakSender">WeakSender</a></div><div class="desc docblock-short">A sender that does not prevent the channel from being closed.</div></li><li><div class="item-name"><a class="struct" href="struct.WeakUnboundedSender.html" title="struct tokio::sync::mpsc::WeakUnboundedSender">WeakUnboundedSender</a></div><div class="desc docblock-short">An unbounded sender that does not prevent the channel from being closed.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.channel.html" title="fn tokio::sync::mpsc::channel">channel</a></div><div class="desc docblock-short">Creates a bounded mpsc channel for communicating between asynchronous tasks
+with backpressure.</div></li><li><div class="item-name"><a class="fn" href="fn.unbounded_channel.html" title="fn tokio::sync::mpsc::unbounded_channel">unbounded_channel</a></div><div class="desc docblock-short">Creates an unbounded mpsc channel for communicating between asynchronous
+tasks without backpressure.</div></li></ul></section></div></main></body></html>

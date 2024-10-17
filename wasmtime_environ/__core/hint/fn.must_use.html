@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An identity function that causes an `unused_must_use` warning to be triggered if the given value is not used (returned, stored in a variable, etc) by the caller."><title>must_use in wasmtime_environ::__core::hint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::hint</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">hint</a>::<wbr><a class="fn" href="#">must_use</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/hint.rs.html#512">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const fn must_use&lt;T&gt;(value: T) -&gt; T</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>hint_must_use</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An identity function that causes an <code>unused_must_use</code> warning to be
+triggered if the given value is not used (returned, stored in a variable,
+etc) by the caller.</p>
+<p>This is primarily intended for use in macro-generated code, in which a
+<a href="https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-must_use-attribute"><code>#[must_use]</code> attribute</a> either on a type or a function would not
+be convenient.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(hint_must_use)]
+
+</span><span class="kw">use </span>core::fmt;
+
+<span class="kw">pub struct </span>Error(<span class="comment">/* ... */</span>);
+
+<span class="attr">#[macro_export]
+</span><span class="macro">macro_rules!</span> make_error {
+    ($(<span class="macro-nonterminal">$args</span>:expr),<span class="kw-2">*</span>) =&gt; {
+        core::hint::must_use({
+            <span class="kw">let </span>error = <span class="macro-nonterminal">$crate::make_error</span>(<span class="macro">core::format_args!</span>($(<span class="macro-nonterminal">$args</span>),<span class="kw-2">*</span>));
+            error
+        })
+    };
+}
+
+<span class="comment">// Implementation detail of make_error! macro.
+</span><span class="attr">#[doc(hidden)]
+</span><span class="kw">pub fn </span>make_error(args: fmt::Arguments&lt;<span class="lifetime">'_</span>&gt;) -&gt; Error {
+    Error(<span class="comment">/* ... */</span>)
+}
+
+<span class="kw">fn </span>demo() -&gt; <span class="prelude-ty">Option</span>&lt;Error&gt; {
+    <span class="kw">if </span><span class="bool-val">true </span>{
+        <span class="comment">// Oops, meant to write `return Some(make_error!("..."));`
+        </span><span class="prelude-val">Some</span>(<span class="macro">make_error!</span>(<span class="string">"..."</span>));
+    }
+    <span class="prelude-val">None
+</span>}</code></pre></div>
+<p>In the above example, we’d like an <code>unused_must_use</code> lint to apply to the
+value created by <code>make_error!</code>. However, neither <code>#[must_use]</code> on a struct
+nor <code>#[must_use]</code> on a function is appropriate here, so the macro expands
+using <code>core::hint::must_use</code> instead.</p>
+<ul>
+<li>
+<p>We wouldn’t want <code>#[must_use]</code> on the <code>struct Error</code> because that would
+make the following unproblematic code trigger a warning:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>f(arg: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt;
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>t() {
+    <span class="comment">// Assert that `f` returns error if passed an empty string.
+    // A value of type `Error` is unused here but that's not a problem.
+    </span>f(<span class="string">""</span>).unwrap_err();
+}</code></pre></div>
+</li>
+<li>
+<p>Using <code>#[must_use]</code> on <code>fn make_error</code> can’t help because the return value
+<em>is</em> used, as the right-hand side of a <code>let</code> statement. The <code>let</code>
+statement looks useless but is in fact necessary for ensuring that
+temporaries within the <code>format_args</code> expansion are not kept alive past the
+creation of the <code>Error</code>, as keeping them alive past that point can cause
+autotrait issues in async code:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>f() {
+    <span class="comment">// Using `let` inside the make_error expansion causes temporaries like
+    // `unsync()` to drop at the semicolon of that `let` statement, which
+    // is prior to the await point. They would otherwise stay around until
+    // the semicolon on *this* statement, which is after the await point,
+    // and the enclosing Future would not implement Send.
+    </span>log(<span class="macro">make_error!</span>(<span class="string">"look: {:p}"</span>, unsync())).<span class="kw">await</span>;
+}
+
+<span class="kw">async fn </span>log(error: Error) {<span class="comment">/* ... */</span>}
+
+<span class="comment">// Returns something without a Sync impl.
+</span><span class="kw">fn </span>unsync() -&gt; <span class="kw-2">*const </span>() {
+    <span class="number">0 </span><span class="kw">as </span><span class="kw-2">*const </span>()
+}</code></pre></div>
+</li>
+</ul>
+</div></details></section></div></main></body></html>

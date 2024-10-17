@@ -1,0 +1,146 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Cranelift IR builder library."><title>cranelift_frontend - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cranelift_frontend" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cranelift_frontend/index.html">cranelift_frontend</a><span class="version">0.112.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">cranelift_frontend</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/cranelift_frontend/lib.rs.html#1-212">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Cranelift IR builder library.</p>
+<p>Provides a straightforward way to create a Cranelift IR function and fill it with instructions
+corresponding to your source program written in another language.</p>
+<p>To get started, create an <a href="struct.FunctionBuilderContext.html"><code>FunctionBuilderContext</code></a> and
+pass it as an argument to a <a href="struct.FunctionBuilder.html" title="struct cranelift_frontend::FunctionBuilder"><code>FunctionBuilder</code></a>.</p>
+<h2 id="mutable-variables-and-cranelift-ir-values"><a class="doc-anchor" href="#mutable-variables-and-cranelift-ir-values">§</a>Mutable variables and Cranelift IR values</h2>
+<p>The most interesting feature of this API is that it provides a single way to deal with all your
+variable problems. Indeed, the <a href="struct.FunctionBuilder.html" title="struct cranelift_frontend::FunctionBuilder"><code>FunctionBuilder</code></a> struct has a
+type <code>Variable</code> that should be an index of your source language variables. Then, through
+calling the functions
+<a href="struct.FunctionBuilder.html#method.declare_var" title="method cranelift_frontend::FunctionBuilder::declare_var"><code>declare_var</code></a>, <a href="struct.FunctionBuilder.html#method.def_var" title="method cranelift_frontend::FunctionBuilder::def_var"><code>def_var</code></a> and
+<a href="struct.FunctionBuilder.html#method.use_var" title="method cranelift_frontend::FunctionBuilder::use_var"><code>use_var</code></a>, the <a href="struct.FunctionBuilder.html" title="struct cranelift_frontend::FunctionBuilder"><code>FunctionBuilder</code></a> will create for you all the
+Cranelift IR values corresponding to your variables.</p>
+<p>This API has been designed to help you translate your mutable variables into
+<a href="https://en.wikipedia.org/wiki/Static_single_assignment_form"><code>SSA</code></a> form.
+<a href="struct.FunctionBuilder.html#method.use_var" title="method cranelift_frontend::FunctionBuilder::use_var"><code>use_var</code></a> will return the Cranelift IR value
+that corresponds to your mutable variable at a precise point in the program. However, if you know
+beforehand that one of your variables is defined only once, for instance if it is the result
+of an intermediate expression in an expression-based language, then you can translate it
+directly by the Cranelift IR value returned by the instruction builder. Using the
+<a href="struct.FunctionBuilder.html#method.use_var" title="method cranelift_frontend::FunctionBuilder::use_var"><code>use_var</code></a> API for such an immutable variable
+would also work but with a slight additional overhead (the SSA algorithm does not know
+beforehand if a variable is immutable or not).</p>
+<p>The moral is that you should use these three functions to handle all your mutable variables,
+even those that are not present in the source code but artifacts of the translation. It is up
+to you to keep a mapping between the mutable variables of your language and their <a href="struct.Variable.html" title="struct cranelift_frontend::Variable"><code>Variable</code></a>
+index that is used by Cranelift. Caution: as the <a href="struct.Variable.html" title="struct cranelift_frontend::Variable"><code>Variable</code></a> is used by Cranelift to index an
+array containing information about your mutable variables, when you create a new <a href="struct.Variable.html" title="struct cranelift_frontend::Variable"><code>Variable</code></a>
+with <code>Variable::new(var_index)</code> you should make sure that <code>var_index</code>
+is provided by a counter incremented by 1 each time you encounter a new mutable variable.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Here is a pseudo-program we want to transform into Cranelift IR:</p>
+<div class="example-wrap"><pre class="language-clif"><code>function(x) {
+x, y, z : i32
+block0:
+   y = 2;
+   z = x + y;
+   jump block1
+block1:
+   z = z + y;
+   brif y, block3, block2
+block2:
+   z = z - x;
+   return y
+block3:
+   y = y - x
+   jump block1
+}
+</code></pre></div>
+<p>Here is how you build the corresponding Cranelift IR function using <a href="struct.FunctionBuilderContext.html" title="struct cranelift_frontend::FunctionBuilderContext"><code>FunctionBuilderContext</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>cranelift_codegen::entity::EntityRef;
+<span class="kw">use </span>cranelift_codegen::ir::types::<span class="kw-2">*</span>;
+<span class="kw">use </span>cranelift_codegen::ir::{AbiParam, UserFuncName, Function, InstBuilder, Signature};
+<span class="kw">use </span>cranelift_codegen::isa::CallConv;
+<span class="kw">use </span>cranelift_codegen::settings;
+<span class="kw">use </span>cranelift_codegen::verifier::verify_function;
+<span class="kw">use </span>cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+
+<span class="kw">let </span><span class="kw-2">mut </span>sig = Signature::new(CallConv::SystemV);
+sig.returns.push(AbiParam::new(I32));
+sig.params.push(AbiParam::new(I32));
+<span class="kw">let </span><span class="kw-2">mut </span>fn_builder_ctx = FunctionBuilderContext::new();
+<span class="kw">let </span><span class="kw-2">mut </span>func = Function::with_name_signature(UserFuncName::user(<span class="number">0</span>, <span class="number">0</span>), sig);
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>builder = FunctionBuilder::new(<span class="kw-2">&amp;mut </span>func, <span class="kw-2">&amp;mut </span>fn_builder_ctx);
+
+    <span class="kw">let </span>block0 = builder.create_block();
+    <span class="kw">let </span>block1 = builder.create_block();
+    <span class="kw">let </span>block2 = builder.create_block();
+    <span class="kw">let </span>block3 = builder.create_block();
+    <span class="kw">let </span>x = Variable::new(<span class="number">0</span>);
+    <span class="kw">let </span>y = Variable::new(<span class="number">1</span>);
+    <span class="kw">let </span>z = Variable::new(<span class="number">2</span>);
+    builder.declare_var(x, I32);
+    builder.declare_var(y, I32);
+    builder.declare_var(z, I32);
+    builder.append_block_params_for_function_params(block0);
+
+    builder.switch_to_block(block0);
+    builder.seal_block(block0);
+    {
+        <span class="kw">let </span>tmp = builder.block_params(block0)[<span class="number">0</span>]; <span class="comment">// the first function parameter
+        </span>builder.def_var(x, tmp);
+    }
+    {
+        <span class="kw">let </span>tmp = builder.ins().iconst(I32, <span class="number">2</span>);
+        builder.def_var(y, tmp);
+    }
+    {
+        <span class="kw">let </span>arg1 = builder.use_var(x);
+        <span class="kw">let </span>arg2 = builder.use_var(y);
+        <span class="kw">let </span>tmp = builder.ins().iadd(arg1, arg2);
+        builder.def_var(z, tmp);
+    }
+    builder.ins().jump(block1, <span class="kw-2">&amp;</span>[]);
+
+    builder.switch_to_block(block1);
+    {
+        <span class="kw">let </span>arg1 = builder.use_var(y);
+        <span class="kw">let </span>arg2 = builder.use_var(z);
+        <span class="kw">let </span>tmp = builder.ins().iadd(arg1, arg2);
+        builder.def_var(z, tmp);
+    }
+    {
+        <span class="kw">let </span>arg = builder.use_var(y);
+        builder.ins().brif(arg, block3, <span class="kw-2">&amp;</span>[], block2, <span class="kw-2">&amp;</span>[]);
+    }
+
+    builder.switch_to_block(block2);
+    builder.seal_block(block2);
+    {
+        <span class="kw">let </span>arg1 = builder.use_var(z);
+        <span class="kw">let </span>arg2 = builder.use_var(x);
+        <span class="kw">let </span>tmp = builder.ins().isub(arg1, arg2);
+        builder.def_var(z, tmp);
+    }
+    {
+        <span class="kw">let </span>arg = builder.use_var(y);
+        builder.ins().return_(<span class="kw-2">&amp;</span>[arg]);
+    }
+
+    builder.switch_to_block(block3);
+    builder.seal_block(block3);
+
+    {
+        <span class="kw">let </span>arg1 = builder.use_var(y);
+        <span class="kw">let </span>arg2 = builder.use_var(x);
+        <span class="kw">let </span>tmp = builder.ins().isub(arg1, arg2);
+        builder.def_var(y, tmp);
+    }
+    builder.ins().jump(block1, <span class="kw-2">&amp;</span>[]);
+    builder.seal_block(block1);
+
+    builder.finalize();
+}
+
+<span class="kw">let </span>flags = settings::Flags::new(settings::builder());
+<span class="kw">let </span>res = verify_function(<span class="kw-2">&amp;</span>func, <span class="kw-2">&amp;</span>flags);
+<span class="macro">println!</span>(<span class="string">"{}"</span>, func.display());
+<span class="kw">if let </span><span class="prelude-val">Err</span>(errors) = res {
+    <span class="macro">panic!</span>(<span class="string">"{}"</span>, errors);
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.FuncInstBuilder.html" title="struct cranelift_frontend::FuncInstBuilder">FuncInstBuilder</a></div><div class="desc docblock-short">Implementation of the <a href="../cranelift_codegen/ir/builder/trait.InstBuilder.html" title="trait cranelift_codegen::ir::builder::InstBuilder"><code>InstBuilder</code></a> that has
+one convenience method per Cranelift IR instruction.</div></li><li><div class="item-name"><a class="struct" href="struct.FunctionBuilder.html" title="struct cranelift_frontend::FunctionBuilder">FunctionBuilder</a></div><div class="desc docblock-short">Temporary object used to build a single Cranelift IR <a href="../cranelift_codegen/ir/function/struct.Function.html" title="struct cranelift_codegen::ir::function::Function"><code>Function</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.FunctionBuilderContext.html" title="struct cranelift_frontend::FunctionBuilderContext">FunctionBuilderContext</a></div><div class="desc docblock-short">Structure used for translating a series of functions into Cranelift IR.</div></li><li><div class="item-name"><a class="struct" href="struct.Switch.html" title="struct cranelift_frontend::Switch">Switch</a></div><div class="desc docblock-short">Unlike with <code>br_table</code>, <code>Switch</code> cases may be sparse or non-0-based.
+They emit efficient code using branches, jump tables, or a combination of both.</div></li><li><div class="item-name"><a class="struct" href="struct.Variable.html" title="struct cranelift_frontend::Variable">Variable</a></div><div class="desc docblock-short">An opaque reference to a variable.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.VERSION.html" title="constant cranelift_frontend::VERSION">VERSION</a></div><div class="desc docblock-short">Version number of this crate.</div></li></ul></section></div></main></body></html>

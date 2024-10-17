@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch","raw_batch","row","value","writers"],"struct":["CellValueBuilder","CellWriter","RowWriter","SerializationError"]};

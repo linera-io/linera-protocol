@@ -1,0 +1,515 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generate types that implement `linera-alloy-sol-types` traits, which can be used for type-safe ABI and EIP-712 serialization to interface with Ethereum smart contracts."><title>sol in linera_alloy_sol_macro - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="linera_alloy_sol_macro" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../linera_alloy_sol_macro/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../linera_alloy_sol_macro/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../linera_alloy_sol_macro/index.html">linera_alloy_sol_macro</a><span class="version">0.7.4</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">linera_alloy_sol_macro</a>::<wbr><a class="macro" href="#">sol</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/linera_alloy_sol_macro/lib.rs.html#240">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>sol!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generate types that implement <a href="https://docs.rs/linera-alloy-sol-types"><code>linera-alloy-sol-types</code></a> traits, which can be used
+for type-safe <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> serialization to interface with Ethereum
+smart contracts.</p>
+<p>Note that you will likely want to use this macro through a re-export in another crate,
+as it will also set the correct paths for the required dependencies by using a <code>macro_rules!</code>
+wrapper.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<blockquote>
+<p>Note: the following example code blocks cannot be tested here because the
+generated code references <a href="https://docs.rs/linera-alloy-sol-types"><code>linera-alloy-sol-types</code></a>, so they are <a href="https://github.com/alloy-rs/core/tree/main/crates/sol-types/tests/doctests">tested in that
+crate</a> and included with <a href="https://doc.rust-lang.org/1.81.0/core/macro.include_str.html" title="macro core::include_str"><code>include_str!</code></a> in this doc instead.</p>
+</blockquote>
+<p>There are two main ways to use this macro:</p>
+<ul>
+<li>you can <a href="#solidity">write Solidity code</a>, or provide a path to a Solidity file,</li>
+<li>if you enable the <code>json</code> feature, you can provide <a href="#json-abi">an ABI, or a path to one, in JSON
+format</a>.</li>
+</ul>
+<p>Note:</p>
+<ul>
+<li>relative file system paths are rooted at the <code>CARGO_MANIFEST_DIR</code> environment variable</li>
+<li>no casing convention is enforced for any identifier,</li>
+<li>unnamed arguments will be given a name based on their index in the list, e.g. <code>_0</code>, <code>_1</code>…</li>
+<li>a current limitation for certain items is that custom types, like structs, must be defined in
+the same macro scope, otherwise a signature cannot be generated at compile time. You can bring
+them in scope with a <a href="#udvt-and-type-aliases">Solidity type alias</a>.</li>
+</ul>
+<h3 id="solidity"><a class="doc-anchor" href="#solidity">§</a>Solidity</h3>
+<p>This macro uses <a href="https://docs.rs/linera-alloy-syn-solidity/latest/linera_alloy_syn_solidity"><code>linera-alloy-syn-solidity</code></a> to parse Solidity-like syntax. See
+<a href="https://docs.rs/linera-alloy-syn-solidity/latest/linera_alloy_syn_solidity">its documentation</a> for more.</p>
+<p>Solidity input can be either one of the following:</p>
+<ul>
+<li>a Solidity item, which is a <a href="https://docs.soliditylang.org/en/latest/grammar.html#a4.SolidityParser.sourceUnit">Solidity source unit</a> which generates one or more Rust
+items,</li>
+<li>a <a href="https://docs.soliditylang.org/en/latest/types.html">Solidity type name</a>, which simply expands to the corresponding Rust type.</li>
+</ul>
+<p><strong>IMPORTANT!</strong> This is <strong>NOT</strong> a Solidity compiler, or a substitute for one! It only parses a
+Solidity-like syntax to generate Rust types, designed for simple interfaces defined inline with
+your other Rust code.</p>
+<p>Further, this macro does not resolve imports or dependencies, and it does not handle
+inheritance. All required types must be provided in the same macro scope.</p>
+<h4 id="attributes"><a class="doc-anchor" href="#attributes">§</a>Attributes</h4>
+<p>Inner attributes (<code>#![...]</code>) are parsed at the top of the input, just like a
+Rust module. These can only be <code>sol</code> attributes, and they will apply to the
+entire input.</p>
+<p>Outer attributes (<code>#[...]</code>) are parsed as part of each individual item, like
+structs, enums, etc. These can be any Rust attribute, and they will be added
+to every Rust item generated from the Solidity item.</p>
+<p>This macro provides the <code>sol</code> attribute, which can be used to customize the
+generated code. Note that unused attributes are currently silently ignored,
+but this may change in the future.</p>
+<p>Note that the <code>sol</code> attribute does not compose like other Rust attributes, for example
+<code>#[cfg_attr]</code> will <strong>NOT</strong> work, as it is parsed and extracted from the input separately.
+This is a limitation of the proc-macro API.</p>
+<p>List of all <code>#[sol(...)]</code> supported values:</p>
+<ul>
+<li>
+<p><code>rpc [ = &lt;bool = false&gt;]</code> (contracts and alike only): generates a structs with methods to
+construct <code>eth_call</code>s to an on-chain contract through Ethereum JSON RPC, similar to the
+default behavior of <a href="https://docs.rs/ethers/latest/ethers/contract/macro.abigen.html"><code>abigen</code></a>. This makes use of the <a href="https://github.com/alloy-rs/alloy"><code>alloy-contract</code></a>
+crate.</p>
+<p>N.B: at the time of writing, the <code>alloy-contract</code> crate is not yet released on <code>crates.io</code>,
+and its API is completely unstable and subject to change, so this feature is not yet
+recommended for use.</p>
+<p>Generates the following items inside of the <code>{contract_name}</code> module:</p>
+<ul>
+<li><code>struct {contract_name}Instance&lt;P: Provider&gt; { ... }</code>
+<ul>
+<li><code>pub fn new(...) -&gt; {contract_name}Instance&lt;P&gt;</code> + getters and setters</li>
+<li><code>pub fn call_builder&lt;C: SolCall&gt;(&amp;self, call: &amp;C) -&gt; SolCallBuilder&lt;P, C&gt;</code>, as a generic
+way to call any function of the contract, even if not generated by the macro; prefer the
+other methods when possible</li>
+<li><code>pub fn &lt;functionName&gt;(&amp;self, &lt;parameters&gt;...) -&gt; CallBuilder&lt;P, functionReturn&gt;</code> for each
+function in the contract</li>
+<li><code>pub fn &lt;eventName&gt;_filter(&amp;self) -&gt; Event&lt;P, eventName&gt;</code> for each event in the contract</li>
+</ul>
+</li>
+<li><code>pub fn new ...</code>, same as above just as a free function in the contract module</li>
+</ul>
+</li>
+<li>
+<p><code>abi [ = &lt;bool = false&gt;]</code>: generates functions which return the dynamic ABI representation
+(provided by <a href="https://docs.rs/linera-alloy-json-abi"><code>linera_alloy_json_abi</code></a>) of all the generated items.
+Requires the <code>"json"</code> feature. For:</p>
+<ul>
+<li>contracts: generates an <code>abi</code> module nested inside of the contract module, which contains:
+<ul>
+<li><code>pub fn contract() -&gt; JsonAbi</code>,</li>
+<li><code>pub fn constructor() -&gt; Option&lt;Constructor&gt;</code></li>
+<li><code>pub fn fallback() -&gt; Option&lt;Fallback&gt;</code></li>
+<li><code>pub fn receive() -&gt; Option&lt;Receive&gt;</code></li>
+<li><code>pub fn functions() -&gt; BTreeMap&lt;String, Vec&lt;Function&gt;&gt;</code></li>
+<li><code>pub fn events() -&gt; BTreeMap&lt;String, Vec&lt;Event&gt;&gt;</code></li>
+<li><code>pub fn errors() -&gt; BTreeMap&lt;String, Vec&lt;Error&gt;&gt;</code></li>
+</ul>
+</li>
+<li>items: generates implementations of the <code>SolAbiExt</code> trait, alongside the existing
+<a href="https://docs.rs/linera-alloy-sol-types"><code>linera-alloy-sol-types</code></a> traits</li>
+</ul>
+</li>
+<li>
+<p><code>linera_alloy_sol_types = &lt;path = ::linera_alloy_sol_types&gt;</code> (inner attribute only): specifies the path to
+the required dependency <a href="https://docs.rs/linera-alloy-sol-types"><code>linera-alloy-sol-types</code></a>.</p>
+</li>
+<li>
+<p><code>linera_alloy_contract = &lt;path = ::linera_alloy_contract&gt;</code> (inner attribute only): specifies the path to the
+optional dependency [<code>alloy-contract</code>]. This is only used by the <code>rpc</code> attribute.</p>
+</li>
+<li>
+<p><code>all_derives [ = &lt;bool = false&gt;]</code>: adds all possible <code>#[derive(...)]</code> attributes to all
+generated types. May significantly increase compile times due to all the extra generated code.
+This is the default behavior of <a href="https://docs.rs/ethers/latest/ethers/contract/macro.abigen.html"><code>abigen</code></a></p>
+</li>
+<li>
+<p><code>extra_methods [ = &lt;bool = false&gt;]</code>: adds extra implementations and methods to all applicable
+generated types, such as <code>From</code> impls and <code>as_&lt;variant&gt;</code> methods. May significantly increase
+compile times due to all the extra generated code. This is the default behavior of <a href="https://docs.rs/ethers/latest/ethers/contract/macro.abigen.html"><code>abigen</code></a></p>
+</li>
+<li>
+<p><code>docs [ = &lt;bool = true&gt;]</code>: adds doc comments to all generated types. This is the default
+behavior of <a href="https://docs.rs/ethers/latest/ethers/contract/macro.abigen.html"><code>abigen</code></a></p>
+</li>
+<li>
+<p><code>bytecode = &lt;hex string literal&gt;</code> (contract-like only): specifies the creation/init bytecode
+of a contract. This will emit a <code>static</code> item with the specified bytes.</p>
+</li>
+<li>
+<p><code>deployed_bytecode = &lt;hex string literal&gt;</code> (contract-like only): specifies the deployed
+bytecode of a contract. This will emit a <code>static</code> item with the specified bytes.</p>
+</li>
+<li>
+<p><code>type_check = &lt;string literal&gt;</code> (UDVT only): specifies a function to be used to check an User
+Defined Type.</p>
+</li>
+</ul>
+<h4 id="structs-and-enums"><a class="doc-anchor" href="#structs-and-enums">§</a>Structs and enums</h4>
+<p>Structs and enums generate their corresponding Rust types. Enums are
+additionally annotated with <code>#[repr(u8)]</code>, and as such can have a maximum of
+256 variants.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_primitives::{hex, Address, U256};
+<span class="kw">use </span>linera_alloy_sol_types::{sol, SolEnum, SolType};
+
+<span class="macro">sol!</span> {
+   <span class="kw">struct </span>Foo {
+       uint256 bar;
+       address[] baz;
+   }
+
+   <span class="doccomment">/// Nested struct.
+   </span><span class="kw">struct </span>Nested {
+       Foo[<span class="number">2</span>] a;
+       address b;
+   }
+
+   <span class="kw">enum </span>Enum {
+       A,
+       B,
+       C,
+   }
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>structs() {
+   <span class="kw">let </span>my_foo = Foo {
+       bar: U256::from(<span class="number">42</span>),
+       baz: <span class="macro">vec!</span>[Address::repeat_byte(<span class="number">0x11</span>), Address::repeat_byte(<span class="number">0x22</span>)],
+   };
+
+   <span class="kw">let </span>_nested = Nested { a: [my_foo.clone(), my_foo.clone()], b: Address::ZERO };
+
+   <span class="kw">let </span>abi_encoded = Foo::abi_encode_sequence(<span class="kw-2">&amp;</span>my_foo);
+   <span class="macro">assert_eq!</span>(
+       abi_encoded,
+       <span class="macro">hex!</span> {
+           <span class="string">"000000000000000000000000000000000000000000000000000000000000002a" </span><span class="comment">// bar
+           </span><span class="string">"0000000000000000000000000000000000000000000000000000000000000040" </span><span class="comment">// baz offset
+           </span><span class="string">"0000000000000000000000000000000000000000000000000000000000000002" </span><span class="comment">// baz length
+           </span><span class="string">"0000000000000000000000001111111111111111111111111111111111111111" </span><span class="comment">// baz[0]
+           </span><span class="string">"0000000000000000000000002222222222222222222222222222222222222222" </span><span class="comment">// baz[1]
+       </span>}
+   );
+
+   <span class="kw">let </span>abi_encoded_enum = Enum::B.abi_encode();
+   <span class="macro">assert_eq!</span>(
+       abi_encoded_enum,
+       <span class="macro">hex!</span> {
+           <span class="string">"0000000000000000000000000000000000000000000000000000000000000001"
+       </span>}
+   );
+}</code></pre></div>
+<h4 id="udvt-and-type-aliases"><a class="doc-anchor" href="#udvt-and-type-aliases">§</a>UDVT and type aliases</h4>
+<p>User defined value types (UDVT) generate a tuple struct with the type as
+its only field, and type aliases simply expand to the corresponding Rust
+type.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_primitives::Address;
+<span class="kw">use </span>linera_alloy_sol_types::{sol, SolType};
+
+<span class="comment">// Type definition: generates a new struct that implements `SolType`
+</span><span class="macro">sol!</span> {
+   <span class="kw">type </span>MyType is uint256;
+}
+
+<span class="comment">// Type aliases
+</span><span class="kw">type </span>B32 = <span class="macro">sol!</span> { bytes32 };
+<span class="comment">// This is equivalent to the following:
+// type B32 = linera_alloy_sol_types::sol_data::Bytes&lt;32&gt;;
+
+</span><span class="kw">type </span>SolArrayOf&lt;T&gt; = <span class="macro">sol!</span> { T[] };
+<span class="kw">type </span>SolTuple = <span class="macro">sol!</span> { tuple(address, bytes, string) };
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>types() {
+   <span class="kw">let _ </span>= &lt;<span class="macro">sol!</span>(bool)&gt;::abi_encode(<span class="kw-2">&amp;</span><span class="bool-val">true</span>);
+   <span class="kw">let _ </span>= B32::abi_encode(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]);
+   <span class="kw">let _ </span>= SolArrayOf::&lt;<span class="macro">sol!</span>(bool)&gt;::abi_encode(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[<span class="bool-val">true</span>, <span class="bool-val">false</span>]);
+   <span class="kw">let _ </span>= SolTuple::abi_encode(<span class="kw-2">&amp;</span>(Address::ZERO, <span class="macro">vec!</span>[<span class="number">0</span>; <span class="number">32</span>], <span class="string">"hello"</span>.to_string()));
+}</code></pre></div>
+<h4 id="state-variables"><a class="doc-anchor" href="#state-variables">§</a>State variables</h4>
+<p>Public and external state variables will generate a getter function just like in Solidity.</p>
+<p>See the <a href="#functions-and-errors">functions</a> and <a href="#contractsinterfaces">contracts</a>
+sections for more information.</p>
+<h4 id="functions-and-errors"><a class="doc-anchor" href="#functions-and-errors">§</a>Functions and errors</h4>
+<p>Functions generate two structs that implement <code>SolCall</code>: <code>&lt;name&gt;Call</code> for
+the function arguments, and <code>&lt;name&gt;Return</code> for the return values.</p>
+<p>In the case of overloaded functions, an underscore and the index of the
+function will be appended to <code>&lt;name&gt;</code> (like <code>foo_0</code>, <code>foo_1</code>…) for
+disambiguation, but the signature will remain the same.</p>
+<p>E.g. if there are two functions named <code>foo</code>, the generated types will be
+<code>foo_0Call</code> and <code>foo_1Call</code>, each of which will implement <code>SolCall</code>
+with their respective signatures.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_primitives::{hex, keccak256, U256};
+<span class="kw">use </span>linera_alloy_sol_types::{sol, SolCall, SolError};
+
+<span class="macro">sol!</span> {
+   function foo(uint256 a, uint256 b) external view returns (uint256);
+
+   <span class="comment">// These will generate structs prefixed with `overloaded_0`, `overloaded_1`,
+   // and `overloaded_2` by default, but each signature is calculated with
+   // `overloaded` as the function name.
+   </span>function overloaded();
+   function overloaded(uint256) returns (uint256);
+   function overloaded(string);
+
+   <span class="comment">// State variables will generate getter functions just like in Solidity.
+   </span>mapping(uint k =&gt; bool v) public variableGetter;
+
+   <span class="doccomment">/// Implements [`SolError`].
+   </span><span class="attr">#[derive(Debug, PartialEq, Eq)]
+   </span>error MyError(uint256 a, uint256 b);
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>function() {
+   assert_call_signature::&lt;fooCall&gt;(<span class="string">"foo(uint256,uint256)"</span>);
+
+   <span class="kw">let </span>call = fooCall { a: U256::from(<span class="number">1</span>), b: U256::from(<span class="number">2</span>) };
+   <span class="kw">let </span>_call_data = call.abi_encode();
+
+   <span class="kw">let _ </span>= overloaded_0Call {};
+   assert_call_signature::&lt;overloaded_0Call&gt;(<span class="string">"overloaded()"</span>);
+
+   <span class="kw">let _ </span>= overloaded_1Call { _0: U256::from(<span class="number">1</span>) };
+   assert_call_signature::&lt;overloaded_1Call&gt;(<span class="string">"overloaded(uint256)"</span>);
+
+   <span class="kw">let _ </span>= overloaded_2Call { _0: <span class="string">"hello"</span>.into() };
+   assert_call_signature::&lt;overloaded_2Call&gt;(<span class="string">"overloaded(string)"</span>);
+
+   <span class="comment">// Exactly the same as `function variableGetter(uint256) returns (bool)`.
+   </span><span class="kw">let _ </span>= variableGetterCall { k: U256::from(<span class="number">2</span>) };
+   assert_call_signature::&lt;variableGetterCall&gt;(<span class="string">"variableGetter(uint256)"</span>);
+   <span class="kw">let _ </span>= variableGetterReturn { v: <span class="bool-val">false </span>};
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>error() {
+   assert_error_signature::&lt;MyError&gt;(<span class="string">"MyError(uint256,uint256)"</span>);
+   <span class="kw">let </span>call_data = <span class="macro">hex!</span>(
+       <span class="string">"0000000000000000000000000000000000000000000000000000000000000001"
+       "0000000000000000000000000000000000000000000000000000000000000002"
+   </span>);
+   <span class="macro">assert_eq!</span>(
+       MyError::abi_decode_raw(<span class="kw-2">&amp;</span>call_data, <span class="bool-val">true</span>),
+       <span class="prelude-val">Ok</span>(MyError { a: U256::from(<span class="number">1</span>), b: U256::from(<span class="number">2</span>) })
+   );
+}
+
+<span class="kw">fn </span>assert_call_signature&lt;T: SolCall&gt;(expected: <span class="kw-2">&amp;</span>str) {
+   <span class="macro">assert_eq!</span>(T::SIGNATURE, expected);
+   <span class="macro">assert_eq!</span>(T::SELECTOR, keccak256(expected)[..<span class="number">4</span>]);
+}
+
+<span class="kw">fn </span>assert_error_signature&lt;T: SolError&gt;(expected: <span class="kw-2">&amp;</span>str) {
+   <span class="macro">assert_eq!</span>(T::SIGNATURE, expected);
+   <span class="macro">assert_eq!</span>(T::SELECTOR, keccak256(expected)[..<span class="number">4</span>]);
+}</code></pre></div>
+<h4 id="events"><a class="doc-anchor" href="#events">§</a>Events</h4>
+<p>Events generate a struct that implements <code>SolEvent</code>.</p>
+<p>Note that events have special encoding rules in Solidity. For example,
+<code>string indexed</code> will be encoded in the topics as its <code>bytes32</code> Keccak-256
+hash, and as such the generated field for this argument will be <code>bytes32</code>,
+and not <code>string</code>.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![allow(clippy::assertions_on_constants)]
+
+</span><span class="kw">use </span>linera_alloy_primitives::{hex, keccak256, Bytes, Log, B256, U256};
+<span class="kw">use </span>alloy_rlp::{Decodable, Encodable};
+<span class="kw">use </span>linera_alloy_sol_types::{abi::token::WordToken, sol, SolEvent};
+
+<span class="macro">sol!</span> {
+   <span class="attr">#[derive(Default, PartialEq, Debug)]
+   </span>event MyEvent(bytes32 indexed a, uint256 b, string indexed c, bytes d);
+
+   event LogNote(
+       bytes4   indexed  sig,
+       address  indexed  guy,
+       bytes32  indexed  foo,
+       bytes32  indexed  bar,
+       uint              wad,
+       bytes             fax
+   ) anonymous;
+
+   <span class="kw">struct </span>Data {
+       bytes data;
+   }
+   event MyEvent2(Data indexed data);
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>event() {
+   assert_event_signature::&lt;MyEvent&gt;(<span class="string">"MyEvent(bytes32,uint256,string,bytes)"</span>);
+   <span class="macro">assert!</span>(!MyEvent::ANONYMOUS);
+   <span class="kw">let </span>event = MyEvent {
+       a: [<span class="number">0x11</span>; <span class="number">32</span>].into(),
+       b: U256::from(<span class="number">1u64</span>),
+       c: keccak256(<span class="string">"Hello World"</span>),
+       d: Bytes::default(),
+   };
+   <span class="comment">// topics are `(SELECTOR, a, keccak256(c))`
+   </span><span class="macro">assert_eq!</span>(
+       event.encode_topics_array::&lt;<span class="number">3</span>&gt;(),
+       [
+           WordToken(MyEvent::SIGNATURE_HASH),
+           WordToken(B256::repeat_byte(<span class="number">0x11</span>)),
+           WordToken(keccak256(<span class="string">"Hello World"</span>))
+       ]
+   );
+   <span class="comment">// dynamic data is `abi.abi_encode(b, d)`
+   </span><span class="macro">assert_eq!</span>(
+       event.encode_data(),
+       <span class="macro">hex!</span>(
+           <span class="comment">// b
+           </span><span class="string">"0000000000000000000000000000000000000000000000000000000000000001"
+           </span><span class="comment">// d offset
+           </span><span class="string">"0000000000000000000000000000000000000000000000000000000000000040"
+           </span><span class="comment">// d length
+           </span><span class="string">"0000000000000000000000000000000000000000000000000000000000000000"
+       </span>),
+   );
+
+   assert_event_signature::&lt;LogNote&gt;(<span class="string">"LogNote(bytes4,address,bytes32,bytes32,uint256,bytes)"</span>);
+   <span class="macro">assert!</span>(LogNote::ANONYMOUS);
+
+   assert_event_signature::&lt;MyEvent2&gt;(<span class="string">"MyEvent2((bytes))"</span>);
+   <span class="macro">assert!</span>(!MyEvent2::ANONYMOUS);
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>event_rlp_roundtrip() {
+   <span class="kw">let </span>event = MyEvent {
+       a: [<span class="number">0x11</span>; <span class="number">32</span>].into(),
+       b: U256::from(<span class="number">1u64</span>),
+       c: keccak256(<span class="string">"Hello World"</span>),
+       d: Vec::new().into(),
+   };
+
+   <span class="kw">let </span>rlpable_log = Log::&lt;MyEvent&gt;::new_from_event_unchecked(Default::default(), event);
+
+   <span class="kw">let </span><span class="kw-2">mut </span>rlp_encoded = <span class="macro">vec!</span>[];
+   rlpable_log.encode(<span class="kw-2">&amp;mut </span>rlp_encoded);
+   <span class="macro">assert_eq!</span>(rlpable_log.length(), rlp_encoded.len());
+
+   <span class="kw">let </span>rlp_decoded = Log::decode(<span class="kw-2">&amp;mut </span>rlp_encoded.as_slice()).unwrap();
+   <span class="macro">assert_eq!</span>(rlp_decoded, rlpable_log.reserialize());
+
+   <span class="kw">let </span>decoded_log = MyEvent::decode_log(<span class="kw-2">&amp;</span>rlp_decoded, <span class="bool-val">true</span>).unwrap();
+
+   <span class="macro">assert_eq!</span>(decoded_log, rlpable_log)
+}
+
+<span class="kw">fn </span>assert_event_signature&lt;T: SolEvent&gt;(expected: <span class="kw-2">&amp;</span>str) {
+   <span class="macro">assert_eq!</span>(T::SIGNATURE, expected);
+   <span class="macro">assert_eq!</span>(T::SIGNATURE_HASH, keccak256(expected));
+}</code></pre></div>
+<h4 id="contractsinterfaces"><a class="doc-anchor" href="#contractsinterfaces">§</a>Contracts/interfaces</h4>
+<p>Contracts generate a module with the same name, which contains all the items.
+This module will also contain 3 container enums which implement <code>SolInterface</code>, one for each:</p>
+<ul>
+<li>functions: <code>&lt;contract_name&gt;Calls</code></li>
+<li>errors: <code>&lt;contract_name&gt;Errors</code></li>
+<li>events: <code>&lt;contract_name&gt;Events</code>
+Note that by default only ABI encoding are generated. In order to generate bindings for RPC
+calls, you must enable the <code>#[sol(rpc)]</code> attribute.</li>
+</ul>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_primitives::{address, hex, U256};
+<span class="kw">use </span>linera_alloy_sol_types::{sol, SolCall, SolConstructor, SolInterface};
+
+<span class="macro">sol!</span> {
+   <span class="doccomment">/// Interface of the ERC20 standard as defined in [the EIP].
+   ///
+   /// [the EIP]: https://eips.ethereum.org/EIPS/eip-20
+   </span><span class="attr">#[derive(Debug, PartialEq, Eq)]
+   </span>contract ERC20 {
+       mapping(address account =&gt; uint256) public balanceOf;
+
+       constructor(string name, string symbol);
+
+       event Transfer(address indexed from, address indexed to, uint256 value);
+       event Approval(address indexed owner, address indexed spender, uint256 value);
+
+       function totalSupply() external view returns (uint256);
+       function transfer(address to, uint256 amount) external returns (bool);
+       function allowance(address owner, address spender) external view returns (uint256);
+       function approve(address spender, uint256 amount) external returns (bool);
+       function transferFrom(address from, address to, uint256 amount) external returns (bool);
+   }
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>constructor() {
+   <span class="kw">let </span>constructor_args =
+       ERC20::constructorCall::new((String::from(<span class="string">"Wrapped Ether"</span>), String::from(<span class="string">"WETH"</span>)))
+           .abi_encode();
+   <span class="kw">let </span>constructor_args_expected = <span class="macro">hex!</span>(<span class="string">"00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000d577261707065642045746865720000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000045745544800000000000000000000000000000000000000000000000000000000"</span>);
+
+   <span class="macro">assert_eq!</span>(constructor_args.as_slice(), constructor_args_expected);
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>transfer() {
+   <span class="comment">// random mainnet ERC20 transfer
+   // https://etherscan.io/tx/0x947332ff624b5092fb92e8f02cdbb8a50314e861a4b39c29a286b3b75432165e
+   </span><span class="kw">let </span>data = <span class="macro">hex!</span>(
+       <span class="string">"a9059cbb"
+       "0000000000000000000000008bc47be1e3abbaba182069c89d08a61fa6c2b292"
+       "0000000000000000000000000000000000000000000000000000000253c51700"
+   </span>);
+   <span class="kw">let </span>expected = ERC20::transferCall {
+       to: <span class="macro">address!</span>(<span class="string">"8bc47be1e3abbaba182069c89d08a61fa6c2b292"</span>),
+       amount: U256::from(<span class="number">9995360000_u64</span>),
+   };
+
+   <span class="macro">assert_eq!</span>(data[..<span class="number">4</span>], ERC20::transferCall::SELECTOR);
+   <span class="kw">let </span>decoded = ERC20::ERC20Calls::abi_decode(<span class="kw-2">&amp;</span>data, <span class="bool-val">true</span>).unwrap();
+   <span class="macro">assert_eq!</span>(decoded, ERC20::ERC20Calls::transfer(expected));
+   <span class="macro">assert_eq!</span>(decoded.abi_encode(), data);
+}</code></pre></div>
+<h3 id="json-abi"><a class="doc-anchor" href="#json-abi">§</a>JSON ABI</h3>
+<p>Contracts can also be generated from ABI JSON strings and files, similar to
+the <a href="https://docs.rs/ethers/latest/ethers/contract/macro.abigen.html">ethers-rs <code>abigen!</code> macro</a>.</p>
+<p>JSON objects containing the <code>abi</code>, <code>evm</code>, <code>bytecode</code>, <code>deployedBytecode</code>,
+and similar keys are also supported.</p>
+<p>Note that only valid JSON is supported, and not the human-readable ABI
+format, also used by <a href="https://docs.rs/ethers/latest/ethers/contract/macro.abigen.html"><code>abigen!</code></a>. This should instead be easily converted to
+<a href="#solidity">normal Solidity input</a>.</p>
+<p>Prefer using <a href="#solidity">Solidity input</a> when possible, as the JSON ABI
+format omits some information which is useful to this macro, such as enum
+variants and visibility modifiers on functions.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>linera_alloy_sol_types::{sol, SolCall};
+
+<span class="macro">sol!</span>(
+   MyJsonContract1,
+   <span class="string">r#"[
+       {
+           "inputs": [
+               { "name": "bar", "type": "uint256" },
+               { 
+                   "internalType": "struct MyJsonContract.MyStruct",
+                   "name": "baz",
+                   "type": "tuple",
+                   "components": [
+                       { "name": "a", "type": "bool[]" },
+                       { "name": "b", "type": "bytes18[][]" }
+                   ]
+               }
+           ],
+           "outputs": [],
+           "stateMutability": "view",
+           "name": "foo",
+           "type": "function"
+       }
+   ]"#
+</span>);
+
+<span class="comment">// This is the same as:
+</span><span class="macro">sol!</span> {
+   interface MyJsonContract2 {
+       <span class="kw">struct </span>MyStruct {
+           bool[] a;
+           bytes18[][] b;
+       }
+
+       function foo(uint256 bar, MyStruct baz) external view;
+   }
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>abigen() {
+   <span class="macro">assert_eq!</span>(MyJsonContract1::fooCall::SIGNATURE, MyJsonContract2::fooCall::SIGNATURE,);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

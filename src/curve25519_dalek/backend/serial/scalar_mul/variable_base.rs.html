@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/curve25519-dalek-4.1.3/src/backend/serial/scalar_mul/variable_base.rs`."><title>variable_base.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="curve25519_dalek" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../../src-files.js"></script><script defer src="../../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+</pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
+
+</span><span class="kw">use </span><span class="kw">crate</span>::backend::serial::curve_models::ProjectiveNielsPoint;
+<span class="kw">use </span><span class="kw">crate</span>::edwards::EdwardsPoint;
+<span class="kw">use </span><span class="kw">crate</span>::scalar::Scalar;
+<span class="kw">use </span><span class="kw">crate</span>::traits::Identity;
+<span class="kw">use </span><span class="kw">crate</span>::window::LookupTable;
+
+<span class="doccomment">/// Perform constant-time, variable-base scalar multiplication.
+</span><span class="attr">#[rustfmt::skip] </span><span class="comment">// keep alignment of explanatory comments
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>mul(point: <span class="kw-2">&amp;</span>EdwardsPoint, scalar: <span class="kw-2">&amp;</span>Scalar) -&gt; EdwardsPoint {
+    <span class="comment">// Construct a lookup table of [P,2P,3P,4P,5P,6P,7P,8P]
+    </span><span class="kw">let </span>lookup_table = LookupTable::&lt;ProjectiveNielsPoint&gt;::from(point);
+    <span class="comment">// Setting s = scalar, compute
+    //
+    //    s = s_0 + s_1*16^1 + ... + s_63*16^63,
+    //
+    // with `-8 ≤ s_i &lt; 8` for `0 ≤ i &lt; 63` and `-8 ≤ s_63 ≤ 8`.
+    // This decomposition requires s &lt; 2^255, which is guaranteed by Scalar invariant #1.
+    </span><span class="kw">let </span>scalar_digits = scalar.as_radix_16();
+    <span class="comment">// Compute s*P as
+    //
+    //    s*P = P*(s_0 +   s_1*16^1 +   s_2*16^2 + ... +   s_63*16^63)
+    //    s*P =  P*s_0 + P*s_1*16^1 + P*s_2*16^2 + ... + P*s_63*16^63
+    //    s*P = P*s_0 + 16*(P*s_1 + 16*(P*s_2 + 16*( ... + P*s_63)...))
+    //
+    // We sum right-to-left.
+
+    // Unwrap first loop iteration to save computing 16*identity
+    </span><span class="kw">let </span><span class="kw-2">mut </span>tmp2;
+    <span class="kw">let </span><span class="kw-2">mut </span>tmp3 = EdwardsPoint::identity();
+    <span class="kw">let </span><span class="kw-2">mut </span>tmp1 = <span class="kw-2">&amp;</span>tmp3 + <span class="kw-2">&amp;</span>lookup_table.select(scalar_digits[<span class="number">63</span>]);
+    <span class="comment">// Now tmp1 = s_63*P in P1xP1 coords
+    </span><span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..<span class="number">63</span>).rev() {
+        tmp2 = tmp1.as_projective(); <span class="comment">// tmp2 =    (prev) in P2 coords
+        </span>tmp1 = tmp2.double();        <span class="comment">// tmp1 =  2*(prev) in P1xP1 coords
+        </span>tmp2 = tmp1.as_projective(); <span class="comment">// tmp2 =  2*(prev) in P2 coords
+        </span>tmp1 = tmp2.double();        <span class="comment">// tmp1 =  4*(prev) in P1xP1 coords
+        </span>tmp2 = tmp1.as_projective(); <span class="comment">// tmp2 =  4*(prev) in P2 coords
+        </span>tmp1 = tmp2.double();        <span class="comment">// tmp1 =  8*(prev) in P1xP1 coords
+        </span>tmp2 = tmp1.as_projective(); <span class="comment">// tmp2 =  8*(prev) in P2 coords
+        </span>tmp1 = tmp2.double();        <span class="comment">// tmp1 = 16*(prev) in P1xP1 coords
+        </span>tmp3 = tmp1.as_extended();   <span class="comment">// tmp3 = 16*(prev) in P3 coords
+        </span>tmp1 = <span class="kw-2">&amp;</span>tmp3 + <span class="kw-2">&amp;</span>lookup_table.select(scalar_digits[i]);
+        <span class="comment">// Now tmp1 = s_i*P + 16*(prev) in P1xP1 coords
+    </span>}
+    tmp1.as_extended()
+}
+</code></pre></div></section></main></body></html>
