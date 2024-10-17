@@ -75,6 +75,7 @@ use crate::{
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerError, WorkerState},
+    CERTIFICATE_BATCH_SIZE,
 };
 
 mod chain_state;
@@ -1492,12 +1493,20 @@ where
             .with_manager_values();
         let info = remote_node.handle_chain_info_query(query).await?;
 
-        let certificates = future::try_join_all(
+        let certificates: Vec<Certificate> = future::try_join_all(
             info.requested_sent_certificate_hashes
-                .into_iter()
-                .map(move |hash| async move { remote_node.node.download_certificate(hash).await }),
+                .chunks(CERTIFICATE_BATCH_SIZE)
+                .map(move |hashes| async move {
+                    remote_node
+                        .node
+                        .download_certificates(hashes.to_vec())
+                        .await
+                }),
         )
-        .await?;
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
 
         if !certificates.is_empty()
             && self

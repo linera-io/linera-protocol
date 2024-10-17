@@ -16,6 +16,7 @@ use tracing::warn;
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
+    CERTIFICATE_BATCH_SIZE,
 };
 
 /// A validator node together with the validator's name.
@@ -117,10 +118,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
         if let Ok(info) = self.handle_chain_info_query(query).await {
             let certificates = future::try_join_all(
                 info.requested_sent_certificate_hashes
-                    .into_iter()
-                    .map(|hash| self.node.download_certificate(hash)),
+                    .chunks(CERTIFICATE_BATCH_SIZE)
+                    .map(|hashes| self.node.download_certificates(hashes.to_vec())),
             )
-            .await?;
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
             Ok(Some(certificates))
         } else {
             Ok(None)
