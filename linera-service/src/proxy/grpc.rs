@@ -30,8 +30,9 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlockProposal, Certificate, CertificateValue, ChainInfoQuery,
-            ChainInfoResult, CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
+            BlobContent, BlobId, BlockProposal, Certificate, CertificateValue,
+            CertificatesBatchRequest, CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult,
+            CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
             SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
@@ -466,6 +467,30 @@ where
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
         Ok(Response::new(certificate.try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn download_certificates(
+        &self,
+        request: Request<CertificatesBatchRequest>,
+    ) -> Result<Response<CertificatesBatchResponse>, Status> {
+        let hashes = request
+            .into_inner()
+            .hashes
+            .into_iter()
+            .map(linera_base::crypto::CryptoHash::try_from)
+            .collect::<Result<Vec<linera_base::crypto::CryptoHash>, _>>()?;
+        let certificates = self
+            .0
+            .storage
+            .read_certificates(hashes)
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?
+            .into_iter()
+            .collect::<Vec<_>>();
+        Ok(Response::new(CertificatesBatchResponse::try_from(
+            certificates,
+        )?))
     }
 
     #[instrument(skip_all, err(Display))]
