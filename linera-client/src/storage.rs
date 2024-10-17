@@ -7,9 +7,14 @@ use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "storage-service")]
-use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
+use linera_storage_service::{
+    client::{ServiceStoreClient, ServiceStoreConfig},
+    common::ServiceStoreInternalConfig,
+};
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig};
+use linera_views::dynamo_db::{
+    get_config, DynamoDbStore, DynamoDbStoreConfig, DynamoDbStoreInternalConfig,
+};
 #[cfg(with_storage)]
 use linera_views::store::LocalAdminKeyValueStore as _;
 use linera_views::{
@@ -20,12 +25,15 @@ use linera_views::{
 use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    linera_views::rocks_db::{
+        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
+        RocksDbStoreInternalConfig,
+    },
     std::path::PathBuf,
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -335,41 +343,59 @@ impl StorageConfigNamespace {
             #[cfg(feature = "storage-service")]
             StorageConfig::Service { endpoint } => {
                 let endpoint = endpoint.clone();
-                let config = ServiceStoreConfig {
+                let inner_config = ServiceStoreInternalConfig {
                     endpoint,
-                    common_config,
+                    common_config: common_config.reduced(),
+                };
+                let config = ServiceStoreConfig {
+                    inner_config,
+                    cache_size: common_config.cache_size,
                 };
                 Ok(StoreConfig::Service(config, namespace))
             }
             StorageConfig::Memory => {
-                let config = MemoryStoreConfig { common_config };
+                let config = MemoryStoreConfig {
+                    common_config: common_config.reduced(),
+                };
                 Ok(StoreConfig::Memory(config, namespace))
             }
             #[cfg(feature = "rocksdb")]
             StorageConfig::RocksDb { path, spawn_mode } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
-                let config = RocksDbStoreConfig {
+                let inner_config = RocksDbStoreInternalConfig {
                     path_with_guard,
                     spawn_mode: *spawn_mode,
-                    common_config,
+                    common_config: common_config.reduced(),
+                };
+                let config = RocksDbStoreConfig {
+                    inner_config,
+                    cache_size: common_config.cache_size,
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))
             }
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => {
                 let aws_config = get_config(*use_localstack).await?;
-                let config = DynamoDbStoreConfig {
+                let inner_config = DynamoDbStoreInternalConfig {
                     config: aws_config,
-                    common_config,
+                    common_config: common_config.reduced(),
+                };
+                let config = DynamoDbStoreConfig {
+                    inner_config,
+                    cache_size: common_config.cache_size,
                 };
                 Ok(StoreConfig::DynamoDb(config, namespace))
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
-                let config = ScyllaDbStoreConfig {
+                let inner_config = ScyllaDbStoreInternalConfig {
                     uri: uri.to_string(),
-                    common_config,
+                    common_config: common_config.reduced(),
+                };
+                let config = ScyllaDbStoreConfig {
+                    inner_config,
+                    cache_size: common_config.cache_size,
                 };
                 Ok(StoreConfig::ScyllaDb(config, namespace))
             }

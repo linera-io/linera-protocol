@@ -228,6 +228,10 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
 impl LocalAdminKeyValueStore for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
 
+    fn get_name() -> String {
+        "indexed db".to_string()
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
