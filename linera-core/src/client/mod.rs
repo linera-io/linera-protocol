@@ -684,10 +684,6 @@ where
     /// local chain.
     #[tracing::instrument(level = "trace")]
     async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
-        if self.next_block_height() != BlockHeight::ZERO && self.options.message_policy.is_ignore()
-        {
-            return Ok(Vec::new()); // OpenChain is already received, other are ignored.
-        }
         let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
         let info = self
             .client
@@ -695,10 +691,17 @@ where
             .handle_chain_info_query(query)
             .await?
             .info;
-        ensure!(
-            info.next_block_height == self.next_block_height(),
-            ChainClientError::WalletSynchronizationError
-        );
+        {
+            let state = self.state();
+            ensure!(
+                state.has_other_owners(&info.manager.ownership)
+                    || info.next_block_height == state.next_block_height(),
+                ChainClientError::WalletSynchronizationError
+            );
+        }
+        if info.next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore() {
+            return Ok(Vec::new()); // OpenChain is already received, others are ignored.
+        }
         let mut requested_pending_message_bundles = info.requested_pending_message_bundles;
         let mut pending_message_bundles = vec![];
         // The first incoming message of any child chain must be `OpenChain`. We must have it in
@@ -792,8 +795,7 @@ where
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let admin_id = self.admin_id;
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
         Ok((committees, epoch))
@@ -842,11 +844,12 @@ where
             manager.ownership.is_active(),
             LocalNodeError::InactiveChain(self.chain_id)
         );
+        let state = self.state();
         let mut identities = manager
             .ownership
             .all_owners()
             .chain(&manager.leader)
-            .filter(|owner| self.state().known_key_pairs().contains_key(owner));
+            .filter(|owner| state.known_key_pairs().contains_key(owner));
         let Some(identity) = identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
@@ -898,9 +901,7 @@ where
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
-        let ownership = &info.manager.ownership;
-        let keys: HashSet<_> = self.state().known_key_pairs().keys().cloned().collect();
-        if ownership.all_owners().any(|owner| !keys.contains(owner)) {
+        if self.state().has_other_owners(&info.manager.ownership) {
             let mutex = self.state().client_mutex();
             let _guard = mutex.lock_owned().await;
 
@@ -2254,7 +2255,7 @@ where
                 info = self.chain_info_with_manager_values().await?;
             }
         }
-        self.state_mut().update_from_info(&info);
+        self.update_from_info(&info);
         let manager = *info.manager;
 
         // If there is a validated block in the current round, finalize it.
