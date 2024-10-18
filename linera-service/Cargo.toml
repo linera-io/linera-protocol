@@ -92,6 +92,7 @@ linera-views.workspace = true
 pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
+prost = { workspace = true }
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true

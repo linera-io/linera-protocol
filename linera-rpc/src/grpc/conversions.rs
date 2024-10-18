@@ -617,6 +617,39 @@ impl From<CryptoHash> for api::CryptoHash {
     }
 }
 
+impl From<Vec<CryptoHash>> for api::CertificatesBatchRequest {
+    fn from(certs: Vec<CryptoHash>) -> Self {
+        Self {
+            hashes: certs.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl TryFrom<Vec<Certificate>> for api::CertificatesBatchResponse {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certs: Vec<Certificate>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            certificates: certs
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<api::CertificatesBatchResponse> for Vec<Certificate> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(response: api::CertificatesBatchResponse) -> Result<Self, Self::Error> {
+        response
+            .certificates
+            .into_iter()
+            .map(Certificate::try_from)
+            .collect()
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use std::{borrow::Cow, fmt::Debug};

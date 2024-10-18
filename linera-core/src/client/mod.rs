@@ -1492,12 +1492,10 @@ where
             .with_manager_values();
         let info = remote_node.handle_chain_info_query(query).await?;
 
-        let certificates = future::try_join_all(
-            info.requested_sent_certificate_hashes
-                .into_iter()
-                .map(move |hash| async move { remote_node.node.download_certificate(hash).await }),
-        )
-        .await?;
+        let certificates = remote_node
+            .node
+            .download_certificates(info.requested_sent_certificate_hashes)
+            .await?;
 
         if !certificates.is_empty()
             && self

@@ -95,6 +95,12 @@ pub trait ValidatorNode {
 
     async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError>;
 
+    /// Requests a batch of certificates from the validator.
+    async fn download_certificates(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError>;
+
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 }

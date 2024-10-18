@@ -309,7 +309,9 @@ where
             | RpcMessage::BlobLastUsedBy(_)
             | RpcMessage::BlobLastUsedByResponse(_)
             | RpcMessage::DownloadCertificate(_)
-            | RpcMessage::DownloadCertificateResponse(_) => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::DownloadCertificates(_)
+            | RpcMessage::DownloadCertificateResponse(_)
+            | RpcMessage::DownloadCertificatesResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;
