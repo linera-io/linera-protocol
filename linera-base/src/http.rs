@@ -143,6 +143,15 @@ impl Response {
             body: vec![],
         }
     }
+
+    /// Creates an HTTP [`Response`] with an OK status code and the provided `body`.
+    pub fn ok(body: impl Into<Vec<u8>>) -> Self {
+        Response {
+            status: 200,
+            headers: vec![],
+            body: body.into(),
+        }
+    }
 }
 
 #[cfg(with_reqwest)]
