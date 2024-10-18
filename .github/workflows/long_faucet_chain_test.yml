@@ -1,0 +1,37 @@
+name: Long Faucet chain test
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  LINERA_STORAGE_SERVICE: 127.0.0.1:1235
+
+jobs:
+  long-faucet-chain-test:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 180
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Clear up some space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build
+      run: |
+        cargo build --release -p linera-service
+    - name: Run end-to-end tests
+      run: |
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+        cargo test --release -p linera-service --features storage-service -- --ignored test_end_to_end_faucet_with_long_chains --nocapture
