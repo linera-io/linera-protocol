@@ -204,6 +204,16 @@ pub enum ExecutionError {
     UnstableOracle,
 }
 
+impl ExecutionError {
+    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            ExecutionError::ViewError(ViewError::BlobsNotFound(blob_ids)) => Some(blob_ids.clone()),
+            ExecutionError::SystemError(error) => error.get_blobs_not_found(),
+            _ => None,
+        }
+    }
+}
+
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.
@@ -284,7 +294,7 @@ pub trait ExecutionRuntimeContext {
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 }
@@ -955,11 +965,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
+            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
             .clone())
     }
 

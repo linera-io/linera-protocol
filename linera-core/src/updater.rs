@@ -6,11 +6,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
     hash::Hash,
-    mem,
     ops::Range,
 };
 
-use futures::{stream, Future, StreamExt};
+use futures::{Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
@@ -274,18 +273,10 @@ where
                     // synchronize them now and retry.
                     self.send_chain_information_for_senders(chain_id).await?;
                 }
-                Err(NodeError::BlobNotFoundOnRead(_)) if !blob_ids.is_empty() => {
+                Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
                     // For `BlobNotFoundOnRead`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
-                    let missing_blob_ids = stream::iter(mem::take(&mut blob_ids))
-                        .filter(|blob_id| {
-                            let node = self.remote_node.node.clone();
-                            let blob_id = *blob_id;
-                            async move { node.blob_last_used_by(blob_id).await.is_err() }
-                        })
-                        .collect::<Vec<_>>()
-                        .await;
                     let local_storage = self.local_node.storage_client();
                     for blob_id in missing_blob_ids {
                         let last_used_by_hash =
