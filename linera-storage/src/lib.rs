@@ -385,8 +385,8 @@ where
         }
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
-        Ok(self.storage.read_blob(blob_id).await?)
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
+        self.storage.read_blob(blob_id).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

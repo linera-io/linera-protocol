@@ -190,11 +190,11 @@ const _: () = {
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
-    ViewError(#[from] ViewError),
+    ViewError(ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
-    SystemError(#[from] SystemExecutionError),
+    SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
     #[cfg(any(with_wasmer, with_wasmtime))]
@@ -264,6 +264,29 @@ pub enum ExecutionError {
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]
     UnstableOracle,
+
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
+}
+
+impl From<ViewError> for ExecutionError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => ExecutionError::BlobsNotFound(blob_ids),
+            error => ExecutionError::ViewError(error),
+        }
+    }
+}
+
+impl From<SystemExecutionError> for ExecutionError {
+    fn from(error: SystemExecutionError) -> Self {
+        match error {
+            SystemExecutionError::BlobsNotFound(blob_ids) => {
+                ExecutionError::BlobsNotFound(blob_ids)
+            }
+            error => ExecutionError::SystemError(error),
+        }
+    }
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -346,7 +369,7 @@ pub trait ExecutionRuntimeContext {
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 }
@@ -1024,11 +1047,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
+            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
             .clone())
     }
 

@@ -14,9 +14,9 @@ use linera_base::{
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock},
     types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
-    ChainError, ChainStateView,
+    ChainStateView,
 };
-use linera_execution::{ExecutionError, Query, Response, SystemExecutionError};
+use linera_execution::{Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -54,10 +54,10 @@ pub enum LocalNodeError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(ViewError),
 
     #[error("Local node operation failed: {0}")]
-    WorkerError(#[from] WorkerError),
+    WorkerError(WorkerError),
 
     #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
     CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
@@ -67,29 +67,25 @@ pub enum LocalNodeError {
 
     #[error("The chain info response received from the local node is invalid")]
     InvalidChainInfoResponse,
+
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
 }
 
-impl LocalNodeError {
-    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
-        match self {
-            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) => {
-                match &**chain_error {
-                    ChainError::ExecutionError(execution_error, _) => match **execution_error {
-                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
-                            blob_id,
-                        ))
-                        | ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)) => {
-                            Some(vec![blob_id])
-                        }
-                        _ => None,
-                    },
-                    _ => None,
-                }
-            }
-            LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                Some(blob_ids.clone())
-            }
-            _ => None,
+impl From<WorkerError> for LocalNodeError {
+    fn from(error: WorkerError) -> Self {
+        match error {
+            WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            error => LocalNodeError::WorkerError(error),
+        }
+    }
+}
+
+impl From<ViewError> for LocalNodeError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            error => LocalNodeError::ViewError(error),
         }
     }
 }
