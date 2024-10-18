@@ -15,14 +15,13 @@ use std::{
 use cargo_toml::Manifest;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
-    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
-    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
+    data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode, UserApplicationDescription},
+    identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, UserApplicationId},
 };
 use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
-    system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
-    ExecutionError, Query, Response,
+    system::SystemOperation, ExecutionError, Query, Response, SystemExecutionError,
 };
 use serde::Serialize;
 use tokio::{fs, sync::Mutex};
@@ -336,14 +335,29 @@ impl ActiveChain {
         for &dependency in &required_application_ids {
             self.register_application(dependency).await;
         }
+        let next_block_height = self.get_tip_height().await.try_add_one().unwrap();
+        let description = UserApplicationDescription {
+            bytecode_id: bytecode_id.forget_abi(),
+            creator_chain_id: self.id(),
+            block_height: next_block_height,
+            operation_index: 0,
+            required_application_ids: required_application_ids.clone(),
+            parameters,
+        };
 
+        let app_blob = Blob::new_application_description(description.clone());
+
+        self.validator
+            .worker()
+            .cache_recent_blob(Cow::Borrowed(&app_blob))
+            .await;
+        let id = UserApplicationId::from(&description);
         let creation_certificate = self
             .add_block(|block| {
                 block.with_system_operation(SystemOperation::CreateApplication {
-                    bytecode_id: bytecode_id.forget_abi(),
-                    parameters,
+                    id,
+                    description,
                     instantiation_argument,
-                    required_application_ids,
                 });
             })
             .await;
@@ -353,16 +367,10 @@ impl ActiveChain {
             .executed_block()
             .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);
-        let creation = MessageId {
-            chain_id: executed_block.block.chain_id,
-            height: executed_block.block.height,
-            index: CREATE_APPLICATION_MESSAGE_INDEX,
-        };
+        assert_eq!(executed_block.block.chain_id, self.id());
+        assert_eq!(executed_block.block.height, next_block_height);
 
-        ApplicationId {
-            bytecode_id: bytecode_id.just_abi(),
-            creation,
-        }
+        id.with_abi()
     }
 
     /// Returns whether this chain has been closed.
@@ -378,7 +386,7 @@ impl ActiveChain {
     /// Registers on this chain an application created on another chain.
     pub async fn register_application<Abi>(&self, application_id: ApplicationId<Abi>) {
         if self.needs_application_description(application_id).await {
-            let source_chain = self.validator.get_chain(&application_id.creation.chain_id);
+            let source_chain = self.validator.get_chain(&application_id.creator_chain_id);
 
             let request_certificate = self
                 .add_block(|block| {

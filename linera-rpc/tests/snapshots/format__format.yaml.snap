@@ -27,10 +27,12 @@ Amount:
   NEWTYPESTRUCT: U128
 ApplicationId:
   STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
     - bytecode_id:
         TYPENAME: BytecodeId
-    - creation:
-        TYPENAME: MessageId
+    - creator_chain_id:
+        TYPENAME: ChainId
 ApplicationPermissions:
   STRUCT:
     - execute_operations:
@@ -43,12 +45,6 @@ ApplicationPermissions:
     - close_chain:
         SEQ:
           TYPENAME: ApplicationId
-BlobApplicationId:
-  STRUCT:
-    - application_description_hash:
-        TYPENAME: CryptoHash
-    - bytecode_id:
-        TYPENAME: BytecodeId
 BlobContent:
   ENUM:
     0:
@@ -65,7 +61,7 @@ BlobContent:
     3:
       ApplicationDescription:
         NEWTYPE:
-          TYPENAME: BlobUserApplicationDescription
+          TYPENAME: UserApplicationDescription
 BlobId:
   STRUCT:
     - hash:
@@ -82,19 +78,6 @@ BlobType:
       ServiceBytecode: UNIT
     3:
       ApplicationDescription: UNIT
-BlobUserApplicationDescription:
-  STRUCT:
-    - bytecode_id:
-        TYPENAME: BytecodeId
-    - creator_chain_id:
-        TYPENAME: ChainId
-    - block_height:
-        TYPENAME: BlockHeight
-    - operation_index: U32
-    - parameters: BYTES
-    - required_application_ids:
-        SEQ:
-          TYPENAME: BlobApplicationId
 Block:
   STRUCT:
     - chain_id:
@@ -1014,13 +997,12 @@ SystemOperation:
     11:
       CreateApplication:
         STRUCT:
-          - bytecode_id:
-              TYPENAME: BytecodeId
-          - parameters: BYTES
-          - instantiation_argument: BYTES
-          - required_application_ids:
-              SEQ:
-                TYPENAME: ApplicationId
+          - id:
+              TYPENAME: ApplicationId
+          - description:
+              TYPENAME: UserApplicationDescription
+          - instantiation_argument:
+              SEQ: U8
     12:
       RequestApplication:
         STRUCT:
@@ -1051,8 +1033,11 @@ UserApplicationDescription:
   STRUCT:
     - bytecode_id:
         TYPENAME: BytecodeId
-    - creation:
-        TYPENAME: MessageId
+    - creator_chain_id:
+        TYPENAME: ChainId
+    - block_height:
+        TYPENAME: BlockHeight
+    - operation_index: U32
     - parameters: BYTES
     - required_application_ids:
         SEQ:

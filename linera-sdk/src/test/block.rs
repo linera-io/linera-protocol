@@ -106,7 +106,7 @@ impl BlockBuilder {
         application: ApplicationId<Abi>,
     ) -> &mut Self {
         self.with_system_operation(SystemOperation::RequestApplication {
-            chain_id: application.creation.chain_id,
+            chain_id: application.creator_chain_id,
             application_id: application.forget_abi(),
         })
     }
