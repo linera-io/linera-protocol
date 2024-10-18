@@ -505,8 +505,6 @@ where
             Ok(prost::Message::encode(&grpc_response, &mut buff).is_ok())
         }
 
-        // Reverse the order to drop from the back.
-        certificates.reverse();
         // Keep dropping elements until we fit in the limited message size.
         while !try_proto_serialize::<
             Vec<linera_chain::data_types::Certificate>,
@@ -517,8 +515,6 @@ where
             let _ = certificates.pop();
         }
 
-        // Reverse again to bring back the original order.
-        certificates.reverse();
         let grpc_response = CertificatesBatchResponse::try_from(certificates)?;
         Ok(Response::new(grpc_response))
     }
