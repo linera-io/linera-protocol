@@ -43,6 +43,12 @@ ApplicationPermissions:
     - close_chain:
         SEQ:
           TYPENAME: ApplicationId
+BlobApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
+    - bytecode_id:
+        TYPENAME: BytecodeId
 BlobContent:
   ENUM:
     0:
@@ -56,6 +62,10 @@ BlobContent:
       ServiceBytecode:
         NEWTYPE:
           TYPENAME: CompressedBytecode
+    3:
+      ApplicationDescription:
+        NEWTYPE:
+          TYPENAME: BlobUserApplicationDescription
 BlobId:
   STRUCT:
     - hash:
@@ -70,6 +80,21 @@ BlobType:
       ContractBytecode: UNIT
     2:
       ServiceBytecode: UNIT
+    3:
+      ApplicationDescription: UNIT
+BlobUserApplicationDescription:
+  STRUCT:
+    - bytecode_id:
+        TYPENAME: BytecodeId
+    - creator_chain_id:
+        TYPENAME: ChainId
+    - block_height:
+        TYPENAME: BlockHeight
+    - operation_index: U32
+    - parameters: BYTES
+    - required_application_ids:
+        SEQ:
+          TYPENAME: BlobApplicationId
 Block:
   STRUCT:
     - chain_id:
