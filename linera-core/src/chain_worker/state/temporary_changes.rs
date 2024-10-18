@@ -278,7 +278,7 @@ where
                 }
             );
         }
-        if query.request_pending_messages {
+        if query.request_pending_message_bundles {
             let mut messages = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
             let action = if *chain.execution_state.system.closed.get() {
@@ -310,7 +310,7 @@ where
                 }
             }
 
-            info.requested_pending_messages = messages;
+            info.requested_pending_message_bundles = messages;
         }
         if let Some(range) = query.request_sent_certificate_hashes_in_range {
             let start: usize = range.start.try_into()?;
@@ -324,7 +324,7 @@ where
             let keys = chain.confirmed_log.read(start..end).await?;
             info.requested_sent_certificate_hashes = keys;
         }
-        if let Some(start) = query.request_received_log_excluding_first_nth {
+        if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             info.requested_received_log = chain.received_log.read(start..).await?;
         }

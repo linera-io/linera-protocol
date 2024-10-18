@@ -57,7 +57,7 @@ pub struct ClientWrapper {
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
-    max_pending_messages: usize,
+    max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
 }
@@ -79,7 +79,7 @@ impl ClientWrapper {
             testing_prng_seed,
             storage,
             wallet,
-            max_pending_messages: 10_000,
+            max_pending_message_bundles: 10_000,
             network,
             path_provider,
         }
@@ -152,8 +152,8 @@ impl ClientWrapper {
             .args(["--wallet", &self.wallet])
             .args(["--storage", &self.storage])
             .args([
-                "--max-pending-messages",
-                &self.max_pending_messages.to_string(),
+                "--max-pending-message-bundles",
+                &self.max_pending_message_bundles.to_string(),
             ])
             .args(["--send-timeout-ms", "500000"])
             .args(["--recv-timeout-ms", "500000"])
@@ -990,12 +990,17 @@ impl NodeService {
             tokio::time::sleep(Duration::from_secs(i)).await;
             let url = format!("http://localhost:{}/", self.port);
             let client = reqwest_client();
-            let response = client
+            let result = client
                 .post(url)
                 .json(&json!({ "query": query }))
                 .send()
-                .await
-                .with_context(|| format!("query_node: failed to post query={}", query))?;
+                .await;
+            if matches!(result, Err(ref error) if error.is_timeout()) {
+                warn!("Timeout when sending query {query:?} to the node service");
+                continue;
+            }
+            let response =
+                result.with_context(|| format!("query_node: failed to post query={query}"))?;
             anyhow::ensure!(
                 response.status().is_success(),
                 "Query \"{}\" failed: {}",

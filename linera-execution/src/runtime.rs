@@ -274,7 +274,7 @@ impl<UserInstance> Drop for SyncRuntime<UserInstance> {
 }
 
 impl<UserInstance> SyncRuntimeInternal<UserInstance> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
@@ -1030,7 +1030,7 @@ impl<UserInstance> Clone for SyncRuntimeHandle<UserInstance> {
 
 impl ContractSyncRuntime {
     /// Main entry point to start executing a user action.
-    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub(crate) fn run_action(
         execution_state_sender: ExecutionStateSender,
         application_id: UserApplicationId,

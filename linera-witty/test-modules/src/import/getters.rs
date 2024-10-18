@@ -17,7 +17,7 @@ use self::{
 struct Implementation;
 
 impl Entrypoint for Implementation {
-    #[allow(clippy::bool_assert_comparison)]
+    #[expect(clippy::bool_assert_comparison)]
     fn entrypoint() {
         assert_eq!(get_true(), true);
         assert_eq!(get_false(), false);

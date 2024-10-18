@@ -327,7 +327,7 @@ impl LocalNetConfig {
         Self {
             database,
             network,
-            num_other_initial_chains: 10,
+            num_other_initial_chains: 2,
             initial_amount: Amount::from_tokens(1_000_000),
             policy: ResourceControlPolicy::devnet(),
             testing_prng_seed: Some(37),
@@ -415,7 +415,7 @@ impl LineraNet for LocalNet {
 }
 
 impl LocalNet {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         database: Database,
         network: Network,

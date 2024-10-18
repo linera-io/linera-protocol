@@ -111,7 +111,7 @@ impl QuotedBashAndGraphQlScript {
         &self.path
     }
 
-    #[allow(clippy::while_let_on_iterator)]
+    #[expect(clippy::while_let_on_iterator)]
     fn read_bash_and_gql_quotes(
         reader: impl std::io::BufRead,
         pause_after_gql_mutations: Option<Duration>,

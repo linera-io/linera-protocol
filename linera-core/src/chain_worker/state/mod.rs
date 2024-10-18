@@ -66,7 +66,6 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
-    #[allow(clippy::too_many_arguments)]
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,

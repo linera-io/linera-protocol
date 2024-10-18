@@ -216,7 +216,7 @@ ChainInfo:
               TYPENAME: Epoch
             VALUE:
               TYPENAME: Committee
-    - requested_pending_messages:
+    - requested_pending_message_bundles:
         SEQ:
           TYPENAME: IncomingBundle
     - requested_sent_certificate_hashes:
@@ -237,11 +237,11 @@ ChainInfoQuery:
         OPTION:
           TYPENAME: Owner
     - request_committees: BOOL
-    - request_pending_messages: BOOL
+    - request_pending_message_bundles: BOOL
     - request_sent_certificate_hashes_in_range:
         OPTION:
           TYPENAME: BlockHeightRange
-    - request_received_log_excluding_first_nth:
+    - request_received_log_excluding_first_n:
         OPTION: U64
     - request_manager_values: BOOL
     - request_leader_timeout: BOOL
@@ -591,6 +591,10 @@ NodeError:
           - error: STR
     20:
       BlobNotFoundOnRead:
+        NEWTYPE:
+          TYPENAME: BlobId
+    21:
+      InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
 OpenChainConfig:

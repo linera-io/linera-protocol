@@ -8,12 +8,14 @@ use crate::{persistent, util};
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub(crate) enum Inner {
+    #[error("chain error: {0}")]
+    Chain(#[from] linera_chain::ChainError),
     #[error("chain client error: {0}")]
     ChainClient(#[from] linera_core::client::ChainClientError),
     #[error("options error: {0}")]
     Options(#[from] crate::client_options::Error),
     #[error("persistence error: {0}")]
-    Persistence(#[source] Box<dyn std::error::Error + Send + Sync + 'static>),
+    Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]
     View(#[from] linera_views::views::ViewError),
     #[error("non-existent chain: {0:?}")]
@@ -29,5 +31,5 @@ thiserror_context::impl_context!(Error(Inner));
 util::impl_from_dynamic!(Inner:Persistence, persistent::memory::Error);
 #[cfg(feature = "fs")]
 util::impl_from_dynamic!(Inner:Persistence, persistent::file::Error);
-#[cfg(with_local_storage)]
-util::impl_from_dynamic!(Inner:Persistence, persistent::local_storage::Error);
+#[cfg(with_indexed_db)]
+util::impl_from_dynamic!(Inner:Persistence, persistent::indexed_db::Error);

@@ -1413,7 +1413,6 @@ mod graphql {
             T::create_type_info(registry)
         }
 
-        #[allow(clippy::trivially_copy_pass_by_ref)]
         async fn resolve(
             &self,
             ctx: &async_graphql::ContextSelectionSet<'_>,

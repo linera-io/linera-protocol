@@ -2169,6 +2169,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
+ "unicode-xid",
+]
+
+[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2577,14 +2598,10 @@ dependencies = [
  "chrono",
  "env_logger",
  "futures",
- "js-sys",
  "log",
  "thiserror",
  "tokio",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "wasm-bindgen-test",
- "web-sys",
 ]
 
 [[package]]
@@ -2905,21 +2922,6 @@ name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
-
-[[package]]
-name = "gloo-storage"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc8031e8c92758af912f9bc08fbbadd3c6f3cfcbf6b64cdf3d6a81f0139277a"
-dependencies = [
- "gloo-utils",
- "js-sys",
- "serde",
- "serde_json",
- "thiserror",
- "wasm-bindgen",
- "web-sys",
-]
 
 [[package]]
 name = "gloo-utils"
@@ -3936,7 +3938,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "const-hex",
- "derive_more",
+ "derive_more 0.99.18",
  "hex-literal",
  "itoa",
  "k256",
@@ -4232,6 +4234,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "tracing-web",
  "wasm-bindgen-futures",
  "web-time",
  "zstd",
@@ -4275,6 +4278,7 @@ dependencies = [
  "clap",
  "counter",
  "crowd-funding",
+ "derive_more 1.0.0",
  "dirs",
  "ethereum-tracker",
  "flarch",
@@ -4282,7 +4286,8 @@ dependencies = [
  "fs4",
  "fungible",
  "futures",
- "gloo-storage",
+ "gloo-utils",
+ "indexed_db_futures",
  "linera-alloy",
  "linera-base",
  "linera-chain",
@@ -4303,6 +4308,7 @@ dependencies = [
  "rand",
  "reqwest 0.11.27",
  "serde",
+ "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "social",
  "test-case",
@@ -4313,6 +4319,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "trait-variant",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -4399,7 +4406,7 @@ dependencies = [
  "counter",
  "custom_debug_derive",
  "dashmap 5.5.3",
- "derive_more",
+ "derive_more 1.0.0",
  "futures",
  "linera-base",
  "linera-execution",
@@ -8013,6 +8020,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-web"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e6a141feebd51f8d91ebfd785af50fca223c570b86852166caa3b141defe7c"
+dependencies = [
+ "js-sys",
+ "tracing-core",
+ "tracing-subscriber",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "trait-variant"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8288,8 +8308,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4be2531df63900aeb2bca0daaaddec08491ee64ceecbee5076636a3b026795a8"
 dependencies = [
  "cfg-if",
- "serde",
- "serde_json",
  "wasm-bindgen-macro",
 ]
 

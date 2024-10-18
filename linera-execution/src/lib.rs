@@ -453,7 +453,7 @@ pub trait BaseRuntime {
 
     /// Reads the data from the key/values having a specific prefix.
     #[cfg(feature = "test")]
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix(
         &mut self,
         key_prefix: Vec<u8>,
@@ -469,7 +469,7 @@ pub trait BaseRuntime {
     ) -> Result<Self::FindKeyValuesByPrefix, ExecutionError>;
 
     /// Resolves the promise to access key/values having a specific prefix
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix_wait(
         &mut self,
         promise: &Self::FindKeyValuesByPrefix,
@@ -740,7 +740,7 @@ pub struct ChannelSubscription {
 /// Externally visible results of an execution, tagged by their application.
 #[derive(Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 pub enum ExecutionOutcome {
     System(RawExecutionOutcome<SystemMessage, Amount>),
     User(UserApplicationId, RawExecutionOutcome<Vec<u8>, Amount>),
@@ -1100,11 +1100,11 @@ pub struct BlobState {
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
-    #[display(fmt = "wasmer")]
+    #[display("wasmer")]
     Wasmer,
     #[cfg(with_wasmtime)]
     #[cfg_attr(not(with_wasmer), default)]
-    #[display(fmt = "wasmtime")]
+    #[display("wasmtime")]
     Wasmtime,
     #[cfg(with_wasmer)]
     WasmerWithSanitizer,

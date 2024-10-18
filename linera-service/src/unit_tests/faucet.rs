@@ -12,7 +12,7 @@ use linera_base::{
     data_types::{Amount, Timestamp},
     identifiers::{ChainDescription, ChainId},
 };
-use linera_client::{chain_clients::ChainClients, chain_listener, wallet::Wallet};
+use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
     client::ChainClient,
     test_utils::{FaultType, MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
@@ -22,8 +22,8 @@ use linera_views::memory::MemoryStore;
 
 use super::MutationRoot;
 
-#[derive(Default)]
 struct ClientContext {
+    client: ChainClient<TestProvider, TestStorage>,
     update_calls: usize,
 }
 
@@ -39,16 +39,30 @@ impl chain_listener::ClientContext for ClientContext {
         unimplemented!()
     }
 
-    fn make_chain_client(&self, _: ChainId) -> ChainClient<TestProvider, TestStorage> {
-        unimplemented!()
+    fn make_chain_client(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<ChainClient<TestProvider, TestStorage>, linera_client::Error> {
+        assert_eq!(chain_id, self.client.chain_id());
+        Ok(self.client.clone())
     }
 
-    fn update_wallet_for_new_chain(&mut self, _: ChainId, _: Option<KeyPair>, _: Timestamp) {
+    async fn update_wallet_for_new_chain(
+        &mut self,
+        _: ChainId,
+        _: Option<KeyPair>,
+        _: Timestamp,
+    ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
+        Ok(())
     }
 
-    async fn update_wallet(&mut self, _: &ChainClient<TestProvider, TestStorage>) {
+    async fn update_wallet(
+        &mut self,
+        _: &ChainClient<TestProvider, TestStorage>,
+    ) -> Result<(), linera_client::Error> {
         self.update_calls += 1;
+        Ok(())
     }
 }
 
@@ -63,11 +77,12 @@ async fn test_faucet_rate_limiting() {
         .await
         .unwrap();
     let chain_id = client.chain_id();
-    let context = ClientContext::default();
-    let clients = ChainClients::from_clients(vec![client]).await;
+    let context = ClientContext {
+        client,
+        update_calls: 0,
+    };
     let context = Arc::new(Mutex::new(context));
     let root = MutationRoot {
-        clients,
         chain_id,
         context: context.clone(),
         amount: Amount::from_tokens(1),
@@ -95,7 +110,7 @@ async fn test_faucet_rate_limiting() {
 
 #[test]
 fn test_multiply() {
-    let mul = MutationRoot::<(), DbStorage<MemoryStore, TestClock>, ()>::multiply;
+    let mul = MutationRoot::<()>::multiply;
     assert_eq!(mul((1 << 127) + (1 << 63), 1 << 63), [1 << 62, 1 << 62, 0]);
     assert_eq!(mul(u128::MAX, u64::MAX), [u64::MAX - 1, u64::MAX, 1]);
 }

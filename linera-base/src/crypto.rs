@@ -706,7 +706,6 @@ impl BcsSignable for TestString {}
 
 #[cfg(with_getrandom)]
 #[test]
-#[allow(clippy::disallowed_names)]
 fn test_signatures() {
     #[derive(Debug, Serialize, Deserialize)]
     struct Foo(String);

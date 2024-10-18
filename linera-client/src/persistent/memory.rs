@@ -1,41 +1,42 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
-
-use super::Persist;
+use super::{Dirty, Persist};
 
 pub type Error = std::convert::Infallible;
 
 /// A dummy [`Persist`] implementation that doesn't persist anything, but holds the value
 /// in memory.
-pub struct Memory<T>(T);
-
-impl<T> Deref for Memory<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.0
-    }
+#[derive(derive_more::Deref)]
+pub struct Memory<T> {
+    #[deref]
+    value: T,
+    dirty: Dirty,
 }
 
 impl<T> Memory<T> {
     pub fn new(value: T) -> Self {
-        Self(value)
+        Self {
+            value,
+            dirty: Dirty::new(true),
+        }
     }
 }
 
-impl<T> Persist for Memory<T> {
+impl<T: Send> Persist for Memory<T> {
     type Error = Error;
 
-    fn as_mut(this: &mut Self) -> &mut T {
-        &mut this.0
+    fn as_mut(&mut self) -> &mut T {
+        *self.dirty = true;
+        &mut self.value
     }
 
-    fn into_value(this: Self) -> T {
-        this.0
+    fn into_value(self) -> T {
+        self.value
     }
 
-    fn persist(_this: &mut Self) -> Result<(), Error> {
+    async fn persist(&mut self) -> Result<(), Error> {
+        *self.dirty = false;
         Ok(())
     }
 }
