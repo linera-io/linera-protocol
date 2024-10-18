@@ -26,9 +26,9 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    execution::ServiceRuntimeEndpoint, ApplicationRegistryView, ExecutionRequest,
-    ExecutionRuntimeContext, ExecutionStateView, QueryContext, ServiceRuntimeRequest,
-    ServiceSyncRuntime, TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+    execution::ServiceRuntimeEndpoint, ExecutionRequest, ExecutionRuntimeContext,
+    ExecutionStateView, QueryContext, ServiceRuntimeRequest, ServiceSyncRuntime,
+    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
 pub fn create_dummy_user_application_description(
@@ -61,66 +61,60 @@ pub struct FakeBlob(String);
 
 impl BcsSignable for FakeBlob {}
 
-/// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
+/// Creates `count` [`MockApplication`]s and adds them to the [`TestExecutionRuntimeContext`].
 ///
 /// Returns an iterator over a tuple of [`UserApplicationId`]s and their respective
 /// [`UserApplicationDescription`]s, [`MockApplication`]s, and contract and service [`Blob`]s.
-pub async fn register_mock_applications<C>(
+pub fn create_mock_applications<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<
-    vec::IntoIter<(
-        UserApplicationId,
-        UserApplicationDescription,
-        MockApplication,
-        Blob,
-        Blob,
-    )>,
->
+) -> vec::IntoIter<(
+    UserApplicationId,
+    UserApplicationDescription,
+    MockApplication,
+    Blob,
+    Blob,
+)>
 where
     C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    let mock_applications = register_mock_applications_internal(state, count).await?;
+    let mock_applications = create_mock_applications_internal(state, count);
     let extra = state.context().extra();
     for (_id, description, _mock_application, contract_blob, service_blob) in &mock_applications {
         let app_blob = Blob::new_application_description(description.clone());
         extra.add_blobs(vec![contract_blob.clone(), service_blob.clone(), app_blob]);
     }
 
-    Ok(mock_applications.into_iter())
+    mock_applications.into_iter()
 }
 
-pub async fn register_mock_applications_internal<C>(
+pub fn create_mock_applications_internal<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<
-    Vec<(
-        UserApplicationId,
-        UserApplicationDescription,
-        MockApplication,
-        Blob,
-        Blob,
-    )>,
->
+) -> Vec<(
+    UserApplicationId,
+    UserApplicationDescription,
+    MockApplication,
+    Blob,
+    Blob,
+)>
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    let mock_applications: Vec<_> =
-        create_dummy_user_application_registrations(&mut state.system.registry, count)
-            .await?
-            .into_iter()
-            .map(|(id, description, contract_blob, service_blob)| {
-                (
-                    id,
-                    description,
-                    MockApplication::default(),
-                    contract_blob,
-                    service_blob,
-                )
-            })
-            .collect();
+    let mock_applications: Vec<_> = create_dummy_user_applications(count)
+        .into_iter()
+        .map(|(id, description, contract_blob, service_blob)| {
+            (
+                id,
+                description,
+                MockApplication::default(),
+                contract_blob,
+                service_blob,
+            )
+        })
+        .collect();
     let extra = state.context().extra();
 
     for (id, _description, mock_application, _contract_blob, _service_blob) in &mock_applications {
@@ -132,29 +126,26 @@ where
             .insert(*id, mock_application.clone().into());
     }
 
-    Ok(mock_applications)
+    mock_applications
 }
 
-pub async fn create_dummy_user_application_registrations<C>(
-    registry: &mut ApplicationRegistryView<C>,
+pub fn create_dummy_user_applications(
     count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)>>
-where
-    C: Context + Clone + Send + Sync + 'static,
-{
+) -> Vec<(UserApplicationId, UserApplicationDescription, Blob, Blob)> {
     let mut ids = Vec::with_capacity(count as usize);
 
     for index in 0..count {
         let (description, contract_blob, service_blob) =
             create_dummy_user_application_description(index);
-        let id = registry.register_application(description.clone()).await?;
-
-        assert_eq!(registry.describe_application(id).await?, description);
-
-        ids.push((id, description, contract_blob, service_blob));
+        ids.push((
+            UserApplicationId::from(&description),
+            description,
+            contract_blob,
+            service_blob,
+        ));
     }
 
-    Ok(ids)
+    ids
 }
 
 pub fn get_application_blob_oracle_responses(app_id: &ApplicationId) -> Vec<OracleResponse> {

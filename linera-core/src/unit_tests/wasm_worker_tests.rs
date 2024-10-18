@@ -10,26 +10,23 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use linera_base::{
     crypto::KeyPair,
     data_types::{
         Amount, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp, UserApplicationDescription,
     },
-    identifiers::{BytecodeId, ChainDescription, ChainId, Destination, UserApplicationId},
+    identifiers::{BytecodeId, ChainDescription, ChainId, UserApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, HashedCertificateValue, OutgoingMessage},
+    data_types::{BlockExecutionOutcome, HashedCertificateValue},
     test::{make_child_block, make_first_block, BlockTestExt},
 };
 use linera_execution::{
-    committee::Epoch,
-    system::{SystemMessage, SystemOperation},
-    test_utils::SystemExecutionState,
-    Message, MessageKind, Operation, OperationContext, ResourceController, TransactionTracker,
-    WasmContractModule, WasmRuntime,
+    committee::Epoch, system::SystemOperation, test_utils::SystemExecutionState, Operation,
+    OperationContext, ResourceController, TransactionTracker, WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
@@ -193,16 +190,15 @@ where
 
     let create_operation = SystemOperation::CreateApplication {
         id,
-        description: description.clone(),
+        creator_chain_id: description.creator_chain_id,
+        block_height: description.block_height,
+        operation_index: description.operation_index,
+        required_application_ids: description.required_application_ids.clone(),
         instantiation_argument: initial_value_bytes.clone(),
     };
     let create_block = make_first_block(creator_chain.into())
         .with_timestamp(2)
         .with_operation(create_operation);
-    creator_system_state
-        .registry
-        .known_applications
-        .insert(id, description.clone());
     creator_system_state.timestamp = Timestamp::from(2);
     let mut creator_state = creator_system_state.into_view().await;
     creator_state
@@ -210,7 +206,7 @@ where
             contract.into(),
             Timestamp::from(2),
             description,
-            initial_value_bytes.clone(),
+            initial_value_bytes,
             contract_blob,
             service_blob,
         )
@@ -222,14 +218,7 @@ where
     ];
     let create_block_proposal = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
-            messages: vec![vec![OutgoingMessage {
-                destination: Destination::Recipient(creator_chain.into()),
-                authenticated_signer: None,
-                grant: Amount::ZERO,
-                refund_grant_to: None,
-                kind: MessageKind::Protected,
-                message: Message::System(SystemMessage::ApplicationCreated),
-            }]],
+            messages: vec![Vec::new()],
             events: vec![Vec::new()],
             state_hash: creator_state.crypto_hash().await?,
             oracle_responses: vec![oracle_responses.clone()],
@@ -276,7 +265,11 @@ where
                 application_id: id,
                 bytes: user_operation,
             },
-            &mut TransactionTracker::new(0, Some(oracle_responses.clone())),
+            &mut TransactionTracker::new(
+                0,
+                Some(oracle_responses.clone()),
+                Arc::new(BTreeMap::new()),
+            ),
             &mut controller,
         )
         .await?;

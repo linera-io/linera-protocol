@@ -23,7 +23,7 @@ use linera_chain::data_types::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    test_utils::{register_mock_applications_internal, MockApplication},
+    test_utils::{create_mock_applications_internal, MockApplication},
     ExecutionRuntimeContext, ExecutionStateView, ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{ChainRuntimeContext, DbStorage, Storage, TestClock};
@@ -1136,11 +1136,11 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
     }
 }
 
-/// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
+/// Creates `count` [`MockApplication`]s and adds the blobs to storage.
 ///
 /// Returns an iterator over a tuple of [`UserApplicationId`]s and their respective
 /// [`UserApplicationDescription`]s, [`MockApplication`]s, and contract and service [`Blob`]s.
-pub async fn register_mock_applications<C, S>(
+pub async fn create_mock_applications<C, S>(
     state: &mut ExecutionStateView<C>,
     count: u64,
     storage: S,
@@ -1158,7 +1158,7 @@ where
     C::Extra: ExecutionRuntimeContext,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    let mock_applications = register_mock_applications_internal(state, count).await?;
+    let mock_applications = create_mock_applications_internal(state, count);
     for (_id, description, _mock_application, contract_blob, service_blob) in &mock_applications {
         let app_blob = Blob::new_application_description(description.clone());
         storage

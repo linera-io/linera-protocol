@@ -16,7 +16,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, UserApplicationDescription},
     ensure,
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId},
 };
 use linera_chain::{
     data_types::{
@@ -159,17 +159,6 @@ where
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .query_application(query)
-            .await
-    }
-
-    /// Returns an application's description.
-    pub(super) async fn describe_application(
-        &mut self,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, WorkerError> {
-        ChainWorkerStateWithTemporaryChanges::new(self)
-            .await
-            .describe_application(application_id)
             .await
     }
 
@@ -368,6 +357,36 @@ where
         } else {
             Err(WorkerError::BlobsNotFound(missing_blobs))
         }
+    }
+
+    async fn get_pending_application_descriptions(
+        &self,
+        application_ids: HashSet<ApplicationId>,
+    ) -> Result<BTreeMap<ApplicationId, UserApplicationDescription>, WorkerError> {
+        let blob_id_to_application_id = application_ids
+            .into_iter()
+            .map(|application_id| {
+                (
+                    BlobId::new(
+                        application_id.application_description_hash,
+                        BlobType::ApplicationDescription,
+                    ),
+                    application_id,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        Ok(self
+            .get_blobs(blob_id_to_application_id.keys().copied().collect())
+            .await?
+            .into_iter()
+            .map(|blob| {
+                (
+                    blob_id_to_application_id[&blob.id()],
+                    blob.into_inner_application_description()
+                        .expect("Should be an application description blob!"),
+                )
+            })
+            .collect())
     }
 
     /// Inserts a [`Blob`] into the worker's cache.

@@ -64,8 +64,6 @@ async fn collect_pledges() {
     let mut pledges_and_transfers = Vec::new();
 
     for (backer_chain, backer_account, _balance) in &backers {
-        backer_chain.register_application(campaign_id).await;
-
         let pledge_certificate = backer_chain
             .add_block(|block| {
                 block.with_operation(
@@ -78,7 +76,7 @@ async fn collect_pledges() {
             })
             .await;
 
-        assert_eq!(pledge_certificate.outgoing_message_count(), 3);
+        assert_eq!(pledge_certificate.outgoing_message_count(), 2);
         pledges_and_transfers.push(pledge_certificate);
     }
 
@@ -168,8 +166,6 @@ async fn cancel_successful_campaign() {
     let mut pledges_and_transfers = Vec::new();
 
     for (backer_chain, backer_account, _balance) in &backers {
-        backer_chain.register_application(campaign_id).await;
-
         let pledge_certificate = backer_chain
             .add_block(|block| {
                 block.with_operation(
@@ -182,7 +178,7 @@ async fn cancel_successful_campaign() {
             })
             .await;
 
-        assert_eq!(pledge_certificate.outgoing_message_count(), 3);
+        assert_eq!(pledge_certificate.outgoing_message_count(), 2);
         pledges_and_transfers.push(pledge_certificate);
     }
 

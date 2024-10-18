@@ -106,9 +106,6 @@ async fn single_transaction() {
         )
         .await;
 
-    user_chain_a.register_application(token_id_b).await;
-    user_chain_b.register_application(token_id_a).await;
-
     // Check the initial starting amounts for chain a and chain b
     for (owner, amount) in [
         (admin_account, None),
@@ -138,9 +135,6 @@ async fn single_transaction() {
             vec![token_id_a.forget_abi(), token_id_b.forget_abi()],
         )
         .await;
-    // Doing the registrations
-    user_chain_a.register_application(matching_id).await;
-    user_chain_b.register_application(matching_id).await;
 
     // Creating the bid orders
     let mut bid_certificates = Vec::new();
@@ -159,7 +153,7 @@ async fn single_transaction() {
             })
             .await;
 
-        assert_eq!(bid_certificate.outgoing_message_count(), 3);
+        assert_eq!(bid_certificate.outgoing_message_count(), 2);
         bid_certificates.push(bid_certificate);
     }
 
@@ -211,7 +205,7 @@ async fn single_transaction() {
             })
             .await;
 
-        assert_eq!(ask_certificate.outgoing_message_count(), 3);
+        assert_eq!(ask_certificate.outgoing_message_count(), 2);
         ask_certificates.push(ask_certificate);
     }
 
@@ -263,7 +257,7 @@ async fn single_transaction() {
             block.with_operation(matching_id, operation);
         })
         .await;
-    assert_eq!(order_certificate.outgoing_message_count(), 2);
+    assert_eq!(order_certificate.outgoing_message_count(), 1);
     matching_chain
         .add_block(|block| {
             block.with_messages_from(&order_certificate);

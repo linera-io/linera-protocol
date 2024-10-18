@@ -1,10 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::vec;
+use std::{collections::BTreeMap, sync::Arc, vec};
 
 use linera_base::{
-    data_types::{Amount, ArithmeticError, OracleResponse},
+    data_types::{Amount, ArithmeticError, OracleResponse, UserApplicationDescription},
     ensure,
     identifiers::ApplicationId,
 };
@@ -21,16 +21,29 @@ pub struct TransactionTracker {
     oracle_responses: Vec<OracleResponse>,
     outcomes: Vec<ExecutionOutcome>,
     next_message_index: u32,
+    pending_applications: Arc<BTreeMap<ApplicationId, UserApplicationDescription>>,
 }
 
 impl TransactionTracker {
-    pub fn new(next_message_index: u32, oracle_responses: Option<Vec<OracleResponse>>) -> Self {
+    pub fn new(
+        next_message_index: u32,
+        oracle_responses: Option<Vec<OracleResponse>>,
+        pending_applications: Arc<BTreeMap<ApplicationId, UserApplicationDescription>>,
+    ) -> Self {
         TransactionTracker {
             replaying_oracle_responses: oracle_responses.map(Vec::into_iter),
             next_message_index,
             oracle_responses: Vec::new(),
             outcomes: Vec::new(),
+            pending_applications,
         }
+    }
+
+    pub fn get_pending_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Option<UserApplicationDescription> {
+        self.pending_applications.get(&application_id).cloned()
     }
 
     pub fn next_message_index(&self) -> u32 {
@@ -116,6 +129,7 @@ impl TransactionTracker {
             oracle_responses,
             outcomes,
             next_message_index,
+            pending_applications: _pending_blobs,
         } = self;
         if let Some(mut responses) = replaying_oracle_responses {
             ensure!(
@@ -124,9 +138,5 @@ impl TransactionTracker {
             );
         }
         Ok((outcomes, oracle_responses, next_message_index))
-    }
-
-    pub(crate) fn outcomes_mut(&mut self) -> &mut Vec<ExecutionOutcome> {
-        &mut self.outcomes
     }
 }

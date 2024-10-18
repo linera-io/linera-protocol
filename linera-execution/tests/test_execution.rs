@@ -3,10 +3,9 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use std::{collections::BTreeMap, vec};
+use std::{collections::BTreeMap, sync::Arc, vec};
 
 use assert_matches::assert_matches;
-use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
     crypto::PublicKey,
     data_types::{
@@ -19,12 +18,12 @@ use linera_execution::{
     committee::{Committee, Epoch},
     system::SystemMessage,
     test_utils::{
-        create_dummy_user_application_registrations, get_application_blob_oracle_responses,
-        register_mock_applications, ExpectedCall, SystemExecutionState,
+        create_dummy_user_applications, create_mock_applications,
+        get_application_blob_oracle_responses, ExpectedCall, SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Operation, OperationContext,
+    Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage, ResourceControlPolicy,
+    ResourceController, Response, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 
@@ -45,8 +44,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let (app_id, app_desc, contract_blob, service_blob) =
-        &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
+    let (app_id, app_desc, contract_blob, service_blob) = &create_dummy_user_applications(1)[0];
     view.context()
         .extra()
         .add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
@@ -64,7 +62,11 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
                 application_id: *app_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, Some(get_application_blob_oracle_responses(app_id))),
+            &mut TransactionTracker::new(
+                0,
+                Some(get_application_blob_oracle_responses(app_id)),
+                Arc::new(BTreeMap::new()),
+            ),
             &mut controller,
         )
         .await;
@@ -83,7 +85,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -152,8 +154,11 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
         ..make_operation_context()
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&caller_id)));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(get_application_blob_oracle_responses(&caller_id)),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -271,7 +276,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -332,8 +337,11 @@ async fn test_simulated_session() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&caller_id)));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(get_application_blob_oracle_responses(&caller_id)),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -385,7 +393,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -446,6 +454,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
             &mut TransactionTracker::new(
                 0,
                 Some(get_application_blob_oracle_responses(&caller_id)),
+                Arc::new(BTreeMap::new()),
             ),
             &mut controller,
         )
@@ -462,7 +471,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let mut applications = create_mock_applications(&mut view, 1);
     let (id, _, application, _, _) = applications
         .next()
         .expect("Mock application should be registered");
@@ -487,7 +496,11 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
                 application_id: id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&id))),
+            &mut TransactionTracker::new(
+                0,
+                Some(get_application_blob_oracle_responses(&id)),
+                Arc::new(BTreeMap::new()),
+            ),
             &mut controller,
         )
         .await;
@@ -503,7 +516,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 4).await?;
+    let mut applications = create_mock_applications(&mut view, 4);
     let (first_id, _, first_application, _, _) = applications
         .next()
         .expect("First mock application should be registered");
@@ -558,7 +571,11 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
                 application_id: first_id,
                 bytes: vec![],
             },
-            &mut TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&first_id))),
+            &mut TransactionTracker::new(
+                0,
+                Some(get_application_blob_oracle_responses(&first_id)),
+                Arc::new(BTreeMap::new()),
+            ),
             &mut controller,
         )
         .await;
@@ -574,7 +591,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 4).await?;
+    let mut applications = create_mock_applications(&mut view, 4);
     let (first_id, _, first_application, _, _) = applications
         .next()
         .expect("First mock application should be registered");
@@ -667,8 +684,11 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&first_id)));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(get_application_blob_oracle_responses(&first_id)),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -680,20 +700,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         &mut controller,
     )
     .await?;
-    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-        .await?;
 
-    let applications = stream::iter([first_id, third_id])
-        .then(|id| view.system.registry.describe_application(id))
-        .try_collect()
-        .await?;
-    let registration_message = RawOutgoingMessage {
-        destination: Destination::from(destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications { applications },
-    };
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -703,9 +710,6 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
     assert_eq!(
         outcomes,
         vec![
-            ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
-            ),
             ExecutionOutcome::User(
                 fourth_id,
                 RawExecutionOutcome::default().with_refund_grant_to(Some(account))
@@ -757,7 +761,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -789,6 +793,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
             &mut TransactionTracker::new(
                 0,
                 Some(get_application_blob_oracle_responses(&caller_id)),
+                Arc::new(BTreeMap::new()),
             ),
             &mut controller,
         )
@@ -813,7 +818,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -852,6 +857,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
             &mut TransactionTracker::new(
                 0,
                 Some(get_application_blob_oracle_responses(&caller_id)),
+                Arc::new(BTreeMap::new()),
             ),
             &mut controller,
         )
@@ -875,7 +881,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -914,6 +920,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
             &mut TransactionTracker::new(
                 0,
                 Some(get_application_blob_oracle_responses(&caller_id)),
+                Arc::new(BTreeMap::new()),
             ),
             &mut controller,
         )
@@ -940,7 +947,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -973,7 +980,8 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
             },
             &mut TransactionTracker::new(
                 0,
-                Some(get_application_blob_oracle_responses(&caller_id))),
+                Some(get_application_blob_oracle_responses(&caller_id)),
+                Arc::new(BTreeMap::new())),
             &mut controller,
         )
         .await,
@@ -991,7 +999,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let mut applications = create_mock_applications(&mut view, 1);
     let (application_id, _, application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -1022,6 +1030,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     let mut txn_tracker = TransactionTracker::new(
         0,
         Some(get_application_blob_oracle_responses(&application_id)),
+        Arc::new(BTreeMap::new()),
     );
     view.execute_operation(
         context,
@@ -1034,23 +1043,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
         &mut controller,
     )
     .await?;
-    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-        .await?;
 
-    let application_description = view
-        .system
-        .registry
-        .describe_application(application_id)
-        .await?;
-    let registration_message = RawOutgoingMessage {
-        destination: Destination::from(destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications {
-            applications: vec![application_description],
-        },
-    };
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -1060,9 +1053,6 @@ async fn test_simple_message() -> anyhow::Result<()> {
     assert_eq!(
         outcomes,
         &[
-            ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
-            ),
             ExecutionOutcome::User(
                 application_id,
                 RawExecutionOutcome::default()
@@ -1087,7 +1077,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 2).await?;
+    let mut applications = create_mock_applications(&mut view, 2);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -1127,8 +1117,11 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&caller_id)));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(get_application_blob_oracle_responses(&caller_id)),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1140,19 +1133,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
         &mut controller,
     )
     .await?;
-    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-        .await?;
 
-    let target_description = view.system.registry.describe_application(target_id).await?;
-    let registration_message = RawOutgoingMessage {
-        destination: Destination::from(destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications {
-            applications: vec![target_description],
-        },
-    };
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -1162,9 +1143,6 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     assert_eq!(
         outcomes,
         &[
-            ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
-            ),
             ExecutionOutcome::User(
                 target_id,
                 RawExecutionOutcome::default()
@@ -1196,7 +1174,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 3).await?;
+    let mut applications = create_mock_applications(&mut view, 3);
     let (caller_id, _, caller_application, _, _) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -1247,8 +1225,11 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&caller_id)));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(get_application_blob_oracle_responses(&caller_id)),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1261,18 +1242,6 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     )
     .await?;
 
-    let target_description = view.system.registry.describe_application(target_id).await?;
-    let registration_message = RawOutgoingMessage {
-        destination: Destination::from(destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications {
-            applications: vec![target_description],
-        },
-    };
-    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-        .await?;
     let account = Account {
         chain_id: ChainId::root(0),
         owner: None,
@@ -1281,9 +1250,6 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     assert_eq!(
         outcomes,
         &[
-            ExecutionOutcome::System(
-                RawExecutionOutcome::default().with_message(registration_message)
-            ),
             ExecutionOutcome::User(
                 target_id,
                 RawExecutionOutcome::default()
@@ -1327,7 +1293,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     state.description = Some(ChainDescription::Root(0));
     let mut view = state.into_view().await;
 
-    let mut applications = register_mock_applications(&mut view, 3).await?;
+    let mut applications = create_mock_applications(&mut view, 3);
     // The entrypoint application, which sends a message and calls other applications
     let (caller_id, _, caller_application, _, _) = applications
         .next()
@@ -1412,8 +1378,11 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     // Execute the operation, starting the test scenario
     let context = make_operation_context();
     let mut controller = ResourceController::default();
-    let mut txn_tracker =
-        TransactionTracker::new(0, Some(get_application_blob_oracle_responses(&caller_id)));
+    let mut txn_tracker = TransactionTracker::new(
+        0,
+        Some(get_application_blob_oracle_responses(&caller_id)),
+        Arc::new(BTreeMap::new()),
+    );
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -1425,38 +1394,6 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
         &mut controller,
     )
     .await?;
-    view.update_execution_outcomes_with_app_registrations(&mut txn_tracker)
-        .await?;
-
-    // Describe the two applications that sent messages, and will therefore handle them in the
-    // other chains
-    let caller_description = view.system.registry.describe_application(caller_id).await?;
-    let sending_target_description = view
-        .system
-        .registry
-        .describe_application(sending_target_id)
-        .await?;
-
-    // The registration message for the first destination chain
-    let first_registration_message = RawOutgoingMessage {
-        destination: Destination::from(first_destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications {
-            applications: vec![caller_description, sending_target_description.clone()],
-        },
-    };
-    // The registration message for the second destination chain
-    let second_registration_message = RawOutgoingMessage {
-        destination: Destination::from(second_destination_chain),
-        authenticated: false,
-        grant: Amount::ZERO,
-        kind: MessageKind::Simple,
-        message: SystemMessage::RegisterApplications {
-            applications: vec![sending_target_description],
-        },
-    };
 
     let account = Account {
         chain_id: ChainId::root(0),
@@ -1468,11 +1405,6 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     assert_eq!(
         outcomes,
         &[
-            ExecutionOutcome::System(
-                RawExecutionOutcome::default()
-                    .with_message(first_registration_message)
-                    .with_message(second_registration_message)
-            ),
             ExecutionOutcome::User(
                 silent_target_id,
                 RawExecutionOutcome::default().with_refund_grant_to(Some(account)),
@@ -1522,7 +1454,7 @@ async fn test_open_chain() {
         ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
     };
     let mut view = state.into_view().await;
-    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let mut applications = create_mock_applications(&mut view, 1);
     let (application_id, _, application, _, _) = applications.next().unwrap();
 
     let context = OperationContext {
@@ -1564,6 +1496,7 @@ async fn test_open_chain() {
     let mut txn_tracker = TransactionTracker::new(
         first_message_index,
         Some(get_application_blob_oracle_responses(&application_id)),
+        Arc::new(BTreeMap::new()),
     );
     view.execute_operation(
         context,
@@ -1627,7 +1560,7 @@ async fn test_close_chain() {
         ..SystemExecutionState::new(Epoch::ZERO, ChainDescription::Root(0), ChainId::root(0))
     };
     let mut view = state.into_view().await;
-    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let mut applications = create_mock_applications(&mut view, 1);
     let (application_id, _, application, _, _) = applications.next().unwrap();
 
     // The application is not authorized to close the chain.
@@ -1655,6 +1588,7 @@ async fn test_close_chain() {
         &mut TransactionTracker::new(
             0,
             Some(get_application_blob_oracle_responses(&application_id)),
+            Arc::new(BTreeMap::new()),
         ),
         &mut controller,
     )
@@ -1669,7 +1603,7 @@ async fn test_close_chain() {
         context,
         Timestamp::from(0),
         operation.into(),
-        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut TransactionTracker::new(0, Some(Vec::new()), Arc::new(BTreeMap::new())),
         &mut controller,
     )
     .await
@@ -1694,6 +1628,7 @@ async fn test_close_chain() {
         &mut TransactionTracker::new(
             0,
             Some(get_application_blob_oracle_responses(&application_id)),
+            Arc::new(BTreeMap::new()),
         ),
         &mut controller,
     )

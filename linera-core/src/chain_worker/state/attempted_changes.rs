@@ -321,10 +321,15 @@ where
         // Execute the block and update inboxes.
         self.state.chain.remove_bundles_from_inboxes(block).await?;
         let local_time = self.state.storage.clock().current_time();
+        let pending_applications = self
+            .state
+            .get_pending_application_descriptions(block.published_application_ids())
+            .await?;
         let verified_outcome = Box::pin(self.state.chain.execute_block(
             block,
             local_time,
             Some(executed_block.outcome.oracle_responses.clone()),
+            pending_applications,
         ))
         .await?;
         // We should always agree on the messages and state hash.

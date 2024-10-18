@@ -906,18 +906,6 @@ SystemMessage:
               TYPENAME: ChainId
           - subscription:
               TYPENAME: ChannelSubscription
-    7:
-      ApplicationCreated: UNIT
-    8:
-      RegisterApplications:
-        STRUCT:
-          - applications:
-              SEQ:
-                TYPENAME: UserApplicationDescription
-    9:
-      RequestApplication:
-        NEWTYPE:
-          TYPENAME: ApplicationId
 SystemOperation:
   ENUM:
     0:
@@ -999,18 +987,17 @@ SystemOperation:
         STRUCT:
           - id:
               TYPENAME: ApplicationId
-          - description:
-              TYPENAME: UserApplicationDescription
+          - creator_chain_id:
+              TYPENAME: ChainId
+          - block_height:
+              TYPENAME: BlockHeight
+          - operation_index: U32
+          - required_application_ids:
+              SEQ:
+                TYPENAME: ApplicationId
           - instantiation_argument:
               SEQ: U8
     12:
-      RequestApplication:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - application_id:
-              TYPENAME: ApplicationId
-    13:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation

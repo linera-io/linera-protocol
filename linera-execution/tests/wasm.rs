@@ -3,12 +3,12 @@
 
 #![cfg(with_wasm_runtime)]
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId},
+    identifiers::{Account, ChainDescription, ChainId, UserApplicationId},
 };
 use linera_execution::{
     test_utils::{create_dummy_user_application_description, SystemExecutionState},
@@ -42,11 +42,7 @@ async fn test_fuel_for_counter_wasm_application(
         .into_view_with(ChainId::root(0), ExecutionRuntimeConfig::default())
         .await;
     let (app_desc, contract_blob, service_blob) = create_dummy_user_application_description(1);
-    let app_id = view
-        .system
-        .registry
-        .register_application(app_desc.clone())
-        .await?;
+    let app_id = UserApplicationId::from(&app_desc);
 
     let app_blob = Blob::new_application_description(app_desc);
 
@@ -107,6 +103,7 @@ async fn test_fuel_for_counter_wasm_application(
                 OracleResponse::Blob(service_blob_id),
                 OracleResponse::Blob(app_blob_id),
             ]),
+            Arc::new(BTreeMap::new()),
         );
         view.execute_operation(
             context,

@@ -2197,22 +2197,6 @@ where
         Ok(())
     }
 
-    /// Requests a `RegisterApplications` message from another chain so the application can be used
-    /// on this one.
-    #[tracing::instrument(level = "trace")]
-    pub async fn request_application(
-        &self,
-        application_id: UserApplicationId,
-        chain_id: Option<ChainId>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let chain_id = chain_id.unwrap_or(application_id.creator_chain_id);
-        self.execute_operation(Operation::System(SystemOperation::RequestApplication {
-            application_id,
-            chain_id,
-        }))
-        .await
-    }
-
     /// Sends tokens to a chain.
     #[tracing::instrument(level = "trace")]
     pub async fn transfer_to_account(
@@ -2663,7 +2647,10 @@ where
         self.add_pending_blobs(vec![application_blob]).await;
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             id,
-            description,
+            creator_chain_id: description.creator_chain_id,
+            block_height: description.block_height,
+            operation_index: description.operation_index,
+            required_application_ids: description.required_application_ids,
             instantiation_argument,
         }))
         .await?
