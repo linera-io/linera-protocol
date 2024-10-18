@@ -22,7 +22,4 @@ pub mod worker;
 pub(crate) mod updater;
 pub(crate) mod value_cache;
 
-// TODO: Move to env vars or config.
-pub const CERTIFICATE_BATCH_SIZE: usize = 10;
-
 pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
