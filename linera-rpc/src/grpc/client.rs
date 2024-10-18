@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, future::Future, iter};
+use std::{collections::BTreeSet, fmt, future::Future, iter};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
@@ -321,7 +321,27 @@ impl ValidatorNode for GrpcClient {
         &self,
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<Certificate>, NodeError> {
-        Ok(client_delegate!(self, download_certificates, hashes)?.try_into()?)
+        let mut missing_hashes = hashes;
+        let mut certs_collected = Vec::with_capacity(missing_hashes.len());
+        loop {
+            // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
+            let missing = missing_hashes.clone();
+            let mut received: Vec<Certificate> =
+                client_delegate!(self, download_certificates, missing)?.try_into()?;
+
+            // In the case of the server not returning any certificates, we break the loop.
+            if received.is_empty() {
+                break;
+            }
+
+            // Remove ones we've just received.
+            let received_hashes: BTreeSet<CryptoHash> =
+                received.iter().map(|cert| cert.hash()).collect();
+            missing_hashes.retain(|hash| !received_hashes.contains(hash));
+
+            certs_collected.append(&mut received);
+        }
+        Ok(certs_collected)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
