@@ -885,7 +885,7 @@ where
         // Verify that our local storage contains enough history compared to the
         // expected block height. Otherwise, download the missing history from the
         // network.
-        let (next_block_height, block_hash, tip_time) = self.state().tip();
+        let (next_block_height, block_hash, _) = self.state().tip();
         let nodes = self.validator_nodes().await?;
         let mut info = self
             .client
@@ -894,7 +894,7 @@ where
         if info.next_block_height == next_block_height {
             // Check that our local node has the expected block hash.
             ensure!(
-                (info.block_hash, info.timestamp) == (block_hash, tip_time),
+                info.block_hash == block_hash,
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
