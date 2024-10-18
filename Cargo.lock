@@ -4518,6 +4518,7 @@ dependencies = [
  "port-selector",
  "prometheus",
  "proptest",
+ "prost",
  "rand",
  "reqwest 0.11.27",
  "serde",

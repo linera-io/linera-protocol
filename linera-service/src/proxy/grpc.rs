@@ -36,10 +36,11 @@ use linera_rpc::{
             SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
-        GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
+        GrpcProtoConversionError, GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
     },
 };
 use linera_storage::Storage;
+use prost::Message;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -480,7 +481,7 @@ where
             .into_iter()
             .map(linera_base::crypto::CryptoHash::try_from)
             .collect::<Result<Vec<linera_base::crypto::CryptoHash>, _>>()?;
-        let certificates = self
+        let mut certificates: Vec<linera_chain::data_types::Certificate> = self
             .0
             .storage
             .read_certificates(hashes)
@@ -488,9 +489,38 @@ where
             .map_err(|err| Status::from_error(Box::new(err)))?
             .into_iter()
             .collect::<Vec<_>>();
-        Ok(Response::new(CertificatesBatchResponse::try_from(
-            certificates,
-        )?))
+
+        // Tries to serialize the certificates into a proto message.
+        // Returns `true` when encoding succeeds and `false` when it fails.
+        // Returns error when conversion to protobuf message fails.
+        fn try_proto_serialize<T, U>(c: T) -> Result<bool, Status>
+        where
+            U: Message + TryFrom<T, Error = GrpcProtoConversionError>,
+        {
+            // Use 70% of the max message size as a buffer capacity.
+            // Leave 30% as overhead.
+            let message_capacity = GRPC_MAX_MESSAGE_SIZE as f64 * 0.7;
+            let mut buff: Vec<u8> = Vec::with_capacity(message_capacity as usize);
+            let grpc_response = U::try_from(c)?;
+            Ok(prost::Message::encode(&grpc_response, &mut buff).is_ok())
+        }
+
+        // Reverse the order to drop from the back.
+        certificates.reverse();
+        // Keep dropping elements until we fit in the limited message size.
+        while !try_proto_serialize::<
+            Vec<linera_chain::data_types::Certificate>,
+            CertificatesBatchResponse,
+        >(certificates.clone())?
+        {
+            // Drop last (first on the reversed list) certificate and try again.
+            let _ = certificates.pop();
+        }
+
+        // Reverse again to bring back the original order.
+        certificates.reverse();
+        let grpc_response = CertificatesBatchResponse::try_from(certificates)?;
+        Ok(Response::new(grpc_response))
     }
 
     #[instrument(skip_all, err(Display))]
