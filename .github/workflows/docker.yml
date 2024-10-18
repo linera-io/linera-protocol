@@ -9,6 +9,7 @@ on:
     paths:
       - 'docker/Dockerfile'
       - 'docker/compose.sh'
+      - 'docker/docker-compose.yml'
       - 'Cargo.toml'
       - '.github/workflows/docker.yml'
   workflow_dispatch:
@@ -53,10 +54,12 @@ jobs:
         run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
         run: cd docker && ./compose.sh &
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
       - name: Sync
         uses: nick-fields/retry@v2
         with:
           # Docker compose can take some time to start
           max_attempts: 5
           timeout_minutes: 2
-          command: sleep 60 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
+          command: sleep 120 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
