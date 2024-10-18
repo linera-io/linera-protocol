@@ -20,6 +20,7 @@ targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 
 [features]
 ethereum = ["async-trait", "linera-ethereum"]
+unstable-oracles = ["linera-core/unstable-oracles", "linera-execution/unstable-oracles"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",

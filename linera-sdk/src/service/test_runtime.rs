@@ -5,12 +5,13 @@
 
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
 };
 
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
+    http,
     identifiers::{ApplicationId, ChainId, Owner},
 };
 
@@ -29,6 +30,7 @@ where
     chain_balance: Cell<Option<Amount>>,
     owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
+    expected_http_requests: VecDeque<(http::Request, http::Response)>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
     blobs: RefCell<Option<HashMap<DataBlobHash, Vec<u8>>>>,
     key_value_store: KeyValueStore,
@@ -58,6 +60,7 @@ where
             chain_balance: Cell::new(None),
             owner_balances: RefCell::new(None),
             query_application_handler: RefCell::new(None),
+            expected_http_requests: VecDeque::new(),
             url_blobs: RefCell::new(None),
             blobs: RefCell::new(None),
             key_value_store: KeyValueStore::mock(),
@@ -321,6 +324,25 @@ where
 
         serde_json::from_slice(&response_bytes)
             .expect("Failed to deserialize query response from application")
+    }
+
+    /// Adds an expected `http_request` call, and the response it should return in the test.
+    pub fn add_expected_http_request(&mut self, request: http::Request, response: http::Response) {
+        self.expected_http_requests.push_back((request, response));
+    }
+
+    /// Makes an HTTP `request` as an oracle and returns the HTTP response.
+    ///
+    /// Should only be used with queries where it is very likely that all validators will receive
+    /// the same response, otherwise most block proposals will fail.
+    ///
+    /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
+    /// owner, not a super owner.
+    pub fn http_request(&mut self, request: http::Request) -> http::Response {
+        let maybe_request = self.expected_http_requests.pop_front();
+        let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");
+        assert_eq!(request, expected_request);
+        response
     }
 
     /// Configures the blobs returned when fetching from URLs during the test.

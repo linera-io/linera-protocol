@@ -17,6 +17,7 @@ pub mod command;
 pub mod crypto;
 pub mod data_types;
 mod graphql;
+pub mod http;
 pub mod identifiers;
 pub mod ownership;
 #[cfg(not(target_arch = "wasm32"))]
