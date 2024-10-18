@@ -65,7 +65,7 @@ mod implementation {
 
 #[cfg(web)]
 mod implementation {
-    use futures::{channel::oneshot, future, stream, StreamExt as _};
+    use futures::{channel::oneshot, stream, StreamExt as _};
     use std::convert::TryFrom;
     use wasm_bindgen::prelude::*;
     use web_sys::js_sys;
@@ -112,14 +112,13 @@ mod implementation {
     }
 
     /// The stream of inputs available to the spawned task.
-    pub type InputReceiver<T> = stream::FilterMap<
+    pub type InputReceiver<T> = stream::Map<
         tokio_stream::wrappers::UnboundedReceiverStream<JsValue>,
-        future::Ready<Option<T>>,
-        fn(JsValue) -> future::Ready<Option<T>>,
+        fn(JsValue) -> T,
     >;
 
-    fn convert_or_discard<V, T: TryFrom<V>>(value: V) -> future::Ready<Option<T>> {
-        future::ready(T::try_from(value).ok())
+    fn convert_or_panic<V, T: TryFrom<V, Error: std::fmt::Debug>>(value: V) -> T {
+        T::try_from(value).expect("type correctness should ensure this can be deserialized")
     }
 
     /// The type of a future awaiting another task.
@@ -140,7 +139,7 @@ mod implementation {
             work: impl FnOnce(InputReceiver<Input>) -> F + Send + 'static,
         ) -> Self
         where
-            Input: Into<JsValue> + TryFrom<JsValue>,
+            Input: Into<JsValue> + TryFrom<JsValue, Error: std::fmt::Debug>,
             Output: Send + 'static,
         {
             let (ready_sender, ready_receiver) = oneshot::channel();
@@ -150,10 +149,10 @@ mod implementation {
                     let input_receiver =
                         tokio_stream::wrappers::UnboundedReceiverStream::new(input_receiver);
                     let onmessage = wasm_bindgen::closure::Closure::<
-                        dyn FnMut(JsValue) -> Result<(), JsError>,
+                        dyn FnMut(web_sys::MessageEvent) -> Result<(), JsError>,
                     >::new(
-                        move |v: JsValue| -> Result<(), JsError> {
-                            input_sender.send(v)?;
+                        move |event: web_sys::MessageEvent| -> Result<(), JsError> {
+                            input_sender.send(event.data())?;
                             Ok(())
                         },
                     );
@@ -163,9 +162,10 @@ mod implementation {
                         .set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
                     onmessage.forget(); // doesn't truly forget it, but lets the JS GC take care of it
                     ready_sender.send(()).unwrap();
-                    work(input_receiver.filter_map(convert_or_discard::<JsValue, Input>)).await
+                    work(input_receiver.map(convert_or_panic::<JsValue, Input>)).await
                 })
                 .expect("should successfully start Web Worker");
+
             ready_receiver
                 .await
                 .expect("should successfully initialize the worker thread");
