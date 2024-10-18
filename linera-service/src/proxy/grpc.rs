@@ -490,26 +490,15 @@ where
             .into_iter()
             .collect::<Vec<_>>();
 
-        // Tries to serialize the certificates into a proto message.
-        // Returns `true` when encoding succeeds and `false` when it fails.
-        // Returns error when conversion to protobuf message fails.
-        fn try_proto_serialize<T, U>(c: T) -> Result<bool, Status>
-        where
-            U: Message + TryFrom<T, Error = GrpcProtoConversionError>,
-        {
-            // Use 70% of the max message size as a buffer capacity.
-            // Leave 30% as overhead.
-            let message_capacity = GRPC_MAX_MESSAGE_SIZE as f64 * 0.7;
-            let mut buff: Vec<u8> = Vec::with_capacity(message_capacity as usize);
-            let grpc_response = U::try_from(c)?;
-            Ok(prost::Message::encode(&grpc_response, &mut buff).is_ok())
-        }
+        // Use 70% of the max message size as a buffer capacity.
+        // Leave 30% as overhead.
+        let message_capacity = (GRPC_MAX_MESSAGE_SIZE as f64 * 0.7) as usize;
 
         // Keep dropping elements until we fit in the limited message size.
         while !try_proto_serialize::<
             Vec<linera_chain::data_types::Certificate>,
             CertificatesBatchResponse,
-        >(certificates.clone())?
+        >(certificates.clone(), message_capacity)?
         {
             // Drop last (first on the reversed list) certificate and try again.
             let _ = certificates.pop();
@@ -550,5 +539,75 @@ where
             .try_into()?;
         self.0.notifier.notify(&chain_id, &Ok(notification));
         Ok(Response::new(()))
+    }
+}
+
+// Tries to serialize the certificates into a proto message.
+// Returns `true` when encoding succeeds and `false` when it fails.
+// Returns error when conversion to protobuf message fails.
+fn try_proto_serialize<T, U>(c: T, message_capacity: usize) -> Result<bool, Status>
+where
+    U: Message + TryFrom<T, Error = GrpcProtoConversionError>,
+{
+    let mut buff: Vec<u8> = std::iter::repeat(0).take(message_capacity).collect();
+    let grpc_response = U::try_from(c)?;
+    Ok(grpc_response.encode(&mut buff.as_mut_slice()).is_ok())
+}
+
+#[cfg(test)]
+mod proto_message_cap {
+    use linera_base::crypto::{KeyPair, Signature};
+    use linera_chain::data_types::{
+        BlockExecutionOutcome, Certificate, ExecutedBlock, HashedCertificateValue,
+    };
+    use linera_execution::committee::ValidatorName;
+    use linera_sdk::base::{ChainId, TestString};
+
+    #[test]
+    fn fails_for_message_too_large() {
+        let keypair = KeyPair::generate();
+        let validator = ValidatorName(keypair.public());
+        let signature = Signature::new(&TestString::new("Test"), &keypair);
+        let executed_block = ExecutedBlock {
+            block: linera_chain::test::make_first_block(ChainId::root(0)),
+            outcome: BlockExecutionOutcome::default(),
+        };
+        let signatures = vec![(validator, signature)];
+        let certificate = Certificate::new(
+            HashedCertificateValue::new_confirmed(executed_block),
+            Default::default(),
+            signatures,
+        );
+
+        let message_capacity = 1; // 1 byte isn't enough for anything.
+        let result = super::try_proto_serialize::<Vec<Certificate>, super::CertificatesBatchResponse>(
+            vec![certificate],
+            message_capacity,
+        );
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn fits_single_message() {
+        let keypair = KeyPair::generate();
+        let validator = ValidatorName(keypair.public());
+        let signature = Signature::new(&TestString::new("Test"), &keypair);
+        let executed_block = ExecutedBlock {
+            block: linera_chain::test::make_first_block(ChainId::root(0)),
+            outcome: BlockExecutionOutcome::default(),
+        };
+        let signatures = vec![(validator, signature)];
+        let certificate = Certificate::new(
+            HashedCertificateValue::new_confirmed(executed_block),
+            Default::default(),
+            signatures,
+        );
+
+        let message_capacity = 1_000_000; // 1 MB should be enough for a single message.
+        let result = super::try_proto_serialize::<Vec<Certificate>, super::CertificatesBatchResponse>(
+            vec![certificate],
+            message_capacity,
+        );
+        assert!(result.unwrap());
     }
 }
