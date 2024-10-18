@@ -18,7 +18,7 @@ use data_types::{MessageBundle, Origin, PostedMessage};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -32,7 +32,7 @@ pub enum ChainError {
     #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
     #[error("Error in view operation: {0}")]
-    ViewError(#[from] ViewError),
+    ViewError(ViewError),
     #[error("Execution error: {0} during {1:?}")]
     ExecutionError(ExecutionError, ChainExecutionContext),
 
@@ -150,6 +150,17 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
+}
+
+impl From<ViewError> for ChainError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => ChainError::BlobsNotFound(blob_ids),
+            error => ChainError::ViewError(error),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

@@ -262,7 +262,7 @@ where
         let handle_block_proposal_result =
             Self::handle_block_proposal(proposal, &mut validator).await;
         let result = match handle_block_proposal_result {
-            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
+            Some(Err(NodeError::BlobsNotFound(_))) => {
                 handle_block_proposal_result.expect("handle_block_proposal_result should be Some")
             }
             _ => match validator.fault_type {
@@ -354,7 +354,7 @@ where
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
-            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
+            Some(Err(NodeError::BlobsNotFound(_))) => {
                 handle_certificate_result.expect("handle_certificate_result should be Some")
             }
             _ => match validator.fault_type {

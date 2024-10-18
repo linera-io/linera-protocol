@@ -17,9 +17,9 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, LiteCertificate,
     },
-    ChainError, ChainStateView,
+    ChainStateView,
 };
-use linera_execution::{ExecutionError, Query, Response, SystemExecutionError};
+use linera_execution::{Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::{prelude::SliceRandom, thread_rng};
@@ -59,10 +59,10 @@ pub enum LocalNodeError {
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(ViewError),
 
     #[error("Local node operation failed: {0}")]
-    WorkerError(#[from] WorkerError),
+    WorkerError(WorkerError),
 
     #[error(
         "Failed to download certificates and update local node to the next height \
@@ -83,35 +83,35 @@ pub enum LocalNodeError {
     InvalidChainInfoResponse,
 
     #[error(transparent)]
-    NodeError(#[from] NodeError),
+    NodeError(NodeError),
+
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
 }
 
-impl LocalNodeError {
-    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
-        match self {
-            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) => {
-                match **chain_error {
-                    ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
-                            blob_id,
-                        )),
-                        _,
-                    )
-                    | ChainError::ExecutionError(
-                        ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
-                        _,
-                    ) => Some(vec![blob_id]),
-                    _ => None,
-                }
-            }
-            LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                Some(blob_ids.clone())
-            }
-            LocalNodeError::NodeError(NodeError::BlobNotFoundOnRead(blob_id)) => {
-                Some(vec![*blob_id])
-            }
-            LocalNodeError::NodeError(NodeError::BlobsNotFound(blob_ids)) => Some(blob_ids.clone()),
-            _ => None,
+impl From<WorkerError> for LocalNodeError {
+    fn from(error: WorkerError) -> Self {
+        match error {
+            WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            error => LocalNodeError::WorkerError(error),
+        }
+    }
+}
+
+impl From<NodeError> for LocalNodeError {
+    fn from(error: NodeError) -> Self {
+        match error {
+            NodeError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            error => LocalNodeError::NodeError(error),
+        }
+    }
+}
+
+impl From<ViewError> for LocalNodeError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            error => LocalNodeError::ViewError(error),
         }
     }
 }
@@ -293,7 +293,7 @@ where
 
             result = match &result {
                 Err(err) => {
-                    if let Some(blob_ids) = err.get_blobs_not_found() {
+                    if let LocalNodeError::BlobsNotFound(blob_ids) = &err {
                         let blobs = remote_node.try_download_blobs(blob_ids.as_slice()).await;
                         if blobs.len() != blob_ids.len() {
                             result

@@ -18,7 +18,7 @@ use linera_chain::{
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    ExecutionError, SystemExecutionError,
+    ExecutionError,
 };
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
@@ -178,7 +178,7 @@ pub enum NodeError {
         height: BlockHeight,
     },
 
-    #[error("The following blobs are missing: {0:?}.")]
+    #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
     // This error must be normalized during conversions.
@@ -216,8 +216,6 @@ pub enum NodeError {
     #[error("Failed to make a chain info query on the local node: {error}")]
     LocalNodeQuery { error: String },
 
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
     #[error("Node failed to provide a 'last used by' certificate for the blob")]
     InvalidCertificateForBlob(BlobId),
     #[error("Local error handling validator response")]
@@ -252,8 +250,11 @@ impl CrossChainMessageDelivery {
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
-        Self::ViewError {
-            error: error.to_string(),
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            error => Self::ViewError {
+                error: error.to_string(),
+            },
         }
     }
 }
@@ -287,14 +288,10 @@ impl From<ChainError> for NodeError {
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::ExecutionError(
-                ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
-                _,
-            )
-            | ChainError::ExecutionError(
-                ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
-                _,
-            ) => Self::BlobNotFoundOnRead(blob_id),
+            ChainError::BlobsNotFound(blob_ids)
+            | ChainError::ExecutionError(ExecutionError::BlobsNotFound(blob_ids), _) => {
+                Self::BlobsNotFound(blob_ids)
+            }
             error => Self::ChainError {
                 error: error.to_string(),
             },
@@ -307,7 +304,7 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
-            WorkerError::BlobsNotFound(blob_ids) => NodeError::BlobsNotFound(blob_ids),
+            WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             error => Self::WorkerError {
                 error: error.to_string(),
             },

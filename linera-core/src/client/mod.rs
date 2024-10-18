@@ -446,10 +446,10 @@ where
 #[derive(Debug, Error)]
 pub enum ChainClientError {
     #[error("Local node operation failed: {0}")]
-    LocalNodeError(#[from] LocalNodeError),
+    LocalNodeError(LocalNodeError),
 
     #[error("Remote node operation failed: {0}")]
-    RemoteNodeError(#[from] NodeError),
+    RemoteNodeError(NodeError),
 
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
@@ -458,7 +458,7 @@ pub enum ChainClientError {
     JsonError(#[from] serde_json::Error),
 
     #[error("Chain operation failed: {0}")]
-    ChainError(#[from] ChainError),
+    ChainError(ChainError),
 
     #[error(transparent)]
     CommunicationError(#[from] CommunicationError<NodeError>),
@@ -494,10 +494,49 @@ pub enum ChainClientError {
     FoundMultipleKeysForChain(ChainId),
 
     #[error(transparent)]
-    ViewError(#[from] ViewError),
+    ViewError(ViewError),
 
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+}
+
+impl From<NodeError> for ChainClientError {
+    fn from(error: NodeError) -> Self {
+        match error {
+            NodeError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            error => Self::RemoteNodeError(error),
+        }
+    }
+}
+
+impl From<ViewError> for ChainClientError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            error => Self::ViewError(error),
+        }
+    }
+}
+
+impl From<LocalNodeError> for ChainClientError {
+    fn from(error: LocalNodeError) -> Self {
+        match error {
+            LocalNodeError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            error => Self::LocalNodeError(error),
+        }
+    }
+}
+
+impl From<ChainError> for ChainClientError {
+    fn from(error: ChainError) -> Self {
+        match error {
+            ChainError::BlobsNotFound(blob_ids)
+            | ChainError::ExecutionError(ExecutionError::BlobsNotFound(blob_ids), _) => {
+                Self::BlobsNotFound(blob_ids)
+            }
+            error => Self::ChainError(error),
+        }
+    }
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1122,7 +1161,7 @@ where
         // necessary.
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
-                LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
+                LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs = LocalNodeClient::<S>::download_blobs(blob_ids, &nodes).await;
 
                     ensure!(blobs.len() == blob_ids.len(), err);
@@ -1623,8 +1662,8 @@ where
                 .handle_block_proposal(*proposal.clone())
                 .await
             {
-                if let Some(blob_ids) = original_err.get_blobs_not_found() {
-                    self.update_local_node_with_blobs_from(blob_ids, remote_node)
+                if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
+                    self.update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
                         .await?;
                     continue; // We found the missing blobs: retry.
                 }
@@ -1641,9 +1680,7 @@ where
             let mut blobs = vec![];
             while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
             {
-                if let LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) =
-                    &original_err
-                {
+                if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
                     blobs = remote_node
                         .find_missing_blobs(blob_ids.clone(), chain_id)
                         .await?;
@@ -1792,11 +1829,10 @@ where
                 .local_node
                 .stage_block_execution(block.clone())
                 .await;
-            if let Err(err) = &result {
-                if let Some(blob_ids) = err.get_blobs_not_found() {
-                    self.receive_certificates_for_blobs(blob_ids).await?;
-                    continue; // We found the missing blob: retry.
-                }
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                self.receive_certificates_for_blobs(blob_ids.clone())
+                    .await?;
+                continue; // We found the missing blob: retry.
             }
             return Ok(result?);
         }

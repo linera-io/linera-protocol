@@ -12,7 +12,7 @@ use std::{
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::{CryptoError, CryptoHash, KeyPair},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -25,10 +25,11 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
     },
-    ChainStateView,
+    ChainError, ChainStateView,
 };
-use linera_execution::{committee::Epoch, Query, Response};
+use linera_execution::{committee::Epoch, ExecutionError, Query, Response};
 use linera_storage::Storage;
+use linera_views::views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -140,16 +141,16 @@ pub enum Reason {
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error(transparent)]
-    CryptoError(#[from] linera_base::crypto::CryptoError),
+    CryptoError(#[from] CryptoError),
 
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(ViewError),
 
     #[error(transparent)]
-    ChainError(#[from] Box<linera_chain::ChainError>),
+    ChainError(#[from] Box<ChainError>),
 
     // Chain access control
     #[error("Block was not signed by an authorized owner")]
@@ -205,7 +206,7 @@ pub enum WorkerError {
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
-    #[error("The following blobs are missing: {0:?}.")]
+    #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
@@ -221,10 +222,25 @@ pub enum WorkerError {
     Decompression(#[from] DecompressionError),
 }
 
-impl From<linera_chain::ChainError> for WorkerError {
+impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
-    fn from(chain_error: linera_chain::ChainError) -> Self {
-        WorkerError::ChainError(Box::new(chain_error))
+    fn from(chain_error: ChainError) -> Self {
+        match chain_error {
+            ChainError::BlobsNotFound(blob_ids)
+            | ChainError::ExecutionError(ExecutionError::BlobsNotFound(blob_ids), _) => {
+                WorkerError::BlobsNotFound(blob_ids)
+            }
+            error => WorkerError::ChainError(Box::new(error)),
+        }
+    }
+}
+
+impl From<ViewError> for WorkerError {
+    fn from(view_error: ViewError) -> Self {
+        match view_error {
+            ViewError::BlobsNotFound(blob_ids) => WorkerError::BlobsNotFound(blob_ids),
+            error => WorkerError::ViewError(error),
+        }
     }
 }
 
