@@ -54,6 +54,8 @@ jobs:
         run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
         run: cd docker && ./compose.sh &
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
       - name: Sync
         uses: nick-fields/retry@v2
         with:
