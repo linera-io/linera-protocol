@@ -427,7 +427,7 @@ where
                 .checked_sub(1)
                 .expect("message counter should not underflow");
             if *counter == 0 {
-                // Important for the test in `all_messages_delivered_up_to`.
+                // Important for the test in `ChainWorkerState::all_messages_delivered_up_to`.
                 self.outbox_counters.get_mut().remove(&update);
             }
         }
@@ -435,21 +435,6 @@ where
             self.outboxes.remove_entry(target)?;
         }
         Ok(true)
-    }
-
-    /// Returns true if there are no more outgoing messages in flight up to the given
-    /// block height.
-    pub fn all_messages_delivered_up_to(&mut self, height: BlockHeight) -> bool {
-        tracing::debug!(
-            "Messages left in {:.8}'s outbox: {:?}",
-            self.chain_id(),
-            self.outbox_counters.get()
-        );
-        if let Some((key, _)) = self.outbox_counters.get().first_key_value() {
-            key > &height
-        } else {
-            true
-        }
     }
 
     /// Invariant for the states of active chains.
