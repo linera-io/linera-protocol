@@ -334,14 +334,14 @@ where
         }
 
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let blob_ids = self
+        let missing_blob_ids = self
             .recent_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
             .collect::<Vec<_>>();
-        Ok(self.storage.missing_blobs(blob_ids.clone()).await?)
+        Ok(self.storage.missing_blobs(missing_blob_ids.clone()).await?)
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the

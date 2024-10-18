@@ -597,10 +597,6 @@ NodeError:
         STRUCT:
           - error: STR
     20:
-      BlobNotFoundOnRead:
-        NEWTYPE:
-          TYPENAME: BlobId
-    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId

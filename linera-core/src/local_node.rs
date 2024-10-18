@@ -18,9 +18,9 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, LiteCertificate,
     },
-    ChainError, ChainStateView,
+    ChainStateView,
 };
-use linera_execution::{ExecutionError, Query, Response, SystemExecutionError};
+use linera_execution::{Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use rand::{prelude::SliceRandom, thread_rng};
@@ -90,28 +90,12 @@ pub enum LocalNodeError {
 impl LocalNodeError {
     pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
         match self {
-            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) => {
-                match **chain_error {
-                    ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
-                            blob_id,
-                        )),
-                        _,
-                    )
-                    | ChainError::ExecutionError(
-                        ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
-                        _,
-                    ) => Some(vec![blob_id]),
-                    _ => None,
-                }
-            }
-            LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
+            LocalNodeError::WorkerError(error) => error.get_blobs_not_found(),
+            LocalNodeError::NodeError(NodeError::BlobsNotFound(blob_ids))
+            | LocalNodeError::ViewError(ViewError::BlobsNotFound(blob_ids)) => {
                 Some(blob_ids.clone())
             }
-            LocalNodeError::NodeError(NodeError::BlobNotFoundOnRead(blob_id)) => {
-                Some(vec![*blob_id])
-            }
-            LocalNodeError::NodeError(NodeError::BlobsNotFound(blob_ids)) => Some(blob_ids.clone()),
+
             _ => None,
         }
     }

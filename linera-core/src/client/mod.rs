@@ -504,6 +504,21 @@ pub enum ChainClientError {
     BlobsNotFound(Vec<BlobId>),
 }
 
+impl ChainClientError {
+    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            ChainClientError::BlobsNotFound(blob_ids)
+            | ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(blob_ids))
+            | ChainClientError::ViewError(ViewError::BlobsNotFound(blob_ids)) => {
+                Some(blob_ids.clone())
+            }
+            ChainClientError::LocalNodeError(error) => error.get_blobs_not_found(),
+            ChainClientError::ChainError(error) => error.get_blobs_not_found(),
+            _ => None,
+        }
+    }
+}
+
 impl From<Infallible> for ChainClientError {
     fn from(infallible: Infallible) -> Self {
         match infallible {}
