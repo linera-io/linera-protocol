@@ -18,7 +18,7 @@ export default function DialogSuccess({open, setOpenDialog}: DialogSuccessProps)
                 <IconSuccess />
                 <p className="text-2xl md:text-3xl text-green-500 font-bold mt-4">Payment Successful!</p>
             </div>
-            <Dialog.Close className="bg-slate-900/50 rounded-md text-white text-lg py-2 font-bold mt-8">Close</Dialog.Close>
+            <Dialog.Close className="bg-green-500 rounded-md text-white text-lg py-2 font-bold mt-8">Close</Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
