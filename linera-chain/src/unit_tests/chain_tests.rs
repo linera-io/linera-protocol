@@ -160,7 +160,9 @@ async fn test_block_size_limit() {
             recipient: Recipient::root(0),
             amount: Amount::ONE,
         });
-    let result = chain.execute_block(&invalid_block, time, None).await;
+    let result = chain
+        .execute_block(&invalid_block, time, None, BTreeMap::new())
+        .await;
     assert_matches!(
         result,
         Err(ChainError::ExecutionError(
@@ -170,7 +172,10 @@ async fn test_block_size_limit() {
     );
 
     // The valid block is accepted...
-    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
+    let outcome = chain
+        .execute_block(&valid_block, time, None, BTreeMap::new())
+        .await
+        .unwrap();
     let executed_block = outcome.with(valid_block);
 
     // ...because its size is exactly at the allowed limit.
@@ -210,10 +215,6 @@ async fn test_application_permissions() {
         .unwrap();
     let open_chain_message = Message::System(SystemMessage::OpenChain(config));
 
-    let register_app_message = SystemMessage::RegisterApplications {
-        applications: vec![app_description],
-    };
-
     // The OpenChain message must be included in the first block. Also register the app.
     let bundle = IncomingBundle {
         origin: Origin::chain(admin_id()),
@@ -222,10 +223,7 @@ async fn test_application_permissions() {
             height: BlockHeight(1),
             transaction_index: 0,
             timestamp: Timestamp::from(0),
-            messages: vec![
-                open_chain_message.to_posted(0, MessageKind::Protected),
-                register_app_message.to_posted(1, MessageKind::Simple),
-            ],
+            messages: vec![open_chain_message.to_posted(0, MessageKind::Protected)],
         },
         action: MessageAction::Accept,
     };
@@ -234,7 +232,9 @@ async fn test_application_permissions() {
     let invalid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle.clone())
         .with_simple_transfer(chain_id, Amount::ONE);
-    let result = chain.execute_block(&invalid_block, time, None).await;
+    let result = chain
+        .execute_block(&invalid_block, time, None, BTreeMap::new())
+        .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id]
     );
@@ -249,21 +249,28 @@ async fn test_application_permissions() {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
+    let outcome = chain
+        .execute_block(&valid_block, time, None, BTreeMap::new())
+        .await
+        .unwrap();
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_operation(app_operation.clone());
-    let result = chain.execute_block(&invalid_block, time, None).await;
+    let result = chain
+        .execute_block(&invalid_block, time, None, BTreeMap::new())
+        .await;
     assert_matches!(result, Err(ChainError::AuthorizedApplications(app_ids))
         if app_ids == vec![application_id]
     );
 
     // Also, blocks without an application operation or incoming message are forbidden.
     let invalid_block = make_child_block(&value);
-    let result = chain.execute_block(&invalid_block, time, None).await;
+    let result = chain
+        .execute_block(&invalid_block, time, None, BTreeMap::new())
+        .await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
     );
@@ -272,5 +279,8 @@ async fn test_application_permissions() {
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
-    chain.execute_block(&valid_block, time, None).await.unwrap();
+    chain
+        .execute_block(&valid_block, time, None, BTreeMap::new())
+        .await
+        .unwrap();
 }

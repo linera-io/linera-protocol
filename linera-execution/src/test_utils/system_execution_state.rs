@@ -20,7 +20,6 @@ use linera_views::{
 };
 
 use crate::{
-    applications::ApplicationRegistry,
     committee::{Committee, Epoch},
     execution::UserAction,
     system::SystemChannel,
@@ -41,7 +40,6 @@ pub struct SystemExecutionState {
     pub balance: Amount,
     pub balances: BTreeMap<Owner, Amount>,
     pub timestamp: Timestamp,
-    pub registry: ApplicationRegistry,
     pub closed: bool,
     pub application_permissions: ApplicationPermissions,
 }
@@ -98,7 +96,6 @@ impl SystemExecutionState {
             balance,
             balances,
             timestamp,
-            registry,
             closed,
             application_permissions,
         } = self;
@@ -133,10 +130,6 @@ impl SystemExecutionState {
                 .expect("insertion of balances should not fail");
         }
         view.system.timestamp.set(timestamp);
-        view.system
-            .registry
-            .import(registry)
-            .expect("serialization of registry components should not fail");
         view.system.closed.set(closed);
         view.system
             .application_permissions

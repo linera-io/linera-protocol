@@ -11,8 +11,8 @@ use std::{
 
 use futures::{future, stream::FuturesUnordered};
 use linera_base::{
-    data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
-    identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
+    data_types::{ArithmeticError, Blob, BlockHeight},
+    identifiers::{BlobId, ChainId, MessageId},
 };
 use linera_chain::{
     data_types::{
@@ -346,20 +346,6 @@ where
         query: Query,
     ) -> Result<Response, LocalNodeError> {
         let response = self.node.state.query_application(chain_id, query).await?;
-        Ok(response)
-    }
-
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn describe_application(
-        &self,
-        chain_id: ChainId,
-        application_id: UserApplicationId,
-    ) -> Result<UserApplicationDescription, LocalNodeError> {
-        let response = self
-            .node
-            .state
-            .describe_application(chain_id, application_id)
-            .await?;
         Ok(response)
     }
 

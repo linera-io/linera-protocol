@@ -5,7 +5,7 @@
 
 #![allow(clippy::items_after_test_module)]
 
-use std::{sync::Arc, vec};
+use std::{collections::BTreeMap, sync::Arc, vec};
 
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{Account, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
-    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
+    test_utils::{create_mock_applications, ExpectedCall, SystemExecutionState},
     ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     RawExecutionOutcome, ResourceControlPolicy, ResourceController, TransactionTracker,
 };
@@ -129,7 +129,7 @@ async fn test_fee_consumption(
         view.system.balances.insert(&owner, owner_balance).unwrap();
     }
 
-    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let mut applications = create_mock_applications(&mut view, 1);
     let (application_id, _description, application, contract_blob, service_blob) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -204,6 +204,7 @@ async fn test_fee_consumption(
                 BlobType::ApplicationDescription,
             )),
         ]),
+        Arc::new(BTreeMap::new()),
     );
     view.execute_message(
         context,

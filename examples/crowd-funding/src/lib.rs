@@ -165,31 +165,6 @@ sleep 2
 
 Type each of these in the GraphiQL interface and substitute the env variables with their actual values that we've defined above.
 
-Point your browser to http://localhost:8080, and enter the query:
-
-```gql,uri=http://localhost:8080
-query { applications(
-    chainId: "$CHAIN_0"
-) { id link } }
-```
-
-The response will have two entries, one for each application.
-
-If you do the same with the other chain ID in http://localhost:8081, the node service for the
-other wallet, it will have no entries at all, because the applications haven't been registered
-there yet. Request `crowd-funding` from the other chain. As an application ID, use `$APP_ID_1`:
-
-```gql,uri=http://localhost:8081
-mutation { requestApplication(
-    chainId: "$CHAIN_1"
-    applicationId: "$APP_ID_1"
-) }
-```
-
-If you enter the `applications` query again, both entries will appear in the second wallet as
-well now. `$APP_ID_0` has been registered, too, because it is a dependency of the other
-application.
-
 On both http://localhost:8080 and http://localhost:8081, you recognize the crowd-funding
 application by its ID. The entry also has a field `link`. If you open that in a new tab, you
 see the GraphQL API for that application on that chain.

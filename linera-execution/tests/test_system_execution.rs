@@ -3,6 +3,8 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight, Timestamp},
@@ -34,7 +36,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         authenticated_caller_id: None,
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()), Arc::new(BTreeMap::new()));
     view.execute_operation(
         context,
         Timestamp::from(0),
@@ -83,7 +85,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
         refund_grant_to: None,
     };
     let mut controller = ResourceController::default();
-    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()), Arc::new(BTreeMap::new()));
     view.execute_message(
         context,
         Timestamp::from(0),

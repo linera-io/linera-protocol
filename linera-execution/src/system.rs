@@ -15,7 +15,7 @@ use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
-        Timestamp, UserApplicationDescription,
+        Timestamp,
     },
     ensure,
     identifiers::{
@@ -40,9 +40,9 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
-    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationId,
+    ChannelName, ChannelSubscription, Destination, ExecutionRuntimeContext, MessageContext,
+    MessageKind, OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    TransactionTracker, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -83,8 +83,6 @@ pub struct SystemExecutionStateView<C> {
     pub balances: HashedMapView<C, Owner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
-    /// Track the locations of known bytecodes as well as the descriptions of known applications.
-    pub registry: ApplicationRegistryView<C>,
     /// Whether this chain has been closed.
     pub closed: HashedRegisterView<C, bool>,
     /// Permissions for applications on this chain.
@@ -159,13 +157,11 @@ pub enum SystemOperation {
     /// Creates a new application.
     CreateApplication {
         id: UserApplicationId,
-        description: UserApplicationDescription,
+        creator_chain_id: ChainId,
+        block_height: BlockHeight,
+        operation_index: u32,
+        required_application_ids: Vec<UserApplicationId>,
         instantiation_argument: Vec<u8>,
-    },
-    /// Requests a message from another chain to register a user application on this chain.
-    RequestApplication {
-        chain_id: ChainId,
-        application_id: UserApplicationId,
     },
     /// Operations that are only allowed on the admin chain.
     Admin(AdminOperation),
@@ -218,16 +214,6 @@ pub enum SystemMessage {
         id: ChainId,
         subscription: ChannelSubscription,
     },
-    /// Notifies that a new application was created.
-    ApplicationCreated,
-    /// Shares information about some applications to help the recipient use them.
-    /// Applications must be registered after their dependencies.
-    RegisterApplications {
-        applications: Vec<UserApplicationDescription>,
-    },
-    /// Requests a `RegisterApplication` message from the target chain to register the specified
-    /// application on the sender chain.
-    RequestApplication(UserApplicationId),
 }
 
 /// A query to the system state.
@@ -382,8 +368,6 @@ pub enum SystemExecutionError {
     CannotRewindEpoch,
     #[error("Cannot decrease the chain's timestamp")]
     TicksOutOfOrder,
-    #[error("Application {0:?} is not registered by the chain")]
-    UnknownApplicationId(Box<UserApplicationId>),
     #[error("Chain is not active yet.")]
     InactiveChain,
 
@@ -612,14 +596,24 @@ where
             }
             CreateApplication {
                 id,
-                description,
+                creator_chain_id,
+                block_height,
+                operation_index,
+                required_application_ids,
                 instantiation_argument,
             } => {
                 ensure!(
-                    context.height == description.block_height,
+                    context.chain_id == creator_chain_id,
+                    SystemExecutionError::WrongChainForApplicationCreation(
+                        context.chain_id,
+                        creator_chain_id,
+                    )
+                );
+                ensure!(
+                    context.height == block_height,
                     SystemExecutionError::WrongBlockHeightForApplicationCreation(
                         context.height,
-                        description.block_height,
+                        block_height,
                     )
                 );
 
@@ -627,55 +621,19 @@ where
                     .operation_index
                     .expect("Operation index must be set!");
                 ensure!(
-                    description.operation_index == expected_operation_index,
+                    expected_operation_index == operation_index,
                     SystemExecutionError::WrongBlockEffectIndexForApplicationCreation(
                         expected_operation_index,
-                        description.operation_index
+                        operation_index
                     )
                 );
 
-                ensure!(
-                    context.chain_id == description.creator_chain_id,
-                    SystemExecutionError::WrongChainForApplicationCreation(
-                        context.chain_id,
-                        description.creator_chain_id,
-                    )
-                );
-
-                let required_application_ids = description.required_application_ids.clone();
-                for application_id in &required_application_ids {
-                    self.check_and_record_application_blob(application_id, txn_tracker)
+                for required_application_id in required_application_ids {
+                    self.check_and_record_application_blob(&required_application_id, txn_tracker)
                         .await?;
                 }
 
-                self.registry
-                    .register_new_application(id, description)
-                    .await?;
-
-                // Send a message to ourself to increment the message ID.
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(context.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Protected,
-                    message: SystemMessage::ApplicationCreated,
-                };
-                outcome.messages.push(message);
-
                 new_application = Some((id, instantiation_argument.clone()));
-            }
-            RequestApplication {
-                chain_id,
-                application_id,
-            } => {
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::RequestApplication(application_id),
-                };
-                outcome.messages.push(message);
             }
             PublishDataBlob { blob_hash } => {
                 txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
@@ -772,7 +730,6 @@ where
         &mut self,
         context: MessageContext,
         message: SystemMessage,
-        txn_tracker: &mut TransactionTracker,
     ) -> Result<RawExecutionOutcome<SystemMessage, Amount>, SystemExecutionError> {
         let mut outcome = RawExecutionOutcome::default();
         use SystemMessage::*;
@@ -840,36 +797,8 @@ where
                     SystemExecutionError::InvalidCommitteeRemoval
                 );
             }
-            RegisterApplications { applications } => {
-                for application in applications {
-                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
-                        .await?;
-                    self.registry
-                        .register_application(application.clone())
-                        .await?;
-                }
-            }
-            RequestApplication(application_id) => {
-                let applications = self
-                    .registry
-                    .describe_applications_with_dependencies(
-                        vec![application_id],
-                        &Default::default(),
-                    )
-                    .await?;
-                let message = RawOutgoingMessage {
-                    destination: Destination::Recipient(context.message_id.chain_id),
-                    authenticated: false,
-                    grant: Amount::ZERO,
-                    kind: MessageKind::Simple,
-                    message: SystemMessage::RegisterApplications { applications },
-                };
-                outcome.messages.push(message);
-            }
             // These messages are executed immediately when cross-chain requests are received.
             Subscribe { .. } | Unsubscribe { .. } | OpenChain(_) => {}
-            // This message is only a placeholder: Its ID is part of the application ID.
-            ApplicationCreated => {}
         }
         Ok(outcome)
     }
@@ -1147,7 +1076,10 @@ mod tests {
         let id = UserApplicationId::from(&description);
         let operation = SystemOperation::CreateApplication {
             id,
-            description,
+            creator_chain_id: description.creator_chain_id,
+            block_height: description.block_height,
+            operation_index: description.operation_index,
+            required_application_ids: description.required_application_ids,
             instantiation_argument: vec![],
         };
         let mut txn_tracker = TransactionTracker::default();
@@ -1159,9 +1091,6 @@ mod tests {
             .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
-        let [ExecutionOutcome::System(_)] = &txn_tracker.destructure().unwrap().0[..] else {
-            panic!("Unexpected outcome");
-        };
         assert_eq!(new_application, Some((id, vec![])));
     }
 

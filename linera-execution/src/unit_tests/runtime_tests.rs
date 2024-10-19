@@ -7,6 +7,7 @@
 
 use std::{
     any::Any,
+    collections::BTreeMap,
     sync::{Arc, Mutex},
 };
 
@@ -184,7 +185,7 @@ fn create_runtime<Application>() -> (
         execution_state_sender,
         None,
         resource_controller,
-        TransactionTracker::new(0, Some(Vec::new())),
+        TransactionTracker::new(0, Some(Vec::new()), Arc::new(BTreeMap::new())),
     );
 
     (runtime, execution_state_receiver)

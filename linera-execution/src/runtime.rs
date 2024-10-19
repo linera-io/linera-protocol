@@ -387,7 +387,13 @@ impl SyncRuntimeInternal<UserContractInstance> {
             hash_map::Entry::Vacant(entry) => {
                 let (code, description) = self
                     .execution_state_sender
-                    .send_request(|callback| ExecutionRequest::LoadContract { id, callback })?
+                    .send_request(|callback| ExecutionRequest::LoadContract {
+                        id,
+                        pending_application_description: self
+                            .transaction_tracker
+                            .get_pending_application_description(id),
+                        callback,
+                    })?
                     .recv_response()?;
 
                 let instance = code.instantiate(SyncRuntimeHandle(this))?;

@@ -102,6 +102,14 @@ pub struct Applications;
     query_path = "gql/service_requests.graphql",
     response_derives = "Debug, Serialize, Clone, PartialEq"
 )]
+pub struct Application;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
+    response_derives = "Debug, Serialize, Clone, PartialEq"
+)]
 pub struct Blocks;
 
 #[derive(GraphQLQuery)]

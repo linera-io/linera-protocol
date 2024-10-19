@@ -23,9 +23,17 @@ use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
+#[cfg(feature = "fs")]
+use {
+    linera_base::{
+        crypto::CryptoHash,
+        data_types::{BlobBytes, Bytecode},
+        identifiers::BytecodeId,
+    },
+    std::{fs, path::PathBuf},
+};
 #[cfg(feature = "benchmark")]
 use {
-    futures::{stream, StreamExt as _, TryStreamExt as _},
     linera_base::{
         crypto::PublicKey,
         data_types::Amount,
@@ -48,15 +56,6 @@ use {
         iter,
     },
     tracing::{error, trace},
-};
-#[cfg(feature = "fs")]
-use {
-    linera_base::{
-        crypto::CryptoHash,
-        data_types::{BlobBytes, Bytecode},
-        identifiers::BytecodeId,
-    },
-    std::{fs, path::PathBuf},
 };
 
 #[cfg(web)]
@@ -601,7 +600,6 @@ where
         &mut self,
         key_pairs: &HashMap<ChainId, KeyPair>,
         application_id: ApplicationId,
-        max_in_flight: usize,
     ) -> Result<(), Error> {
         let default_chain_id = self
             .wallet
@@ -637,41 +635,13 @@ where
                 .expect("should execute block with OpenChain operations");
         }
         self.update_wallet_from_client(&chain_client).await?;
-        // Make sure all chains have registered the application now.
-        let futures = key_pairs
-            .keys()
-            .map(|&chain_id| {
-                let chain_client = self
-                    .make_chain_client(chain_id)
-                    .expect("chain should have been created");
-                async move {
-                    for i in 0..5 {
-                        linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-                        chain_client.process_inbox().await?;
-                        let chain_state = chain_client.chain_state_view().await?;
-                        if chain_state
-                            .execution_state
-                            .system
-                            .registry
-                            .known_applications
-                            .contains_key(&application_id)
-                            .await?
-                        {
-                            return Ok::<_, Error>(chain_client);
-                        }
-                    }
-                    panic!("Could not instantiate application on chain {chain_id:?}");
-                }
-            })
-            .collect::<Vec<_>>();
-        // We have to collect the futures to avoid a higher-ranked lifetime error:
-        // https://github.com/rust-lang/rust/issues/102211#issuecomment-1673201352
-        let clients = stream::iter(futures)
-            .buffer_unordered(max_in_flight)
-            .try_collect::<Vec<_>>()
-            .await?;
-        for client in clients {
-            self.update_wallet_from_client(&client).await?;
+
+        for chain_id in key_pairs.keys() {
+            let chain_client = self
+                .make_chain_client(*chain_id)
+                .expect("chain should have been created");
+            chain_client.process_inbox().await?;
+            self.update_wallet_from_client(&chain_client).await?;
         }
         Ok(())
     }

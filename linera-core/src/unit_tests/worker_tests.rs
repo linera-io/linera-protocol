@@ -38,7 +38,7 @@ use linera_execution::{
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
-    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
+    test_utils::{create_mock_applications, ExpectedCall, SystemExecutionState},
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
     SystemExecutionError, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
 };
@@ -3598,7 +3598,7 @@ where
     {
         let mut chain = storage.load_chain(chain_id).await?;
         applications =
-            crate::test_utils::register_mock_applications(&mut chain.execution_state, 1, storage)
+            crate::test_utils::create_mock_applications(&mut chain.execution_state, 1, storage)
                 .await?;
         chain.save().await?;
     }
@@ -3690,7 +3690,7 @@ where
     {
         let mut chain = storage.load_chain(chain_id).await?;
         applications =
-            crate::test_utils::register_mock_applications(&mut chain.execution_state, 1, storage)
+            crate::test_utils::create_mock_applications(&mut chain.execution_state, 1, storage)
                 .await?;
         chain.save().await?;
     }
@@ -3776,7 +3776,7 @@ where
     }
     .into_view()
     .await;
-    register_mock_applications::<MemoryContext<TestExecutionRuntimeContext>>(&mut state, 1).await?;
+    create_mock_applications::<MemoryContext<TestExecutionRuntimeContext>>(&mut state, 1);
 
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
