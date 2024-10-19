@@ -210,6 +210,8 @@ pub enum WorkerError {
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
     FullChainWorkerCache,
+    #[error("Failed to join spawned worker task")]
+    JoinError,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -417,15 +419,21 @@ where
         blobs: Vec<Blob>,
         notifications: &impl NotificationSink<Notification>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
-        notifications.handle_notifications(&actions.notifications);
-        let mut requests = VecDeque::from(actions.cross_chain_requests);
-        while let Some(request) = requests.pop_front() {
-            let actions = self.handle_cross_chain_request(request).await?;
-            requests.extend(actions.cross_chain_requests);
+        let notifications = (*notifications).clone();
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let (response, actions) = this.handle_certificate(certificate, blobs, None).await?;
             notifications.handle_notifications(&actions.notifications);
-        }
-        Ok(response)
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.handle_notifications(&actions.notifications);
+            }
+            Ok(response)
+        })
+        .await
+        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
