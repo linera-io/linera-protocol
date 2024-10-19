@@ -31,6 +31,7 @@ use tracing::warn;
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
+    notifier::NotificationSink,
     remote_node::RemoteNode,
     value_cache::ValueCache,
     worker::{Notification, WorkerError, WorkerState},
@@ -135,13 +136,13 @@ where
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
-        notifications: &mut impl Extend<Notification>,
+        notifications: &impl NotificationSink<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let full_cert = self.node.state.full_certificate(certificate).await?;
         let response = self
             .node
             .state
-            .fully_handle_certificate_with_notifications(full_cert, vec![], Some(notifications))
+            .fully_handle_certificate_with_notifications(full_cert, vec![], notifications)
             .await?;
         Ok(response)
     }
@@ -151,12 +152,12 @@ where
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        notifications: &mut impl Extend<Notification>,
+        notifications: &impl NotificationSink<Notification>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
             certificate,
             blobs,
-            Some(notifications),
+            notifications,
         ))
         .await?;
         Ok(response)
@@ -289,7 +290,7 @@ where
         remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-        notifications: &mut impl Extend<Notification>,
+        notifications: &impl NotificationSink<Notification>,
     ) -> Option<Box<ChainInfo>> {
         let mut info = None;
         for certificate in certificates {
@@ -401,7 +402,7 @@ where
         validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-        notifications: &mut impl Extend<Notification>,
+        notifications: &impl NotificationSink<Notification>,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
@@ -462,7 +463,7 @@ where
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
-        notifications: &mut impl Extend<Notification>,
+        notifications: &impl NotificationSink<Notification>,
     ) -> Result<(), LocalNodeError> {
         while start < stop {
             // TODO(#2045): Analyze network errors instead of guessing the batch size.

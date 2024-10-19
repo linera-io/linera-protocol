@@ -44,6 +44,7 @@ use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
+    notifier::NotificationSink,
     value_cache::ValueCache,
 };
 
@@ -404,12 +405,8 @@ where
         certificate: Certificate,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.fully_handle_certificate_with_notifications(
-            certificate,
-            blobs,
-            None::<&mut Vec<Notification>>,
-        )
-        .await
+        self.fully_handle_certificate_with_notifications(certificate, blobs, &())
+            .await
     }
 
     #[tracing::instrument(level = "trace", skip(self, certificate, blobs, notifications))]
@@ -418,19 +415,15 @@ where
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        mut notifications: Option<&mut impl Extend<Notification>>,
+        notifications: &impl NotificationSink<Notification>,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
-        if let Some(ref mut notifications) = notifications {
-            notifications.extend(actions.notifications);
-        }
+        notifications.handle_notifications(&actions.notifications);
         let mut requests = VecDeque::from(actions.cross_chain_requests);
         while let Some(request) = requests.pop_front() {
             let actions = self.handle_cross_chain_request(request).await?;
             requests.extend(actions.cross_chain_requests);
-            if let Some(ref mut notifications) = notifications {
-                notifications.extend(actions.notifications);
-            }
+            notifications.handle_notifications(&actions.notifications);
         }
         Ok(response)
     }

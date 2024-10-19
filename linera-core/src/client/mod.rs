@@ -293,13 +293,9 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let mut notifications = Vec::<Notification>::new();
-        let info = self
-            .local_node
-            .download_certificates(nodes, chain_id, height, &mut notifications)
-            .await?;
-        self.notifier.handle_notifications(&notifications);
-        Ok(info)
+        self.local_node
+            .download_certificates(nodes, chain_id, height, &self.notifier)
+            .await
     }
 
     async fn try_process_certificates(
@@ -308,13 +304,9 @@ where
         chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Option<Box<ChainInfo>> {
-        let mut notifications = Vec::<Notification>::new();
-        let result = self
-            .local_node
-            .try_process_certificates(remote_node, chain_id, certificates, &mut notifications)
-            .await;
-        self.notifier.handle_notifications(&notifications);
-        result
+        self.local_node
+            .try_process_certificates(remote_node, chain_id, certificates, &self.notifier)
+            .await
     }
 
     async fn handle_certificate(
@@ -322,13 +314,9 @@ where
         certificate: Certificate,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let mut notifications = Vec::<Notification>::new();
-        let result = self
-            .local_node
-            .handle_certificate(certificate, blobs, &mut notifications)
-            .await;
-        self.notifier.handle_notifications(&notifications);
-        result
+        self.local_node
+            .handle_certificate(certificate, blobs, &self.notifier)
+            .await
     }
 }
 

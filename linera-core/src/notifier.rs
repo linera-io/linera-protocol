@@ -1,10 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use dashmap::DashMap;
 use linera_base::identifiers::ChainId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::trace;
+
+use crate::worker;
 
 // TODO(#2171): replace this with a Tokio broadcast channel
 
@@ -70,12 +74,34 @@ where
     }
 }
 
-impl Notifier<crate::worker::Notification> {
-    /// Process multiple notifications of type [`crate::worker::Notification`].
-    pub fn handle_notifications(&self, notifications: &[crate::worker::Notification]) {
+impl Notifier<worker::Notification> {
+    /// Process multiple notifications of type [`worker::Notification`].
+    pub fn handle_notifications(&self, notifications: &[worker::Notification]) {
         for notification in notifications {
             self.notify(&notification.chain_id, notification);
         }
+    }
+}
+
+pub trait NotificationSink<N: Clone>: Clone + 'static {
+    fn handle_notifications(&self, notifications: &[N]);
+}
+
+impl NotificationSink<worker::Notification> for Arc<Notifier<worker::Notification>> {
+    fn handle_notifications(&self, notifications: &[worker::Notification]) {
+        (**self).handle_notifications(notifications);
+    }
+}
+
+impl<N: Clone + 'static> NotificationSink<N> for () {
+    fn handle_notifications(&self, _notifications: &[N]) {}
+}
+
+#[cfg(with_testing)]
+impl<N: Clone + 'static> NotificationSink<N> for Arc<std::sync::Mutex<Vec<N>>> {
+    fn handle_notifications(&self, notifications: &[N]) {
+        let mut guard = self.lock().unwrap();
+        guard.extend(notifications.iter().cloned())
     }
 }
 
