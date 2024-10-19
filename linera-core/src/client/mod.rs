@@ -1438,22 +1438,27 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let mut futures = vec![];
-
-        for remote_node in validators {
-            let client = self.clone();
-            futures.push(async move {
-                client
-                    .try_synchronize_chain_state_from(remote_node, chain_id)
-                    .await
-            });
-        }
-
-        for result in future::join_all(futures).await {
-            if let Err(e) = result {
-                error!(?e, "Error synchronizing chain state");
-            }
-        }
+        let committee = self.local_committee().await?;
+        communicate_with_quorum(
+            validators,
+            &committee,
+            |_: &()| (),
+            |remote_node| {
+                let client = self.clone();
+                async move {
+                    client
+                        .try_synchronize_chain_state_from(&remote_node, chain_id)
+                        .await
+                        .map_err(|error| match error {
+                            ChainClientError::RemoteNodeError(error) => error,
+                            _ => NodeError::LocalError {
+                                error: error.to_string(),
+                            },
+                        })
+                }
+            },
+        )
+        .await?;
 
         self.client
             .local_node

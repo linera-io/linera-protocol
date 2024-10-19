@@ -220,6 +220,8 @@ pub enum NodeError {
     BlobNotFoundOnRead(BlobId),
     #[error("Node failed to provide a 'last used by' certificate for the blob")]
     InvalidCertificateForBlob(BlobId),
+    #[error("Local error handling validator response")]
+    LocalError { error: String },
 }
 
 impl From<tonic::Status> for NodeError {
