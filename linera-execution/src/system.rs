@@ -7,7 +7,6 @@ use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
-    iter,
 };
 
 use async_graphql::Enum;
@@ -15,11 +14,13 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, BlobContent, OracleResponse, Timestamp,
+        Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
+        Timestamp, UserApplicationDescription,
     },
-    ensure, hex_debug,
+    ensure,
     identifiers::{
-        Account, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
+        Account, ApplicationId, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId,
+        Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -41,15 +42,11 @@ use crate::{
     committee::{Committee, Epoch},
     ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
     ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
 pub static OPEN_CHAIN_MESSAGE_INDEX: u32 = 0;
-/// The relative index of the `ApplicationCreated` message created by the `CreateApplication`
-/// operation.
-pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
@@ -161,14 +158,9 @@ pub enum SystemOperation {
     ReadBlob { blob_id: BlobId },
     /// Creates a new application.
     CreateApplication {
-        bytecode_id: BytecodeId,
-        #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug")]
-        parameters: Vec<u8>,
-        #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug")]
+        id: UserApplicationId,
+        description: UserApplicationDescription,
         instantiation_argument: Vec<u8>,
-        required_application_ids: Vec<UserApplicationId>,
     },
     /// Requests a message from another chain to register a user application on this chain.
     RequestApplication {
@@ -338,6 +330,12 @@ pub enum SystemExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
+    #[error("Trying to create an application in the wrong chain! Expected chain: {0}, Actual chain: {1}")]
+    WrongChainForApplicationCreation(ChainId, ChainId),
+    #[error("Trying to create an application in the wrong block height! Expected height: {0}, Actual height: {1}")]
+    WrongBlockHeightForApplicationCreation(BlockHeight, BlockHeight),
+    #[error("Trying to create an application in the wrong block effect index! Expected index: {0}, Actual index: {1}")]
+    WrongBlockEffectIndexForApplicationCreation(u32, u32),
     #[error("Invalid admin ID in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
     #[error("Invalid committees")]
@@ -613,26 +611,47 @@ where
                 )))?;
             }
             CreateApplication {
-                bytecode_id,
-                parameters,
+                id,
+                description,
                 instantiation_argument,
-                required_application_ids,
             } => {
-                let id = UserApplicationId {
-                    bytecode_id,
-                    creation: context.next_message_id(txn_tracker.next_message_index()),
-                };
-                for application in required_application_ids.iter().chain(iter::once(&id)) {
-                    self.check_and_record_bytecode_blobs(&application.bytecode_id, txn_tracker)
+                ensure!(
+                    context.height == description.block_height,
+                    SystemExecutionError::WrongBlockHeightForApplicationCreation(
+                        context.height,
+                        description.block_height,
+                    )
+                );
+
+                let expected_operation_index = context
+                    .operation_index
+                    .expect("Operation index must be set!");
+                ensure!(
+                    description.operation_index == expected_operation_index,
+                    SystemExecutionError::WrongBlockEffectIndexForApplicationCreation(
+                        expected_operation_index,
+                        description.operation_index
+                    )
+                );
+
+                ensure!(
+                    context.chain_id == description.creator_chain_id,
+                    SystemExecutionError::WrongChainForApplicationCreation(
+                        context.chain_id,
+                        description.creator_chain_id,
+                    )
+                );
+
+                let required_application_ids = description.required_application_ids.clone();
+                for application_id in &required_application_ids {
+                    self.check_and_record_application_blob(application_id, txn_tracker)
                         .await?;
                 }
+
                 self.registry
-                    .register_new_application(
-                        id,
-                        parameters.clone(),
-                        required_application_ids.clone(),
-                    )
+                    .register_new_application(id, description)
                     .await?;
+
                 // Send a message to ourself to increment the message ID.
                 let message = RawOutgoingMessage {
                     destination: Destination::Recipient(context.chain_id),
@@ -642,6 +661,7 @@ where
                     message: SystemMessage::ApplicationCreated,
                 };
                 outcome.messages.push(message);
+
                 new_application = Some((id, instantiation_argument.clone()));
             }
             RequestApplication {
@@ -997,7 +1017,43 @@ where
         }
     }
 
-    async fn check_and_record_bytecode_blobs(
+    pub async fn check_and_record_application_blob(
+        &mut self,
+        application_id: &ApplicationId,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), SystemExecutionError> {
+        let result = self
+            .check_and_record_bytecode_blobs(&application_id.bytecode_id, txn_tracker)
+            .await;
+        let mut missing_blobs = match result {
+            Err(SystemExecutionError::BlobsNotFound(missing_blobs)) => missing_blobs,
+            Ok(_) => Vec::new(),
+            Err(error) => return Err(error),
+        };
+
+        let application_blob_id = BlobId::new(
+            application_id.application_description_hash,
+            BlobType::ApplicationDescription,
+        );
+
+        if !self
+            .context()
+            .extra()
+            .contains_blob(application_blob_id)
+            .await?
+        {
+            missing_blobs.push(application_blob_id);
+        }
+
+        if missing_blobs.is_empty() {
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(application_blob_id))?;
+            Ok(())
+        } else {
+            Err(SystemExecutionError::BlobsNotFound(missing_blobs))
+        }
+    }
+
+    pub async fn check_and_record_bytecode_blobs(
         &mut self,
         bytecode_id: &BytecodeId,
         txn_tracker: &mut TransactionTracker,
@@ -1038,10 +1094,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use linera_base::{
-        data_types::{Blob, BlockHeight, Bytecode},
-        identifiers::ApplicationId,
-    };
+    use linera_base::data_types::{Blob, BlockHeight, Bytecode, UserApplicationDescription};
     use linera_views::context::MemoryContext;
 
     use super::*;
@@ -1059,7 +1112,8 @@ mod tests {
             authenticated_signer: None,
             authenticated_caller_id: None,
             height: BlockHeight::from(7),
-            index: Some(2),
+            txn_index: Some(2),
+            operation_index: Some(2),
         };
         let state = SystemExecutionState {
             description: Some(description),
@@ -1081,11 +1135,20 @@ mod tests {
         let service_blob = Blob::new_service_bytecode(service.compress());
         let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
 
-        let operation = SystemOperation::CreateApplication {
+        let description = UserApplicationDescription {
             bytecode_id,
-            parameters: vec![],
-            instantiation_argument: vec![],
+            creator_chain_id: context.chain_id,
+            block_height: context.height,
+            operation_index: context.operation_index.unwrap(),
             required_application_ids: vec![],
+            parameters: vec![],
+        };
+
+        let id = UserApplicationId::from(&description);
+        let operation = SystemOperation::CreateApplication {
+            id,
+            description,
+            instantiation_argument: vec![],
         };
         let mut txn_tracker = TransactionTracker::default();
         view.context()
@@ -1096,21 +1159,8 @@ mod tests {
             .execute_operation(context, operation, &mut txn_tracker)
             .await
             .unwrap();
-        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+        let [ExecutionOutcome::System(_)] = &txn_tracker.destructure().unwrap().0[..] else {
             panic!("Unexpected outcome");
-        };
-        assert_eq!(
-            result.messages[CREATE_APPLICATION_MESSAGE_INDEX as usize].message,
-            SystemMessage::ApplicationCreated
-        );
-        let creation = MessageId {
-            chain_id: context.chain_id,
-            height: context.height,
-            index: CREATE_APPLICATION_MESSAGE_INDEX,
-        };
-        let id = ApplicationId {
-            bytecode_id,
-            creation,
         };
         assert_eq!(new_application, Some((id, vec![])));
     }

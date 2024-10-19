@@ -1138,22 +1138,31 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
 
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///
-/// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
-/// [`MockApplication`]s.
+/// Returns an iterator over a tuple of [`UserApplicationId`]s and their respective
+/// [`UserApplicationDescription`]s, [`MockApplication`]s, and contract and service [`Blob`]s.
 pub async fn register_mock_applications<C, S>(
     state: &mut ExecutionStateView<C>,
     count: u64,
     storage: S,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
+) -> anyhow::Result<
+    vec::IntoIter<(
+        UserApplicationId,
+        UserApplicationDescription,
+        MockApplication,
+        Blob,
+        Blob,
+    )>,
+>
 where
     C: Context<Extra = ChainRuntimeContext<S>> + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
     S: Storage + Clone + Send + Sync + 'static,
 {
     let mock_applications = register_mock_applications_internal(state, count).await?;
-    for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
+    for (_id, description, _mock_application, contract_blob, service_blob) in &mock_applications {
+        let app_blob = Blob::new_application_description(description.clone());
         storage
-            .write_blobs(&[contract_blob.clone(), service_blob.clone()])
+            .write_blobs(&[contract_blob.clone(), service_blob.clone(), app_blob])
             .await?;
     }
 

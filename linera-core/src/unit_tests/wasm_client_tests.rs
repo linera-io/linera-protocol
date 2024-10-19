@@ -21,8 +21,8 @@ use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Bytecode, OracleResponse, UserApplicationDescription},
     identifiers::{
-        AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
-        StreamName,
+        AccountOwner, ApplicationId, BlobId, BlobType, ChainDescription, ChainId, Destination,
+        Owner, StreamId, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -334,8 +334,25 @@ where
         panic!("Unexpected oracle responses: {:?}", responses);
     };
     if cfg!(feature = "unstable-oracles") {
-        let [OracleResponse::Service(json)] = &responses[..] else {
-            assert_eq!(&responses[..], &[]);
+        assert_eq!(responses.len(), 4);
+        assert_eq!(
+            responses[0..3],
+            [
+                OracleResponse::Blob(BlobId::new(
+                    application_id2.bytecode_id.contract_blob_hash,
+                    BlobType::ContractBytecode
+                )),
+                OracleResponse::Blob(BlobId::new(
+                    application_id2.bytecode_id.service_blob_hash,
+                    BlobType::ServiceBytecode
+                )),
+                OracleResponse::Blob(BlobId::new(
+                    application_id2.application_description_hash,
+                    BlobType::ApplicationDescription
+                )),
+            ]
+        );
+        let OracleResponse::Service(json) = &responses[3] else {
             panic!("Unexpected oracle responses: {:?}", responses);
         };
         let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();

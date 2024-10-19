@@ -34,8 +34,8 @@ use crate::{
     crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug,
     identifiers::{
-        ApplicationId, BlobId, BlobType, BlobUserApplicationId, BytecodeId, ChainId, Destination,
-        GenericApplicationId, MessageId, UserApplicationId,
+        ApplicationId, BlobId, BlobType, BytecodeId, ChainId, Destination, GenericApplicationId,
+        UserApplicationId,
     },
     time::{Duration, SystemTime},
 };
@@ -790,23 +790,8 @@ impl FromStr for OracleResponse {
 }
 
 /// Description of the necessary information to run a user application.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
-pub struct UserApplicationDescription {
-    /// The unique ID of the bytecode to use for the application.
-    pub bytecode_id: BytecodeId,
-    /// The unique ID of the application's creation.
-    pub creation: MessageId,
-    /// The parameters of the application.
-    #[serde(with = "serde_bytes")]
-    #[debug(with = "hex_debug")]
-    pub parameters: Vec<u8>,
-    /// Required dependencies.
-    pub required_application_ids: Vec<UserApplicationId>,
-}
-
-/// Description of the necessary information to run a user application used within blobs.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitStore)]
-pub struct BlobUserApplicationDescription {
+pub struct UserApplicationDescription {
     /// The unique ID of the bytecode to use for the application.
     pub bytecode_id: BytecodeId,
     /// The chain ID that created the application.
@@ -820,31 +805,23 @@ pub struct BlobUserApplicationDescription {
     #[debug(with = "hex_debug")]
     pub parameters: Vec<u8>,
     /// Required dependencies.
-    pub required_application_ids: Vec<BlobUserApplicationId>,
+    pub required_application_ids: Vec<UserApplicationId>,
 }
 
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId {
-            bytecode_id: description.bytecode_id,
-            creation: description.creation,
-        }
-    }
-}
-
-impl From<&BlobUserApplicationDescription> for BlobUserApplicationId {
-    fn from(description: &BlobUserApplicationDescription) -> Self {
-        BlobUserApplicationId::new(
+        UserApplicationId::new(
             CryptoHash::new(&description.blob_bytes()),
             description.bytecode_id,
+            description.creator_chain_id,
         )
     }
 }
 
-impl BcsHashable for BlobUserApplicationDescription {}
+impl BcsHashable for UserApplicationDescription {}
 
-impl BlobUserApplicationDescription {
-    /// Gets the `BlobBytes` for this `BlobUserApplicationDescription`.
+impl UserApplicationDescription {
+    /// Gets the `BlobBytes` for this `UserApplicationDescription`.
     pub fn blob_bytes(&self) -> BlobBytes {
         BlobBytes(bcs::to_bytes(self).expect("Deserializing blob bytes should not fail!"))
     }
@@ -984,7 +961,7 @@ pub enum BlobContent {
     /// A blob containing service bytecode.
     ServiceBytecode(CompressedBytecode),
     /// A blob containing an application description.
-    ApplicationDescription(BlobUserApplicationDescription),
+    ApplicationDescription(UserApplicationDescription),
 }
 
 impl fmt::Debug for BlobContent {
@@ -1036,9 +1013,9 @@ impl BlobContent {
         BlobContent::ServiceBytecode(compressed_bytecode)
     }
 
-    /// Creates a new application description [`BlobContent`] from a [`BlobUserApplicationDescription`].
+    /// Creates a new application description [`BlobContent`] from a [`UserApplicationDescription`].
     pub fn new_application_description(
-        application_description: BlobUserApplicationDescription,
+        application_description: UserApplicationDescription,
     ) -> Self {
         BlobContent::ApplicationDescription(application_description)
     }
@@ -1095,7 +1072,7 @@ impl BlobContent {
     }
 
     /// Moves ownership of the blob's application description. If the `BlobContent` is of the wrong type, returns `None`.
-    pub fn into_inner_application_description(self) -> Option<BlobUserApplicationDescription> {
+    pub fn into_inner_application_description(self) -> Option<UserApplicationDescription> {
         match self {
             BlobContent::ApplicationDescription(description) => Some(description),
             _ => None,
@@ -1155,9 +1132,9 @@ impl Blob {
         BlobContent::new_service_bytecode(compressed_bytecode).into()
     }
 
-    /// Creates a new application description [`Blob`] from a [`BlobUserApplicationDescription`].
+    /// Creates a new application description [`Blob`] from a [`UserApplicationDescription`].
     pub fn new_application_description(
-        application_description: BlobUserApplicationDescription,
+        application_description: UserApplicationDescription,
     ) -> Self {
         BlobContent::new_application_description(application_description).into()
     }
@@ -1183,7 +1160,7 @@ impl Blob {
     }
 
     /// Moves ownership of the blob's application description. If the `Blob` is of the wrong type, returns `None`.
-    pub fn into_inner_application_description(self) -> Option<BlobUserApplicationDescription> {
+    pub fn into_inner_application_description(self) -> Option<UserApplicationDescription> {
         self.content.into_inner_application_description()
     }
 

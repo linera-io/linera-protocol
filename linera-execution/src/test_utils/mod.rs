@@ -26,9 +26,9 @@ pub use self::{
     system_execution_state::SystemExecutionState,
 };
 use crate::{
-    ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
-    QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+    execution::ServiceRuntimeEndpoint, ApplicationRegistryView, ExecutionRequest,
+    ExecutionRuntimeContext, ExecutionStateView, QueryContext, ServiceRuntimeRequest,
+    ServiceSyncRuntime, TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
 pub fn create_dummy_user_application_description(
@@ -45,11 +45,9 @@ pub fn create_dummy_user_application_description(
     (
         UserApplicationDescription {
             bytecode_id: BytecodeId::new(contract_blob.id().hash, service_blob.id().hash),
-            creation: MessageId {
-                chain_id,
-                height: BlockHeight(index),
-                index: 1,
-            },
+            creator_chain_id: chain_id,
+            block_height: BlockHeight(index),
+            operation_index: 0,
             required_application_ids: vec![],
             parameters: vec![],
         },
@@ -65,20 +63,29 @@ impl BcsSignable for FakeBlob {}
 
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///
-/// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
-/// [`MockApplication`]s.
+/// Returns an iterator over a tuple of [`UserApplicationId`]s and their respective
+/// [`UserApplicationDescription`]s, [`MockApplication`]s, and contract and service [`Blob`]s.
 pub async fn register_mock_applications<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
+) -> anyhow::Result<
+    vec::IntoIter<(
+        UserApplicationId,
+        UserApplicationDescription,
+        MockApplication,
+        Blob,
+        Blob,
+    )>,
+>
 where
     C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     let mock_applications = register_mock_applications_internal(state, count).await?;
     let extra = state.context().extra();
-    for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
-        extra.add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
+    for (_id, description, _mock_application, contract_blob, service_blob) in &mock_applications {
+        let app_blob = Blob::new_application_description(description.clone());
+        extra.add_blobs(vec![contract_blob.clone(), service_blob.clone(), app_blob]);
     }
 
     Ok(mock_applications.into_iter())
@@ -87,7 +94,15 @@ where
 pub async fn register_mock_applications_internal<C>(
     state: &mut ExecutionStateView<C>,
     count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, MockApplication, Blob, Blob)>>
+) -> anyhow::Result<
+    Vec<(
+        UserApplicationId,
+        UserApplicationDescription,
+        MockApplication,
+        Blob,
+        Blob,
+    )>,
+>
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
@@ -96,13 +111,19 @@ where
         create_dummy_user_application_registrations(&mut state.system.registry, count)
             .await?
             .into_iter()
-            .map(|(id, _description, contract_blob, service_blob)| {
-                (id, MockApplication::default(), contract_blob, service_blob)
+            .map(|(id, description, contract_blob, service_blob)| {
+                (
+                    id,
+                    description,
+                    MockApplication::default(),
+                    contract_blob,
+                    service_blob,
+                )
             })
             .collect();
     let extra = state.context().extra();
 
-    for (id, mock_application, _contract_blob, _service_blob) in &mock_applications {
+    for (id, _description, mock_application, _contract_blob, _service_blob) in &mock_applications {
         extra
             .user_contracts()
             .insert(*id, mock_application.clone().into());
@@ -134,6 +155,23 @@ where
     }
 
     Ok(ids)
+}
+
+pub fn get_application_blob_oracle_responses(app_id: &ApplicationId) -> Vec<OracleResponse> {
+    vec![
+        OracleResponse::Blob(BlobId::new(
+            app_id.bytecode_id.contract_blob_hash,
+            BlobType::ContractBytecode,
+        )),
+        OracleResponse::Blob(BlobId::new(
+            app_id.bytecode_id.service_blob_hash,
+            BlobType::ServiceBytecode,
+        )),
+        OracleResponse::Blob(BlobId::new(
+            app_id.application_description_hash,
+            BlobType::ApplicationDescription,
+        )),
+    ]
 }
 
 impl QueryContext {
