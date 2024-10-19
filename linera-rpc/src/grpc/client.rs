@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, fmt, future::Future, iter};
+use std::{fmt, future::Future, iter};
 
 use futures::{future, stream, StreamExt};
 use linera_base::{
@@ -334,11 +334,8 @@ impl ValidatorNode for GrpcClient {
                 break;
             }
 
-            // Remove ones we've just received.
-            let received_hashes: BTreeSet<CryptoHash> =
-                received.iter().map(|cert| cert.hash()).collect();
-            missing_hashes.retain(|hash| !received_hashes.contains(hash));
-
+            // Honest validator should return certificates in the same order as the requested hashes.
+            missing_hashes = missing_hashes[received.len()..].to_vec();
             certs_collected.append(&mut received);
         }
         Ok(certs_collected)

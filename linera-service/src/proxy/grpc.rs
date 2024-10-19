@@ -37,7 +37,8 @@ use linera_rpc::{
             SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
-        GrpcProtoConversionError, GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
+        GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
+        GRPC_MAX_MESSAGE_SIZE,
     },
 };
 use linera_storage::Storage;
@@ -485,8 +486,8 @@ where
 
         // Use 70% of the max message size as a buffer capacity.
         // Leave 30% as overhead.
-        let mut grpc_message_limit: GrpcMessageLimiter<linera_chain::data_types::Certificate> =
-            GrpcMessageLimiter::new((GRPC_MAX_MESSAGE_SIZE as f64 * 0.7) as usize);
+        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::data_types::Certificate> =
+            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
         let mut certificates = vec![];
 
@@ -497,7 +498,7 @@ where
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?
         {
-            if grpc_message_limit.fits::<Certificate>(certificate.clone())? {
+            if grpc_message_limiter.fits::<Certificate>(certificate.clone())? {
                 certificates.push(certificate);
             } else {
                 break;
