@@ -155,9 +155,9 @@ pub enum ViewError {
     #[error("The value is too large for the client")]
     TooLargeValue,
 
-    /// Blob not found when trying to read it.
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
+    /// Some blobs were not found.
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
 }
 
 impl ViewError {

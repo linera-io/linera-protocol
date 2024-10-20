@@ -467,7 +467,7 @@ where
         let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobNotFoundOnRead(blob_id))?;
+        let blob_bytes = maybe_blob_bytes.ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?;
         Ok(Blob::new_with_id_unchecked(blob_id, blob_bytes))
     }
 

@@ -18,7 +18,7 @@ use data_types::{MessageBundle, Origin, PostedMessage};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -150,6 +150,16 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
+}
+
+impl ChainError {
+    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            ChainError::ViewError(ViewError::BlobsNotFound(blob_ids)) => Some(blob_ids.clone()),
+            ChainError::ExecutionError(error, _) => error.get_blobs_not_found(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
