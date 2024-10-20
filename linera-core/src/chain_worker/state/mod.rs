@@ -417,6 +417,34 @@ where
         Ok(actions)
     }
 
+    /// Returns true if there are no more outgoing messages in flight up to the given
+    /// block height.
+    pub async fn all_messages_to_tracked_chains_delivered_up_to(
+        &mut self,
+        height: BlockHeight,
+    ) -> Result<bool, WorkerError> {
+        if self.chain.all_messages_delivered_up_to(height) {
+            return Ok(true);
+        }
+        let Some(tracked_chains) = self.tracked_chains.as_ref() else {
+            return Ok(false);
+        };
+        let mut targets = self.chain.outboxes.indices().await?;
+        {
+            let tracked_chains = tracked_chains.read().unwrap();
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
+        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        for (_, outbox) in targets.into_iter().zip(outboxes) {
+            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
+            let front = outbox.queue.front().await?;
+            if front.is_some_and(|key| key <= height) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     /// Creates an `UpdateRecipient` request that informs the `recipient` about new
     /// cross-chain messages from this chain.
     async fn create_cross_chain_request(
