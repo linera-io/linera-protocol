@@ -477,7 +477,7 @@ where
         &self,
         request: Request<CertificatesBatchRequest>,
     ) -> Result<Response<CertificatesBatchResponse>, Status> {
-        let hashes = request
+        let hashes: Vec<linera_base::crypto::CryptoHash> = request
             .into_inner()
             .hashes
             .into_iter()
@@ -491,17 +491,19 @@ where
 
         let mut certificates = vec![];
 
-        for certificate in self
-            .0
-            .storage
-            .read_certificates(hashes)
-            .await
-            .map_err(|err| Status::from_error(Box::new(err)))?
-        {
-            if grpc_message_limiter.fits::<Certificate>(certificate.clone())? {
-                certificates.push(certificate);
-            } else {
-                break;
+        'outer: for batch in hashes.chunks(100) {
+            for certificate in self
+                .0
+                .storage
+                .read_certificates(batch.to_vec())
+                .await
+                .map_err(|err| Status::from_error(Box::new(err)))?
+            {
+                if grpc_message_limiter.fits::<Certificate>(certificate.clone())? {
+                    certificates.push(certificate);
+                } else {
+                    break 'outer;
+                }
             }
         }
 
