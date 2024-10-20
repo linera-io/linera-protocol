@@ -411,15 +411,15 @@ where
             .await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, certificate, blobs, notifications))]
+    #[tracing::instrument(level = "trace", skip(self, certificate, blobs, notifier))]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        notifications: &impl NotificationSink<Notification>,
+        notifier: &impl NotificationSink<Notification>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let notifications = (*notifications).clone();
+        let notifications = (*notifier).clone();
         let this = self.clone();
         linera_base::task::spawn(async move {
             let (response, actions) = this.handle_certificate(certificate, blobs, None).await?;
