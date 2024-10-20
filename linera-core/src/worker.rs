@@ -417,7 +417,7 @@ where
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        notifier: &impl NotificationSink<Notification>,
+        notifier: &impl NotificationSink,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let notifications = (*notifier).clone();
         let this = self.clone();

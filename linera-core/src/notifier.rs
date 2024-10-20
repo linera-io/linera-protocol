@@ -83,23 +83,23 @@ impl Notifier<worker::Notification> {
     }
 }
 
-pub trait NotificationSink<N: Clone>: Clone + Send + 'static {
-    fn handle_notifications(&self, notifications: &[N]);
+pub trait NotificationSink: Clone + Send + 'static {
+    fn handle_notifications(&self, notifications: &[worker::Notification]);
 }
 
-impl NotificationSink<worker::Notification> for Arc<Notifier<worker::Notification>> {
+impl NotificationSink for Arc<Notifier<worker::Notification>> {
     fn handle_notifications(&self, notifications: &[worker::Notification]) {
         (**self).handle_notifications(notifications);
     }
 }
 
-impl<N: Clone + 'static> NotificationSink<N> for () {
-    fn handle_notifications(&self, _notifications: &[N]) {}
+impl NotificationSink for () {
+    fn handle_notifications(&self, _notifications: &[worker::Notification]) {}
 }
 
 #[cfg(with_testing)]
-impl<N: Clone + Send + 'static> NotificationSink<N> for Arc<std::sync::Mutex<Vec<N>>> {
-    fn handle_notifications(&self, notifications: &[N]) {
+impl NotificationSink for Arc<std::sync::Mutex<Vec<worker::Notification>>> {
+    fn handle_notifications(&self, notifications: &[worker::Notification]) {
         let mut guard = self.lock().unwrap();
         guard.extend(notifications.iter().cloned())
     }
