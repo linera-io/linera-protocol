@@ -428,37 +428,27 @@ where
 
     /// Returns true if there are no more outgoing messages in flight up to the given
     /// block height.
-    pub async fn all_messages_delivered_up_to(
+    pub async fn all_messages_to_tracked_chains_delivered_up_to(
         &mut self,
         height: BlockHeight,
     ) -> Result<bool, WorkerError> {
-        tracing::debug!(
-            "Messages left in {:.8}'s outbox: {:?}",
-            self.chain_id(),
-            self.chain.outbox_counters.get()
-        );
-        let Some((key, _)) = self.chain.outbox_counters.get().first_key_value() else {
-            return Ok(true);
-        };
-        if key > &height {
+        if self.chain.all_messages_delivered_up_to(height) {
             return Ok(true);
         }
-        if let Some(tracked_chains) = self.tracked_chains.as_ref() {
-            let mut targets = self.chain.outboxes.indices().await?;
-            {
-                let tracked_chains = tracked_chains
-                    .read()
-                    .expect("Panics should not happen while holding a lock to `tracked_chains`");
-                targets.retain(|target| tracked_chains.contains(&target.recipient));
-            }
-            let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
-            for (_, outbox) in targets.into_iter().zip(outboxes) {
-                let outbox =
-                    outbox.expect("Only existing outboxes should be referenced by `indices`");
-                let front = outbox.queue.front().await?;
-                if front.is_some_and(|key| key <= height) {
-                    return Ok(false);
-                }
+        let Some(tracked_chains) = self.tracked_chains.as_ref() else {
+            return Ok(false);
+        };
+        let mut targets = self.chain.outboxes.indices().await?;
+        {
+            let tracked_chains = tracked_chains.read().unwrap();
+            targets.retain(|target| tracked_chains.contains(&target.recipient));
+        }
+        let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
+        for (_, outbox) in targets.into_iter().zip(outboxes) {
+            let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
+            let front = outbox.queue.front().await?;
+            if front.is_some_and(|key| key <= height) {
+                return Ok(false);
             }
         }
         Ok(true)
