@@ -1167,7 +1167,7 @@ impl Job {
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
         node_client
-            .download_certificates(&nodes, message_id.chain_id, target_height, &mut vec![])
+            .download_certificates(&nodes, message_id.chain_id, target_height, &())
             .await
             .context("Failed to download parent chain")?;
 

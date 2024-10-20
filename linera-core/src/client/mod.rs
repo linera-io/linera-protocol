@@ -72,7 +72,7 @@ use crate::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
-    notifier::Notifier,
+    notifier::ChannelNotifier,
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerError, WorkerState},
@@ -177,7 +177,7 @@ where
     // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
-    notifier: Arc<Notifier<Notification>>,
+    notifier: Arc<ChannelNotifier<Notification>>,
     /// A copy of the storage client so that we don't have to lock the local node client
     /// to retrieve it.
     storage: Storage,
@@ -217,7 +217,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
             tracked_chains,
-            notifier: Arc::new(Notifier::default()),
+            notifier: Arc::new(ChannelNotifier::default()),
             storage,
         }
     }
@@ -294,13 +294,9 @@ where
         chain_id: ChainId,
         height: BlockHeight,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let mut notifications = Vec::<Notification>::new();
-        let info = self
-            .local_node
-            .download_certificates(nodes, chain_id, height, &mut notifications)
-            .await?;
-        self.notifier.handle_notifications(&notifications);
-        Ok(info)
+        self.local_node
+            .download_certificates(nodes, chain_id, height, &self.notifier)
+            .await
     }
 
     async fn try_process_certificates(
@@ -309,13 +305,9 @@ where
         chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Option<Box<ChainInfo>> {
-        let mut notifications = Vec::<Notification>::new();
-        let result = self
-            .local_node
-            .try_process_certificates(remote_node, chain_id, certificates, &mut notifications)
-            .await;
-        self.notifier.handle_notifications(&notifications);
-        result
+        self.local_node
+            .try_process_certificates(remote_node, chain_id, certificates, &self.notifier)
+            .await
     }
 
     async fn handle_certificate(
@@ -323,13 +315,9 @@ where
         certificate: Certificate,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let mut notifications = Vec::<Notification>::new();
-        let result = self
-            .local_node
-            .handle_certificate(certificate, blobs, &mut notifications)
-            .await;
-        self.notifier.handle_notifications(&notifications);
-        result
+        self.local_node
+            .handle_certificate(certificate, blobs, &self.notifier)
+            .await
     }
 }
 
@@ -1455,22 +1443,27 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::SYNCHRONIZE_CHAIN_STATE_LATENCY.measure_latency();
 
-        let mut futures = vec![];
-
-        for remote_node in validators {
-            let client = self.clone();
-            futures.push(async move {
-                client
-                    .try_synchronize_chain_state_from(remote_node, chain_id)
-                    .await
-            });
-        }
-
-        for result in future::join_all(futures).await {
-            if let Err(e) = result {
-                error!(?e, "Error synchronizing chain state");
-            }
-        }
+        let committee = self.local_committee().await?;
+        communicate_with_quorum(
+            validators,
+            &committee,
+            |_: &()| (),
+            |remote_node| {
+                let client = self.clone();
+                async move {
+                    client
+                        .try_synchronize_chain_state_from(&remote_node, chain_id)
+                        .await
+                        .map_err(|error| match error {
+                            ChainClientError::RemoteNodeError(error) => error,
+                            _ => NodeError::LocalError {
+                                error: error.to_string(),
+                            },
+                        })
+                }
+            },
+        )
+        .await?;
 
         self.client
             .local_node
