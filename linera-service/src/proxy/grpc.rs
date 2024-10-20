@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::identifiers::ChainId;
 use linera_client::config::GenesisConfig;
-use linera_core::{notifier::Notifier, JoinSetExt as _};
+use linera_core::{notifier::ChannelNotifier, JoinSetExt as _};
 use linera_rpc::{
     config::{
         ShardConfig, TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig,
@@ -154,7 +154,7 @@ struct GrpcProxyInner<S> {
     internal_config: ValidatorInternalNetworkConfig,
     genesis_config: GenesisConfig,
     worker_connection_pool: GrpcConnectionPool,
-    notifier: Notifier<Result<Notification, Status>>,
+    notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
 }
@@ -179,7 +179,7 @@ where
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
-            notifier: Notifier::default(),
+            notifier: ChannelNotifier::default(),
             tls,
             storage,
         }))
@@ -499,7 +499,7 @@ where
             .clone()
             .ok_or_else(|| Status::invalid_argument("Missing field: chain_id."))?
             .try_into()?;
-        self.0.notifier.notify(&chain_id, &Ok(notification));
+        self.0.notifier.notify_chain(&chain_id, &Ok(notification));
         Ok(Response::new(()))
     }
 }

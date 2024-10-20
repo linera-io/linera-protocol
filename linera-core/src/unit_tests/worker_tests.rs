@@ -11,6 +11,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
     num::NonZeroUsize,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -772,23 +773,15 @@ where
     );
 
     // Run transfers
-    let mut notifications = Vec::new();
+    let notifications = Arc::new(Mutex::new(Vec::new()));
     worker
-        .fully_handle_certificate_with_notifications(
-            certificate0.clone(),
-            vec![],
-            Some(&mut notifications),
-        )
+        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &notifications)
         .await?;
     worker
-        .fully_handle_certificate_with_notifications(
-            certificate1.clone(),
-            vec![],
-            Some(&mut notifications),
-        )
+        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &notifications)
         .await?;
     assert_eq!(
-        notifications,
+        *notifications.lock().unwrap(),
         vec![
             Notification {
                 chain_id: ChainId::root(1),

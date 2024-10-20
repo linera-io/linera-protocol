@@ -597,6 +597,10 @@ NodeError:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
+    22:
+      LocalError:
+        STRUCT:
+          - error: STR
 OpenChainConfig:
   STRUCT:
     - ownership:
