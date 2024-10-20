@@ -393,6 +393,14 @@ Destination:
           TYPENAME: ChannelName
 Epoch:
   NEWTYPESTRUCT: U32
+EventId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - stream_id:
+        TYPENAME: StreamId
+    - key:
+        SEQ: U8
 EventRecord:
   STRUCT:
     - stream_id:
@@ -649,6 +657,11 @@ OracleResponse:
         NEWTYPE:
           TYPENAME: BlobId
     3:
+      Event:
+        TUPLE:
+          - TYPENAME: EventId
+          - SEQ: U8
+    4:
       Assert: UNIT
 Origin:
   STRUCT:

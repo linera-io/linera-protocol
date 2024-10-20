@@ -9,7 +9,8 @@ use linera_base::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, ChainId, ChannelName, Destination, MessageId, Owner, StreamName,
+        Account, ApplicationId, ChainId, ChannelName, Destination, EventId, MessageId, Owner,
+        StreamName,
     },
     ownership::{ChainOwnership, CloseChainError},
 };
@@ -291,6 +292,11 @@ where
     /// Asserts that a data blob with the given hash exists in storage.
     pub fn assert_data_blob_exists(&mut self, hash: DataBlobHash) {
         wit::assert_data_blob_exists(hash.0.into())
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(event_id: EventId) -> Vec<u8> {
+        wit::read_event(&event_id.into())
     }
 }
 

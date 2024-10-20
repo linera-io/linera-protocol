@@ -38,7 +38,7 @@ use linera_base::{
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
+        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination, EventId,
         GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
@@ -198,6 +198,8 @@ pub enum ExecutionError {
     EventKeyTooLong,
     #[error("Stream names can be at most {MAX_STREAM_NAME_LEN} bytes.")]
     StreamNameTooLong,
+    #[error("Event not found: {0}")]
+    EventNotFound(Box<EventId>),
     // TODO(#2127): Remove this error and the unstable-oracles feature once there are fees
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]
@@ -287,6 +289,8 @@ pub trait ExecutionRuntimeContext {
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+
+    async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -521,6 +525,9 @@ pub trait BaseRuntime {
 
     /// Asserts the existence of a data blob with the given hash.
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError>;
+
+    /// Reads an event.
+    fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError>;
 }
 
 pub trait ServiceRuntime: BaseRuntime {
@@ -887,6 +894,7 @@ pub struct TestExecutionRuntimeContext {
     user_contracts: Arc<DashMap<UserApplicationId, UserContractCode>>,
     user_services: Arc<DashMap<UserApplicationId, UserServiceCode>>,
     blobs: Arc<DashMap<BlobId, Blob>>,
+    events: Arc<DashMap<EventId, Vec<u8>>>,
 }
 
 #[cfg(with_testing)]
@@ -898,6 +906,7 @@ impl TestExecutionRuntimeContext {
             user_contracts: Arc::default(),
             user_services: Arc::default(),
             blobs: Arc::default(),
+            events: Arc::default(),
         }
     }
 
@@ -965,6 +974,14 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
+    }
+
+    async fn get_event(&self, event_id: &EventId) -> Result<Vec<u8>, ExecutionError> {
+        Ok(self
+            .events
+            .get(event_id)
+            .ok_or_else(|| ExecutionError::EventNotFound(Box::new(event_id.clone())))?
+            .clone())
     }
 }
 

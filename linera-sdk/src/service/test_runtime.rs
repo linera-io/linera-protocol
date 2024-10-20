@@ -11,7 +11,7 @@ use std::{
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{ApplicationId, ChainId, EventId, Owner},
 };
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
@@ -427,6 +427,11 @@ where
         let value = cell.take().expect(message);
         cell.set(Some(value.clone()));
         value
+    }
+
+    /// Reads an event with the given ID from storage.
+    pub fn read_event(_event_id: EventId) -> Vec<u8> {
+        panic!("Unexpected read_event call");
     }
 }
 

@@ -17,7 +17,7 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId, Owner,
+        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, EventId, MessageId, Owner,
         StreamName,
     },
     ownership::ChainOwnership,
@@ -694,6 +694,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
         self.inner().assert_data_blob_exists(hash)
     }
+
+    fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+        self.inner().read_event(event_id)
+    }
 }
 
 impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
@@ -1020,6 +1024,26 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
         Ok(())
+    }
+
+    fn read_event(&mut self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+        let event_value =
+            if let Some(response) = self.transaction_tracker.next_replayed_oracle_response()? {
+                match response {
+                    OracleResponse::Event(id, bytes) if id == event_id => bytes,
+                    _ => return Err(ExecutionError::OracleResponseMismatch),
+                }
+            } else {
+                self.execution_state_sender
+                    .send_request(|callback| ExecutionRequest::ReadEvent {
+                        event_id: event_id.clone(),
+                        callback,
+                    })?
+                    .recv_response()?
+            };
+        self.transaction_tracker
+            .add_oracle_response(OracleResponse::Event(event_id, event_value.clone()));
+        Ok(event_value)
     }
 }
 
