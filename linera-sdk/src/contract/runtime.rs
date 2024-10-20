@@ -246,7 +246,7 @@ where
         wit::emit(&name.into(), key, value);
     }
 
-    /// Queries our application service as an oracle and returns the response.
+    /// Queries an application service as an oracle and returns the response.
     ///
     /// Should only be used with queries where it is very likely that all validators will compute
     /// the same result, otherwise most block proposals will fail.
