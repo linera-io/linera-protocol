@@ -53,7 +53,7 @@ use crate::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
-    notifier::Notifier,
+    notifier::ChannelNotifier,
     worker::{NetworkActions, Notification, WorkerState},
 };
 
@@ -80,7 +80,7 @@ where
 {
     state: WorkerState<S>,
     fault_type: FaultType,
-    notifier: Notifier<Notification>,
+    notifier: Arc<ChannelNotifier<Notification>>,
 }
 
 #[derive(Clone)]
@@ -205,7 +205,7 @@ where
         let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
-            notifier: Notifier::default(),
+            notifier: Arc::new(ChannelNotifier::default()),
         };
         Self {
             name,
@@ -305,7 +305,6 @@ where
     async fn handle_certificate(
         certificate: Certificate,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
-        notifications: &mut Vec<Notification>,
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
@@ -320,7 +319,7 @@ where
                     .fully_handle_certificate_with_notifications(
                         certificate,
                         blobs,
-                        Some(notifications),
+                        &validator.notifier,
                     )
                     .await
                     .map_err(Into::into),
@@ -351,11 +350,10 @@ where
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let mut notifications = Vec::new();
         let is_validated = certificate.value().is_validated();
         let handle_certificate_result =
-            Self::handle_certificate(certificate, validator, &mut notifications, blobs).await;
-        let result = match handle_certificate_result {
+            Self::handle_certificate(certificate, validator, blobs).await;
+        match handle_certificate_result {
             Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
                 handle_certificate_result.expect("handle_certificate_result should be Some")
             }
@@ -378,9 +376,7 @@ where
                     error: "offline".to_string(),
                 }),
             },
-        };
-        validator.notifier.handle_notifications(&notifications);
-        result
+        }
     }
 
     async fn do_handle_certificate(

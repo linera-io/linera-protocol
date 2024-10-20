@@ -44,6 +44,7 @@ use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
+    notifier::Notifier,
     value_cache::ValueCache,
 };
 
@@ -209,6 +210,8 @@ pub enum WorkerError {
     InvalidBlockProposal(String),
     #[error("The worker is too busy to handle new chains")]
     FullChainWorkerCache,
+    #[error("Failed to join spawned worker task")]
+    JoinError,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
@@ -404,35 +407,33 @@ where
         certificate: Certificate,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        self.fully_handle_certificate_with_notifications(
-            certificate,
-            blobs,
-            None::<&mut Vec<Notification>>,
-        )
-        .await
+        self.fully_handle_certificate_with_notifications(certificate, blobs, &())
+            .await
     }
 
-    #[tracing::instrument(level = "trace", skip(self, certificate, blobs, notifications))]
+    #[tracing::instrument(level = "trace", skip(self, certificate, blobs, notifier))]
     #[inline]
     pub(crate) async fn fully_handle_certificate_with_notifications(
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        mut notifications: Option<&mut impl Extend<Notification>>,
+        notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, WorkerError> {
-        let (response, actions) = self.handle_certificate(certificate, blobs, None).await?;
-        if let Some(ref mut notifications) = notifications {
-            notifications.extend(actions.notifications);
-        }
-        let mut requests = VecDeque::from(actions.cross_chain_requests);
-        while let Some(request) = requests.pop_front() {
-            let actions = self.handle_cross_chain_request(request).await?;
-            requests.extend(actions.cross_chain_requests);
-            if let Some(ref mut notifications) = notifications {
-                notifications.extend(actions.notifications);
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::task::spawn(async move {
+            let (response, actions) = this.handle_certificate(certificate, blobs, None).await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
             }
-        }
-        Ok(response)
+            Ok(response)
+        })
+        .await
+        .unwrap_or_else(|_| Err(WorkerError::JoinError))
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.

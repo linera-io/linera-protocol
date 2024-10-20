@@ -31,9 +31,10 @@ use tracing::warn;
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
+    notifier::Notifier,
     remote_node::RemoteNode,
     value_cache::ValueCache,
-    worker::{Notification, WorkerError, WorkerState},
+    worker::{WorkerError, WorkerState},
 };
 
 /// A local node with a single worker, typically used by clients.
@@ -135,13 +136,13 @@ where
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
-        notifications: &mut impl Extend<Notification>,
+        notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let full_cert = self.node.state.full_certificate(certificate).await?;
         let response = self
             .node
             .state
-            .fully_handle_certificate_with_notifications(full_cert, vec![], Some(notifications))
+            .fully_handle_certificate_with_notifications(full_cert, vec![], notifier)
             .await?;
         Ok(response)
     }
@@ -151,12 +152,12 @@ where
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        notifications: &mut impl Extend<Notification>,
+        notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
             certificate,
             blobs,
-            Some(notifications),
+            notifier,
         ))
         .await?;
         Ok(response)
@@ -289,7 +290,7 @@ where
         remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-        notifications: &mut impl Extend<Notification>,
+        notifier: &impl Notifier,
     ) -> Option<Box<ChainInfo>> {
         let mut info = None;
         for certificate in certificates {
@@ -300,7 +301,7 @@ where
                 return info;
             }
             let mut result = self
-                .handle_certificate(certificate.clone(), vec![], notifications)
+                .handle_certificate(certificate.clone(), vec![], notifier)
                 .await;
 
             result = match &result {
@@ -310,8 +311,7 @@ where
                         if blobs.len() != blob_ids.len() {
                             result
                         } else {
-                            self.handle_certificate(certificate, blobs, notifications)
-                                .await
+                            self.handle_certificate(certificate, blobs, notifier).await
                         }
                     } else {
                         result
@@ -395,13 +395,13 @@ where
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height.
-    #[tracing::instrument(level = "trace", skip(self, validators, notifications))]
+    #[tracing::instrument(level = "trace", skip(self, validators, notifier))]
     pub async fn download_certificates(
         &self,
         validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-        notifications: &mut impl Extend<Notification>,
+        notifier: &impl Notifier,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
@@ -416,7 +416,7 @@ where
                 chain_id,
                 info.next_block_height,
                 target_next_block_height,
-                notifications,
+                notifier,
             )
             .await?;
         }
@@ -462,7 +462,7 @@ where
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
-        notifications: &mut impl Extend<Notification>,
+        notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
         while start < stop {
             // TODO(#2045): Analyze network errors instead of guessing the batch size.
@@ -477,7 +477,7 @@ where
                 break;
             };
             let Some(info) = self
-                .try_process_certificates(remote_node, chain_id, certificates, notifications)
+                .try_process_certificates(remote_node, chain_id, certificates, notifier)
                 .await
             else {
                 break;
