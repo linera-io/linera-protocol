@@ -15,11 +15,11 @@ use crate::worker;
 /// A `Notifier` holds references to clients waiting to receive notifications
 /// from the validator.
 /// Clients will be evicted if their connections are terminated.
-pub struct Notifier<N> {
+pub struct ChannelNotifier<N> {
     inner: DashMap<ChainId, Vec<UnboundedSender<N>>>,
 }
 
-impl<N> Default for Notifier<N> {
+impl<N> Default for ChannelNotifier<N> {
     fn default() -> Self {
         Self {
             inner: DashMap::default(),
@@ -27,7 +27,7 @@ impl<N> Default for Notifier<N> {
     }
 }
 
-impl<N> Notifier<N> {
+impl<N> ChannelNotifier<N> {
     /// Creates a subscription given a collection of ChainIds and a sender to the client.
     pub fn subscribe(&self, chain_ids: Vec<ChainId>) -> UnboundedReceiver<N> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -39,12 +39,12 @@ impl<N> Notifier<N> {
     }
 }
 
-impl<N> Notifier<N>
+impl<N> ChannelNotifier<N>
 where
     N: Clone,
 {
     /// Notifies all the clients waiting for a notification from a given chain.
-    pub fn notify(&self, chain_id: &ChainId, notification: &N) {
+    pub fn notify_chain(&self, chain_id: &ChainId, notification: &N) {
         let senders_is_empty = {
             let Some(mut senders) = self.inner.get_mut(chain_id) else {
                 trace!("Chain {chain_id:?} has no subscribers.");
@@ -74,32 +74,25 @@ where
     }
 }
 
-impl Notifier<worker::Notification> {
-    /// Process multiple notifications of type [`worker::Notification`].
-    pub fn handle_notifications(&self, notifications: &[worker::Notification]) {
+pub trait Notifier: Clone + Send + 'static {
+    fn notify(&self, notifications: &[worker::Notification]);
+}
+
+impl Notifier for Arc<ChannelNotifier<worker::Notification>> {
+    fn notify(&self, notifications: &[worker::Notification]) {
         for notification in notifications {
-            self.notify(&notification.chain_id, notification);
+            self.notify_chain(&notification.chain_id, notification);
         }
     }
 }
 
-pub trait NotificationSink: Clone + Send + 'static {
-    fn handle_notifications(&self, notifications: &[worker::Notification]);
-}
-
-impl NotificationSink for Arc<Notifier<worker::Notification>> {
-    fn handle_notifications(&self, notifications: &[worker::Notification]) {
-        (**self).handle_notifications(notifications);
-    }
-}
-
-impl NotificationSink for () {
-    fn handle_notifications(&self, _notifications: &[worker::Notification]) {}
+impl Notifier for () {
+    fn notify(&self, _notifications: &[worker::Notification]) {}
 }
 
 #[cfg(with_testing)]
-impl NotificationSink for Arc<std::sync::Mutex<Vec<worker::Notification>>> {
-    fn handle_notifications(&self, notifications: &[worker::Notification]) {
+impl Notifier for Arc<std::sync::Mutex<Vec<worker::Notification>>> {
+    fn notify(&self, notifications: &[worker::Notification]) {
         let mut guard = self.lock().unwrap();
         guard.extend(notifications.iter().cloned())
     }
@@ -116,7 +109,7 @@ pub mod tests {
 
     #[test]
     fn test_concurrent() {
-        let notifier = Notifier::default();
+        let notifier = ChannelNotifier::default();
 
         let chain_a = ChainId::root(0);
         let chain_b = ChainId::root(1);
@@ -159,13 +152,13 @@ pub mod tests {
         let a_notifier = notifier.clone();
         let handle_a = std::thread::spawn(move || {
             for _ in 0..NOTIFICATIONS_A {
-                a_notifier.notify(&chain_a, &());
+                a_notifier.notify_chain(&chain_a, &());
             }
         });
 
         let handle_b = std::thread::spawn(move || {
             for _ in 0..NOTIFICATIONS_B {
-                notifier.notify(&chain_b, &());
+                notifier.notify_chain(&chain_b, &());
             }
         });
 
@@ -186,7 +179,7 @@ pub mod tests {
 
     #[test]
     fn test_eviction() {
-        let notifier = Notifier::default();
+        let notifier = ChannelNotifier::default();
 
         let chain_a = ChainId::root(0);
         let chain_b = ChainId::root(1);
@@ -206,22 +199,22 @@ pub mod tests {
         assert_eq!(notifier.inner.len(), 4);
 
         rx_c.close();
-        notifier.notify(&chain_c, &());
+        notifier.notify_chain(&chain_c, &());
         assert_eq!(notifier.inner.len(), 3);
 
         rx_a.close();
-        notifier.notify(&chain_a, &());
+        notifier.notify_chain(&chain_a, &());
         assert_eq!(notifier.inner.len(), 3);
 
         rx_b.close();
-        notifier.notify(&chain_b, &());
+        notifier.notify_chain(&chain_b, &());
         assert_eq!(notifier.inner.len(), 2);
 
-        notifier.notify(&chain_a, &());
+        notifier.notify_chain(&chain_a, &());
         assert_eq!(notifier.inner.len(), 1);
 
         rx_d.close();
-        notifier.notify(&chain_d, &());
+        notifier.notify_chain(&chain_d, &());
         assert_eq!(notifier.inner.len(), 0);
     }
 }

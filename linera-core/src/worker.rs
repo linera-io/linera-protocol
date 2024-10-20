@@ -44,7 +44,7 @@ use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
-    notifier::NotificationSink,
+    notifier::Notifier,
     value_cache::ValueCache,
 };
 
@@ -417,18 +417,18 @@ where
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        notifier: &impl NotificationSink,
+        notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let notifications = (*notifier).clone();
         let this = self.clone();
         linera_base::task::spawn(async move {
             let (response, actions) = this.handle_certificate(certificate, blobs, None).await?;
-            notifications.handle_notifications(&actions.notifications);
+            notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
                 let actions = this.handle_cross_chain_request(request).await?;
                 requests.extend(actions.cross_chain_requests);
-                notifications.handle_notifications(&actions.notifications);
+                notifications.notify(&actions.notifications);
             }
             Ok(response)
         })

@@ -31,7 +31,7 @@ use tracing::warn;
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
-    notifier::NotificationSink,
+    notifier::Notifier,
     remote_node::RemoteNode,
     value_cache::ValueCache,
     worker::{WorkerError, WorkerState},
@@ -136,7 +136,7 @@ where
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
-        notifier: &impl NotificationSink,
+        notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let full_cert = self.node.state.full_certificate(certificate).await?;
         let response = self
@@ -152,7 +152,7 @@ where
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
-        notifier: &impl NotificationSink,
+        notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
             certificate,
@@ -290,7 +290,7 @@ where
         remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
-        notifier: &impl NotificationSink,
+        notifier: &impl Notifier,
     ) -> Option<Box<ChainInfo>> {
         let mut info = None;
         for certificate in certificates {
@@ -401,7 +401,7 @@ where
         validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
-        notifier: &impl NotificationSink,
+        notifier: &impl Notifier,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         // Sequentially try each validator in random order.
         let mut validators: Vec<_> = validators.iter().collect();
@@ -462,7 +462,7 @@ where
         chain_id: ChainId,
         mut start: BlockHeight,
         stop: BlockHeight,
-        notifier: &impl NotificationSink,
+        notifier: &impl Notifier,
     ) -> Result<(), LocalNodeError> {
         while start < stop {
             // TODO(#2045): Analyze network errors instead of guessing the batch size.

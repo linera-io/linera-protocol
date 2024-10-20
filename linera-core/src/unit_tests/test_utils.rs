@@ -53,7 +53,7 @@ use crate::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
-    notifier::Notifier,
+    notifier::ChannelNotifier,
     worker::{NetworkActions, Notification, WorkerState},
 };
 
@@ -80,7 +80,7 @@ where
 {
     state: WorkerState<S>,
     fault_type: FaultType,
-    notifier: Arc<Notifier<Notification>>,
+    notifier: Arc<ChannelNotifier<Notification>>,
 }
 
 #[derive(Clone)]
@@ -205,7 +205,7 @@ where
         let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
-            notifier: Arc::new(Notifier::default()),
+            notifier: Arc::new(ChannelNotifier::default()),
         };
         Self {
             name,

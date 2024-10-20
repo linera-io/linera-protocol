@@ -71,7 +71,7 @@ use crate::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
-    notifier::Notifier,
+    notifier::ChannelNotifier,
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerError, WorkerState},
@@ -176,7 +176,7 @@ where
     // TODO(#2412): Merge with set of chains the client is receiving notifications from validators
     tracked_chains: Arc<RwLock<HashSet<ChainId>>>,
     /// References to clients waiting for chain notifications.
-    notifier: Arc<Notifier<Notification>>,
+    notifier: Arc<ChannelNotifier<Notification>>,
     /// A copy of the storage client so that we don't have to lock the local node client
     /// to retrieve it.
     storage: Storage,
@@ -216,7 +216,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             message_policy: MessagePolicy::new(BlanketMessagePolicy::Accept, None),
             cross_chain_message_delivery,
             tracked_chains,
-            notifier: Arc::new(Notifier::default()),
+            notifier: Arc::new(ChannelNotifier::default()),
             storage,
         }
     }
