@@ -317,6 +317,31 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn download_certificates(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        let mut missing_hashes = hashes;
+        let mut certs_collected = Vec::with_capacity(missing_hashes.len());
+        loop {
+            // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
+            let missing = missing_hashes.clone();
+            let mut received: Vec<Certificate> =
+                client_delegate!(self, download_certificates, missing)?.try_into()?;
+
+            // In the case of the server not returning any certificates, we break the loop.
+            if received.is_empty() {
+                break;
+            }
+
+            // Honest validator should return certificates in the same order as the requested hashes.
+            missing_hashes = missing_hashes[received.len()..].to_vec();
+            certs_collected.append(&mut received);
+        }
+        Ok(certs_collected)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
         Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)

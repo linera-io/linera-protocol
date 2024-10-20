@@ -9,6 +9,7 @@
 use std::sync::LazyLock;
 use std::{
     fmt::Debug,
+    marker::PhantomData,
     net::SocketAddr,
     sync::Arc,
     task::{Context, Poll},
@@ -30,15 +31,18 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlockProposal, Certificate, CertificateValue, ChainInfoQuery,
-            ChainInfoResult, CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
+            BlobContent, BlobId, BlockProposal, Certificate, CertificateValue,
+            CertificatesBatchRequest, CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult,
+            CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
             SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
-        GrpcProxyable, GRPC_MAX_MESSAGE_SIZE,
+        GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
+        GRPC_MAX_MESSAGE_SIZE,
     },
 };
 use linera_storage::Storage;
+use prost::Message;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -469,6 +473,44 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
+    async fn download_certificates(
+        &self,
+        request: Request<CertificatesBatchRequest>,
+    ) -> Result<Response<CertificatesBatchResponse>, Status> {
+        let hashes = request
+            .into_inner()
+            .hashes
+            .into_iter()
+            .map(linera_base::crypto::CryptoHash::try_from)
+            .collect::<Result<Vec<linera_base::crypto::CryptoHash>, _>>()?;
+
+        // Use 70% of the max message size as a buffer capacity.
+        // Leave 30% as overhead.
+        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::data_types::Certificate> =
+            GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
+
+        let mut certificates = vec![];
+
+        for certificate in self
+            .0
+            .storage
+            .read_certificates(hashes)
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?
+        {
+            if grpc_message_limiter.fits::<Certificate>(certificate.clone())? {
+                certificates.push(certificate);
+            } else {
+                break;
+            }
+        }
+
+        Ok(Response::new(CertificatesBatchResponse::try_from(
+            certificates,
+        )?))
+    }
+
+    #[instrument(skip_all, err(Display))]
     async fn blob_last_used_by(
         &self,
         request: Request<BlobId>,
@@ -499,5 +541,103 @@ where
             .try_into()?;
         self.0.notifier.notify(&chain_id, &Ok(notification));
         Ok(Response::new(()))
+    }
+}
+
+/// A message limiter that keeps track of the remaining capacity in bytes.
+struct GrpcMessageLimiter<T> {
+    remaining: usize,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> GrpcMessageLimiter<T> {
+    fn new(limit: usize) -> Self {
+        Self {
+            remaining: limit,
+            _phantom: PhantomData,
+        }
+    }
+
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self::new(0)
+    }
+
+    // Returns true if the element, after serialising to proto bytes, fits within the remaining capacity.
+    fn fits<U>(&mut self, el: T) -> Result<bool, GrpcProtoConversionError>
+    where
+        U: TryFrom<T, Error = GrpcProtoConversionError> + Message,
+    {
+        let required = U::try_from(el).map(|proto| proto.encoded_len())?;
+        if required > self.remaining {
+            return Ok(false);
+        }
+        self.remaining -= required;
+        Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod proto_message_cap {
+    use linera_base::crypto::{KeyPair, Signature};
+    use linera_chain::data_types::{
+        BlockExecutionOutcome, Certificate, ExecutedBlock, HashedCertificateValue,
+    };
+    use linera_execution::committee::ValidatorName;
+    use linera_sdk::base::{ChainId, TestString};
+
+    use super::{CertificatesBatchResponse, GrpcMessageLimiter};
+
+    fn test_certificate() -> Certificate {
+        let keypair = KeyPair::generate();
+        let validator = ValidatorName(keypair.public());
+        let signature = Signature::new(&TestString::new("Test"), &keypair);
+        let executed_block = ExecutedBlock {
+            block: linera_chain::test::make_first_block(ChainId::root(0)),
+            outcome: BlockExecutionOutcome::default(),
+        };
+        let signatures = vec![(validator, signature)];
+        Certificate::new(
+            HashedCertificateValue::new_confirmed(executed_block),
+            Default::default(),
+            signatures,
+        )
+    }
+
+    #[test]
+    fn takes_up_to_limit() {
+        let certificate = test_certificate();
+        let single_cert_size = prost::Message::encoded_len(
+            &CertificatesBatchResponse::try_from(vec![certificate.clone()]).unwrap(),
+        );
+        let certificates = vec![certificate.clone(), certificate.clone()];
+
+        let mut empty_limiter = GrpcMessageLimiter::empty();
+        assert!(!empty_limiter
+            .fits::<super::Certificate>(certificate.clone())
+            .unwrap());
+
+        let mut single_message_limiter = GrpcMessageLimiter::new(single_cert_size);
+        assert_eq!(
+            certificates
+                .clone()
+                .into_iter()
+                .take_while(|cert| single_message_limiter
+                    .fits::<super::Certificate>(cert.clone())
+                    .unwrap())
+                .collect::<Vec<_>>(),
+            vec![certificate.clone()]
+        );
+
+        let mut double_message_limiter = GrpcMessageLimiter::new(single_cert_size * 2);
+        assert_eq!(
+            certificates
+                .into_iter()
+                .take_while(|cert| double_message_limiter
+                    .fits::<super::Certificate>(cert.clone())
+                    .unwrap())
+                .collect::<Vec<_>>(),
+            vec![certificate.clone(), certificate.clone()]
+        );
     }
 }

@@ -43,3 +43,7 @@ pub enum GrpcError {
 
 const MEBIBYTE: usize = 1024 * 1024;
 pub const GRPC_MAX_MESSAGE_SIZE: usize = 16 * MEBIBYTE;
+
+/// Limit of gRPC message size up to which we will try to populate with data when estimating.
+/// We leave 30% of buffer for the rest of the message and potential underestimation.
+pub const GRPC_CHUNKED_MESSAGE_FILL_LIMIT: usize = GRPC_MAX_MESSAGE_SIZE * 7 / 10;
