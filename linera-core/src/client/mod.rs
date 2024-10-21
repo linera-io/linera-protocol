@@ -1197,8 +1197,16 @@ where
 
         for (chain_id, mut block_batch) in remote_node_chains_view {
             block_batch.sort();
-            let first_block = block_batch.first().expect("nonempty batch");
-            let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1;
+
+            self.advance_with_local(chain_id, &mut block_batch, &mut tracker)
+                .await?;
+
+            let Some(first_block) = block_batch.first() else {
+                // `advance_with_local` might have drained the whole `block_batch`.
+                // In that case, move to the next chain batch.
+                continue;
+            };
+            let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1; // safe to unwrap because we checked that the vec is not empty.
             let block_batch_range = BlockHeightRange::multi(*first_block, batch_size);
             let query = ChainInfoQuery::new(chain_id)
                 .with_sent_certificate_hashes_in_range(block_batch_range.clone());
@@ -1255,6 +1263,42 @@ where
         }
         let new_tracker = tracker.finalize();
         Ok((remote_node.name, new_tracker, certificates))
+    }
+
+    // Uses local information (about already-processed blocks) to advance the `block_batch` to a place where only new blocks are left.
+    async fn advance_with_local(
+        &self,
+        chain_id: ChainId,
+        block_batch: &mut Vec<BlockHeight>,
+        tracker: &mut MultichainTracker,
+    ) -> Result<(), NodeError> {
+        let local_response = self.local_query(ChainInfoQuery::new(chain_id)).await?;
+        let local_next = local_response.info.next_block_height;
+
+        tracker.push(chain_id, local_next.saturating_sub(1.into()));
+        match block_batch.iter().position(|b| b >= &local_next) {
+            None => {
+                // Our highest, locally-known block is higher than any block height from the current batch.
+                // Move to the next chain batch.
+                block_batch.clear();
+            }
+            Some(index) => {
+                // Blocks with height lower than block_batch[index] are already known.
+                // Skip processing them.
+                let _ = block_batch.drain(0..index);
+            }
+        }
+        Ok(())
+    }
+
+    async fn local_query(&self, query: ChainInfoQuery) -> Result<ChainInfoResponse, NodeError> {
+        self.client
+            .local_node
+            .handle_chain_info_query(query)
+            .await
+            .map_err(|error| NodeError::LocalNodeQuery {
+                error: error.to_string(),
+            })
     }
 
     async fn check_certificate(
