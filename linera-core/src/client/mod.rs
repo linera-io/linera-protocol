@@ -1197,6 +1197,24 @@ where
 
         for (chain_id, mut block_batch) in remote_node_chains_view {
             block_batch.sort();
+
+            'local: loop {
+                let block_height = block_batch.first().copied().unwrap();
+                let local_query = ChainInfoQuery::new(chain_id);
+                let local_response = self.local_query(local_query).await?;
+                if !local_response
+                    .info
+                    .requested_sent_certificate_hashes
+                    .is_empty()
+                {
+                    tracker.push(chain_id, block_height);
+                    block_batch = block_batch[1..].to_vec();
+                    continue 'local;
+                } else {
+                    break 'local;
+                }
+            }
+
             let first_block = block_batch.first().expect("nonempty batch");
             let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1;
             let block_batch_range = BlockHeightRange::multi(*first_block, batch_size);
@@ -1255,6 +1273,16 @@ where
         }
         let new_tracker = tracker.finalize();
         Ok((remote_node.name, new_tracker, certificates))
+    }
+
+    async fn local_query(&self, query: ChainInfoQuery) -> Result<ChainInfoResponse, NodeError> {
+        self.client
+            .local_node
+            .handle_chain_info_query(query)
+            .await
+            .map_err(|error| NodeError::LocalNodeQuery {
+                error: error.to_string(),
+            })
     }
 
     async fn check_certificate(
