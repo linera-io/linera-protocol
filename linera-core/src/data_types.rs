@@ -165,6 +165,12 @@ pub struct ChainInfo {
     pub requested_received_log: Vec<ChainAndHeight>,
 }
 
+impl ChainInfo {
+    pub fn tip(&self) -> (BlockHeight, Option<CryptoHash>, Timestamp) {
+        (self.next_block_height, self.block_hash, self.timestamp)
+    }
+}
+
 /// The response to an `ChainInfoQuery`
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
