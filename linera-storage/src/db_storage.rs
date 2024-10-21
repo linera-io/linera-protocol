@@ -616,8 +616,7 @@ where
     }
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let (cert_key, value_key) = Self::construct_query(&hash)?;
-        let keys = vec![cert_key, value_key];
+        let keys = Self::construct_query(&[hash])?;
         let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
@@ -625,8 +624,7 @@ where
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let (cert_key, value_key) = Self::construct_query(&hash)?;
-        let keys = vec![cert_key, value_key];
+        let keys = Self::construct_query(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
@@ -640,13 +638,8 @@ where
         &self,
         hashes: I,
     ) -> Result<Vec<Certificate>, ViewError> {
-        let mut keys = Vec::new();
         let hashes = hashes.into_iter().collect::<Vec<_>>();
-        for hash in &hashes {
-            let (cert_key, value_key) = Self::construct_query(hash)?;
-            keys.push(cert_key);
-            keys.push(value_key);
-        }
+        let keys = Self::construct_query(&hashes)?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
@@ -686,10 +679,15 @@ where
     C: Clock,
     Store::Error: Send + Sync,
 {
-    fn construct_query(hash: &CryptoHash) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
-        Ok((cert_key, value_key))
+    fn construct_query(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut keys = Vec::new();
+        for hash in hashes {
+            let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
+            let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
+            keys.push(cert_key);
+            keys.push(value_key);
+        }
+        Ok(keys)
     }
 
     fn deserialize_certificate(
