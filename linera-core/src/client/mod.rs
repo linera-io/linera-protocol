@@ -3022,13 +3022,19 @@ where
             let hash_map::Entry::Vacant(entry) = senders.entry(name) else {
                 continue;
             };
-            let (mut stream, abort) = match node.subscribe(vec![chain_id]).await {
-                Err(error) => {
+            let stream = stream::once({
+                let node = node.clone();
+                async move { node.subscribe(vec![chain_id]).await }
+            })
+            .filter_map(move |result| async move {
+                if let Err(error) = &result {
                     info!(?error, "Could not connect to validator {name}");
-                    continue;
                 }
-                Ok(stream) => stream::abortable(stream),
-            };
+                result.ok()
+            })
+            .flatten();
+            let (stream, abort) = stream::abortable(stream);
+            let mut stream = Box::pin(stream);
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { name, node };
