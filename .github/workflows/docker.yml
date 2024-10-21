@@ -8,6 +8,7 @@ on:
       - "**"
     paths:
       - 'docker/Dockerfile'
+      - 'docker/docker-compose.yml'
       - 'docker/compose.sh'
       - 'docker/docker-compose.yml'
       - 'Cargo.toml'
@@ -74,4 +75,3 @@ jobs:
           timeout_minutes: 2
           retry_wait_seconds: 10
           command: linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
-
