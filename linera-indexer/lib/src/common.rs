@@ -52,7 +52,7 @@ pub enum IndexerError {
 
     #[cfg(feature = "storage-service")]
     #[error(transparent)]
-    StorageServiceError(#[from] linera_storage_service::common::ServiceContextError),
+    StorageServiceError(#[from] linera_storage_service::common::ServiceStoreError),
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
     RocksDbError(#[from] linera_views::rocks_db::RocksDbStoreError),

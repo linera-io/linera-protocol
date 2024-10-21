@@ -12,6 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+default = ["storage-service"]
 benchmark = ["linera-base/test", "linera-indexer/benchmark"]
 rocksdb = ["linera-indexer/rocksdb", "linera-indexer-plugins/rocksdb"]
 dynamodb = ["linera-indexer/dynamodb", "linera-indexer-plugins/dynamodb"]
@@ -32,7 +33,7 @@ anyhow.workspace = true
 async-graphql.workspace = true
 linera-base.workspace = true
 linera-indexer-graphql-client.workspace = true
-linera-service = { workspace = true, features = ["test"] }
+linera-service = { workspace = true, features = ["storage-service", "test"] }
 linera-service-graphql-client.workspace = true
 reqwest.workspace = true
 serde.workspace = true

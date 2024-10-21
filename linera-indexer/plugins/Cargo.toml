@@ -12,10 +12,12 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+default = ["storage-service"]
 benchmark = ["linera-base/test"]
 rocksdb = ["linera-views/rocksdb", "linera-indexer/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-indexer/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-indexer/scylladb"]
+storage-service = ["linera-storage-service", "linera-indexer/storage-service"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 
@@ -28,6 +30,7 @@ linera-base.workspace = true
 linera-chain.workspace = true
 linera-execution.workspace = true
 linera-indexer.workspace = true
+linera-storage-service = { workspace = true, optional = true }
 linera-views.workspace = true
 serde.workspace = true
 tokio.workspace = true

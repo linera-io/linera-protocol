@@ -3,7 +3,7 @@
 
 use clap::Parser as _;
 use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
-use linera_views::common::{AdminKeyValueStore, CommonStoreConfig};
+use linera_views::store::{AdminKeyValueStore, CommonStoreConfig};
 
 use crate::{
     common::IndexerError,
@@ -44,7 +44,8 @@ impl StorageServiceRunner {
             common_config,
         };
         let namespace = config.client.table.clone();
-        let store = ServiceStoreClient::maybe_create_and_connect(&store_config, &namespace).await?;
+        let root_key = &[];
+        let store = ServiceStoreClient::maybe_create_and_connect(&store_config, &namespace, root_key).await?;
         Self::new(config, store).await
     }
 }

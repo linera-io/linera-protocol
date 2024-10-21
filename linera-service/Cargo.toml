@@ -13,7 +13,7 @@ version.workspace = true
 
 [features]
 ethereum = []
-default = ["wasmer"]
+default = ["storage-service", "wasmer"]
 test = [
     "linera-base/test",
     "linera-views/test",

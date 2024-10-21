@@ -12,6 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
+default = ["storage-service"]
 benchmark = ["linera-base/test"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
