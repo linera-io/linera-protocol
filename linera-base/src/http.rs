@@ -152,6 +152,15 @@ impl Response {
             body: body.into(),
         }
     }
+
+    /// Creates an HTTP [`Response`] with an Unauthorized status code.
+    pub fn unauthorized() -> Self {
+        Response {
+            status: 401,
+            headers: vec![],
+            body: vec![],
+        }
+    }
 }
 
 #[cfg(with_reqwest)]
