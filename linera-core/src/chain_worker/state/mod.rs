@@ -444,7 +444,7 @@ where
             targets.retain(|target| tracked_chains.contains(&target.recipient));
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
-        for (_, outbox) in targets.into_iter().zip(outboxes) {
+        for outbox in outboxes {
             let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let front = outbox.queue.front().await?;
             if front.is_some_and(|key| key <= height) {
