@@ -3,7 +3,7 @@
 
 use std::{mem, sync::Arc};
 
-use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
+use async_lock::{Semaphore, SemaphoreGuard};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
@@ -59,7 +59,7 @@ const MAX_KEY_SIZE: usize = 1000000;
 // is stored to indicate the existence of a namespace.
 #[derive(Clone)]
 pub struct ServiceStoreClientInternal {
-    client: Arc<RwLock<StoreProcessorClient<Channel>>>,
+    channel: Channel,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
     cache_size: usize,
@@ -87,7 +87,8 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let channel = self.channel.clone();
+        let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_read_value(request).await?;
         let response = response.into_inner();
@@ -99,7 +100,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(value)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            Self::read_entries(&mut client, message_index, num_chunks).await
         }
     }
 
@@ -110,7 +111,8 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let channel = self.channel.clone();
+        let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_contains_key(request).await?;
         let response = response.into_inner();
@@ -129,7 +131,8 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         }
         let query = RequestContainsKeys { keys: full_keys };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let channel = self.channel.clone();
+        let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_contains_keys(request).await?;
         let response = response.into_inner();
@@ -151,7 +154,8 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         }
         let query = RequestReadMultiValues { keys: full_keys };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let channel = self.channel.clone();
+        let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
@@ -164,7 +168,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
             Ok(values)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            Self::read_entries(&mut client, message_index, num_chunks).await
         }
     }
 
@@ -183,7 +187,8 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let channel = self.channel.clone();
+        let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
@@ -195,7 +200,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(keys)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            Self::read_entries(&mut client, message_index, num_chunks).await
         }
     }
 
@@ -214,7 +219,8 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let channel = self.channel.clone();
+        let mut client = StoreProcessorClient::new(channel);
         let _guard = self.acquire().await;
         let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
@@ -230,7 +236,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                 .collect::<Vec<_>>();
             Ok(key_values)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            Self::read_entries(&mut client, message_index, num_chunks).await
         }
     }
 }
@@ -320,7 +326,8 @@ impl ServiceStoreClientInternal {
         if !statements.is_empty() {
             let query = RequestWriteBatchExtended { statements };
             let request = tonic::Request::new(query);
-            let mut client = self.client.write().await;
+            let channel = self.channel.clone();
+            let mut client = StoreProcessorClient::new(channel);
             let _guard = self.acquire().await;
             let _response = client.process_write_batch_extended(request).await?;
         }
@@ -357,7 +364,7 @@ impl ServiceStoreClientInternal {
     }
 
     async fn read_entries<S: DeserializeOwned>(
-        mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>,
+        client: &mut StoreProcessorClient<Channel>,
         message_index: i64,
         num_chunks: i32,
     ) -> Result<S, ServiceStoreError> {
@@ -387,8 +394,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     ) -> Result<Self, ServiceStoreError> {
         let endpoint = format!("http://{}", config.endpoint);
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let client = StoreProcessorClient::connect(endpoint).await?;
-        let client = Arc::new(RwLock::new(client));
+        let channel = endpoint.connect_lazy();
         let semaphore = config
             .common_config
             .max_concurrent_queries
@@ -398,7 +404,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let namespace = Self::namespace_as_vec(namespace)?;
         let root_key = root_key.to_vec();
         Ok(Self {
-            client,
+            channel,
             semaphore,
             max_stream_queries,
             cache_size,
@@ -408,14 +414,14 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
-        let client = self.client.clone();
+        let channel = self.channel.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
         let cache_size = self.cache_size;
         let namespace = self.namespace.clone();
         let root_key = root_key.to_vec();
         Ok(Self {
-            client,
+            channel,
             semaphore,
             max_stream_queries,
             cache_size,
