@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{BlockHeight, Timestamp},
+    data_types::{BlockHeight, CompressedContractService, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -411,23 +411,23 @@ where
         service: PathBuf,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract)
+        let contract_bytecode = Bytecode::load_from_file(&contract)
             .await
             .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
-        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
-            "failed to load service bytecode from {:?}",
-            &service
-        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service)
+            .await
+            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing bytecode");
+        let compressed_contract_service =
+            CompressedContractService::new(contract_bytecode, service_bytecode).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
-                let contract_bytecode = contract_bytecode.clone();
-                let service_bytecode = service_bytecode.clone();
+                let compressed_contract_service = compressed_contract_service.clone();
                 let chain_client = chain_client.clone();
                 async move {
                     chain_client
-                        .publish_bytecode(contract_bytecode, service_bytecode)
+                        .publish_compressed_bytecode(compressed_contract_service)
                         .await
                         .context("Failed to publish bytecode")
                 }
