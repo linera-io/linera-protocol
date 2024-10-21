@@ -949,6 +949,7 @@ pub enum BlobContent {
 }
 
 /// Compressed contract, service and bytecode_id.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub struct CompressedContractService {
     /// The contract blob
@@ -959,6 +960,7 @@ pub struct CompressedContractService {
     pub bytecode_id: BytecodeId,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl CompressedContractService {
     /// Creates a compressed Contract, Service and bytecode.
     pub async fn new(contract: Bytecode, service: Bytecode) -> Self {
