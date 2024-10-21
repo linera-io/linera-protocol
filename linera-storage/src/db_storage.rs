@@ -616,7 +616,7 @@ where
     }
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let (cert_key, value_key) = Self::get_hash_keys(&hash)?;
+        let (cert_key, value_key) = Self::construct_query(&hash)?;
         let keys = vec![cert_key, value_key];
         let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
@@ -625,7 +625,7 @@ where
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let (cert_key, value_key) = Self::get_hash_keys(&hash)?;
+        let (cert_key, value_key) = Self::construct_query(&hash)?;
         let keys = vec![cert_key, value_key];
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -633,7 +633,7 @@ where
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let values = values?;
-        Self::get_certificate(&values, hash)
+        Self::deserialize_certificate(&values, hash)
     }
 
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
@@ -643,7 +643,7 @@ where
         let mut keys = Vec::new();
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         for hash in &hashes {
-            let (cert_key, value_key) = Self::get_hash_keys(hash)?;
+            let (cert_key, value_key) = Self::construct_query(hash)?;
             keys.push(cert_key);
             keys.push(value_key);
         }
@@ -655,7 +655,7 @@ where
         let values = values?;
         let mut certificates = Vec::new();
         for (pair, hash) in values.chunks_exact(2).zip(hashes) {
-            let certificate = Self::get_certificate(pair, hash)?;
+            let certificate = Self::deserialize_certificate(pair, hash)?;
             certificates.push(certificate);
         }
         Ok(certificates)
@@ -686,13 +686,13 @@ where
     C: Clock,
     Store::Error: Send + Sync,
 {
-    fn get_hash_keys(hash: &CryptoHash) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
+    fn construct_query(hash: &CryptoHash) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
         Ok((cert_key, value_key))
     }
 
-    fn get_certificate(
+    fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
     ) -> Result<Certificate, ViewError> {
