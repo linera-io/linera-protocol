@@ -180,6 +180,18 @@ pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often certificates are read from storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "read_certificates",
+        "The metric counting how often certificate are read from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a certificate is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -634,6 +646,42 @@ where
         Ok(cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?)
+    }
+
+    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<Certificate>, ViewError> {
+        let mut keys = Vec::new();
+        let hashes = hashes.into_iter().collect::<Vec<_>>();
+        for hash in &hashes {
+            let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
+            let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
+            keys.push(cert_key);
+            keys.push(value_key);
+        }
+        let values = self.store.read_multi_values_bytes(keys).await;
+        if values.is_ok() {
+            #[cfg(with_metrics)]
+            READ_CERTIFICATES_COUNTER.with_label_values(&[]).inc();
+        }
+        let values = values?;
+        let mut certificates = Vec::new();
+        for (pair, hash) in values.chunks_exact(2).zip(hashes) {
+            let cert_bytes = pair[0]
+                .as_ref()
+                .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
+            let value_bytes = pair[1]
+                .as_ref()
+                .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
+            let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
+            let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
+            let certificate = cert
+                .with_value(value.with_hash_unchecked(hash))
+                .ok_or(ViewError::InconsistentEntries)?;
+            certificates.push(certificate);
+        }
+        Ok(certificates)
     }
 
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {

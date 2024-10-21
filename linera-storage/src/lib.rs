@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dashmap::{mapref::entry::Entry, DashMap};
-use futures::future;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, Blob, BlockHeight, TimeDelta, Timestamp, UserApplicationDescription},
@@ -157,6 +156,12 @@ pub trait Storage: Sized {
     /// Reads the certificate with the given hash.
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
 
+    /// Reads a number of certificates
+    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
+        &self,
+        hashes: I,
+    ) -> Result<Vec<Certificate>, ViewError>;
+
     /// Writes the given certificate.
     async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
 
@@ -183,29 +188,6 @@ pub trait Storage: Sized {
         let chain = self.load_chain(id).await?;
         chain.ensure_is_active()?;
         Ok(chain)
-    }
-
-    /// Reads a number of certificates in parallel.
-    async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
-        &self,
-        keys: I,
-    ) -> Result<Vec<Certificate>, ViewError>
-    where
-        Self: Clone + Send + 'static,
-    {
-        let mut tasks = Vec::new();
-        for key in keys {
-            let client = self.clone();
-            tasks.push(linera_base::task::spawn(async move {
-                client.read_certificate(key).await
-            }));
-        }
-        let results = future::join_all(tasks).await;
-        let mut certs = Vec::new();
-        for result in results {
-            certs.push(result.expect("storage access should not cancel or crash")?);
-        }
-        Ok(certs)
     }
 
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
