@@ -411,13 +411,12 @@ where
         service: PathBuf,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract)
+        let contract_bytecode = Bytecode::load_from_file(&contract)
             .await
             .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
-        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
-            "failed to load service bytecode from {:?}",
-            &service
-        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service)
+            .await
+            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing bytecode");
         let (bytecode_id, _) = self
