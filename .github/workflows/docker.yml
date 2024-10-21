@@ -8,6 +8,7 @@ on:
       - "**"
     paths:
       - 'docker/Dockerfile'
+      - 'docker/docker-compose.yml'
       - 'docker/compose.sh'
       - 'Cargo.toml'
       - '.github/workflows/docker.yml'
