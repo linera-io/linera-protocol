@@ -616,8 +616,7 @@ where
     }
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
+        let (cert_key, value_key) = Self::get_hash_keys(&hash)?;
         let keys = vec![cert_key, value_key];
         let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
@@ -626,8 +625,7 @@ where
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
+        let (cert_key, value_key) = Self::get_hash_keys(&hash)?;
         let keys = vec![cert_key, value_key];
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -635,17 +633,7 @@ where
             READ_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         }
         let values = values?;
-        let cert_bytes = values[0]
-            .as_ref()
-            .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
-        let value_bytes = values[1]
-            .as_ref()
-            .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
-        let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
-        let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
-        Ok(cert
-            .with_value(value.with_hash_unchecked(hash))
-            .ok_or(ViewError::InconsistentEntries)?)
+        Self::get_certificate(&values, hash)
     }
 
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
@@ -655,8 +643,7 @@ where
         let mut keys = Vec::new();
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         for hash in &hashes {
-            let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
-            let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
+            let (cert_key, value_key) = Self::get_hash_keys(hash)?;
             keys.push(cert_key);
             keys.push(value_key);
         }
@@ -668,17 +655,7 @@ where
         let values = values?;
         let mut certificates = Vec::new();
         for (pair, hash) in values.chunks_exact(2).zip(hashes) {
-            let cert_bytes = pair[0]
-                .as_ref()
-                .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
-            let value_bytes = pair[1]
-                .as_ref()
-                .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
-            let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
-            let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
-            let certificate = cert
-                .with_value(value.with_hash_unchecked(hash))
-                .ok_or(ViewError::InconsistentEntries)?;
+            let certificate = Self::get_certificate(pair, hash)?;
             certificates.push(certificate);
         }
         Ok(certificates)
@@ -709,6 +686,30 @@ where
     C: Clock,
     Store::Error: Send + Sync,
 {
+    fn get_hash_keys(hash: &CryptoHash) -> Result<(Vec<u8>, Vec<u8>), ViewError> {
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
+        Ok((cert_key, value_key))
+    }
+
+    fn get_certificate(
+        pair: &[Option<Vec<u8>>],
+        hash: CryptoHash,
+    ) -> Result<Certificate, ViewError> {
+        let cert_bytes = pair[0]
+            .as_ref()
+            .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
+        let value_bytes = pair[1]
+            .as_ref()
+            .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
+        let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
+        let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
+        let certificate = cert
+            .with_value(value.with_hash_unchecked(hash))
+            .ok_or(ViewError::InconsistentEntries)?;
+        Ok(certificate)
+    }
+
     fn add_hashed_cert_value_to_batch(
         value: &HashedCertificateValue,
         batch: &mut Batch,
