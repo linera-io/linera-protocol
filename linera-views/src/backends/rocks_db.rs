@@ -16,12 +16,12 @@ use thiserror::Error;
 
 #[cfg(with_metrics)]
 use crate::metering::{
-    MeteredStore, LRU_CACHING_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
+    MeteredStore, CACHED_ROCKS_DB_METRICS, ROCKS_DB_METRICS, VALUE_SPLITTING_METRICS,
 };
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::LruCachingStore,
+    lru_caching::{CachingStore, StorageCachePolicy},
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
@@ -29,7 +29,7 @@ use crate::{
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 #[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
+use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
 
 /// The number of streams for the test
 #[cfg(with_testing)]
@@ -58,6 +58,58 @@ pub enum RocksDbSpawnMode {
     SpawnBlocking,
     /// This uses the `block_in_place` function of tokio.
     BlockInPlace,
+}
+
+/// The inner client
+#[derive(Clone)]
+struct RocksDbStoreInternal {
+    executor: RocksDbStoreExecutor,
+    _path_with_guard: PathWithGuard,
+    max_stream_queries: usize,
+    storage_cache_policy: StorageCachePolicy,
+    spawn_mode: RocksDbSpawnMode,
+}
+
+impl RocksDbStoreInternal {
+    fn check_namespace(namespace: &str) -> Result<(), RocksDbStoreInternalError> {
+        if !namespace
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err(RocksDbStoreInternalError::InvalidNamespace);
+        }
+        Ok(())
+    }
+
+    fn build(
+        path_with_guard: PathWithGuard,
+        spawn_mode: RocksDbSpawnMode,
+        max_stream_queries: usize,
+        storage_cache_policy: &StorageCachePolicy,
+        root_key: &[u8],
+    ) -> Result<RocksDbStoreInternal, RocksDbStoreInternalError> {
+        let path = path_with_guard.path_buf.clone();
+        if !std::path::Path::exists(&path) {
+            std::fs::create_dir(path.clone())?;
+        }
+        let mut options = rocksdb::Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path)?;
+        let root_key = root_key.to_vec();
+        let root_key = root_key.to_vec();
+        let executor = RocksDbStoreExecutor {
+            db: Arc::new(db),
+            root_key,
+        };
+        let storage_cache_policy = storage_cache_policy.clone();
+        Ok(RocksDbStoreInternal {
+            executor,
+            _path_with_guard: path_with_guard,
+            max_stream_queries,
+            storage_cache_policy,
+            spawn_mode,
+        })
+    }
 }
 
 impl RocksDbSpawnMode {
@@ -262,16 +314,6 @@ impl RocksDbStoreExecutor {
     }
 }
 
-/// The inner client
-#[derive(Clone)]
-pub struct RocksDbStoreInternal {
-    executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
-    max_stream_queries: usize,
-    cache_size: usize,
-    spawn_mode: RocksDbSpawnMode,
-}
-
 /// The initial configuration of the system
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreConfig {
@@ -281,46 +323,6 @@ pub struct RocksDbStoreConfig {
     pub spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
     pub common_config: CommonStoreConfig,
-}
-
-impl RocksDbStoreInternal {
-    fn check_namespace(namespace: &str) -> Result<(), RocksDbStoreInternalError> {
-        if !namespace
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        {
-            return Err(RocksDbStoreInternalError::InvalidNamespace);
-        }
-        Ok(())
-    }
-
-    fn build(
-        path_with_guard: PathWithGuard,
-        spawn_mode: RocksDbSpawnMode,
-        max_stream_queries: usize,
-        cache_size: usize,
-        root_key: &[u8],
-    ) -> Result<RocksDbStoreInternal, RocksDbStoreInternalError> {
-        let path = path_with_guard.path_buf.clone();
-        if !std::path::Path::exists(&path) {
-            std::fs::create_dir(path.clone())?;
-        }
-        let mut options = rocksdb::Options::default();
-        options.create_if_missing(true);
-        let db = DB::open(&options, path)?;
-        let root_key = root_key.to_vec();
-        let executor = RocksDbStoreExecutor {
-            db: Arc::new(db),
-            root_key,
-        };
-        Ok(RocksDbStoreInternal {
-            executor,
-            _path_with_guard: path_with_guard,
-            max_stream_queries,
-            cache_size,
-            spawn_mode,
-        })
-    }
 }
 
 impl WithError for RocksDbStoreInternal {
@@ -451,13 +453,13 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         path_buf.push(namespace);
         path_with_guard.path_buf = path_buf;
         let max_stream_queries = config.common_config.max_stream_queries;
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = &config.common_config.storage_cache_policy;
         let spawn_mode = config.spawn_mode;
         RocksDbStoreInternal::build(
             path_with_guard,
             spawn_mode,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             root_key,
         )
     }
@@ -539,7 +541,7 @@ impl TestKeyValueStore for RocksDbStoreInternal {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
-            cache_size: TEST_CACHE_SIZE,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
         Ok(RocksDbStoreConfig {
@@ -598,15 +600,15 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";
 }
 
-/// A shared DB client for RocksDB implementing LruCaching
+/// A shared DB client for RocksDB implementing caching
 #[derive(Clone)]
 pub struct RocksDbStore {
     #[cfg(with_metrics)]
     store: MeteredStore<
-        LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
+        CachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
     >,
     #[cfg(not(with_metrics))]
-    store: LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
+    store: CachingStore<ValueSplittingStore<RocksDbStoreInternal>>,
 }
 
 /// A path and the guard for the temporary directory if needed
@@ -648,15 +650,18 @@ impl RocksDbStore {
         &self.store.store.store
     }
 
-    fn from_inner(store: RocksDbStoreInternal, cache_size: usize) -> RocksDbStore {
+    fn from_inner(
+        store: RocksDbStoreInternal,
+        storage_cache_policy: &StorageCachePolicy,
+    ) -> RocksDbStore {
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
         let store = ValueSplittingStore::new(store);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&VALUE_SPLITTING_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
+        let store = CachingStore::new(store, storage_cache_policy.clone());
         #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        let store = MeteredStore::new(&CACHED_ROCKS_DB_METRICS, store);
         Self { store }
     }
 }
@@ -732,14 +737,14 @@ impl AdminKeyValueStore for RocksDbStore {
         root_key: &[u8],
     ) -> Result<Self, RocksDbStoreError> {
         let store = RocksDbStoreInternal::connect(config, namespace, root_key).await?;
-        let cache_size = config.common_config.cache_size;
-        Ok(Self::from_inner(store, cache_size))
+        let storage_cache_policy = &config.common_config.storage_cache_policy;
+        Ok(Self::from_inner(store, storage_cache_policy))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
         let store = self.inner().clone_with_root_key(root_key)?;
-        let cache_size = self.inner().cache_size;
-        Ok(Self::from_inner(store, cache_size))
+        let storage_cache_policy = &self.inner().storage_cache_policy;
+        Ok(Self::from_inner(store, storage_cache_policy))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
