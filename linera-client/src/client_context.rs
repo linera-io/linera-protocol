@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{BlockHeight, CompressedContractService, Timestamp},
+    data_types::{BlockHeight, Timestamp},
     identifiers::{Account, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -53,7 +53,7 @@ use {
 use {
     linera_base::{
         crypto::CryptoHash,
-        data_types::{BlobBytes, Bytecode},
+        data_types::{BlobBytes, Bytecode, CompressedContractService},
         identifiers::BytecodeId,
     },
     std::{fs, path::PathBuf},
