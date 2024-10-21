@@ -616,7 +616,7 @@ where
     }
 
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let keys = Self::construct_query(&[hash])?;
+        let keys = Self::get_keys_for_certificates(&[hash])?;
         let results = self.store.contains_keys(keys).await?;
         #[cfg(with_metrics)]
         CONTAINS_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
@@ -624,7 +624,7 @@ where
     }
 
     async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
-        let keys = Self::construct_query(&[hash])?;
+        let keys = Self::get_keys_for_certificates(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
@@ -639,7 +639,7 @@ where
         hashes: I,
     ) -> Result<Vec<Certificate>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
-        let keys = Self::construct_query(&hashes)?;
+        let keys = Self::get_keys_for_certificates(&hashes)?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
             #[cfg(with_metrics)]
@@ -679,15 +679,15 @@ where
     C: Clock,
     Store::Error: Send + Sync,
 {
-    fn construct_query(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
-        let mut keys = Vec::new();
-        for hash in hashes {
-            let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash))?;
-            let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash))?;
-            keys.push(cert_key);
-            keys.push(value_key);
-        }
-        Ok(keys)
+    fn get_keys_for_certificates(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(hashes
+            .iter()
+            .flat_map(|hash| {
+                let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
+                let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash));
+                vec![cert_key, value_key]
+            })
+            .collect::<Result<_, _>>()?)
     }
 
     fn deserialize_certificate(
