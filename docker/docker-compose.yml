@@ -19,7 +19,8 @@ services:
       - linera-shared:/shared
   shard:
     image: linera
-    container_name: shard
+    deploy:
+      replicas: 4
     command: [ "./compose-server-entrypoint.sh" ]
     volumes:
       - .:/config
