@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NonErrorResponse","Response","ResponseOpcode"],"mod":["authenticate","cql_to_rust","error","event","result","supported"],"struct":["Error","Supported"]};

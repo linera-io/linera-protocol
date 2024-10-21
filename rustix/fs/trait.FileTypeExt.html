@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Re-export types common to POSIX-ish platforms. Unix-specific extensions for `fs::FileType`."><title>FileTypeExt in rustix::fs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="rustix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../rustix/index.html">rustix</a><span class="version">0.38.37</span></h2></div><h2 class="location"><a href="#">FileTypeExt</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.is_block_device">is_block_device</a></li><li><a href="#tymethod.is_char_device">is_char_device</a></li><li><a href="#tymethod.is_fifo">is_fifo</a></li><li><a href="#tymethod.is_socket">is_socket</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In rustix::fs</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">rustix</a>::<wbr><a href="index.html">fs</a>::<wbr><a class="trait" href="#">FileTypeExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#775">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait FileTypeExt {
+    // Required methods
+    fn <a href="#tymethod.is_block_device" class="fn">is_block_device</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_char_device" class="fn">is_char_device</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_fifo" class="fn">is_fifo</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_socket" class="fn">is_socket</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Re-export types common to POSIX-ish platforms.
+Unix-specific extensions for <a href="https://doc.rust-lang.org/1.81.0/std/fs/struct.FileType.html" title="struct std::fs::FileType"><code>fs::FileType</code></a>.</p>
+<p>Adds support for special Unix file types such as block/character devices,
+pipes, and sockets.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.is_block_device" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#793">source</a></span><h4 class="code-header">fn <a href="#tymethod.is_block_device" class="fn">is_block_device</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this file type is a block device.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::os::unix::fs::FileTypeExt;
+<span class="kw">use </span>std::io;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>meta = fs::metadata(<span class="string">"block_device_file"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>file_type = meta.file_type();
+    <span class="macro">assert!</span>(file_type.is_block_device());
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_char_device" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#811">source</a></span><h4 class="code-header">fn <a href="#tymethod.is_char_device" class="fn">is_char_device</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this file type is a char device.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::os::unix::fs::FileTypeExt;
+<span class="kw">use </span>std::io;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>meta = fs::metadata(<span class="string">"char_device_file"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>file_type = meta.file_type();
+    <span class="macro">assert!</span>(file_type.is_char_device());
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_fifo" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#829">source</a></span><h4 class="code-header">fn <a href="#tymethod.is_fifo" class="fn">is_fifo</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this file type is a fifo.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::os::unix::fs::FileTypeExt;
+<span class="kw">use </span>std::io;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>meta = fs::metadata(<span class="string">"fifo_file"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>file_type = meta.file_type();
+    <span class="macro">assert!</span>(file_type.is_fifo());
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_socket" class="method"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#847">source</a></span><h4 class="code-header">fn <a href="#tymethod.is_socket" class="fn">is_socket</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this file type is a socket.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::os::unix::fs::FileTypeExt;
+<span class="kw">use </span>std::io;
+
+<span class="kw">fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>meta = fs::metadata(<span class="string">"unix.socket"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>file_type = meta.file_type();
+    <span class="macro">assert!</span>(file_type.is_socket());
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-FileTypeExt-for-FileType" class="impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.5.0">1.5.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/std/os/unix/fs.rs.html#851">source</a></span><a href="#impl-FileTypeExt-for-FileType" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.FileTypeExt.html" title="trait rustix::fs::FileTypeExt">FileTypeExt</a> for <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/fs/struct.FileType.html" title="struct std::fs::FileType">FileType</a></h3></section></div><script src="../../trait.impl/std/os/unix/fs/trait.FileTypeExt.js" data-ignore-extern-crates="std" async></script></section></div></main></body></html>

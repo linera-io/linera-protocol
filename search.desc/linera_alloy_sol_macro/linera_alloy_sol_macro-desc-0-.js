@@ -1,0 +1,1 @@
+searchState.loadedDescShard("linera_alloy_sol_macro", 0, "linera-alloy-sol-macro\nGenerate types that implement <code>linera-alloy-sol-types</code> …")

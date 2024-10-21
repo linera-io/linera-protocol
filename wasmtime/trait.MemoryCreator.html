@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A memory creator. Can be used to provide a memory creator to wasmtime which supplies host managed memory."><title>MemoryCreator in wasmtime - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime/index.html">wasmtime</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">MemoryCreator</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.new_memory">new_memory</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate wasmtime</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">wasmtime</a>::<wbr><a class="trait" href="#">MemoryCreator</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime/runtime/memory.rs.html#713-753">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait MemoryCreator: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> {
+    // Required method
+    fn <a href="#tymethod.new_memory" class="fn">new_memory</a>(
+        &amp;self,
+        ty: <a class="struct" href="struct.MemoryType.html" title="struct wasmtime::MemoryType">MemoryType</a>,
+        minimum: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        maximum: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+        reserved_size_in_bytes: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+        guard_size_in_bytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    ) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.LinearMemory.html" title="trait wasmtime::LinearMemory">LinearMemory</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A memory creator. Can be used to provide a memory creator
+to wasmtime which supplies host managed memory.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This trait is unsafe, as the memory safety depends on proper implementation
+of memory management. Memories created by the MemoryCreator should always be
+treated as owned by wasmtime instance, and any modification of them outside
+of wasmtime invoked routines is unsafe and may lead to corruption.</p>
+<p>Note that this is a relatively new and experimental feature and it is
+recommended to be familiar with wasmtime runtime code to use it.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.new_memory" class="method"><a class="src rightside" href="../src/wasmtime/runtime/memory.rs.html#745-752">source</a><h4 class="code-header">fn <a href="#tymethod.new_memory" class="fn">new_memory</a>(
+    &amp;self,
+    ty: <a class="struct" href="struct.MemoryType.html" title="struct wasmtime::MemoryType">MemoryType</a>,
+    minimum: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    maximum: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+    reserved_size_in_bytes: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+    guard_size_in_bytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="trait.LinearMemory.html" title="trait wasmtime::LinearMemory">LinearMemory</a>&gt;, <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new <code>LinearMemory</code> object from the specified parameters.</p>
+<p>The type of memory being created is specified by <code>ty</code> which indicates
+both the minimum and maximum size, in wasm pages. The minimum and
+maximum sizes, in bytes, are also specified as parameters to avoid
+integer conversion if desired.</p>
+<p>The <code>reserved_size_in_bytes</code> value indicates the expected size of the
+reservation that is to be made for this memory. If this value is <code>None</code>
+than the implementation is free to allocate memory as it sees fit. If
+the value is <code>Some</code>, however, then the implementation is expected to
+reserve that many bytes for the memory’s allocation, plus the guard
+size at the end. Note that this reservation need only be a virtual
+memory reservation, physical memory does not need to be allocated
+immediately. In this case <code>grow</code> should never move the base pointer and
+the maximum size of <code>ty</code> is guaranteed to fit within
+<code>reserved_size_in_bytes</code>.</p>
+<p>The <code>guard_size_in_bytes</code> parameter indicates how many bytes of space,
+after the memory allocation, is expected to be unmapped. JIT code will
+elide bounds checks based on the <code>guard_size_in_bytes</code> provided, so for
+JIT code to work correctly the memory returned will need to be properly
+guarded with <code>guard_size_in_bytes</code> bytes left unmapped after the base
+allocation.</p>
+<p>Note that the <code>reserved_size_in_bytes</code> and <code>guard_size_in_bytes</code> options
+are tuned from the various <a href="struct.Config.html" title="struct wasmtime::Config"><code>Config</code></a> methods about
+memory sizes/guards. Additionally these two values are guaranteed to be
+multiples of the system page size.</p>
+<p>Memory created from this method should be zero filled.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/wasmtime/runtime/memory/trait.MemoryCreator.js" async></script></section></div></main></body></html>

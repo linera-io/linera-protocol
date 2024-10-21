@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`Secret` wrapper type for more carefully handling secret values (e.g. passwords, cryptographic keys, access tokens or other credentials)"><title>secrecy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="secrecy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../secrecy/index.html">secrecy</a><span class="version">0.8.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">secrecy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/secrecy/lib.rs.html#1-285">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="struct.Secret.html" title="struct secrecy::Secret"><code>Secret</code></a> wrapper type for more carefully handling secret values
+(e.g. passwords, cryptographic keys, access tokens or other credentials)</p>
+<h2 id="goals"><a class="doc-anchor" href="#goals">§</a>Goals</h2>
+<ul>
+<li>Make secret access explicit and easy-to-audit via the
+<a href="trait.ExposeSecret.html" title="trait secrecy::ExposeSecret"><code>ExposeSecret</code></a> trait. This also makes secret values immutable which
+helps avoid making accidental copies (e.g. reallocating the backing
+buffer for a <code>Vec</code>)</li>
+<li>Prevent accidental leakage of secrets via channels like debug logging</li>
+<li>Ensure secrets are wiped from memory on drop securely
+(using the <a href="../zeroize/index.html" title="mod zeroize"><code>zeroize</code></a> crate)</li>
+</ul>
+<p>Presently this crate favors a simple, <code>no_std</code>-friendly, safe i.e.
+<code>forbid(unsafe_code)</code>-based implementation and does not provide more advanced
+memory protection mechanisms e.g. ones based on <code>mlock(2)</code>/<code>mprotect(2)</code>.
+We may explore more advanced protection mechanisms in the future.</p>
+<h2 id="box-string-and-vec-wrappers"><a class="doc-anchor" href="#box-string-and-vec-wrappers">§</a><code>Box</code>, <code>String</code>, and <code>Vec</code> wrappers</h2>
+<p>Most users of this crate will simply want <a href="struct.Secret.html" title="struct secrecy::Secret"><code>Secret</code></a> wrappers around Rust’s
+core collection types: i.e. <code>Box</code>, <code>String</code>, and <code>Vec</code>.</p>
+<p>When the <code>alloc</code> feature of this crate is enabled (which it is by default),
+<a href="type.SecretBox.html" title="type secrecy::SecretBox"><code>SecretBox</code></a>, <a href="type.SecretString.html" title="type secrecy::SecretString"><code>SecretString</code></a>, and <a href="type.SecretVec.html" title="type secrecy::SecretVec"><code>SecretVec</code></a> type aliases are
+available.</p>
+<p>There’s nothing particularly fancy about these: they’re just the simple
+composition of <code>Secret&lt;Box&lt;_&gt;&gt;</code>, <code>Secret&lt;String&gt;</code>, and <code>Secret&lt;Vec&lt;_&gt;&gt;</code>!
+However, in many cases they’re all you will need.</p>
+<h2 id="advanced-usage"><a class="doc-anchor" href="#advanced-usage">§</a>Advanced usage</h2>
+<p>If you are hitting limitations on what’s possible with the collection type
+wrappers, you’ll want to define your own newtype which lets you customize
+the implementation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>secrecy::{CloneableSecret, DebugSecret, Secret, Zeroize};
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>AccountNumber(String);
+
+<span class="kw">impl </span>Zeroize <span class="kw">for </span>AccountNumber {
+    <span class="kw">fn </span>zeroize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.<span class="number">0</span>.zeroize();
+    }
+}
+
+<span class="doccomment">/// Permits cloning
+</span><span class="kw">impl </span>CloneableSecret <span class="kw">for </span>AccountNumber {}
+
+<span class="doccomment">/// Provides a `Debug` impl (by default `[[REDACTED]]`)
+</span><span class="kw">impl </span>DebugSecret <span class="kw">for </span>AccountNumber {}
+
+<span class="doccomment">/// Use this alias when storing secret values
+</span><span class="kw">pub type </span>SecretAccountNumber = Secret&lt;AccountNumber&gt;;</code></pre></div>
+<h2 id="serde-support"><a class="doc-anchor" href="#serde-support">§</a><code>serde</code> support</h2>
+<p>When the <code>serde</code> feature of this crate is enabled, the <a href="struct.Secret.html" title="struct secrecy::Secret"><code>Secret</code></a> type will
+receive a <a href="../serde/de/trait.Deserialize.html" title="trait serde::de::Deserialize"><code>Deserialize</code></a> impl for all <code>Secret&lt;T&gt;</code> types where
+<code>T: DeserializeOwned</code>. This allows <em>loading</em> secret values from data
+deserialized from <code>serde</code> (be careful to clean up any intermediate secrets
+when doing this, e.g. the unparsed input!)</p>
+<p>To prevent exfiltration of secret values via <code>serde</code>, by default <code>Secret&lt;T&gt;</code>
+does <em>not</em> receive a corresponding <a href="../serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize"><code>Serialize</code></a> impl. If you would like
+types of <code>Secret&lt;T&gt;</code> to be serializable with <code>serde</code>, you will need to impl
+the <a href="trait.SerializableSecret.html" title="trait secrecy::SerializableSecret"><code>SerializableSecret</code></a> marker trait on <code>T</code>.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.zeroize"><code>pub use <a class="mod" href="../zeroize/index.html" title="mod zeroize">zeroize</a>;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Secret.html" title="struct secrecy::Secret">Secret</a></div><div class="desc docblock-short">Wrapper type for values that contains secrets, which attempts to limit
+accidental exposure and ensure secrets are wiped from memory when dropped.
+(e.g. passwords, cryptographic keys, access tokens or other credentials)</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.CloneableSecret.html" title="trait secrecy::CloneableSecret">CloneableSecret</a></div><div class="desc docblock-short">Marker trait for secrets which are allowed to be cloned</div></li><li><div class="item-name"><a class="trait" href="trait.DebugSecret.html" title="trait secrecy::DebugSecret">DebugSecret</a></div><div class="desc docblock-short">Debugging trait which is specialized for handling secret values</div></li><li><div class="item-name"><a class="trait" href="trait.ExposeSecret.html" title="trait secrecy::ExposeSecret">ExposeSecret</a></div><div class="desc docblock-short">Expose a reference to an inner secret</div></li><li><div class="item-name"><a class="trait" href="trait.SerializableSecret.html" title="trait secrecy::SerializableSecret">SerializableSecret</a></div><div class="desc docblock-short">Marker trait for secret types which can be <a href="../serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize"><code>Serialize</code></a>-d by <a href="../serde/index.html" title="mod serde"><code>serde</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.Zeroize.html" title="trait secrecy::Zeroize">Zeroize</a></div><div class="desc docblock-short">Trait for securely erasing values from memory.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.SecretBox.html" title="type secrecy::SecretBox">SecretBox</a></div><div class="desc docblock-short"><code>Box</code> types containing a secret value</div></li><li><div class="item-name"><a class="type" href="type.SecretString.html" title="type secrecy::SecretString">SecretString</a></div><div class="desc docblock-short">Secret strings</div></li><li><div class="item-name"><a class="type" href="type.SecretVec.html" title="type secrecy::SecretVec">SecretVec</a></div><div class="desc docblock-short"><code>Vec</code> types containing secret value</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Zeroize.html" title="derive secrecy::Zeroize">Zeroize</a></div><div class="desc docblock-short">Derive the <code>Zeroize</code> trait.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Rust `uint` crate using const-generics"><title>linera_alloy::primitives::ruint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_alloy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../crates.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../linera_alloy/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../../../linera_alloy/index.html">linera_alloy</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In linera_alloy::primitives</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a href="../../index.html">linera_alloy</a>::<wbr><a href="../index.html">primitives</a>::<wbr><a class="mod" href="#">ruint</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/ruint/lib.rs.html#1-372">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="rust-uint-crate-using-const-generics"><a class="doc-anchor" href="#rust-uint-crate-using-const-generics">§</a>Rust <code>uint</code> crate using const-generics</h2>
+<p><a href="https://crates.io/crates/ruint"><img src="https://buildstats.info/crate/ruint" alt="crates.io" /></a>
+<a href="https://docs.rs/ruint"><img src="https://img.shields.io/docsrs/ruint" alt="docs.rs" /></a>
+<a href="https://github.com/recmo/uint/blob/main/LICENSE"><img src="https://img.shields.io/github/license/recmo/uint" alt="MIT License" /></a>
+<a href="https://deps.rs/repo/github/recmo/uint"><img src="https://deps.rs/repo/github/recmo/uint/status.svg" alt="dependency status" /></a>
+<a href="https://codecov.io/gh/recmo/uint"><img src="https://codecov.io/gh/recmo/uint/branch/main/graph/badge.svg?token=WBPZ9U4TTO" alt="codecov" /></a>
+<a href="https://github.com/recmo/uint/actions/workflows/ci.yml"><img src="https://github.com/recmo/uint/actions/workflows/ci.yml/badge.svg" alt="CI" /></a></p>
+<p>Implements <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint&lt;BITS, LIMBS&gt;</code></a>, the ring of numbers modulo $2^{\mathsf{BITS}}$. It requires two
+generic arguments: the number of bits and the number of 64-bit ‘limbs’ required to store those bits.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>answer: Uint&lt;<span class="number">256</span>, <span class="number">4</span>&gt; = Uint::from(<span class="number">42</span>);</code></pre></div>
+<p>You can compute <code>LIMBS</code> yourself using $\mathsf{LIMBS} = \left\lceil{\mathsf{BITS} / 64}\right\rceil$,
+i.e.<code>LIMBS</code> equals <code>BITS</code> divided by $64$ rounded up. <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> will <code>panic!</code> if you try to
+construct it with incorrect arguments. Ideally this would be a compile time error, but
+that is blocked by Rust issue <a href="https://github.com/rust-lang/rust/issues/60551">#60551</a>.</p>
+<p>A more convenient method on stable is to use the [<code>uint!</code>] macro, which constructs the right
+<a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> for you.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>answer = <span class="macro">uint!</span>(<span class="number">42_U256</span>);</code></pre></div>
+<p>You can also use one of the pre-computed type <a href="aliases/index.html" title="mod linera_alloy::primitives::ruint::aliases"><code>aliases</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ruint::aliases::<span class="kw-2">*</span>;
+
+<span class="kw">let </span>answer: U256 = Uint::from(<span class="number">42</span>);</code></pre></div>
+<p>You can of course also create your own type alias if you need a funny size:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">type </span>U1337 = Uint&lt;<span class="number">1337</span>, <span class="number">21</span>&gt;;
+
+<span class="kw">let </span>answer: U1337 = Uint::from(<span class="number">42</span>);</code></pre></div>
+<h3 id="rust-nightly"><a class="doc-anchor" href="#rust-nightly">§</a>Rust nightly</h3>
+<p>If you are on nightly, you can use [<code>Uint&lt;BITS&gt;</code>][nightly::Uint] which will
+compute the number of limbs for you. Unfortunately this can not be made stable
+without <code>generic_const_exprs</code> support (Rust issue <a href="https://github.com/rust-lang/rust/issues/76560">#76560</a>).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ruint::nightly::Uint;
+
+<span class="kw">let </span>answer: Uint&lt;<span class="number">256</span>&gt; = Uint::&lt;<span class="number">256</span>&gt;::from(<span class="number">42</span>);</code></pre></div>
+<p>Even on nightly, the ergonomics of Rust are limited. In the example above Rust
+requires explicit type annotation for <a href="../struct.Uint.html#method.from" title="associated function linera_alloy::primitives::Uint::from"><code>Uint::from</code></a>, where it did not require
+it in the stable version. There are a few more subtle issues that make this
+less ideal than it appears. It also looks like it may take some time before
+these nightly features are stabilized.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ruint::Uint;
+
+<span class="kw">let </span>a: Uint&lt;<span class="number">256</span>, <span class="number">4</span>&gt; = Uint::from(<span class="number">0xf00f_u64</span>);
+<span class="kw">let </span>b: Uint&lt;<span class="number">256</span>, <span class="number">4</span>&gt; = Uint::from(<span class="number">42_u64</span>);
+<span class="kw">let </span>c  = a + b;
+<span class="macro">assert_eq!</span>(c, Uint::from(<span class="number">0xf039_u64</span>));</code></pre></div>
+<p>There is a convenient macro [<code>uint!</code>] to create constants for you. It allows
+for arbitrary length constants using standard Rust integer syntax. The size of
+the <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> or <a href="struct.Bits.html" title="struct linera_alloy::primitives::ruint::Bits"><code>Bits</code></a> is specified with a <code>U</code> or <code>B</code> suffix followed by the
+number of bits. The standard Rust syntax of decimal, hexadecimal and even binary and octal is
+supported using their prefixes <code>0x</code>, <code>0b</code> and <code>0o</code>. Literals can have
+underscores <code>_</code> added for readability.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>cow = <span class="macro">uint!</span>(<span class="number">0xc85ef7d79691fe79573b1a7064c19c1a9819ebdbd1faaab1a8ec92344438aaf4_U256</span>);</code></pre></div>
+<p>In fact, this macro recurses down the parse tree, so you can apply it to entire
+source files:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">uint!</span>{
+
+<span class="kw">let </span>a = <span class="number">42_U256</span>;
+<span class="kw">let </span>b = <span class="number">0xf00f_1337_c0d3_U256</span>;
+<span class="kw">let </span>c = a + b;
+<span class="macro">assert_eq!</span>(c, <span class="number">263947537596669_U256</span>);
+
+}</code></pre></div>
+<p>Note that since <code>B</code> is a valid hexadecimal digit there can be ambiguity. To lessen the impact an underscore separator <code>_B</code> is required in this case.</p>
+<h3 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h3><!--
+When updating this, also update:
+- .clippy.toml
+- Cargo.toml
+- .github/workflows/ci.yml
+-->
+<p>Uint will keep a rolling MSRV (minimum supported rust version) policy of <strong>at
+least</strong> 6 months. When increasing the MSRV, the new Rust version must have been
+released at least six months ago. The current MSRV is 1.65.0.</p>
+<p>Note that the MSRV is not increased automatically, and only as part of a minor
+release.</p>
+<h3 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h3>
+<p>There is support for a number of crates. These are enabled by setting the identically
+named feature flag.</p>
+<ul>
+<li><code>unstable</code> Enable sem-ver unstable features.</li>
+<li><a href="https://docs.rs/rand"><code>rand</code></a>: Implements sampling from the <a href="https://docs.rs/rand/latest/rand/distributions/struct.Standard.html"><code>Standard</code></a> distribution, i.e. <a href="https://docs.rs/rand/latest/rand/trait.Rng.html#method.gen"><code>rng.gen()</code></a>.</li>
+<li><a href="https://docs.rs/arbitrary"><code>arbitrary</code></a>: Implements the <a href="https://docs.rs/arbitrary/latest/arbitrary/trait.Arbitrary.html"><code>Arbitrary</code></a> trait, allowing <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a>s to be generated for fuzz testing.</li>
+<li><a href="https://docs.rs/quickcheck"><code>quickcheck</code></a>: Implements the <a href="https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html"><code>Arbitrary</code></a> trait, allowing <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a>s to be generated for property based testing.</li>
+<li><a href="https://docs.rs/proptest"><code>proptest</code></a>: Implements the <a href="https://docs.rs/proptest/latest/proptest/arbitrary/trait.Arbitrary.html"><code>Arbitrary</code></a> trait, allowing <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a>s to be generated for property based testing. Proptest is used for the <code>uint</code>s own test suite.</li>
+<li><a href="https://docs.rs/serde"><code>serde</code></a>: Implements the <a href="https://docs.rs/serde/latest/serde/trait.Serialize.html"><code>Serialize</code></a> and <a href="https://docs.rs/serde/latest/serde/trait.Deserialize.html"><code>Deserialize</code></a> traits for <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> and <a href="struct.Bits.html" title="struct linera_alloy::primitives::ruint::Bits"><code>Bits</code></a>.Serialization uses big-endian hex in human readable formats and big-endian byte strings in machine readable formats. <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> uses ethereum <code>Quantity</code> format (0x-prefixed minimal string) when serializing in a human readable format.</li>
+<li><a href="https://docs.rs/rlp"><code>rlp</code></a>: Implements the <a href="https://docs.rs/rlp/latest/rlp/trait.Encodable.html"><code>Encodable</code></a> and <a href="https://docs.rs/rlp/latest/rlp/trait.Decodable.html"><code>Decodable</code></a> traits for <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> to allow serialization to/from RLP.</li>
+<li><a href="https://docs.rs/fastrlp"><code>fastrlp</code></a>: Implements the <a href="https://docs.rs/fastrlp/latest/fastrlp/trait.Encodable.html"><code>Encodable</code></a> and <a href="https://docs.rs/fastrlp/latest/fastrlp/trait.Decodable.html"><code>Decodable</code></a> traits for <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> to allow serialization to/from RLP.</li>
+<li><a href="https://docs.rs/primitive-types"><code>primitive-types</code></a>: Implements the <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From&lt;_&gt;</code></a> conversions between corresponding types.</li>
+<li><a href="https://docs.rs/postgres"><code>postgres</code></a>: Implements the <a href="https://docs.rs/postgres/latest/postgres/types/trait.ToSql.html"><code>ToSql</code></a> trait supporting many column types.</li>
+<li><a href="https://docs.rs/num-bigint"><code>num-bigint</code></a>: Implements conversion to/from <a href="https://docs.rs/num-bigint/latest/num_bigint/struct.BigUint.html"><code>BigUint</code></a> and <a href="https://docs.rs/num-bigint/latest/num_bigint/struct.BigInt.html"><code>BigInt</code></a>.</li>
+<li><a href="https://docs.rs/ark-ff"><code>ark-ff</code></a>: Implements conversion to/from the <a href="https://docs.rs/ark-ff/0.3.0/ark_ff/biginteger/index.html"><code>BigInteger*</code></a> types and the <a href="https://docs.rs/ark-ff/0.3.0/ark_ff/fields/models/index.html"><code>Fp*</code></a> types from <code>ark-ff@0.3</code>.</li>
+<li><a href="https://docs.rs/ark-ff"><code>ark-ff-04</code></a>: Implements conversion to/from <a href="https://docs.rs/ark-ff/0.4.2/ark_ff/biginteger/struct.BigInt.html"><code>BigInt</code></a> and <a href="https://docs.rs/ark-ff/0.4.2/ark_ff/fields/models/fp/struct.Fp.html"><code>Fp</code></a> types from <code>ark-ff@0.4</code>.</li>
+<li><a href="https://docs.rs/sqlx"><code>sqlx</code></a>: Implements database agnostic storage as byte array. Requires
+<code>sqlx</code> to be used with the <code>tokio-native-tls</code> runtime, due to issue <a href="https://github.com/launchbadge/sqlx/issues/1627">sqlx#1627</a>.</li>
+<li><a href="https://docs.rs/zeroize"><code>zeroize</code></a>: Implements the <a href="https://docs.rs/zeroize/latest/zeroize/trait.Zeroize.html"><code>Zeroize</code></a> trait. This makes <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> and <a href="struct.Bits.html" title="struct linera_alloy::primitives::ruint::Bits"><code>Bits</code></a> compatible with the <a href="https://crates.io/crates/secrecy"><code>secrecy</code></a> crate.</li>
+<li><a href="https://docs.rs/valuable"><code>valuable</code></a>: Implements the <a href="https://docs.rs/valuable/0.1.0/valuable/trait.Valuable.html"><code>Valuable</code></a> trait.</li>
+<li><a href="https://docs.rs/pyo3"><code>pyo3</code></a>: Implements the <a href="https://docs.rs/pyo3/latest/pyo3/conversion/trait.ToPyObject.html"><code>ToPyObject</code></a>, <a href="https://docs.rs/pyo3/latest/pyo3/conversion/trait.IntoPy.html"><code>IntoPy</code></a> and <a href="https://docs.rs/pyo3/latest/pyo3/conversion/trait.FromPyObject.html"><code>FromPyObject</code></a> traits.</li>
+<li><a href="https://docs.rs/parity-scale-codec"><code>parity-scale-codec</code></a>: Implements the <a href="https://docs.rs/parity-scale-codec/latest/parity_scale_codec/trait.Encode.html"><code>Encode</code></a>, <a href="https://docs.rs/parity-scale-codec/latest/parity_scale_codec/trait.Decode.html"><code>Decode</code></a>, <a href="https://github.com/paritytech/parity-scale-codec/blob/47d98a1c23dabc890fdb548d115a18070082c66e/src/max_encoded_len.rs"><code>MaxEncodedLen</code></a> and <a href="https://docs.rs/parity-scale-codec/latest/parity_scale_codec/trait.HasCompact.html"><code>HasCompact</code></a> traits.</li>
+<li><a href="https://docs.rs/bn-rs/latest/bn_rs/"><code>bn-rs</code></a>: Implements conversion to/from the <a href="https://docs.rs/bn-rs/latest/bn_rs/struct.BN.html"><code>BN</code></a> and <a href="https://docs.rs/bn-rs/latest/bn_rs/struct.BigNumber.html"><code>BigNumber</code></a>.</li>
+<li><a href="https://docs.rs/bytemuck"><code>bytemuck</code></a>: Implements the <a href="https://docs.rs/bytemuck/latest/bytemuck/trait.Pod.html"><code>Pod</code></a> and <a href="https://docs.rs/bytemuck/latest/bytemuck/trait.Zeroable.html"><code>Zeroable</code></a> traits for <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> where the size is a multiple of 64, up to 1024. This allows <code>Uint</code> to be used where a <code>Pod</code> trait bound exists.</li>
+<li><a href="https://docs.rs/num-traits"><code>num-traits</code></a>: Implements about forty applicable traits.</li>
+</ul>
+<h3 id="building-and-testing"><a class="doc-anchor" href="#building-and-testing">§</a>Building and testing</h3>
+<p>Format, lint, build and test everything (I recommend creating a shell alias for this):</p>
+<div class="example-wrap"><pre class="language-sh"><code>cargo fmt &amp;&amp;\
+cargo clippy --all-features --all-targets &amp;&amp;\
+cargo test --workspace --all-features --doc -- --nocapture &amp;&amp;\
+cargo test --workspace --all-features --all-targets -- --nocapture &amp;&amp;\
+cargo doc --workspace --all-features --no-deps
+</code></pre></div>
+<p>Run benchmarks with the provided <code>.cargo/config.toml</code> alias</p>
+<div class="example-wrap"><pre class="language-sh"><code>cargo criterion
+</code></pre></div>
+<p>Check documentation coverage</p>
+<div class="example-wrap"><pre class="language-sh"><code>RUSTDOCFLAGS=&quot;-Z unstable-options --show-coverage&quot;  cargo doc --workspace --all-features --no-deps
+</code></pre></div><h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li>All the quality of life features one could want.</li>
+<li>Compatible with std <code>u64</code>, etc types. See Rust’s <a href="https://doc.rust-lang.org/stable/std/primitive.u64.html">integer methods</a>.</li>
+<li>Adhere to <a href="https://rust-lang.github.io/api-guidelines">Rust API Guidelines</a></li>
+<li>Montgomery REDC and other algo’s for implementing prime fields.</li>
+</ul>
+<h3 id="to-do"><a class="doc-anchor" href="#to-do">§</a>To do</h3>
+<ul>
+<li>Builds <code>no-std</code> and <code>wasm</code>.</li>
+<li>Fast platform agnostic generic algorithms.</li>
+<li>Target specific assembly optimizations (where available).</li>
+<li>Optional num-traits, etc, support.</li>
+<li>Run-time sized type with compatible interface.</li>
+</ul>
+<hr />
+<p><a href="https://github.com/recmo/uint"><img src="https://img.shields.io/tokei/lines/github/recmo/uint" alt="lines of code" /></a>
+<a href="https://github.com/recmo/uint/graphs/contributors"><img src="https://img.shields.io/github/contributors/recmo/uint" alt="GitHub contributors" /></a>
+<a href="https://github.com/recmo/uint/issues"><img src="https://img.shields.io/github/issues/recmo/uint" alt="GitHub issues" /></a>
+<a href="https://github.com/recmo/uint/pulls"><img src="https://img.shields.io/github/issues-pr/recmo/uint?label=PRs" alt="GitHub pull requests" /></a>
+<a href="https://star-history.com/#recmo/uint&amp;Date"><img src="https://img.shields.io/github/stars/recmo/uint" alt="GitHub Repo stars" /></a>
+<a href="https://crates.io/crates/ruint"><img src="https://img.shields.io/crates/d/ruint" alt="crates.io" /></a></p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="algorithms/index.html" title="mod linera_alloy::primitives::ruint::algorithms">algorithms</a></div><div class="desc docblock-short">⚠️ Collection of bignum algorithms.</div></li><li><div class="item-name"><a class="mod" href="aliases/index.html" title="mod linera_alloy::primitives::ruint::aliases">aliases</a></div><div class="desc docblock-short">Type aliases for common bit sizes of <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> and <a href="struct.Bits.html" title="struct linera_alloy::primitives::ruint::Bits"><code>Bits</code></a>.</div></li><li><div class="item-name"><a class="mod" href="support/index.html" title="mod linera_alloy::primitives::ruint::support">support</a></div><div class="desc docblock-short">Support for external crates.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.const_for.html" title="macro linera_alloy::primitives::ruint::const_for">const_for</a></div><div class="desc docblock-short">Compile time for loops with a <code>const</code> variable for testing.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Bits.html" title="struct linera_alloy::primitives::ruint::Bits">Bits</a></div><div class="desc docblock-short">A newtype wrapper around <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a> that restricts operations to those
+relevant for bit arrays.</div></li><li><div class="item-name"><a class="struct" href="struct.Uint.html" title="struct linera_alloy::primitives::ruint::Uint">Uint</a></div><div class="desc docblock-short">The ring of numbers modulo $2^{\mathtt{BITS}}$.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BaseConvertError.html" title="enum linera_alloy::primitives::ruint::BaseConvertError">BaseConvertError</a></div><div class="desc docblock-short">Error for <a href="../struct.Uint.html#method.from_base_le" title="associated function linera_alloy::primitives::Uint::from_base_le"><code>from_base_le</code></a> and
+<a href="../struct.Uint.html#method.from_base_be" title="associated function linera_alloy::primitives::Uint::from_base_be"><code>from_base_be</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.FromUintError.html" title="enum linera_alloy::primitives::ruint::FromUintError">FromUintError</a></div><div class="desc docblock-short">Error for <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom"><code>TryFrom&lt;Uint&gt;</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.ParseError.html" title="enum linera_alloy::primitives::ruint::ParseError">ParseError</a></div><div class="desc docblock-short">Error for <a href="../struct.Uint.html#method.from_str_radix" title="associated function linera_alloy::primitives::Uint::from_str_radix"><code>from_str_radix</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.ToFieldError.html" title="enum linera_alloy::primitives::ruint::ToFieldError">ToFieldError</a></div><div class="desc docblock-short">Error for <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom"><code>TryFrom&lt;Uint&gt;</code></a> for <a href="https://docs.rs/ark-ff"><code>ark_ff</code></a> and others.</div></li><li><div class="item-name"><a class="enum" href="enum.ToUintError.html" title="enum linera_alloy::primitives::ruint::ToUintError">ToUintError</a></div><div class="desc docblock-short">Error for <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom"><code>TryFrom&lt;T&gt;</code></a> for <a href="../struct.Uint.html" title="struct linera_alloy::primitives::Uint"><code>Uint</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.UintTryFrom.html" title="trait linera_alloy::primitives::ruint::UintTryFrom">UintTryFrom</a></div><div class="desc docblock-short">⚠️ Workaround for <a href="https://github.com/rust-lang/rust/issues/50133">Rust issue #50133</a>.
+Use <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom"><code>TryFrom</code></a> instead.</div></li><li><div class="item-name"><a class="trait" href="trait.UintTryTo.html" title="trait linera_alloy::primitives::ruint::UintTryTo">UintTryTo</a></div><div class="desc docblock-short">⚠️ Workaround for <a href="https://github.com/rust-lang/rust/issues/50133">Rust issue #50133</a>.
+Use <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom"><code>TryFrom</code></a> instead.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.mask.html" title="fn linera_alloy::primitives::ruint::mask">mask</a></div><div class="desc docblock-short">Mask to apply to the highest limb to get the correct number of bits.</div></li><li><div class="item-name"><a class="fn" href="fn.nbytes.html" title="fn linera_alloy::primitives::ruint::nbytes">nbytes</a></div><div class="desc docblock-short">Number of bytes required to represent the given number of bits.</div></li><li><div class="item-name"><a class="fn" href="fn.nlimbs.html" title="fn linera_alloy::primitives::ruint::nlimbs">nlimbs</a></div><div class="desc docblock-short">Number of <code>u64</code> limbs required to represent the given number of bits.
+This needs to be public because it is used in the <code>Uint</code> type.</div></li></ul></section></div></main></body></html>

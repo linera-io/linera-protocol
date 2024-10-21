@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["spawn","spawn_blocking"],"type":["BlockingFuture","Error","NonBlockingFuture"]};

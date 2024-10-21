@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["HISTORY_STORAGE_ADDRESS"],"static":["HISTORY_STORAGE_CODE"]};

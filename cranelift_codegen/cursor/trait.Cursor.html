@@ -1,0 +1,250 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="All cursor types implement the `Cursor` which provides common navigation operations."><title>Cursor in cranelift_codegen::cursor - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="cranelift_codegen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../cranelift_codegen/index.html">cranelift_codegen</a><span class="version">0.112.1</span></h2></div><h2 class="location"><a href="#">Cursor</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.layout">layout</a></li><li><a href="#tymethod.layout_mut">layout_mut</a></li><li><a href="#tymethod.position">position</a></li><li><a href="#tymethod.set_position">set_position</a></li><li><a href="#tymethod.set_srcloc">set_srcloc</a></li><li><a href="#tymethod.srcloc">srcloc</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.after_inst">after_inst</a></li><li><a href="#method.at_bottom">at_bottom</a></li><li><a href="#method.at_first_insertion_point">at_first_insertion_point</a></li><li><a href="#method.at_first_inst">at_first_inst</a></li><li><a href="#method.at_inst">at_inst</a></li><li><a href="#method.at_last_inst">at_last_inst</a></li><li><a href="#method.at_position">at_position</a></li><li><a href="#method.at_top">at_top</a></li><li><a href="#method.current_block">current_block</a></li><li><a href="#method.current_inst">current_inst</a></li><li><a href="#method.goto_after_inst">goto_after_inst</a></li><li><a href="#method.goto_bottom">goto_bottom</a></li><li><a href="#method.goto_first_insertion_point">goto_first_insertion_point</a></li><li><a href="#method.goto_first_inst">goto_first_inst</a></li><li><a href="#method.goto_inst">goto_inst</a></li><li><a href="#method.goto_last_inst">goto_last_inst</a></li><li><a href="#method.goto_top">goto_top</a></li><li><a href="#method.insert_block">insert_block</a></li><li><a href="#method.insert_inst">insert_inst</a></li><li><a href="#method.next_block">next_block</a></li><li><a href="#method.next_inst">next_inst</a></li><li><a href="#method.prev_block">prev_block</a></li><li><a href="#method.prev_inst">prev_inst</a></li><li><a href="#method.remove_inst">remove_inst</a></li><li><a href="#method.remove_inst_and_step_back">remove_inst_and_step_back</a></li><li><a href="#method.with_srcloc">with_srcloc</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In cranelift_codegen::cursor</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">cranelift_codegen</a>::<wbr><a href="index.html">cursor</a>::<wbr><a class="trait" href="#">Cursor</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/cranelift_codegen/cursor.rs.html#24-563">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Cursor {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 32 methods</span></summary>    // Required methods
+    fn <a href="#tymethod.position" class="fn">position</a>(&amp;self) -&gt; <a class="enum" href="enum.CursorPosition.html" title="enum cranelift_codegen::cursor::CursorPosition">CursorPosition</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_position" class="fn">set_position</a>(&amp;mut self, pos: <a class="enum" href="enum.CursorPosition.html" title="enum cranelift_codegen::cursor::CursorPosition">CursorPosition</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.srcloc" class="fn">srcloc</a>(&amp;self) -&gt; <a class="struct" href="../ir/struct.SourceLoc.html" title="struct cranelift_codegen::ir::SourceLoc">SourceLoc</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.set_srcloc" class="fn">set_srcloc</a>(&amp;mut self, srcloc: <a class="struct" href="../ir/struct.SourceLoc.html" title="struct cranelift_codegen::ir::SourceLoc">SourceLoc</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.layout" class="fn">layout</a>(&amp;self) -&gt; &amp;<a class="struct" href="../ir/layout/struct.Layout.html" title="struct cranelift_codegen::ir::layout::Layout">Layout</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.layout_mut" class="fn">layout_mut</a>(&amp;mut self) -&gt; &amp;mut <a class="struct" href="../ir/layout/struct.Layout.html" title="struct cranelift_codegen::ir::layout::Layout">Layout</a>;
+
+    // Provided methods
+    fn <a href="#method.with_srcloc" class="fn">with_srcloc</a>(self, srcloc: <a class="struct" href="../ir/struct.SourceLoc.html" title="struct cranelift_codegen::ir::SourceLoc">SourceLoc</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_position" class="fn">at_position</a>(self, pos: <a class="enum" href="enum.CursorPosition.html" title="enum cranelift_codegen::cursor::CursorPosition">CursorPosition</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_inst" class="fn">at_inst</a>(self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_first_insertion_point" class="fn">at_first_insertion_point</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_first_inst" class="fn">at_first_inst</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_last_inst" class="fn">at_last_inst</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.after_inst" class="fn">after_inst</a>(self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_top" class="fn">at_top</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.at_bottom" class="fn">at_bottom</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self
+       <span class="where">where Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a></span> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.current_block" class="fn">current_block</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.current_inst" class="fn">current_inst</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_after_inst" class="fn">goto_after_inst</a>(&amp;mut self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_inst" class="fn">goto_inst</a>(&amp;mut self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_first_insertion_point" class="fn">goto_first_insertion_point</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_first_inst" class="fn">goto_first_inst</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_last_inst" class="fn">goto_last_inst</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_top" class="fn">goto_top</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.goto_bottom" class="fn">goto_bottom</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.next_block" class="fn">next_block</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.prev_block" class="fn">prev_block</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.next_inst" class="fn">next_inst</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.prev_inst" class="fn">prev_inst</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.insert_inst" class="fn">insert_inst</a>(&amp;mut self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.remove_inst" class="fn">remove_inst</a>(&amp;mut self) -&gt; <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.remove_inst_and_step_back" class="fn">remove_inst_and_step_back</a>(&amp;mut self) -&gt; <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.insert_block" class="fn">insert_block</a>(&amp;mut self, new_block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>All cursor types implement the <code>Cursor</code> which provides common navigation operations.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.position" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#26">source</a><h4 class="code-header">fn <a href="#tymethod.position" class="fn">position</a>(&amp;self) -&gt; <a class="enum" href="enum.CursorPosition.html" title="enum cranelift_codegen::cursor::CursorPosition">CursorPosition</a></h4></section></summary><div class="docblock"><p>Get the current cursor position.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_position" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#29">source</a><h4 class="code-header">fn <a href="#tymethod.set_position" class="fn">set_position</a>(&amp;mut self, pos: <a class="enum" href="enum.CursorPosition.html" title="enum cranelift_codegen::cursor::CursorPosition">CursorPosition</a>)</h4></section></summary><div class="docblock"><p>Set the current position.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.srcloc" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#32">source</a><h4 class="code-header">fn <a href="#tymethod.srcloc" class="fn">srcloc</a>(&amp;self) -&gt; <a class="struct" href="../ir/struct.SourceLoc.html" title="struct cranelift_codegen::ir::SourceLoc">SourceLoc</a></h4></section></summary><div class="docblock"><p>Get the source location that should be assigned to new instructions.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.set_srcloc" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#35">source</a><h4 class="code-header">fn <a href="#tymethod.set_srcloc" class="fn">set_srcloc</a>(&amp;mut self, srcloc: <a class="struct" href="../ir/struct.SourceLoc.html" title="struct cranelift_codegen::ir::SourceLoc">SourceLoc</a>)</h4></section></summary><div class="docblock"><p>Set the source location that should be assigned to new instructions.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.layout" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#38">source</a><h4 class="code-header">fn <a href="#tymethod.layout" class="fn">layout</a>(&amp;self) -&gt; &amp;<a class="struct" href="../ir/layout/struct.Layout.html" title="struct cranelift_codegen::ir::layout::Layout">Layout</a></h4></section></summary><div class="docblock"><p>Borrow a reference to the function layout that this cursor is navigating.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.layout_mut" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#41">source</a><h4 class="code-header">fn <a href="#tymethod.layout_mut" class="fn">layout_mut</a>(&amp;mut self) -&gt; &amp;mut <a class="struct" href="../ir/layout/struct.Layout.html" title="struct cranelift_codegen::ir::layout::Layout">Layout</a></h4></section></summary><div class="docblock"><p>Borrow a mutable reference to the function layout that this cursor is navigating.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.with_srcloc" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#56-62">source</a><h4 class="code-header">fn <a href="#method.with_srcloc" class="fn">with_srcloc</a>(self, srcloc: <a class="struct" href="../ir/struct.SourceLoc.html" title="struct cranelift_codegen::ir::SourceLoc">SourceLoc</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Exchange this cursor for one with a set source location.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, srcloc: SourceLoc) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).with_srcloc(srcloc);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_position" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#65-71">source</a><h4 class="code-header">fn <a href="#method.at_position" class="fn">at_position</a>(self, pos: <a class="enum" href="enum.CursorPosition.html" title="enum cranelift_codegen::cursor::CursorPosition">CursorPosition</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at <code>pos</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#86-92">source</a><h4 class="code-header">fn <a href="#method.at_inst" class="fn">at_inst</a>(self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at <code>inst</code>.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, inst: Inst) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_inst(inst);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_first_insertion_point" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#109-115">source</a><h4 class="code-header">fn <a href="#method.at_first_insertion_point" class="fn">at_first_insertion_point</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at the first insertion point for <code>block</code>.
+This differs from <code>at_first_inst</code> in that it doesn’t assume that any
+instructions have been inserted into <code>block</code> yet.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_first_insertion_point(block);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_first_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#130-136">source</a><h4 class="code-header">fn <a href="#method.at_first_inst" class="fn">at_first_inst</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at the first instruction in <code>block</code>.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_first_inst(block);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_last_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#151-157">source</a><h4 class="code-header">fn <a href="#method.at_last_inst" class="fn">at_last_inst</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at the last instruction in <code>block</code>.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_last_inst(block);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.after_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#172-178">source</a><h4 class="code-header">fn <a href="#method.after_inst" class="fn">after_inst</a>(self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned after <code>inst</code>.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, inst: Inst) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).after_inst(inst);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_top" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#193-199">source</a><h4 class="code-header">fn <a href="#method.at_top" class="fn">at_top</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at the top of <code>block</code>.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_top(block);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.at_bottom" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#214-220">source</a><h4 class="code-header">fn <a href="#method.at_bottom" class="fn">at_bottom</a>(self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>) -&gt; Self<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Rebuild this cursor positioned at the bottom of <code>block</code>.</p>
+<p>This is intended to be used as a builder method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>pos = FuncCursor::new(func).at_bottom(block);
+
+    <span class="comment">// Use `pos`...
+</span>}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.current_block" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#223-230">source</a><h4 class="code-header">fn <a href="#method.current_block" class="fn">current_block</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>&gt;</h4></section></summary><div class="docblock"><p>Get the block corresponding to the current position.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.current_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#233-239">source</a><h4 class="code-header">fn <a href="#method.current_inst" class="fn">current_inst</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;</h4></section></summary><div class="docblock"><p>Get the instruction corresponding to the current position, if any.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_after_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#243-255">source</a><h4 class="code-header">fn <a href="#method.goto_after_inst" class="fn">goto_after_inst</a>(&amp;mut self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>)</h4></section></summary><div class="docblock"><p>Go to the position after a specific instruction, which must be inserted
+in the layout. New instructions will be inserted after <code>inst</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#259-262">source</a><h4 class="code-header">fn <a href="#method.goto_inst" class="fn">goto_inst</a>(&amp;mut self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>)</h4></section></summary><div class="docblock"><p>Go to a specific instruction which must be inserted in the layout.
+New instructions will be inserted before <code>inst</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_first_insertion_point" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#267-273">source</a><h4 class="code-header">fn <a href="#method.goto_first_insertion_point" class="fn">goto_first_insertion_point</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>)</h4></section></summary><div class="docblock"><p>Go to the position for inserting instructions at the beginning of <code>block</code>,
+which unlike <code>goto_first_inst</code> doesn’t assume that any instructions have
+been inserted into <code>block</code> yet.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_first_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#276-279">source</a><h4 class="code-header">fn <a href="#method.goto_first_inst" class="fn">goto_first_inst</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>)</h4></section></summary><div class="docblock"><p>Go to the first instruction in <code>block</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_last_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#282-285">source</a><h4 class="code-header">fn <a href="#method.goto_last_inst" class="fn">goto_last_inst</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>)</h4></section></summary><div class="docblock"><p>Go to the last instruction in <code>block</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_top" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#290-293">source</a><h4 class="code-header">fn <a href="#method.goto_top" class="fn">goto_top</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>)</h4></section></summary><div class="docblock"><p>Go to the top of <code>block</code> which must be inserted into the layout.
+At this position, instructions cannot be inserted, but <code>next_inst()</code> will move to the first
+instruction in <code>block</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.goto_bottom" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#297-300">source</a><h4 class="code-header">fn <a href="#method.goto_bottom" class="fn">goto_bottom</a>(&amp;mut self, block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>)</h4></section></summary><div class="docblock"><p>Go to the bottom of <code>block</code> which must be inserted into the layout.
+At this position, inserted instructions will be appended to <code>block</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.next_block" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#322-333">source</a><h4 class="code-header">fn <a href="#method.next_block" class="fn">next_block</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>&gt;</h4></section></summary><div class="docblock"><p>Go to the top of the next block in layout order and return it.</p>
+<ul>
+<li>If the cursor wasn’t pointing at anything, go to the top of the first block in the
+function.</li>
+<li>If there are no more blocks, leave the cursor pointing at nothing and return <code>None</code>.</li>
+</ul>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>The <code>next_block()</code> method is intended for iterating over the blocks in layout order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function) {
+    <span class="kw">let </span><span class="kw-2">mut </span>cursor = FuncCursor::new(func);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(block) = cursor.next_block() {
+        <span class="comment">// Edit block.
+    </span>}
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prev_block" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#355-366">source</a><h4 class="code-header">fn <a href="#method.prev_block" class="fn">prev_block</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>&gt;</h4></section></summary><div class="docblock"><p>Go to the bottom of the previous block in layout order and return it.</p>
+<ul>
+<li>If the cursor wasn’t pointing at anything, go to the bottom of the last block in the
+function.</li>
+<li>If there are no more blocks, leave the cursor pointing at nothing and return <code>None</code>.</li>
+</ul>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>The <code>prev_block()</code> method is intended for iterating over the blocks in backwards layout order:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function) {
+    <span class="kw">let </span><span class="kw-2">mut </span>cursor = FuncCursor::new(func);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(block) = cursor.prev_block() {
+        <span class="comment">// Edit block.
+    </span>}
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.next_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#408-436">source</a><h4 class="code-header">fn <a href="#method.next_inst" class="fn">next_inst</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;</h4></section></summary><div class="docblock"><p>Move to the next instruction in the same block and return it.</p>
+<ul>
+<li>If the cursor was positioned before a block, go to the first instruction in that block.</li>
+<li>If there are no more instructions in the block, go to the <code>After(block)</code> position and return
+<code>None</code>.</li>
+<li>If the cursor wasn’t pointing anywhere, keep doing that.</li>
+</ul>
+<p>This method will never move the cursor to a different block.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>The <code>next_inst()</code> method is intended for iterating over the instructions in a block like
+this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_block(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>cursor = FuncCursor::new(func).at_top(block);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(inst) = cursor.next_inst() {
+        <span class="comment">// Edit instructions...
+    </span>}
+}</code></pre></div>
+<p>The loop body can insert and remove instructions via the cursor.</p>
+<p>Iterating over all the instructions in a function looks like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_func(func: <span class="kw-2">&amp;mut </span>Function) {
+    <span class="kw">let </span><span class="kw-2">mut </span>cursor = FuncCursor::new(func);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(block) = cursor.next_block() {
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(inst) = cursor.next_inst() {
+            <span class="comment">// Edit instructions...
+        </span>}
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.prev_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#462-490">source</a><h4 class="code-header">fn <a href="#method.prev_inst" class="fn">prev_inst</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>&gt;</h4></section></summary><div class="docblock"><p>Move to the previous instruction in the same block and return it.</p>
+<ul>
+<li>If the cursor was positioned after a block, go to the last instruction in that block.</li>
+<li>If there are no more instructions in the block, go to the <code>Before(block)</code> position and return
+<code>None</code>.</li>
+<li>If the cursor wasn’t pointing anywhere, keep doing that.</li>
+</ul>
+<p>This method will never move the cursor to a different block.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>The <code>prev_inst()</code> method is intended for iterating backwards over the instructions in an
+block like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>edit_block(func: <span class="kw-2">&amp;mut </span>Function, block: Block) {
+    <span class="kw">let </span><span class="kw-2">mut </span>cursor = FuncCursor::new(func).at_bottom(block);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(inst) = cursor.prev_inst() {
+        <span class="comment">// Edit instructions...
+    </span>}
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.insert_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#501-508">source</a><h4 class="code-header">fn <a href="#method.insert_inst" class="fn">insert_inst</a>(&amp;mut self, inst: <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a>)</h4></section></summary><div class="docblock"><p>Insert an instruction at the current position.</p>
+<ul>
+<li>If pointing at an instruction, the new instruction is inserted before the current
+instruction.</li>
+<li>If pointing at the bottom of a block, the new instruction is appended to the block.</li>
+<li>Otherwise panic.</li>
+</ul>
+<p>In either case, the cursor is not moved, such that repeated calls to <code>insert_inst()</code> causes
+instructions to appear in insertion order in the block.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.remove_inst" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#515-520">source</a><h4 class="code-header">fn <a href="#method.remove_inst" class="fn">remove_inst</a>(&amp;mut self) -&gt; <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a></h4></section></summary><div class="docblock"><p>Remove the instruction under the cursor.</p>
+<p>The cursor is left pointing at the position following the current instruction.</p>
+<p>Return the instruction that was removed.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.remove_inst_and_step_back" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#527-532">source</a><h4 class="code-header">fn <a href="#method.remove_inst_and_step_back" class="fn">remove_inst_and_step_back</a>(&amp;mut self) -&gt; <a class="struct" href="../ir/entities/struct.Inst.html" title="struct cranelift_codegen::ir::entities::Inst">Inst</a></h4></section></summary><div class="docblock"><p>Remove the instruction under the cursor.</p>
+<p>The cursor is left pointing at the position preceding the current instruction.</p>
+<p>Return the instruction that was removed.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.insert_block" class="method"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#548-562">source</a><h4 class="code-header">fn <a href="#method.insert_block" class="fn">insert_block</a>(&amp;mut self, new_block: <a class="struct" href="../ir/entities/struct.Block.html" title="struct cranelift_codegen::ir::entities::Block">Block</a>)</h4></section></summary><div class="docblock"><p>Insert a block at the current position and switch to it.</p>
+<p>As far as possible, this method behaves as if the block header were an instruction inserted
+at the current position.</p>
+<ul>
+<li>If the cursor is pointing at an existing instruction, <em>the current block is split in two</em>
+and the current instruction becomes the first instruction in the inserted block.</li>
+<li>If the cursor points at the bottom of a block, the new block is inserted after the current
+one, and moved to the bottom of the new block where instructions can be appended.</li>
+<li>If the cursor points to the top of a block, the new block is inserted above the current one.</li>
+<li>If the cursor is not pointing at anything, the new block is placed last in the layout.</li>
+</ul>
+<p>This means that it is always valid to call this method, and it always leaves the cursor in
+a state that will insert instructions into the new block.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Cursor-for-FuncCursor%3C'f%3E" class="impl"><a class="src rightside" href="../../src/cranelift_codegen/cursor.rs.html#601-626">source</a><a href="#impl-Cursor-for-FuncCursor%3C'f%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'f&gt; <a class="trait" href="trait.Cursor.html" title="trait cranelift_codegen::cursor::Cursor">Cursor</a> for <a class="struct" href="struct.FuncCursor.html" title="struct cranelift_codegen::cursor::FuncCursor">FuncCursor</a>&lt;'f&gt;</h3></section></div><script src="../../trait.impl/cranelift_codegen/cursor/trait.Cursor.js" async></script></section></div></main></body></html>

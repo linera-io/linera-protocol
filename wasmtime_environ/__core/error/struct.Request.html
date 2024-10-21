@@ -1,0 +1,350 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`Request` supports generic, type-driven access to data. Its use is currently restricted to the standard library in cases where trait authors wish to allow trait implementors to share generic information across trait boundaries. The motivating and prototypical use case is `core::error::Error` which would otherwise require a method per concrete type (eg. `std::backtrace::Backtrace` instance that implementors want to expose to users)."><title>Request in wasmtime_environ::__core::error - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Request</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.provide_ref">provide_ref</a></li><li><a href="#method.provide_ref_with">provide_ref_with</a></li><li><a href="#method.provide_value">provide_value</a></li><li><a href="#method.provide_value_with">provide_value_with</a></li><li><a href="#method.would_be_satisfied_by_ref_of">would_be_satisfied_by_ref_of</a></li><li><a href="#method.would_be_satisfied_by_value_of">would_be_satisfied_by_value_of</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-Request%3C'a%3E">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Request%3C'a%3E">!Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Request%3C'a%3E">!RefUnwindSafe</a></li><li><a href="#impl-Send-for-Request%3C'a%3E">!Send</a></li><li><a href="#impl-Sized-for-Request%3C'a%3E">!Sized</a></li><li><a href="#impl-Sync-for-Request%3C'a%3E">!Sync</a></li><li><a href="#impl-Unpin-for-Request%3C'a%3E">!Unpin</a></li><li><a href="#impl-UnwindSafe-for-Request%3C'a%3E">!UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li></ul></section><h2><a href="index.html">In wasmtime_environ::__core::error</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">error</a>::<wbr><a class="struct" href="#">Request</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#510">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Request&lt;'a&gt;(<span class="comment">/* private fields */</span>);</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>Request</code> supports generic, type-driven access to data. Its use is currently restricted to the
+standard library in cases where trait authors wish to allow trait implementors to share generic
+information across trait boundaries. The motivating and prototypical use case is
+<code>core::error::Error</code> which would otherwise require a method per concrete type (eg.
+<code>std::backtrace::Backtrace</code> instance that implementors want to expose to users).</p>
+<h2 id="data-flow"><a class="doc-anchor" href="#data-flow">§</a>Data flow</h2>
+<p>To describe the intended data flow for Request objects, let’s consider two conceptual users
+separated by API boundaries:</p>
+<ul>
+<li>
+<p>Consumer - the consumer requests objects using a Request instance; eg a crate that offers
+fancy <code>Error</code>/<code>Result</code> reporting to users wants to request a Backtrace from a given <code>dyn Error</code>.</p>
+</li>
+<li>
+<p>Producer - the producer provides objects when requested via Request; eg. a library with an
+an <code>Error</code> implementation that automatically captures backtraces at the time instances are
+created.</p>
+</li>
+</ul>
+<p>The consumer only needs to know where to submit their request and are expected to handle the
+request not being fulfilled by the use of <code>Option&lt;T&gt;</code> in the responses offered by the producer.</p>
+<ul>
+<li>A Producer initializes the value of one of its fields of a specific type. (or is otherwise
+prepared to generate a value requested). eg, <code>backtrace::Backtrace</code> or
+<code>std::backtrace::Backtrace</code></li>
+<li>A Consumer requests an object of a specific type (say <code>std::backtrace::Backtrace</code>). In the
+case of a <code>dyn Error</code> trait object (the Producer), there are functions called <code>request_ref</code> and
+<code>request_value</code> to simplify obtaining an <code>Option&lt;T&gt;</code> for a given type.</li>
+<li>The Producer, when requested, populates the given Request object which is given as a mutable
+reference.</li>
+<li>The Consumer extracts a value or reference to the requested type from the <code>Request</code> object
+wrapped in an <code>Option&lt;T&gt;</code>; in the case of <code>dyn Error</code> the aforementioned <code>request_ref</code> and <code> request_value</code> methods mean that <code>dyn Error</code> users don’t have to deal with the <code>Request</code> type at
+all (but <code>Error</code> implementors do). The <code>None</code> case of the <code>Option</code> suggests only that the
+Producer cannot currently offer an instance of the requested type, not it can’t or never will.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>The best way to demonstrate this is using an example implementation of <code>Error</code>’s <code>provide</code> trait
+method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+</span><span class="kw">use </span>core::fmt;
+<span class="kw">use </span>core::error::Request;
+<span class="kw">use </span>core::error::request_ref;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">enum </span>MyLittleTeaPot {
+    Empty,
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>MyBacktrace {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl </span>MyBacktrace {
+    <span class="kw">fn </span>new() -&gt; MyBacktrace {
+        <span class="comment">// ...
+    </span>}
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>Error {
+    backtrace: MyBacktrace,
+}
+
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>Error {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"Example Error"</span>)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>Error {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        request
+            .provide_ref::&lt;MyBacktrace&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>.backtrace);
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>backtrace = MyBacktrace::new();
+    <span class="kw">let </span>error = Error { backtrace };
+    <span class="kw">let </span>dyn_error = <span class="kw-2">&amp;</span>error <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>std::error::Error;
+    <span class="kw">let </span>backtrace_ref = request_ref::&lt;MyBacktrace&gt;(dyn_error).unwrap();
+
+    <span class="macro">assert!</span>(core::ptr::eq(<span class="kw-2">&amp;</span>error.backtrace, backtrace_ref));
+    <span class="macro">assert!</span>(request_ref::&lt;MyLittleTeaPot&gt;(dyn_error).is_none());
+}</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Request%3C'a%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#512">source</a><a href="#impl-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.provide_value" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#540-542">source</a><h4 class="code-header">pub fn <a href="#method.provide_value" class="fn">provide_value</a>&lt;T&gt;(&amp;mut self, value: T) -&gt; &amp;mut <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;<div class="where">where
+    T: 'static,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span></summary><div class="docblock"><p>Provide a value or other type with only static lifetimes.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>Provides an <code>u8</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+
+</span><span class="kw">use </span>core::error::Request;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SomeConcreteType { field: u8 }
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{} failed"</span>, <span class="self">self</span>.field)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        request.provide_value::&lt;u8&gt;(<span class="self">self</span>.field);
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.provide_value_with" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#574-576">source</a><h4 class="code-header">pub fn <a href="#method.provide_value_with" class="fn">provide_value_with</a>&lt;T&gt;(
+    &amp;mut self,
+    fulfil: impl <a class="trait" href="../ops/trait.FnOnce.html" title="trait wasmtime_environ::__core::ops::FnOnce">FnOnce</a>() -&gt; T,
+) -&gt; &amp;mut <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;<div class="where">where
+    T: 'static,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span></summary><div class="docblock"><p>Provide a value or other type with only static lifetimes computed using a closure.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Provides a <code>String</code> by cloning.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+
+</span><span class="kw">use </span>core::error::Request;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SomeConcreteType { field: String }
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{} failed"</span>, <span class="self">self</span>.field)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        request.provide_value_with::&lt;String&gt;(|| <span class="self">self</span>.field.clone());
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.provide_ref" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#609">source</a><h4 class="code-header">pub fn <a href="#method.provide_ref" class="fn">provide_ref</a>&lt;T&gt;(&amp;mut self, value: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a T</a>) -&gt; &amp;mut <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;<div class="where">where
+    T: 'static + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span></summary><div class="docblock"><p>Provide a reference. The referee type must be bounded by <code>'static</code>,
+but may be unsized.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>Provides a reference to a field as a <code>&amp;str</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+
+</span><span class="kw">use </span>core::error::Request;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SomeConcreteType { field: String }
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{} failed"</span>, <span class="self">self</span>.field)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        request.provide_ref::&lt;str&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>.field);
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.provide_ref_with" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#648-651">source</a><h4 class="code-header">pub fn <a href="#method.provide_ref_with" class="fn">provide_ref_with</a>&lt;T&gt;(
+    &amp;mut self,
+    fulfil: impl <a class="trait" href="../ops/trait.FnOnce.html" title="trait wasmtime_environ::__core::ops::FnOnce">FnOnce</a>() -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;'a T</a>,
+) -&gt; &amp;mut <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;<div class="where">where
+    T: 'static + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span></summary><div class="docblock"><p>Provide a reference computed using a closure. The referee type
+must be bounded by <code>'static</code>, but may be unsized.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Provides a reference to a field as a <code>&amp;str</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+
+</span><span class="kw">use </span>core::error::Request;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SomeConcreteType { business: String, party: String }
+<span class="kw">fn </span>today_is_a_weekday() -&gt; bool { <span class="bool-val">true </span>}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{} failed"</span>, <span class="self">self</span>.business)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>SomeConcreteType {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        request.provide_ref_with::&lt;str&gt;(|| {
+            <span class="kw">if </span>today_is_a_weekday() {
+                <span class="kw-2">&amp;</span><span class="self">self</span>.business
+            } <span class="kw">else </span>{
+                <span class="kw-2">&amp;</span><span class="self">self</span>.party
+            }
+        });
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.would_be_satisfied_by_value_of" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#757-759">source</a><h4 class="code-header">pub fn <a href="#method.would_be_satisfied_by_value_of" class="fn">would_be_satisfied_by_value_of</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: 'static,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span></summary><div class="docblock"><p>Check if the <code>Request</code> would be satisfied if provided with a
+value of the specified type. If the type does not match or has
+already been provided, returns false.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Check if an <code>u8</code> still needs to be provided and then provides
+it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+
+</span><span class="kw">use </span>core::error::Request;
+<span class="kw">use </span>core::error::request_value;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>Parent(<span class="prelude-ty">Option</span>&lt;u8&gt;);
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Parent {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"a parent failed"</span>)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>Parent {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = <span class="self">self</span>.<span class="number">0 </span>{
+            request.provide_value::&lt;u8&gt;(v);
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>Child {
+    parent: Parent,
+}
+
+<span class="kw">impl </span>Child {
+    <span class="comment">// Pretend that this takes a lot of resources to evaluate.
+    </span><span class="kw">fn </span>an_expensive_computation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u8&gt; {
+        <span class="prelude-val">Some</span>(<span class="number">99</span>)
+    }
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Child {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"child failed: \n  because of parent: {}"</span>, <span class="self">self</span>.parent)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>Child {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        <span class="comment">// In general, we don't know if this call will provide
+        // an `u8` value or not...
+        </span><span class="self">self</span>.parent.provide(request);
+
+        <span class="comment">// ...so we check to see if the `u8` is needed before
+        // we run our expensive computation.
+        </span><span class="kw">if </span>request.would_be_satisfied_by_value_of::&lt;u8&gt;() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = <span class="self">self</span>.an_expensive_computation() {
+                request.provide_value::&lt;u8&gt;(v);
+            }
+        }
+
+        <span class="comment">// The request will be satisfied now, regardless of if
+        // the parent provided the value or we did.
+        </span><span class="macro">assert!</span>(!request.would_be_satisfied_by_value_of::&lt;u8&gt;());
+    }
+}
+
+<span class="kw">let </span>parent = Parent(<span class="prelude-val">Some</span>(<span class="number">42</span>));
+<span class="kw">let </span>child = Child { parent };
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">42</span>), request_value::&lt;u8&gt;(<span class="kw-2">&amp;</span>child));
+
+<span class="kw">let </span>parent = Parent(<span class="prelude-val">None</span>);
+<span class="kw">let </span>child = Child { parent };
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">99</span>), request_value::&lt;u8&gt;(<span class="kw-2">&amp;</span>child));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.would_be_satisfied_by_ref_of" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#844-846">source</a><h4 class="code-header">pub fn <a href="#method.would_be_satisfied_by_ref_of" class="fn">would_be_satisfied_by_ref_of</a>&lt;T&gt;(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: 'static + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>error_generic_member_access</code>)</span></div></span></summary><div class="docblock"><p>Check if the <code>Request</code> would be satisfied if provided with a
+reference to a value of the specified type. If the type does
+not match or has already been provided, returns false.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Check if a <code>&amp;str</code> still needs to be provided and then provides
+it.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(error_generic_member_access)]
+
+</span><span class="kw">use </span>core::error::Request;
+<span class="kw">use </span>core::error::request_ref;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>Parent(<span class="prelude-ty">Option</span>&lt;String&gt;);
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Parent {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"a parent failed"</span>)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>Parent {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
+            request.provide_ref::&lt;str&gt;(v);
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>Child {
+    parent: Parent,
+    name: String,
+}
+
+<span class="kw">impl </span>Child {
+    <span class="comment">// Pretend that this takes a lot of resources to evaluate.
+    </span><span class="kw">fn </span>an_expensive_computation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.name)
+    }
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Child {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{} failed: \n  {}"</span>, <span class="self">self</span>.name, <span class="self">self</span>.parent)
+    }
+}
+
+<span class="kw">impl </span>std::error::Error <span class="kw">for </span>Child {
+    <span class="kw">fn </span>provide&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, request: <span class="kw-2">&amp;mut </span>Request&lt;<span class="lifetime">'a</span>&gt;) {
+        <span class="comment">// In general, we don't know if this call will provide
+        // a `str` reference or not...
+        </span><span class="self">self</span>.parent.provide(request);
+
+        <span class="comment">// ...so we check to see if the `&amp;str` is needed before
+        // we run our expensive computation.
+        </span><span class="kw">if </span>request.would_be_satisfied_by_ref_of::&lt;str&gt;() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = <span class="self">self</span>.an_expensive_computation() {
+                request.provide_ref::&lt;str&gt;(v);
+            }
+        }
+
+        <span class="comment">// The request will be satisfied now, regardless of if
+        // the parent provided the reference or we did.
+        </span><span class="macro">assert!</span>(!request.would_be_satisfied_by_ref_of::&lt;str&gt;());
+    }
+}
+
+<span class="kw">let </span>parent = Parent(<span class="prelude-val">Some</span>(<span class="string">"parent"</span>.into()));
+<span class="kw">let </span>child = Child { parent, name: <span class="string">"child"</span>.into() };
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"parent"</span>), request_ref::&lt;str&gt;(<span class="kw-2">&amp;</span>child));
+
+<span class="kw">let </span>parent = Parent(<span class="prelude-val">None</span>);
+<span class="kw">let </span>child = Child { parent, name: <span class="string">"child"</span>.into() };
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"child"</span>), request_ref::&lt;str&gt;(<span class="kw-2">&amp;</span>child));</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Request%3C'a%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#860">source</a><a href="#impl-Debug-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="trait" href="../fmt/trait.Debug.html" title="trait wasmtime_environ::__core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/error.rs.html#861">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="../fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="../fmt/struct.Formatter.html" title="struct wasmtime_environ::__core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../fmt/struct.Error.html" title="struct wasmtime_environ::__core::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="../fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Request%3C'a%3E" class="impl"><a href="#impl-Freeze-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../marker/trait.Freeze.html" title="trait wasmtime_environ::__core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section><section id="impl-RefUnwindSafe-for-Request%3C'a%3E" class="impl"><a href="#impl-RefUnwindSafe-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../panic/trait.RefUnwindSafe.html" title="trait wasmtime_environ::__core::panic::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section><section id="impl-Send-for-Request%3C'a%3E" class="impl"><a href="#impl-Send-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../marker/trait.Send.html" title="trait wasmtime_environ::__core::marker::Send">Send</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section><section id="impl-Sized-for-Request%3C'a%3E" class="impl"><a href="#impl-Sized-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section><section id="impl-Sync-for-Request%3C'a%3E" class="impl"><a href="#impl-Sync-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../marker/trait.Sync.html" title="trait wasmtime_environ::__core::marker::Sync">Sync</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section><section id="impl-Unpin-for-Request%3C'a%3E" class="impl"><a href="#impl-Unpin-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../marker/trait.Unpin.html" title="trait wasmtime_environ::__core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section><section id="impl-UnwindSafe-for-Request%3C'a%3E" class="impl"><a href="#impl-UnwindSafe-for-Request%3C'a%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; !<a class="trait" href="../panic/trait.UnwindSafe.html" title="trait wasmtime_environ::__core::panic::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Request.html" title="struct wasmtime_environ::__core::error::Request">Request</a>&lt;'a&gt;</h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../any/trait.Any.html" title="trait wasmtime_environ::__core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="../any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="../any/struct.TypeId.html" title="struct wasmtime_environ::__core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="../any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../borrow/trait.Borrow.html" title="trait wasmtime_environ::__core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="../borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="../borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../borrow/trait.BorrowMut.html" title="trait wasmtime_environ::__core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="../borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="../borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details></div></section></div></main></body></html>

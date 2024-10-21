@@ -1,0 +1,95 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parses the parameters and executes the query and return a custom `Connection` type."><title>query_with in async_graphql::types::connection - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="async_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../async_graphql/index.html">async_graphql</a><span class="version">7.0.2</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In async_graphql::types::connection</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">async_graphql</a>::<wbr><a href="../index.html">types</a>::<wbr><a href="index.html">connection</a>::<wbr><a class="fn" href="#">query_with</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/async_graphql/types/connection/mod.rs.html#341-386">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub async fn query_with&lt;Cursor, T, F, R, E&gt;(
+    after: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    before: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
+    first: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt;,
+    last: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt;,
+    f: F,
+) -&gt; <a class="type" href="../../type.Result.html" title="type async_graphql::Result">Result</a>&lt;T&gt;<div class="where">where
+    Cursor: <a class="trait" href="trait.CursorType.html" title="trait async_graphql::types::connection::CursorType">CursorType</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,
+    &lt;Cursor as <a class="trait" href="trait.CursorType.html" title="trait async_graphql::types::connection::CursorType">CursorType</a>&gt;::<a class="associatedtype" href="trait.CursorType.html#associatedtype.Error" title="type async_graphql::types::connection::CursorType::Error">Error</a>: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Display.html" title="trait core::fmt::Display">Display</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Cursor&gt;, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Cursor&gt;, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;, <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; R,
+    R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../type.Result.html" title="type async_graphql::Result">Result</a>&lt;T, E&gt;&gt;,
+    E: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../struct.Error.html" title="struct async_graphql::Error">Error</a>&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parses the parameters and executes the query and return a custom
+<code>Connection</code> type.</p>
+<p><code>Connection&lt;T&gt;</code> and <code>Edge&lt;T&gt;</code> have certain limitations. For example, you
+cannot customize the name of the type, so you can use this function to
+execute the query and return a customized <code>Connection</code> type.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> 
+<span class="kw">use </span>async_graphql::<span class="kw-2">*</span>;
+<span class="kw">use </span>async_graphql::types::connection::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(SimpleObject)]
+</span><span class="kw">struct </span>MyEdge {
+    cursor: usize,
+    node: i32,
+    diff: i32,
+}
+
+<span class="attr">#[derive(SimpleObject)]
+</span><span class="kw">struct </span>MyConnection {
+    edges: Vec&lt;MyEdge&gt;,
+    page_info: PageInfo,
+}
+
+<span class="kw">struct </span>Query;
+
+<span class="attr">#[Object]
+</span><span class="kw">impl </span>Query {
+    <span class="kw">async fn </span>numbers(<span class="kw-2">&amp;</span><span class="self">self</span>,
+        after: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        before: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        first: <span class="prelude-ty">Option</span>&lt;i32&gt;,
+        last: <span class="prelude-ty">Option</span>&lt;i32&gt;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;MyConnection&gt; {
+        query_with(after, before, first, last, |after, before, first, last| <span class="kw">async move </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>start = after.map(|after| after + <span class="number">1</span>).unwrap_or(<span class="number">0</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>end = before.unwrap_or(<span class="number">10000</span>);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(first) = first {
+                end = (start + first).min(end);
+            }
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(last) = last {
+                start = <span class="kw">if </span>last &gt; end - start {
+                    end
+                } <span class="kw">else </span>{
+                    end - last
+                };
+            }
+            <span class="kw">let </span>connection = MyConnection {
+                edges: (start..end).into_iter().map(|n| MyEdge {
+                    cursor: n,
+                    node: n <span class="kw">as </span>i32,
+                    diff: (<span class="number">10000 </span>- n) <span class="kw">as </span>i32,
+                }).collect(),
+                page_info: PageInfo {
+                    has_previous_page: start &gt; <span class="number">0</span>,
+                    has_next_page: end &lt; <span class="number">10000</span>,
+                    start_cursor: <span class="prelude-val">Some</span>(start.encode_cursor()),
+                    end_cursor: <span class="prelude-val">Some</span>(end.encode_cursor()),
+                },
+            };
+            <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, Error&gt;(connection)
+        }).<span class="kw">await
+    </span>}
+}
+
+<span class="kw">let </span>schema = Schema::new(Query, EmptyMutation, EmptySubscription);
+
+<span class="macro">assert_eq!</span>(schema.execute(<span class="string">"{ numbers(first: 2) { edges { node diff } } }"</span>).<span class="kw">await</span>.into_result().unwrap().data, <span class="macro">value!</span>({
+    <span class="string">"numbers"</span>: {
+        <span class="string">"edges"</span>: [
+            {<span class="string">"node"</span>: <span class="number">0</span>, <span class="string">"diff"</span>: <span class="number">10000</span>},
+            {<span class="string">"node"</span>: <span class="number">1</span>, <span class="string">"diff"</span>: <span class="number">9999</span>},
+        ]
+    },
+}));
+
+<span class="macro">assert_eq!</span>(schema.execute(<span class="string">"{ numbers(last: 2) { edges { node diff } } }"</span>).<span class="kw">await</span>.into_result().unwrap().data, <span class="macro">value!</span>({
+    <span class="string">"numbers"</span>: {
+        <span class="string">"edges"</span>: [
+            {<span class="string">"node"</span>: <span class="number">9998</span>, <span class="string">"diff"</span>: <span class="number">2</span>},
+            {<span class="string">"node"</span>: <span class="number">9999</span>, <span class="string">"diff"</span>: <span class="number">1</span>},
+        ]
+    },
+}));</code></pre></div>
+</div></details></section></div></main></body></html>

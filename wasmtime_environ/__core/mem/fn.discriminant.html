@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns a value uniquely identifying the enum variant in `v`."><title>discriminant in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::mem</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a>::<wbr><a class="fn" href="#">discriminant</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.21.0, const since 1.75.0">1.21.0 (const: 1.75.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/mem/mod.rs.html#1162">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const fn discriminant&lt;T&gt;(v: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="struct" href="struct.Discriminant.html" title="struct wasmtime_environ::__core::mem::Discriminant">Discriminant</a>&lt;T&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns a value uniquely identifying the enum variant in <code>v</code>.</p>
+<p>If <code>T</code> is not an enum, calling this function will not result in undefined behavior, but the
+return value is unspecified.</p>
+<h2 id="stability"><a class="doc-anchor" href="#stability">§</a>Stability</h2>
+<p>The discriminant of an enum variant may change if the enum definition changes. A discriminant
+of some variant will not change between compilations with the same compiler. See the <a href="../../reference/items/enumerations.html#custom-discriminant-values-for-fieldless-enumerations">Reference</a>
+for more information.</p>
+<p>The value of a <a href="struct.Discriminant.html" title="struct wasmtime_environ::__core::mem::Discriminant"><code>Discriminant&lt;T&gt;</code></a> is independent of any <em>free lifetimes</em> in <code>T</code>. As such,
+reading or writing a <code>Discriminant&lt;Foo&lt;'a&gt;&gt;</code> as a <code>Discriminant&lt;Foo&lt;'b&gt;&gt;</code> (whether via
+<a href="fn.transmute.html" title="fn wasmtime_environ::__core::mem::transmute"><code>transmute</code></a> or otherwise) is always sound. Note that this is <strong>not</strong> true for other kinds
+of generic parameters and for higher-ranked lifetimes; <code>Discriminant&lt;Foo&lt;A&gt;&gt;</code> and
+<code>Discriminant&lt;Foo&lt;B&gt;&gt;</code> as well as <code>Discriminant&lt;Bar&lt;dyn for&lt;'a&gt; Trait&lt;'a&gt;&gt;&gt;</code> and
+<code>Discriminant&lt;Bar&lt;dyn Trait&lt;'static&gt;&gt;&gt;</code> may be incompatible.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This can be used to compare enums that carry data, while disregarding
+the actual data:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::mem;
+
+<span class="kw">enum </span>Foo { A(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str), B(i32), C(i32) }
+
+<span class="macro">assert_eq!</span>(mem::discriminant(<span class="kw-2">&amp;</span>Foo::A(<span class="string">"bar"</span>)), mem::discriminant(<span class="kw-2">&amp;</span>Foo::A(<span class="string">"baz"</span>)));
+<span class="macro">assert_eq!</span>(mem::discriminant(<span class="kw-2">&amp;</span>Foo::B(<span class="number">1</span>)), mem::discriminant(<span class="kw-2">&amp;</span>Foo::B(<span class="number">2</span>)));
+<span class="macro">assert_ne!</span>(mem::discriminant(<span class="kw-2">&amp;</span>Foo::B(<span class="number">3</span>)), mem::discriminant(<span class="kw-2">&amp;</span>Foo::C(<span class="number">3</span>)));</code></pre></div>
+<h3 id="accessing-the-numeric-value-of-the-discriminant"><a class="doc-anchor" href="#accessing-the-numeric-value-of-the-discriminant">§</a>Accessing the numeric value of the discriminant</h3>
+<p>Note that it is <em>undefined behavior</em> to <a href="fn.transmute.html" title="fn wasmtime_environ::__core::mem::transmute"><code>transmute</code></a> from <a href="struct.Discriminant.html" title="struct wasmtime_environ::__core::mem::Discriminant"><code>Discriminant</code></a> to a primitive!</p>
+<p>If an enum has only unit variants, then the numeric value of the discriminant can be accessed
+with an <a href="../../std/keyword.as.html"><code>as</code></a> cast:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">enum </span>Enum {
+    Foo,
+    Bar,
+    Baz,
+}
+
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, Enum::Foo <span class="kw">as </span>isize);
+<span class="macro">assert_eq!</span>(<span class="number">1</span>, Enum::Bar <span class="kw">as </span>isize);
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, Enum::Baz <span class="kw">as </span>isize);</code></pre></div>
+<p>If an enum has opted-in to having a <a href="../../reference/type-layout.html#primitive-representations">primitive representation</a> for its discriminant,
+then it’s possible to use pointers to read the memory location storing the discriminant.
+That <strong>cannot</strong> be done for enums using the <a href="../../reference/type-layout.html#the-default-representation">default representation</a>, however, as it’s
+undefined what layout the discriminant has and where it’s stored — it might not even be
+stored at all!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[repr(u8)]
+</span><span class="kw">enum </span>Enum {
+    Unit,
+    Tuple(bool),
+    Struct { a: bool },
+}
+
+<span class="kw">impl </span>Enum {
+    <span class="kw">fn </span>discriminant(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u8 {
+        <span class="comment">// SAFETY: Because `Self` is marked `repr(u8)`, its layout is a `repr(C)` `union`
+        // between `repr(C)` structs, each of which has the `u8` discriminant as its first
+        // field, so we can read the discriminant without offsetting the pointer.
+        </span><span class="kw">unsafe </span>{ <span class="kw-2">*</span>&lt;<span class="kw-2">*const </span><span class="kw">_</span>&gt;::from(<span class="self">self</span>).cast::&lt;u8&gt;() }
+    }
+}
+
+<span class="kw">let </span>unit_like = Enum::Unit;
+<span class="kw">let </span>tuple_like = Enum::Tuple(<span class="bool-val">true</span>);
+<span class="kw">let </span>struct_like = Enum::Struct { a: <span class="bool-val">false </span>};
+<span class="macro">assert_eq!</span>(<span class="number">0</span>, unit_like.discriminant());
+<span class="macro">assert_eq!</span>(<span class="number">1</span>, tuple_like.discriminant());
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, struct_like.discriminant());
+
+<span class="comment">// ⚠️ This is undefined behavior. Don't do this. ⚠️
+// assert_eq!(0, unsafe { std::mem::transmute::&lt;_, u8&gt;(std::mem::discriminant(&amp;unit_like)) });</span></code></pre></div>
+</div></details></section></div></main></body></html>

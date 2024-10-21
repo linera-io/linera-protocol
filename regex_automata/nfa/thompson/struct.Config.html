@@ -1,0 +1,331 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The configuration used for a Thompson NFA compiler."><title>Config in regex_automata::nfa::thompson - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Config</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.captures">captures</a></li><li><a href="#method.get_captures">get_captures</a></li><li><a href="#method.get_look_matcher">get_look_matcher</a></li><li><a href="#method.get_nfa_size_limit">get_nfa_size_limit</a></li><li><a href="#method.get_reverse">get_reverse</a></li><li><a href="#method.get_shrink">get_shrink</a></li><li><a href="#method.get_utf8">get_utf8</a></li><li><a href="#method.get_which_captures">get_which_captures</a></li><li><a href="#method.look_matcher">look_matcher</a></li><li><a href="#method.new">new</a></li><li><a href="#method.nfa_size_limit">nfa_size_limit</a></li><li><a href="#method.reverse">reverse</a></li><li><a href="#method.shrink">shrink</a></li><li><a href="#method.utf8">utf8</a></li><li><a href="#method.which_captures">which_captures</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Config">Clone</a></li><li><a href="#impl-Debug-for-Config">Debug</a></li><li><a href="#impl-Default-for-Config">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Config">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Config">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Config">Send</a></li><li><a href="#impl-Sync-for-Config">Sync</a></li><li><a href="#impl-Unpin-for-Config">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Config">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::nfa::thompson</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">nfa</a>::<wbr><a href="index.html">thompson</a>::<wbr><a class="struct" href="#">Config</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#28-37">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Config { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The configuration used for a Thompson NFA compiler.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#39-537">source</a><a href="#impl-Config" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#41-43">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Return a new default Thompson NFA compiler configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.utf8" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#147-150">source</a><h4 class="code-header">pub fn <a href="#method.utf8" class="fn">utf8</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Whether to enable UTF-8 mode during search or not.</p>
+<p>A regex engine is said to be in UTF-8 mode when it guarantees that
+all matches returned by it have spans consisting of only valid UTF-8.
+That is, it is impossible for a match span to be returned that
+contains any invalid UTF-8.</p>
+<p>UTF-8 mode generally consists of two things:</p>
+<ol>
+<li>Whether the NFA’s states are constructed such that all paths to a
+match state that consume at least one byte always correspond to valid
+UTF-8.</li>
+<li>Whether all paths to a match state that do <em>not</em> consume any bytes
+should always correspond to valid UTF-8 boundaries.</li>
+</ol>
+<p>(1) is a guarantee made by whoever constructs the NFA.
+If you’re parsing a regex from its concrete syntax, then
+<a href="../../util/syntax/struct.Config.html#method.utf8" title="method regex_automata::util::syntax::Config::utf8"><code>syntax::Config::utf8</code></a> can make
+this guarantee for you. It does it by returning an error if the regex
+pattern could every report a non-empty match span that contains invalid
+UTF-8. So long as <code>syntax::Config::utf8</code> mode is enabled and your regex
+successfully parses, then you’re guaranteed that the corresponding NFA
+will only ever report non-empty match spans containing valid UTF-8.</p>
+<p>(2) is a trickier guarantee because it cannot be enforced by the NFA
+state graph itself. Consider, for example, the regex <code>a*</code>. It matches
+the empty strings in <code>☃</code> at positions <code>0</code>, <code>1</code>, <code>2</code> and <code>3</code>, where
+positions <code>1</code> and <code>2</code> occur within the UTF-8 encoding of a codepoint,
+and thus correspond to invalid UTF-8 boundaries. Therefore, this
+guarantee must be made at a higher level than the NFA state graph
+itself. This crate deals with this case in each regex engine. Namely,
+when a zero-width match that splits a codepoint is found and UTF-8
+mode enabled, then it is ignored and the engine moves on looking for
+the next match.</p>
+<p>Thus, UTF-8 mode is both a promise that the NFA built only reports
+non-empty matches that are valid UTF-8, and an <em>instruction</em> to regex
+engines that empty matches that split codepoints should be banned.</p>
+<p>Because UTF-8 mode is fundamentally about avoiding invalid UTF-8 spans,
+it only makes sense to enable this option when you <em>know</em> your haystack
+is valid UTF-8. (For example, a <code>&amp;str</code>.) Enabling UTF-8 mode and
+searching a haystack that contains invalid UTF-8 leads to <strong>unspecified
+behavior</strong>.</p>
+<p>Therefore, it may make sense to enable <code>syntax::Config::utf8</code> while
+simultaneously <em>disabling</em> this option. That would ensure all non-empty
+match spans are valid UTF-8, but that empty match spans may still split
+a codepoint or match at other places that aren’t valid UTF-8.</p>
+<p>In general, this mode is only relevant if your regex can match the
+empty string. Most regexes don’t.</p>
+<p>This is enabled by default.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<p>This example shows how UTF-8 mode can impact the match spans that may
+be reported in certain cases.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::{<span class="self">self</span>, pikevm::PikeVM},
+    Match, Input,
+};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+<span class="comment">// UTF-8 mode is enabled by default.
+</span><span class="kw">let </span><span class="kw-2">mut </span>input = Input::new(<span class="string">"☃"</span>);
+re.search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>)), caps.get_match());
+
+<span class="comment">// Even though an empty regex matches at 1..1, our next match is
+// 3..3 because 1..1 and 2..2 split the snowman codepoint (which is
+// three bytes long).
+</span>input.set_start(<span class="number">1</span>);
+re.search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>)), caps.get_match());
+
+<span class="comment">// But if we disable UTF-8, then we'll get matches at 1..1 and 2..2:
+</span><span class="kw">let </span>re = PikeVM::builder()
+    .thompson(thompson::Config::new().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">""</span>)<span class="question-mark">?</span>;
+re.search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">1</span>)), caps.get_match());
+
+input.set_start(<span class="number">2</span>);
+re.search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">2</span>)), caps.get_match());
+
+input.set_start(<span class="number">3</span>);
+re.search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>)), caps.get_match());
+
+input.set_start(<span class="number">4</span>);
+re.search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.reverse" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#199-202">source</a><h4 class="code-header">pub fn <a href="#method.reverse" class="fn">reverse</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Reverse the NFA.</p>
+<p>A NFA reversal is performed by reversing all of the concatenated
+sub-expressions in the original pattern, recursively. (Look around
+operators are also inverted.) The resulting NFA can be used to match
+the pattern starting from the end of a string instead of the beginning
+of a string.</p>
+<p>Reversing the NFA is useful for building a reverse DFA, which is most
+useful for finding the start of a match after its ending position has
+been found. NFA execution engines typically do not work on reverse
+NFAs. For example, currently, the Pike VM reports the starting location
+of matches without a reverse NFA.</p>
+<p>Currently, enabling this setting requires disabling the
+<a href="struct.Config.html#method.captures" title="method regex_automata::nfa::thompson::Config::captures"><code>captures</code></a> setting. If both are enabled, then the
+compiler will return an error. It is expected that this limitation will
+be lifted in the future.</p>
+<p>This is disabled by default.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows how to build a DFA from a reverse NFA, and then use
+the DFA to search backwards.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    dfa::{<span class="self">self</span>, Automaton},
+    nfa::thompson::{NFA, WhichCaptures},
+    HalfMatch, Input,
+};
+
+<span class="kw">let </span>dfa = dfa::dense::Builder::new()
+    .thompson(NFA::config()
+        .which_captures(WhichCaptures::None)
+        .reverse(<span class="bool-val">true</span>)
+    )
+    .build(<span class="string">"baz[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>));
+<span class="macro">assert_eq!</span>(
+    expected,
+    dfa.try_search_rev(<span class="kw-2">&amp;</span>Input::new(<span class="string">"foobaz12345bar"</span>))<span class="question-mark">?</span>,
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.nfa_size_limit" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#248-251">source</a><h4 class="code-header">pub fn <a href="#method.nfa_size_limit" class="fn">nfa_size_limit</a>(self, bytes: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets an approximate size limit on the total heap used by the NFA being
+compiled.</p>
+<p>This permits imposing constraints on the size of a compiled NFA. This
+may be useful in contexts where the regex pattern is untrusted and one
+wants to avoid using too much memory.</p>
+<p>This size limit does not apply to auxiliary heap used during
+compilation that is not part of the built NFA.</p>
+<p>Note that this size limit is applied during compilation in order for
+the limit to prevent too much heap from being used. However, the
+implementation may use an intermediate NFA representation that is
+otherwise slightly bigger than the final public form. Since the size
+limit may be applied to an intermediate representation, there is not
+necessarily a precise correspondence between the configured size limit
+and the heap usage of the final NFA.</p>
+<p>There is no size limit by default.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example demonstrates how Unicode mode can greatly increase the
+size of the NFA.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::NFA;
+
+<span class="comment">// 300KB isn't enough!
+</span>NFA::compiler()
+    .configure(NFA::config().nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">300_000</span>)))
+    .build(<span class="string">r"\w{20}"</span>)
+    .unwrap_err();
+
+<span class="comment">// ... but 400KB probably is.
+</span><span class="kw">let </span>nfa = NFA::compiler()
+    .configure(NFA::config().nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">400_000</span>)))
+    .build(<span class="string">r"\w{20}"</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(nfa.pattern_len(), <span class="number">1</span>);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.shrink" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#302-305">source</a><h4 class="code-header">pub fn <a href="#method.shrink" class="fn">shrink</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Apply best effort heuristics to shrink the NFA at the expense of more
+time/memory.</p>
+<p>Generally speaking, if one is using an NFA to compile a DFA, then the
+extra time used to shrink the NFA will be more than made up for during
+DFA construction (potentially by a lot). In other words, enabling this
+can substantially decrease the overall amount of time it takes to build
+a DFA.</p>
+<p>A reason to keep this disabled is if you want to compile an NFA and
+start using it as quickly as possible without needing to build a DFA,
+and you don’t mind using a bit of extra memory for the NFA. e.g., for
+an NFA simulation or for a lazy DFA.</p>
+<p>NFA shrinking is currently most useful when compiling a reverse
+NFA with large Unicode character classes. In particular, it trades
+additional CPU time during NFA compilation in favor of generating fewer
+NFA states.</p>
+<p>This is disabled by default because it can increase compile times
+quite a bit if you aren’t building a full DFA.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows that NFA shrinking can lead to substantial space
+savings in some cases. Notice that, as noted above, we build a reverse
+DFA and use a pattern with a large Unicode character class.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::{NFA, WhichCaptures};
+
+<span class="comment">// Currently we have to disable captures when enabling reverse NFA.
+</span><span class="kw">let </span>config = NFA::config()
+    .which_captures(WhichCaptures::None)
+    .reverse(<span class="bool-val">true</span>);
+<span class="kw">let </span>not_shrunk = NFA::compiler()
+    .configure(config.clone().shrink(<span class="bool-val">false</span>))
+    .build(<span class="string">r"\w"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>shrunk = NFA::compiler()
+    .configure(config.clone().shrink(<span class="bool-val">true</span>))
+    .build(<span class="string">r"\w"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// While a specific shrink factor is not guaranteed, the savings can be
+// considerable in some cases.
+</span><span class="macro">assert!</span>(shrunk.states().len() * <span class="number">2 </span>&lt; not_shrunk.states().len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.captures" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#343-349">source</a><h4 class="code-header">pub fn <a href="#method.captures" class="fn">captures</a>(self, yes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.3.5: use which_captures instead</span></div></span></summary><div class="docblock"><p>Whether to include ‘Capture’ states in the NFA.</p>
+<p>Currently, enabling this setting requires disabling the
+<a href="struct.Config.html#method.reverse" title="method regex_automata::nfa::thompson::Config::reverse"><code>reverse</code></a> setting. If both are enabled, then the
+compiler will return an error. It is expected that this limitation will
+be lifted in the future.</p>
+<p>This is enabled by default.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>This example demonstrates that some regex engines, like the Pike VM,
+require capturing states to be present in the NFA to report match
+offsets.</p>
+<p>(Note that since this method is deprecated, the example below uses
+<a href="struct.Config.html#method.which_captures" title="method regex_automata::nfa::thompson::Config::which_captures"><code>Config::which_captures</code></a> to disable capture states.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::{
+    pikevm::PikeVM,
+    NFA,
+    WhichCaptures,
+};
+
+<span class="kw">let </span>re = PikeVM::builder()
+    .thompson(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.find(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.which_captures" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#410-413">source</a><h4 class="code-header">pub fn <a href="#method.which_captures" class="fn">which_captures</a>(self, which_captures: <a class="enum" href="enum.WhichCaptures.html" title="enum regex_automata::nfa::thompson::WhichCaptures">WhichCaptures</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Configures what kinds of capture groups are compiled into
+<a href="enum.State.html#variant.Capture" title="variant regex_automata::nfa::thompson::State::Capture"><code>State::Capture</code></a> states in a
+Thompson NFA.</p>
+<p>Currently, using any option except for <a href="enum.WhichCaptures.html#variant.None" title="variant regex_automata::nfa::thompson::WhichCaptures::None"><code>WhichCaptures::None</code></a> requires
+disabling the <a href="struct.Config.html#method.reverse" title="method regex_automata::nfa::thompson::Config::reverse"><code>reverse</code></a> setting. If both are
+enabled, then the compiler will return an error. It is expected that
+this limitation will be lifted in the future.</p>
+<p>This is set to <a href="enum.WhichCaptures.html#variant.All" title="variant regex_automata::nfa::thompson::WhichCaptures::All"><code>WhichCaptures::All</code></a> by default. Callers may wish to
+use <a href="enum.WhichCaptures.html#variant.Implicit" title="variant regex_automata::nfa::thompson::WhichCaptures::Implicit"><code>WhichCaptures::Implicit</code></a> in cases where one wants avoid the
+overhead of capture states for explicit groups. Usually this occurs
+when one wants to use the <code>PikeVM</code> only for determining the overall
+match. Otherwise, the <code>PikeVM</code> could use much more memory than is
+necessary.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>This example demonstrates that some regex engines, like the Pike VM,
+require capturing states to be present in the NFA to report match
+offsets.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::{
+    pikevm::PikeVM,
+    NFA,
+    WhichCaptures,
+};
+
+<span class="kw">let </span>re = PikeVM::builder()
+    .thompson(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.find(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>));
+</code></pre></div>
+<p>The same applies to the bounded backtracker:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::{
+    backtrack::BoundedBacktracker,
+    NFA,
+    WhichCaptures,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::builder()
+    .thompson(NFA::config().which_captures(WhichCaptures::None))
+    .build(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.try_is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>)<span class="question-mark">?</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.try_find(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc"</span>)<span class="question-mark">?</span>);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.look_matcher" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#454-457">source</a><h4 class="code-header">pub fn <a href="#method.look_matcher" class="fn">look_matcher</a>(self, m: <a class="struct" href="../../util/look/struct.LookMatcher.html" title="struct regex_automata::util::look::LookMatcher">LookMatcher</a>) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class="docblock"><p>Sets the look-around matcher that should be used with this NFA.</p>
+<p>A look-around matcher determines how to match look-around assertions.
+In particular, some assertions are configurable. For example, the
+<code>(?m:^)</code> and <code>(?m:$)</code> assertions can have their line terminator changed
+from the default of <code>\n</code> to any other byte.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This shows how to change the line terminator for multi-line assertions.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::{<span class="self">self</span>, pikevm::PikeVM},
+    util::look::LookMatcher,
+    Match, Input,
+};
+
+<span class="kw">let </span><span class="kw-2">mut </span>lookm = LookMatcher::new();
+lookm.set_line_terminator(<span class="string">b'\x00'</span>);
+
+<span class="kw">let </span>re = PikeVM::builder()
+    .thompson(thompson::Config::new().look_matcher(lookm))
+    .build(<span class="string">r"(?m)^[a-z]+$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="comment">// Multi-line assertions now use NUL as a terminator.
+</span><span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">4</span>)),
+    re.find(<span class="kw-2">&amp;mut </span>cache, <span class="string">b"\x00abc\x00"</span>),
+);
+<span class="comment">// ... and \n is no longer recognized as a terminator.
+</span><span class="macro">assert_eq!</span>(
+    <span class="prelude-val">None</span>,
+    re.find(<span class="kw-2">&amp;mut </span>cache, <span class="string">b"\nabc\n"</span>),
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_utf8" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#470-472">source</a><h4 class="code-header">pub fn <a href="#method.get_utf8" class="fn">get_utf8</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration has enabled UTF-8 mode.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_reverse" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#475-477">source</a><h4 class="code-header">pub fn <a href="#method.get_reverse" class="fn">get_reverse</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns whether this configuration has enabled reverse NFA compilation.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_nfa_size_limit" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#481-483">source</a><h4 class="code-header">pub fn <a href="#method.get_nfa_size_limit" class="fn">get_nfa_size_limit</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Return the configured NFA size limit, if it exists, in the number of
+bytes of heap used.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_shrink" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#486-488">source</a><h4 class="code-header">pub fn <a href="#method.get_shrink" class="fn">get_shrink</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Return whether NFA shrinking is enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_captures" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#492-494">source</a><h4 class="code-header">pub fn <a href="#method.get_captures" class="fn">get_captures</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.3.5: use get_which_captures instead</span></div></span></summary><div class="docblock"><p>Return whether NFA compilation is configured to produce capture states.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_which_captures" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#497-499">source</a><h4 class="code-header">pub fn <a href="#method.get_which_captures" class="fn">get_which_captures</a>(&amp;self) -&gt; <a class="enum" href="enum.WhichCaptures.html" title="enum regex_automata::nfa::thompson::WhichCaptures">WhichCaptures</a></h4></section></summary><div class="docblock"><p>Return what kinds of capture states will be compiled into an NFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_look_matcher" class="method"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#502-504">source</a><h4 class="code-header">pub fn <a href="#method.get_look_matcher" class="fn">get_look_matcher</a>(&amp;self) -&gt; <a class="struct" href="../../util/look/struct.LookMatcher.html" title="struct regex_automata::util::look::LookMatcher">LookMatcher</a></h4></section></summary><div class="docblock"><p>Return the look-around matcher for this NFA.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#27">source</a><a href="#impl-Clone-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#27">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#27">source</a><a href="#impl-Debug-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#27">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Config" class="impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#27">source</a><a href="#impl-Default-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/nfa/thompson/compiler.rs.html#27">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Config" class="impl"><a href="#impl-Freeze-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section><section id="impl-RefUnwindSafe-for-Config" class="impl"><a href="#impl-RefUnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section><section id="impl-Send-for-Config" class="impl"><a href="#impl-Send-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section><section id="impl-Sync-for-Config" class="impl"><a href="#impl-Sync-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section><section id="impl-Unpin-for-Config" class="impl"><a href="#impl-Unpin-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section><section id="impl-UnwindSafe-for-Config" class="impl"><a href="#impl-UnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::Config">Config</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

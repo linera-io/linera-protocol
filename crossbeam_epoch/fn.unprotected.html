@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns a reference to a dummy guard that allows unprotected access to `Atomic`s."><title>unprotected in crossbeam_epoch - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crossbeam_epoch" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crossbeam_epoch/index.html">crossbeam_epoch</a><span class="version">0.9.18</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">crossbeam_epoch</a>::<wbr><a class="fn" href="#">unprotected</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crossbeam_epoch/guard.rs.html#513-523">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn unprotected() -&gt; &amp;'static <a class="struct" href="struct.Guard.html" title="struct crossbeam_epoch::Guard">Guard</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns a reference to a dummy guard that allows unprotected access to <a href="struct.Atomic.html" title="struct crossbeam_epoch::Atomic"><code>Atomic</code></a>s.</p>
+<p>This guard should be used in special occasions only. Note that it doesn’t actually keep any
+thread pinned - it’s just a fake guard that allows loading from <a href="struct.Atomic.html" title="struct crossbeam_epoch::Atomic"><code>Atomic</code></a>s unsafely.</p>
+<p>Note that calling <a href="struct.Guard.html#method.defer" title="method crossbeam_epoch::Guard::defer"><code>defer</code></a> with a dummy guard will not defer the function - it will just
+execute the function immediately.</p>
+<p>If necessary, it’s possible to create more dummy guards by cloning: <code>unprotected().clone()</code>.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Loading and dereferencing data from an <a href="struct.Atomic.html" title="struct crossbeam_epoch::Atomic"><code>Atomic</code></a> using this guard is safe only if the
+<a href="struct.Atomic.html" title="struct crossbeam_epoch::Atomic"><code>Atomic</code></a> is not being concurrently modified by other threads.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_epoch::{<span class="self">self </span><span class="kw">as </span>epoch, Atomic};
+<span class="kw">use </span>std::sync::atomic::Ordering::Relaxed;
+
+<span class="kw">let </span>a = Atomic::new(<span class="number">7</span>);
+
+<span class="kw">unsafe </span>{
+    <span class="comment">// Load `a` without pinning the current thread.
+    </span>a.load(Relaxed, epoch::unprotected());
+
+    <span class="comment">// It's possible to create more dummy guards.
+    </span><span class="kw">let </span>dummy = epoch::unprotected();
+
+    dummy.defer(<span class="kw">move </span>|| {
+        <span class="macro">println!</span>(<span class="string">"This gets executed immediately."</span>);
+    });
+
+    <span class="comment">// Dropping `dummy` doesn't affect the current thread - it's just a noop.
+</span>}</code></pre></div>
+<p>The most common use of this function is when constructing or destructing a data structure.</p>
+<p>For example, we can use a dummy guard in the destructor of a Treiber stack because at that
+point no other thread could concurrently modify the <a href="struct.Atomic.html" title="struct crossbeam_epoch::Atomic"><code>Atomic</code></a>s we are accessing.</p>
+<p>If we were to actually pin the current thread during destruction, that would just unnecessarily
+delay garbage collection and incur some performance cost, so in cases like these <code>unprotected</code>
+is very helpful.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_epoch::{<span class="self">self </span><span class="kw">as </span>epoch, Atomic};
+<span class="kw">use </span>std::mem::ManuallyDrop;
+<span class="kw">use </span>std::sync::atomic::Ordering::Relaxed;
+
+<span class="kw">struct </span>Stack&lt;T&gt; {
+    head: Atomic&lt;Node&lt;T&gt;&gt;,
+}
+
+<span class="kw">struct </span>Node&lt;T&gt; {
+    data: ManuallyDrop&lt;T&gt;,
+    next: Atomic&lt;Node&lt;T&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;T&gt; Drop <span class="kw">for </span>Stack&lt;T&gt; {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">unsafe </span>{
+            <span class="comment">// Unprotected load.
+            </span><span class="kw">let </span><span class="kw-2">mut </span>node = <span class="self">self</span>.head.load(Relaxed, epoch::unprotected());
+
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(n) = node.as_ref() {
+                <span class="comment">// Unprotected load.
+                </span><span class="kw">let </span>next = n.next.load(Relaxed, epoch::unprotected());
+
+                <span class="comment">// Take ownership of the node, then drop its data and deallocate it.
+                </span><span class="kw">let </span><span class="kw-2">mut </span>o = node.into_owned();
+                ManuallyDrop::drop(<span class="kw-2">&amp;mut </span>o.data);
+                drop(o);
+
+                node = next;
+            }
+        }
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HttpSignatureType"],"mod":["sigv4"],"struct":["SigV4OperationSigningConfig","SigV4SessionTokenNameOverride","SigningOptions"]};

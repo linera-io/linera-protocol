@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Waits for either one of two differently-typed futures to complete."><title>select in futures::prelude::future - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="futures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../futures/index.html">futures</a><span class="version">0.3.30</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In futures::prelude::future</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">futures</a>::<wbr><a href="../index.html">prelude</a>::<wbr><a href="index.html">future</a>::<wbr><a class="fn" href="#">select</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/futures_util/future/select.rs.html#84-87">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn select&lt;A, B&gt;(future1: A, future2: B) -&gt; <a class="struct" href="../../future/struct.Select.html" title="struct futures::future::Select">Select</a>&lt;A, B&gt; <a href="#" class="tooltip" data-notable-ty="Select&lt;A, B&gt;">ⓘ</a><div class="where">where
+    A: <a class="trait" href="../../future/trait.Future.html" title="trait futures::future::Future">Future</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,
+    B: <a class="trait" href="../../future/trait.Future.html" title="trait futures::future::Future">Future</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Waits for either one of two differently-typed futures to complete.</p>
+<p>This function will return a new future which awaits for either one of both
+futures to complete. The returned future will finish with both the value
+resolved and a future representing the completion of the other work.</p>
+<p>Note that this function consumes the receiving futures and returns a
+wrapped version of them.</p>
+<p>Also note that if both this and the second future have the same
+output type you can use the <code>Either::factor_first</code> method to
+conveniently extract out the value at the end.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>A simple example</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::{
+    pin_mut,
+    future::Either,
+    future::<span class="self">self</span>,
+};
+
+<span class="comment">// These two futures have different types even though their outputs have the same type.
+</span><span class="kw">let </span>future1 = <span class="kw">async </span>{
+    future::pending::&lt;()&gt;().<span class="kw">await</span>; <span class="comment">// will never finish
+    </span><span class="number">1
+</span>};
+<span class="kw">let </span>future2 = <span class="kw">async </span>{
+    future::ready(<span class="number">2</span>).<span class="kw">await
+</span>};
+
+<span class="comment">// 'select' requires Future + Unpin bounds
+</span><span class="macro">pin_mut!</span>(future1);
+<span class="macro">pin_mut!</span>(future2);
+
+<span class="kw">let </span>value = <span class="kw">match </span>future::select(future1, future2).<span class="kw">await </span>{
+    Either::Left((value1, <span class="kw">_</span>)) =&gt; value1,  <span class="comment">// `value1` is resolved from `future1`
+                                          // `_` represents `future2`
+    </span>Either::Right((value2, <span class="kw">_</span>)) =&gt; value2, <span class="comment">// `value2` is resolved from `future2`
+                                          // `_` represents `future1`
+</span>};
+
+<span class="macro">assert!</span>(value == <span class="number">2</span>);</code></pre></div>
+<p>A more complex example</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::future::{<span class="self">self</span>, Either, Future, FutureExt};
+
+<span class="comment">// A poor-man's join implemented on top of select
+
+</span><span class="kw">fn </span>join&lt;A, B&gt;(a: A, b: B) -&gt; <span class="kw">impl </span>Future&lt;Output=(A::Output, B::Output)&gt;
+    <span class="kw">where </span>A: Future + Unpin,
+          B: Future + Unpin,
+{
+    future::select(a, b).then(|either| {
+        <span class="kw">match </span>either {
+            Either::Left((x, b)) =&gt; b.map(<span class="kw">move </span>|y| (x, y)).left_future(),
+            Either::Right((y, a)) =&gt; a.map(<span class="kw">move </span>|x| (x, y)).right_future(),
+        }
+    })
+}</code></pre></div>
+</div></details><script type="text/json" id="notable-traits-data">{"Select<A, B>":"<h3>Notable traits for <code><a class=\"struct\" href=\"../../future/struct.Select.html\" title=\"struct futures::future::Select\">Select</a>&lt;A, B&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A, B&gt; <a class=\"trait\" href=\"../../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> for <a class=\"struct\" href=\"../../future/struct.Select.html\" title=\"struct futures::future::Select\">Select</a>&lt;A, B&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"../../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html\" title=\"trait core::marker::Unpin\">Unpin</a>,\n    B: <a class=\"trait\" href=\"../../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html\" title=\"trait core::marker::Unpin\">Unpin</a>,</div></div><div class=\"where\">    type <a href=\"../../future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = <a class=\"enum\" href=\"../../future/enum.Either.html\" title=\"enum futures::future::Either\">Either</a>&lt;(&lt;A as <a class=\"trait\" href=\"../../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a>&gt;::<a class=\"associatedtype\" href=\"../../future/trait.Future.html#associatedtype.Output\" title=\"type futures::future::Future::Output\">Output</a>, B), (&lt;B as <a class=\"trait\" href=\"../../future/trait.Future.html\" title=\"trait futures::future::Future\">Future</a>&gt;::<a class=\"associatedtype\" href=\"../../future/trait.Future.html#associatedtype.Output\" title=\"type futures::future::Future::Output\">Output</a>, A)&gt;;</div>"}</script></section></div></main></body></html>

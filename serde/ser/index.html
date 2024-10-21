@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generic data structure serialization framework."><title>serde::ser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><h2 class="location"><a href="#">Module ser</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate serde</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">serde</a>::<wbr><a class="mod" href="#">ser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/serde/ser/mod.rs.html#1-1954">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generic data structure serialization framework.</p>
+<p>The two most important traits in this module are <a href="../trait.Serialize.html"><code>Serialize</code></a> and
+<a href="../trait.Serializer.html"><code>Serializer</code></a>.</p>
+<ul>
+<li><strong>A type that implements <code>Serialize</code> is a data structure</strong> that can be
+serialized to any data format supported by Serde, and conversely</li>
+<li><strong>A type that implements <code>Serializer</code> is a data format</strong> that can
+serialize any data structure supported by Serde.</li>
+</ul>
+<h2 id="the-serialize-trait"><a class="doc-anchor" href="#the-serialize-trait">§</a>The Serialize trait</h2>
+<p>Serde provides <a href="../trait.Serialize.html"><code>Serialize</code></a> implementations for many Rust primitive and
+standard library types. The complete list is below. All of these can be
+serialized using Serde out of the box.</p>
+<p>Additionally, Serde provides a procedural macro called <a href="https://crates.io/crates/serde_derive"><code>serde_derive</code></a> to
+automatically generate <a href="../trait.Serialize.html"><code>Serialize</code></a> implementations for structs and enums
+in your program. See the <a href="https://serde.rs/derive.html">derive section of the manual</a> for how to use this.</p>
+<p>In rare cases it may be necessary to implement <a href="../trait.Serialize.html"><code>Serialize</code></a> manually for
+some type in your program. See the <a href="https://serde.rs/impl-serialize.html">Implementing <code>Serialize</code></a> section of the
+manual for more about this.</p>
+<p>Third-party crates may provide <a href="../trait.Serialize.html"><code>Serialize</code></a> implementations for types that
+they expose. For example the <a href="https://crates.io/crates/linked-hash-map"><code>linked-hash-map</code></a> crate provides a
+<a href="https://docs.rs/linked-hash-map/*/linked_hash_map/struct.LinkedHashMap.html"><code>LinkedHashMap&lt;K, V&gt;</code></a> type that is serializable by Serde because the crate
+provides an implementation of <a href="../trait.Serialize.html"><code>Serialize</code></a> for it.</p>
+<h2 id="the-serializer-trait"><a class="doc-anchor" href="#the-serializer-trait">§</a>The Serializer trait</h2>
+<p><a href="../trait.Serializer.html"><code>Serializer</code></a> implementations are provided by third-party crates, for
+example <a href="https://github.com/serde-rs/json"><code>serde_json</code></a>, <a href="https://github.com/dtolnay/serde-yaml"><code>serde_yaml</code></a> and <a href="https://github.com/jamesmunns/postcard"><code>postcard</code></a>.</p>
+<p>A partial list of well-maintained formats is given on the <a href="https://serde.rs/#data-formats">Serde
+website</a>.</p>
+<h2 id="implementations-of-serialize-provided-by-serde"><a class="doc-anchor" href="#implementations-of-serialize-provided-by-serde">§</a>Implementations of Serialize provided by Serde</h2>
+<ul>
+<li><strong>Primitive types</strong>:
+<ul>
+<li>bool</li>
+<li>i8, i16, i32, i64, i128, isize</li>
+<li>u8, u16, u32, u64, u128, usize</li>
+<li>f32, f64</li>
+<li>char</li>
+<li>str</li>
+<li>&amp;T and &amp;mut T</li>
+</ul>
+</li>
+<li><strong>Compound types</strong>:
+<ul>
+<li>[T]</li>
+<li>[T; 0] through [T; 32]</li>
+<li>tuples up to size 16</li>
+</ul>
+</li>
+<li><strong>Common standard library types</strong>:
+<ul>
+<li>String</li>
+<li>Option&lt;T&gt;</li>
+<li>Result&lt;T, E&gt;</li>
+<li>PhantomData&lt;T&gt;</li>
+</ul>
+</li>
+<li><strong>Wrapper types</strong>:
+<ul>
+<li>Box&lt;T&gt;</li>
+<li>Cow&lt;’a, T&gt;</li>
+<li>Cell&lt;T&gt;</li>
+<li>RefCell&lt;T&gt;</li>
+<li>Mutex&lt;T&gt;</li>
+<li>RwLock&lt;T&gt;</li>
+<li>Rc&lt;T&gt; <em>(if</em> features = [“rc”] <em>is enabled)</em></li>
+<li>Arc&lt;T&gt; <em>(if</em> features = [“rc”] <em>is enabled)</em></li>
+</ul>
+</li>
+<li><strong>Collection types</strong>:
+<ul>
+<li>BTreeMap&lt;K, V&gt;</li>
+<li>BTreeSet&lt;T&gt;</li>
+<li>BinaryHeap&lt;T&gt;</li>
+<li>HashMap&lt;K, V, H&gt;</li>
+<li>HashSet&lt;T, H&gt;</li>
+<li>LinkedList&lt;T&gt;</li>
+<li>VecDeque&lt;T&gt;</li>
+<li>Vec&lt;T&gt;</li>
+</ul>
+</li>
+<li><strong>FFI types</strong>:
+<ul>
+<li>CStr</li>
+<li>CString</li>
+<li>OsStr</li>
+<li>OsString</li>
+</ul>
+</li>
+<li><strong>Miscellaneous standard library types</strong>:
+<ul>
+<li>Duration</li>
+<li>SystemTime</li>
+<li>Path</li>
+<li>PathBuf</li>
+<li>Range&lt;T&gt;</li>
+<li>RangeInclusive&lt;T&gt;</li>
+<li>Bound&lt;T&gt;</li>
+<li>num::NonZero*</li>
+<li><code>!</code> <em>(unstable)</em></li>
+</ul>
+</li>
+<li><strong>Net types</strong>:
+<ul>
+<li>IpAddr</li>
+<li>Ipv4Addr</li>
+<li>Ipv6Addr</li>
+<li>SocketAddr</li>
+<li>SocketAddrV4</li>
+<li>SocketAddrV6</li>
+</ul>
+</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.StdError"><code>pub use std::error::<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/error/trait.Error.html" title="trait core::error::Error">Error</a> as StdError;</code></div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Impossible.html" title="struct serde::ser::Impossible">Impossible</a></div><div class="desc docblock-short">Helper type for implementing a <code>Serializer</code> that does not support
+serializing one of the compound types.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Error.html" title="trait serde::ser::Error">Error</a></div><div class="desc docblock-short">Trait used by <code>Serialize</code> implementations to generically construct
+errors belonging to the <code>Serializer</code> against which they are
+currently running.</div></li><li><div class="item-name"><a class="trait" href="trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a></div><div class="desc docblock-short">A <strong>data structure</strong> that can be serialized into any data format supported
+by Serde.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeMap.html" title="trait serde::ser::SerializeMap">SerializeMap</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_map</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeSeq.html" title="trait serde::ser::SerializeSeq">SerializeSeq</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_seq</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeStruct.html" title="trait serde::ser::SerializeStruct">SerializeStruct</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_struct</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeStructVariant.html" title="trait serde::ser::SerializeStructVariant">SerializeStructVariant</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_struct_variant</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeTuple.html" title="trait serde::ser::SerializeTuple">SerializeTuple</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_tuple</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeTupleStruct.html" title="trait serde::ser::SerializeTupleStruct">SerializeTupleStruct</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_tuple_struct</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.SerializeTupleVariant.html" title="trait serde::ser::SerializeTupleVariant">SerializeTupleVariant</a></div><div class="desc docblock-short">Returned from <code>Serializer::serialize_tuple_variant</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.Serializer.html" title="trait serde::ser::Serializer">Serializer</a></div><div class="desc docblock-short">A <strong>data format</strong> that can serialize any data structure supported by Serde.</div></li></ul></section></div></main></body></html>

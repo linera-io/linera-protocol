@@ -1,0 +1,340 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="axum is a web application framework that focuses on ergonomics and modularity."><title>axum - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="axum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../axum/index.html">axum</a><span class="version">0.7.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">axum</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/axum/lib.rs.html#1-535">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>axum is a web application framework that focuses on ergonomics and modularity.</p>
+<h2 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of contents</h2>
+<ul>
+<li><a href="#high-level-features">High-level features</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#example">Example</a></li>
+<li><a href="#routing">Routing</a></li>
+<li><a href="#handlers">Handlers</a></li>
+<li><a href="#extractors">Extractors</a></li>
+<li><a href="#responses">Responses</a></li>
+<li><a href="#error-handling">Error handling</a></li>
+<li><a href="#middleware">Middleware</a></li>
+<li><a href="#sharing-state-with-handlers">Sharing state with handlers</a></li>
+<li><a href="#building-integrations-for-axum">Building integrations for axum</a></li>
+<li><a href="#required-dependencies">Required dependencies</a></li>
+<li><a href="#examples">Examples</a></li>
+<li><a href="#feature-flags">Feature flags</a></li>
+</ul>
+<h2 id="high-level-features"><a class="doc-anchor" href="#high-level-features">§</a>High-level features</h2>
+<ul>
+<li>Route requests to handlers with a macro-free API.</li>
+<li>Declaratively parse requests using extractors.</li>
+<li>Simple and predictable error handling model.</li>
+<li>Generate responses with minimal boilerplate.</li>
+<li>Take full advantage of the <a href="https://crates.io/crates/tower"><code>tower</code></a> and <a href="https://crates.io/crates/tower-http"><code>tower-http</code></a> ecosystem of
+middleware, services, and utilities.</li>
+</ul>
+<p>In particular, the last point is what sets <code>axum</code> apart from other frameworks.
+<code>axum</code> doesn’t have its own middleware system but instead uses
+<a href="../tower_service/trait.Service.html" title="trait tower_service::Service"><code>tower::Service</code></a>. This means <code>axum</code> gets timeouts, tracing, compression,
+authorization, and more, for free. It also enables you to share middleware with
+applications written using <a href="http://crates.io/crates/hyper"><code>hyper</code></a> or <a href="http://crates.io/crates/tonic"><code>tonic</code></a>.</p>
+<h2 id="compatibility"><a class="doc-anchor" href="#compatibility">§</a>Compatibility</h2>
+<p>axum is designed to work with <a href="../tokio/index.html" title="mod tokio">tokio</a> and <a href="../hyper/index.html" title="mod hyper">hyper</a>. Runtime and
+transport layer independence is not a goal, at least for the time being.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>The “Hello, World!” of axum is:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    routing::get,
+    Router,
+};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="comment">// build our application with a single route
+    </span><span class="kw">let </span>app = Router::new().route(<span class="string">"/"</span>, get(|| <span class="kw">async </span>{ <span class="string">"Hello, World!" </span>}));
+
+    <span class="comment">// run our app with hyper, listening globally on port 3000
+    </span><span class="kw">let </span>listener = tokio::net::TcpListener::bind(<span class="string">"0.0.0.0:3000"</span>).<span class="kw">await</span>.unwrap();
+    axum::serve(listener, app).<span class="kw">await</span>.unwrap();
+}</code></pre></div>
+<p>Note using <code>#[tokio::main]</code> requires you enable tokio’s <code>macros</code> and <code>rt-multi-thread</code> features
+or just <code>full</code> to enable all features (<code>cargo add tokio --features macros,rt-multi-thread</code>).</p>
+<h2 id="routing"><a class="doc-anchor" href="#routing">§</a>Routing</h2>
+<p><a href="struct.Router.html" title="struct axum::Router"><code>Router</code></a> is used to set up which paths goes to which services:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{Router, routing::get};
+
+<span class="comment">// our router
+</span><span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(root))
+    .route(<span class="string">"/foo"</span>, get(get_foo).post(post_foo))
+    .route(<span class="string">"/foo/bar"</span>, get(foo_bar));
+
+<span class="comment">// which calls one of these handlers
+</span><span class="kw">async fn </span>root() {}
+<span class="kw">async fn </span>get_foo() {}
+<span class="kw">async fn </span>post_foo() {}
+<span class="kw">async fn </span>foo_bar() {}</code></pre></div>
+<p>See <a href="struct.Router.html" title="struct axum::Router"><code>Router</code></a> for more details on routing.</p>
+<h2 id="handlers"><a class="doc-anchor" href="#handlers">§</a>Handlers</h2>
+<p>In axum a “handler” is an async function that accepts zero or more
+<a href="extract/index.html" title="mod axum::extract">“extractors”</a> as arguments and returns something that
+can be converted <a href="response/index.html" title="mod axum::response">into a response</a>.</p>
+<p>Handlers are where your application logic lives and axum applications are built
+by routing between handlers.</p>
+<p>See <a href="handler/index.html" title="mod axum::handler"><code>handler</code></a> for more details on handlers.</p>
+<h2 id="extractors"><a class="doc-anchor" href="#extractors">§</a>Extractors</h2>
+<p>An extractor is a type that implements <a href="extract/trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a> or <a href="extract/trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts"><code>FromRequestParts</code></a>. Extractors are
+how you pick apart the incoming request to get the parts your handler needs.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::extract::{Path, Query, Json};
+<span class="kw">use </span>std::collections::HashMap;
+
+<span class="comment">// `Path` gives you the path parameters and deserializes them.
+</span><span class="kw">async fn </span>path(Path(user_id): Path&lt;u32&gt;) {}
+
+<span class="comment">// `Query` gives you the query parameters and deserializes them.
+</span><span class="kw">async fn </span>query(Query(params): Query&lt;HashMap&lt;String, String&gt;&gt;) {}
+
+<span class="comment">// Buffer the request body and deserialize it as JSON into a
+// `serde_json::Value`. `Json` supports any type that implements
+// `serde::Deserialize`.
+</span><span class="kw">async fn </span>json(Json(payload): Json&lt;serde_json::Value&gt;) {}</code></pre></div>
+<p>See <a href="extract/index.html" title="mod axum::extract"><code>extract</code></a> for more details on extractors.</p>
+<h2 id="responses"><a class="doc-anchor" href="#responses">§</a>Responses</h2>
+<p>Anything that implements <a href="response/trait.IntoResponse.html" title="trait axum::response::IntoResponse"><code>IntoResponse</code></a> can be returned from handlers.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    body::Body,
+    routing::get,
+    response::Json,
+    Router,
+};
+<span class="kw">use </span>serde_json::{Value, json};
+
+<span class="comment">// `&amp;'static str` becomes a `200 OK` with `content-type: text/plain; charset=utf-8`
+</span><span class="kw">async fn </span>plain_text() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+    <span class="string">"foo"
+</span>}
+
+<span class="comment">// `Json` gives a content-type of `application/json` and works with any type
+// that implements `serde::Serialize`
+</span><span class="kw">async fn </span>json() -&gt; Json&lt;Value&gt; {
+    Json(<span class="macro">json!</span>({ <span class="string">"data"</span>: <span class="number">42 </span>}))
+}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/plain_text"</span>, get(plain_text))
+    .route(<span class="string">"/json"</span>, get(json));</code></pre></div>
+<p>See <a href="response/index.html" title="mod axum::response"><code>response</code></a> for more details on building responses.</p>
+<h2 id="error-handling"><a class="doc-anchor" href="#error-handling">§</a>Error handling</h2>
+<p>axum aims to have a simple and predictable error handling model. That means
+it is simple to convert errors into responses and you are guaranteed that
+all errors are handled.</p>
+<p>See <a href="error_handling/index.html" title="mod axum::error_handling"><code>error_handling</code></a> for more details on axum’s
+error handling model and how to handle errors gracefully.</p>
+<h2 id="middleware"><a class="doc-anchor" href="#middleware">§</a>Middleware</h2>
+<p>There are several different ways to write middleware for axum. See
+<a href="middleware/index.html" title="mod axum::middleware"><code>middleware</code></a> for more details.</p>
+<h2 id="sharing-state-with-handlers"><a class="doc-anchor" href="#sharing-state-with-handlers">§</a>Sharing state with handlers</h2>
+<p>It is common to share some state between handlers. For example, a
+pool of database connections or clients to other services may need to
+be shared.</p>
+<p>The three most common ways of doing that are:</p>
+<ul>
+<li>Using the <a href="extract/struct.State.html" title="struct axum::extract::State"><code>State</code></a> extractor</li>
+<li>Using request extensions</li>
+<li>Using closure captures</li>
+</ul>
+<h3 id="using-the-state-extractor"><a class="doc-anchor" href="#using-the-state-extractor">§</a>Using the <a href="extract/struct.State.html" title="struct axum::extract::State"><code>State</code></a> extractor</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::State,
+    routing::get,
+    Router,
+};
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">struct </span>AppState {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>shared_state = Arc::new(AppState { <span class="comment">/* ... */ </span>});
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .with_state(shared_state);
+
+<span class="kw">async fn </span>handler(
+    State(state): State&lt;Arc&lt;AppState&gt;&gt;,
+) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>You should prefer using <a href="extract/struct.State.html" title="struct axum::extract::State"><code>State</code></a> if possible since it’s more type safe. The downside is that
+it’s less dynamic than request extensions.</p>
+<p>See <a href="extract/struct.State.html" title="struct axum::extract::State"><code>State</code></a> for more details about accessing state.</p>
+<h3 id="using-request-extensions"><a class="doc-anchor" href="#using-request-extensions">§</a>Using request extensions</h3>
+<p>Another way to extract state in handlers is using <a href="struct.Extension.html" title="struct axum::Extension"><code>Extension</code></a> as
+layer and extractor:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::Extension,
+    routing::get,
+    Router,
+};
+<span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">struct </span>AppState {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>shared_state = Arc::new(AppState { <span class="comment">/* ... */ </span>});
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .layer(Extension(shared_state));
+
+<span class="kw">async fn </span>handler(
+    Extension(state): Extension&lt;Arc&lt;AppState&gt;&gt;,
+) {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>The downside to this approach is that you’ll get runtime errors
+(specifically a <code>500 Internal Server Error</code> response) if you try and extract
+an extension that doesn’t exist, perhaps because you forgot to add the
+middleware or because you’re extracting the wrong type.</p>
+<h3 id="using-closure-captures"><a class="doc-anchor" href="#using-closure-captures">§</a>Using closure captures</h3>
+<p>State can also be passed directly to handlers using closure captures:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Json,
+    extract::{Extension, Path},
+    routing::{get, post},
+    Router,
+};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>serde::Deserialize;
+
+<span class="kw">struct </span>AppState {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>shared_state = Arc::new(AppState { <span class="comment">/* ... */ </span>});
+
+<span class="kw">let </span>app = Router::new()
+    .route(
+        <span class="string">"/users"</span>,
+        post({
+            <span class="kw">let </span>shared_state = Arc::clone(<span class="kw-2">&amp;</span>shared_state);
+            <span class="kw">move </span>|body| create_user(body, shared_state)
+        }),
+    )
+    .route(
+        <span class="string">"/users/:id"</span>,
+        get({
+            <span class="kw">let </span>shared_state = Arc::clone(<span class="kw-2">&amp;</span>shared_state);
+            <span class="kw">move </span>|path| get_user(path, shared_state)
+        }),
+    );
+
+<span class="kw">async fn </span>get_user(Path(user_id): Path&lt;String&gt;, state: Arc&lt;AppState&gt;) {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">async fn </span>create_user(Json(payload): Json&lt;CreateUserPayload&gt;, state: Arc&lt;AppState&gt;) {
+    <span class="comment">// ...
+</span>}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>CreateUserPayload {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>The downside to this approach is that it’s a little more verbose than using
+<a href="extract/struct.State.html" title="struct axum::extract::State"><code>State</code></a> or extensions.</p>
+<h3 id="using-tokios-task_local-macro"><a class="doc-anchor" href="#using-tokios-task_local-macro">§</a>Using <a href="https://docs.rs/tokio/1/tokio/macro.task_local.html">tokio’s <code>task_local</code> macro</a>:</h3>
+<p>This allows to share state with <code>IntoResponse</code> implementations.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::Request,
+    http::{header, StatusCode},
+    middleware::{<span class="self">self</span>, Next},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
+<span class="kw">use </span>tokio::task_local;
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>CurrentUser {
+    name: String,
+}
+<span class="macro">task_local!</span> {
+    <span class="kw">pub static </span>USER: CurrentUser;
+}
+
+<span class="kw">async fn </span>auth(req: Request, next: Next) -&gt; <span class="prelude-ty">Result</span>&lt;Response, StatusCode&gt; {
+    <span class="kw">let </span>auth_header = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)<span class="question-mark">?</span>;
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(current_user) = authorize_current_user(auth_header).<span class="kw">await </span>{
+        <span class="comment">// State is setup here in the middleware
+        </span><span class="prelude-val">Ok</span>(USER.scope(current_user, next.run(req)).<span class="kw">await</span>)
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED)
+    }
+}
+<span class="kw">async fn </span>authorize_current_user(auth_token: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;CurrentUser&gt; {
+    <span class="prelude-val">Some</span>(CurrentUser {
+        name: auth_token.to_string(),
+    })
+}
+
+<span class="kw">struct </span>UserResponse;
+
+<span class="kw">impl </span>IntoResponse <span class="kw">for </span>UserResponse {
+    <span class="kw">fn </span>into_response(<span class="self">self</span>) -&gt; Response {
+        <span class="comment">// State is accessed here in the IntoResponse implementation
+        </span><span class="kw">let </span>current_user = USER.with(|u| u.clone());
+        (StatusCode::OK, current_user.name).into_response()
+    }
+}
+
+<span class="kw">async fn </span>handler() -&gt; UserResponse {
+    UserResponse
+}
+
+<span class="kw">let </span>app: Router = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .route_layer(middleware::from_fn(auth));</code></pre></div>
+<h2 id="building-integrations-for-axum"><a class="doc-anchor" href="#building-integrations-for-axum">§</a>Building integrations for axum</h2>
+<p>Libraries authors that want to provide <a href="extract/trait.FromRequest.html" title="trait axum::extract::FromRequest"><code>FromRequest</code></a>, <a href="extract/trait.FromRequestParts.html" title="trait axum::extract::FromRequestParts"><code>FromRequestParts</code></a>, or
+<a href="response/trait.IntoResponse.html" title="trait axum::response::IntoResponse"><code>IntoResponse</code></a> implementations should depend on the <a href="http://crates.io/crates/axum-core"><code>axum-core</code></a> crate, instead of <code>axum</code> if
+possible. <a href="http://crates.io/crates/axum-core"><code>axum-core</code></a> contains core types and traits and is less likely to receive breaking
+changes.</p>
+<h2 id="required-dependencies"><a class="doc-anchor" href="#required-dependencies">§</a>Required dependencies</h2>
+<p>To use axum there are a few dependencies you have to pull in as well:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+axum = &quot;&lt;latest-version&gt;&quot;
+tokio = { version = &quot;&lt;latest-version&gt;&quot;, features = [&quot;full&quot;] }
+tower = &quot;&lt;latest-version&gt;&quot;
+</code></pre></div>
+<p>The <code>"full"</code> feature for tokio isn’t necessary but it’s the easiest way to get started.</p>
+<p>Tower isn’t strictly necessary either but helpful for testing. See the
+testing example in the repo to learn more about testing axum apps.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>The axum repo contains <a href="https://github.com/tokio-rs/axum/tree/main/examples">a number of examples</a> that show how to put all the
+pieces together.</p>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature flags</h2>
+<p>axum uses a set of <a href="https://doc.rust-lang.org/cargo/reference/features.html#the-features-section">feature flags</a> to reduce the amount of compiled and
+optional dependencies.</p>
+<p>The following optional features are available:</p>
+<div><table><thead><tr><th>Name</th><th>Description</th><th>Default?</th></tr></thead><tbody>
+<tr><td><code>http1</code></td><td>Enables hyper’s <code>http1</code> feature</td><td>Yes</td></tr>
+<tr><td><code>http2</code></td><td>Enables hyper’s <code>http2</code> feature</td><td>No</td></tr>
+<tr><td><code>json</code></td><td>Enables the <a href="struct.Json.html" title="struct axum::Json"><code>Json</code></a> type and some similar convenience functionality</td><td>Yes</td></tr>
+<tr><td><code>macros</code></td><td>Enables optional utility macros</td><td>No</td></tr>
+<tr><td><code>matched-path</code></td><td>Enables capturing of every request’s router path and the <a href="extract/struct.MatchedPath.html" title="struct axum::extract::MatchedPath"><code>MatchedPath</code></a> extractor</td><td>Yes</td></tr>
+<tr><td><code>multipart</code></td><td>Enables parsing <code>multipart/form-data</code> requests with <a href="crate::extract::Multipart"><code>Multipart</code></a></td><td>No</td></tr>
+<tr><td><code>original-uri</code></td><td>Enables capturing of every request’s original URI and the <a href="extract/struct.OriginalUri.html" title="struct axum::extract::OriginalUri"><code>OriginalUri</code></a> extractor</td><td>Yes</td></tr>
+<tr><td><code>tokio</code></td><td>Enables <code>tokio</code> as a dependency and <code>axum::serve</code>, <code>SSE</code> and <code>extract::connect_info</code> types.</td><td>Yes</td></tr>
+<tr><td><code>tower-log</code></td><td>Enables <code>tower</code>’s <code>log</code> feature</td><td>Yes</td></tr>
+<tr><td><code>tracing</code></td><td>Log rejections from built-in extractors</td><td>Yes</td></tr>
+<tr><td><code>ws</code></td><td>Enables WebSockets support via <a href="extract/ws/index.html" title="mod axum::extract::ws"><code>extract::ws</code></a></td><td>No</td></tr>
+<tr><td><code>form</code></td><td>Enables the <code>Form</code> extractor</td><td>Yes</td></tr>
+<tr><td><code>query</code></td><td>Enables the <code>Query</code> extractor</td><td>Yes</td></tr>
+</tbody></table>
+</div></div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.async_trait"><code>pub use async_trait::<a class="attr" href="../async_trait/attr.async_trait.html" title="attr async_trait::async_trait">async_trait</a>;</code></div></li><li><div class="item-name" id="reexport.http"><code>pub use <a class="mod" href="../http/index.html" title="mod http">http</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="body/index.html" title="mod axum::body">body</a></div><div class="desc docblock-short">HTTP body utilities.</div></li><li><div class="item-name"><a class="mod" href="error_handling/index.html" title="mod axum::error_handling">error_handling</a></div><div class="desc docblock-short">Error handling model and utilities</div></li><li><div class="item-name"><a class="mod" href="extract/index.html" title="mod axum::extract">extract</a></div><div class="desc docblock-short">Types and traits for extracting data from requests.</div></li><li><div class="item-name"><a class="mod" href="handler/index.html" title="mod axum::handler">handler</a></div><div class="desc docblock-short">Async functions that can be used to handle requests.</div></li><li><div class="item-name"><a class="mod" href="middleware/index.html" title="mod axum::middleware">middleware</a></div><div class="desc docblock-short">Utilities for writing middleware</div></li><li><div class="item-name"><a class="mod" href="response/index.html" title="mod axum::response">response</a></div><div class="desc docblock-short">Types and traits for generating responses.</div></li><li><div class="item-name"><a class="mod" href="routing/index.html" title="mod axum::routing">routing</a></div><div class="desc docblock-short">Routing between <a href="../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>s and handlers.</div></li><li><div class="item-name"><a class="mod" href="serve/index.html" title="mod axum::serve">serve</a></div><div class="desc docblock-short">Serve services.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct axum::Error">Error</a></div><div class="desc docblock-short">Errors that can happen when using axum.</div></li><li><div class="item-name"><a class="struct" href="struct.Extension.html" title="struct axum::Extension">Extension</a></div><div class="desc docblock-short">Extractor and response for extensions.</div></li><li><div class="item-name"><a class="struct" href="struct.Form.html" title="struct axum::Form">Form</a></div><div class="desc docblock-short">URL encoded extractor and response.</div></li><li><div class="item-name"><a class="struct" href="struct.Json.html" title="struct axum::Json">Json</a></div><div class="desc docblock-short">JSON Extractor / Response.</div></li><li><div class="item-name"><a class="struct" href="struct.Router.html" title="struct axum::Router">Router</a></div><div class="desc docblock-short">The router type for composing handlers and services.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.RequestExt.html" title="trait axum::RequestExt">RequestExt</a></div><div class="desc docblock-short">Extension trait that adds additional methods to <a href="extract/type.Request.html" title="type axum::extract::Request"><code>Request</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.RequestPartsExt.html" title="trait axum::RequestPartsExt">RequestPartsExt</a></div><div class="desc docblock-short">Extension trait that adds additional methods to <a href="../http/request/struct.Parts.html" title="struct http::request::Parts"><code>Parts</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.ServiceExt.html" title="trait axum::ServiceExt">ServiceExt</a></div><div class="desc docblock-short">Extension trait that adds additional methods to any <a href="../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.serve.html" title="fn axum::serve">serve</a></div><div class="desc docblock-short">Serve the service with the supplied listener.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.BoxError.html" title="type axum::BoxError">BoxError</a></div><div class="desc docblock-short">Alias for a type-erased error type.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/regex-automata-0.4.7/src/meta/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+</pre></div><pre class="rust"><code><span class="doccomment">/*!
+Provides a regex matcher that composes several other regex matchers
+automatically.
+
+This module is home to a meta [`Regex`], which provides a convenient high
+level API for executing regular expressions in linear time.
+
+# Comparison with the `regex` crate
+
+A meta `Regex` is the implementation used directly by the `regex` crate.
+Indeed, the `regex` crate API is essentially just a light wrapper over a meta
+`Regex`. This means that if you need the full flexibility offered by this
+API, then you should be able to switch to using this API directly without
+any changes in match semantics or syntax. However, there are some API level
+differences:
+
+* The `regex` crate API returns match objects that include references to the
+haystack itself, which in turn makes it easy to access the matching strings
+without having to slice the haystack yourself. In contrast, a meta `Regex`
+returns match objects that only have offsets in them.
+* At time of writing, a meta `Regex` doesn't have some of the convenience
+routines that the `regex` crate has, such as replacements. Note though that
+[`Captures::interpolate_string`](crate::util::captures::Captures::interpolate_string)
+will handle the replacement string interpolation for you.
+* A meta `Regex` supports the [`Input`](crate::Input) abstraction, which
+provides a way to configure a search in more ways than is supported by the
+`regex` crate. For example, [`Input::anchored`](crate::Input::anchored) can
+be used to run an anchored search, regardless of whether the pattern is itself
+anchored with a `^`.
+* A meta `Regex` supports multi-pattern searching everywhere.
+Indeed, every [`Match`](crate::Match) returned by the search APIs
+include a [`PatternID`](crate::PatternID) indicating which pattern
+matched. In the single pattern case, all matches correspond to
+[`PatternID::ZERO`](crate::PatternID::ZERO). In contrast, the `regex` crate
+has distinct `Regex` and a `RegexSet` APIs. The former only supports a single
+pattern, while the latter supports multiple patterns but cannot report the
+offsets of a match.
+* A meta `Regex` provides the explicit capability of bypassing its internal
+memory pool for automatically acquiring mutable scratch space required by its
+internal regex engines. Namely, a [`Cache`] can be explicitly provided to lower
+level routines such as [`Regex::search_with`].
+
+*/
+
+</span><span class="kw">pub use </span><span class="self">self</span>::{
+    error::BuildError,
+    regex::{
+        Builder, Cache, CapturesMatches, Config, FindMatches, Regex, Split,
+        SplitN,
+    },
+};
+
+<span class="kw">mod </span>error;
+<span class="attr">#[cfg(any(feature = <span class="string">"dfa-build"</span>, feature = <span class="string">"hybrid"</span>))]
+</span><span class="kw">mod </span>limited;
+<span class="kw">mod </span>literal;
+<span class="kw">mod </span>regex;
+<span class="kw">mod </span>reverse_inner;
+<span class="attr">#[cfg(any(feature = <span class="string">"dfa-build"</span>, feature = <span class="string">"hybrid"</span>))]
+</span><span class="kw">mod </span>stopat;
+<span class="kw">mod </span>strategy;
+<span class="kw">mod </span>wrappers;
+</code></pre></div></section></main></body></html>

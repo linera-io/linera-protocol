@@ -1,0 +1,498 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate exposes a variety of regex engines used by the `regex` crate. It provides a vast, sprawling and “expert” level API to each regex engine. The regex engines provided by this crate focus heavily on finite automata implementations and specifically guarantee worst case `O(m * n)` time complexity for all searches. (Where `m ~ len(regex)` and `n ~ len(haystack)`.)"><title>regex_automata - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">regex_automata</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/regex_automata/lib.rs.html#1-648">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate exposes a variety of regex engines used by the <code>regex</code> crate.
+It provides a vast, sprawling and “expert” level API to each regex engine.
+The regex engines provided by this crate focus heavily on finite automata
+implementations and specifically guarantee worst case <code>O(m * n)</code> time
+complexity for all searches. (Where <code>m ~ len(regex)</code> and <code>n ~ len(haystack)</code>.)</p>
+<p>The primary goal of this crate is to serve as an implementation detail for the
+<code>regex</code> crate. A secondary goal is to make its internals available for use by
+others.</p>
+<h2 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of contents</h2>
+<ul>
+<li><a href="#should-i-be-using-this-crate">Should I be using this crate?</a> gives some
+reasons for and against using this crate.</li>
+<li><a href="#examples">Examples</a> provides a small selection of things you can do with
+this crate.</li>
+<li><a href="#available-regex-engines">Available regex engines</a> provides a hyperlinked
+list of all regex engines in this crate.</li>
+<li><a href="#api-themes">API themes</a> discusses common elements used throughout this
+crate.</li>
+<li><a href="#crate-features">Crate features</a> documents the extensive list of Cargo
+features available.</li>
+</ul>
+<h2 id="should-i-be-using-this-crate"><a class="doc-anchor" href="#should-i-be-using-this-crate">§</a>Should I be using this crate?</h2>
+<p>If you find yourself here because you just want to use regexes, then you should
+first check out whether the <a href="https://docs.rs/regex"><code>regex</code> crate</a> meets
+your needs. It provides a streamlined and difficult-to-misuse API for regex
+searching.</p>
+<p>If you’re here because there is something specific you want to do that can’t
+be easily done with <code>regex</code> crate, then you are perhaps in the right place.
+It’s most likely that the first stop you’ll want to make is to explore the
+<a href="meta/index.html" title="mod regex_automata::meta"><code>meta</code> regex APIs</a>. Namely, the <code>regex</code> crate is just a light wrapper
+over a <a href="meta/struct.Regex.html" title="struct regex_automata::meta::Regex"><code>meta::Regex</code></a>, so its API will probably be the easiest to transition
+to. In contrast to the <code>regex</code> crate, the <code>meta::Regex</code> API supports more
+search parameters and does multi-pattern searches. However, it isn’t quite as
+ergonomic.</p>
+<p>Otherwise, the following is an inexhaustive list of reasons to use this crate:</p>
+<ul>
+<li>You want to analyze or use a <a href="nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">Thompson <code>NFA</code></a> directly.</li>
+<li>You want more powerful multi-pattern search than what is provided by
+<code>RegexSet</code> in the <code>regex</code> crate. All regex engines in this crate support
+multi-pattern searches.</li>
+<li>You want to use one of the <code>regex</code> crate’s internal engines directly because
+of some interesting configuration that isn’t possible via the <code>regex</code> crate.
+For example, a <a href="hybrid/dfa/struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">lazy DFA’s configuration</a> exposes a
+dizzying number of options for controlling its execution.</li>
+<li>You want to use the lower level search APIs. For example, both the <a href="hybrid/dfa/index.html" title="mod regex_automata::hybrid::dfa">lazy
+DFA</a> and <a href="dfa/index.html" title="mod regex_automata::dfa">fully compiled DFAs</a> support searching by exploring
+the automaton one state at a time. This might be useful, for example, for
+stream searches or searches of strings stored in non-contiguous in memory.</li>
+<li>You want to build a fully compiled DFA and then <a href="dfa::dense::DFA::from_bytes">use zero-copy
+deserialization</a> to load it into memory and use
+it for searching. This use case is supported in core-only no-std/no-alloc
+environments.</li>
+<li>You want to run <a href="struct.Input.html#method.anchored" title="method regex_automata::Input::anchored">anchored searches</a> without using the <code>^</code>
+anchor in your regex pattern.</li>
+<li>You need to work-around contention issues with
+sharing a regex across multiple threads. The
+<a href="meta/struct.Regex.html#method.search_with" title="method regex_automata::meta::Regex::search_with"><code>meta::Regex::search_with</code></a> API permits bypassing
+any kind of synchronization at all by requiring the caller to provide the
+mutable scratch spaced needed during a search.</li>
+<li>You want to build your own regex engine on top of the <code>regex</code> crate’s
+infrastructure.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This section tries to identify a few interesting things you can do with this
+crate and demonstrates them.</p>
+<h4 id="multi-pattern-searches-with-capture-groups"><a class="doc-anchor" href="#multi-pattern-searches-with-capture-groups">§</a>Multi-pattern searches with capture groups</h4>
+<p>One of the more frustrating limitations of <code>RegexSet</code> in the <code>regex</code> crate
+(at the time of writing) is that it doesn’t report match positions. With this
+crate, multi-pattern support was intentionally designed in from the beginning,
+which means it works in all regex engines and even for capture groups as well.</p>
+<p>This example shows how to search for matches of multiple regexes, where each
+regex uses the same capture group names to parse different key-value formats.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{meta::Regex, PatternID};
+
+<span class="kw">let </span>re = Regex::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r#"(?m)^(?&lt;key&gt;[[:word:]]+)=(?&lt;val&gt;[[:word:]]+)$"#</span>,
+    <span class="string">r#"(?m)^(?&lt;key&gt;[[:word:]]+)="(?&lt;val&gt;[^"]+)"$"#</span>,
+    <span class="string">r#"(?m)^(?&lt;key&gt;[[:word:]]+)='(?&lt;val&gt;[^']+)'$"#</span>,
+    <span class="string">r#"(?m)^(?&lt;key&gt;[[:word:]]+):\s*(?&lt;val&gt;[[:word:]]+)$"#</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>hay = <span class="string">r#"
+best_album="Blow Your Face Out"
+best_quote='"then as it was, then again it will be"'
+best_year=1973
+best_simpsons_episode: HOMR
+"#</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>kvs = <span class="macro">vec!</span>[];
+<span class="kw">for </span>caps <span class="kw">in </span>re.captures_iter(hay) {
+    <span class="comment">// N.B. One could use capture indices '1' and '2' here
+    // as well. Capture indices are local to each pattern.
+    // (Just like names are.)
+    </span><span class="kw">let </span>key = <span class="kw-2">&amp;</span>hay[caps.get_group_by_name(<span class="string">"key"</span>).unwrap()];
+    <span class="kw">let </span>val = <span class="kw-2">&amp;</span>hay[caps.get_group_by_name(<span class="string">"val"</span>).unwrap()];
+    kvs.push((key, val));
+}
+<span class="macro">assert_eq!</span>(kvs, <span class="macro">vec!</span>[
+    (<span class="string">"best_album"</span>, <span class="string">"Blow Your Face Out"</span>),
+    (<span class="string">"best_quote"</span>, <span class="string">"\"then as it was, then again it will be\""</span>),
+    (<span class="string">"best_year"</span>, <span class="string">"1973"</span>),
+    (<span class="string">"best_simpsons_episode"</span>, <span class="string">"HOMR"</span>),
+]);
+</code></pre></div>
+<h4 id="build-a-full-dfa-and-walk-it-manually"><a class="doc-anchor" href="#build-a-full-dfa-and-walk-it-manually">§</a>Build a full DFA and walk it manually</h4>
+<p>One of the regex engines in this crate is a fully compiled DFA. It takes worst
+case exponential time to build, but once built, it can be easily explored and
+used for searches. Here’s a simple example that uses its lower level APIs to
+implement a simple anchored search by hand.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{dfa::{Automaton, dense}, Input};
+
+<span class="kw">let </span>dfa = dense::DFA::new(<span class="string">r"(?-u)\b[A-Z]\w+z\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>haystack = <span class="string">"Quartz"</span>;
+
+<span class="comment">// The start state is determined by inspecting the position and the
+// initial bytes of the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>state = dfa.start_state_forward(<span class="kw-2">&amp;</span>Input::new(haystack))<span class="question-mark">?</span>;
+<span class="comment">// Walk all the bytes in the haystack.
+</span><span class="kw">for </span><span class="kw-2">&amp;</span>b <span class="kw">in </span>haystack.as_bytes().iter() {
+    state = dfa.next_state(state, b);
+}
+<span class="comment">// DFAs in this crate require an explicit
+// end-of-input transition if a search reaches
+// the end of a haystack.
+</span>state = dfa.next_eoi_state(state);
+<span class="macro">assert!</span>(dfa.is_match_state(state));
+</code></pre></div>
+<p>Or do the same with a lazy DFA that avoids exponential worst case compile time,
+but requires mutable scratch space to lazily build the DFA during the search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">r"(?-u)\b[A-Z]\w+z\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>hay = <span class="string">"Quartz"</span>;
+
+<span class="comment">// The start state is determined by inspecting the position and the
+// initial bytes of the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>state = dfa.start_state_forward(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(hay))<span class="question-mark">?</span>;
+<span class="comment">// Walk all the bytes in the haystack.
+</span><span class="kw">for </span><span class="kw-2">&amp;</span>b <span class="kw">in </span>hay.as_bytes().iter() {
+    state = dfa.next_state(<span class="kw-2">&amp;mut </span>cache, state, b)<span class="question-mark">?</span>;
+}
+<span class="comment">// DFAs in this crate require an explicit
+// end-of-input transition if a search reaches
+// the end of a haystack.
+</span>state = dfa.next_eoi_state(<span class="kw-2">&amp;mut </span>cache, state)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(state.is_match());
+</code></pre></div>
+<h4 id="find-all-overlapping-matches"><a class="doc-anchor" href="#find-all-overlapping-matches">§</a>Find all overlapping matches</h4>
+<p>This example shows how to build a DFA and use it to find all possible matches,
+including overlapping matches. A similar example will work with a lazy DFA as
+well. This also works with multiple patterns and will report all matches at the
+same position where multiple patterns match.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    dfa::{dense, Automaton, OverlappingState},
+    Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = dense::DFA::builder()
+    .configure(dense::DFA::config().match_kind(MatchKind::All))
+    .build(<span class="string">r"(?-u)\w{3,}"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>input = Input::new(<span class="string">"homer marge bart lisa maggie"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">while let </span><span class="prelude-val">Some</span>(hm) = {
+    dfa.try_search_overlapping_fwd(<span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+    state.get_match()
+} {
+    matches.push(hm.offset());
+}
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[
+    <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>,        <span class="comment">// hom, home, homer
+    </span><span class="number">9</span>, <span class="number">10</span>, <span class="number">11</span>,      <span class="comment">// mar, marg, marge
+    </span><span class="number">15</span>, <span class="number">16</span>,         <span class="comment">// bar, bart
+    </span><span class="number">20</span>, <span class="number">21</span>,         <span class="comment">// lis, lisa
+    </span><span class="number">25</span>, <span class="number">26</span>, <span class="number">27</span>, <span class="number">28</span>, <span class="comment">// mag, magg, maggi, maggie
+</span>]);
+</code></pre></div>
+<h2 id="available-regex-engines"><a class="doc-anchor" href="#available-regex-engines">§</a>Available regex engines</h2>
+<p>The following is a complete list of all regex engines provided by this crate,
+along with a very brief description of it and why you might want to use it.</p>
+<ul>
+<li>[<code>dfa::regex::Regex</code>] is a regex engine that works on top of either
+<a href="dfa::dense">dense</a> or <a href="dfa::sparse">sparse</a> fully compiled DFAs. You might
+use a DFA if you need the fastest possible regex engine in this crate and can
+afford the exorbitant memory usage usually required by DFAs. Low level APIs on
+fully compiled DFAs are provided by the <a href="dfa::Automaton"><code>Automaton</code> trait</a>.
+Fully compiled dense DFAs can handle all regexes except for searching a regex
+with a Unicode word boundary on non-ASCII haystacks. A fully compiled DFA based
+regex can only report the start and end of each match.</li>
+<li><a href="hybrid/regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>hybrid::regex::Regex</code></a> is a regex engine that works on top of a lazily
+built DFA. Its performance profile is very similar to that of fully compiled
+DFAs, but can be slower in some pathological cases. Fully compiled DFAs are
+also amenable to more optimizations, such as state acceleration, that aren’t
+available in a lazy DFA. You might use this lazy DFA if you can’t abide the
+worst case exponential compile time of a full DFA, but still want the DFA
+search performance in the vast majority of cases. A lazy DFA based regex can
+only report the start and end of each match.</li>
+<li><a href="dfa/onepass/struct.DFA.html" title="struct regex_automata::dfa::onepass::DFA"><code>dfa::onepass::DFA</code></a> is a regex engine that is implemented as a DFA, but
+can report the matches of each capture group in addition to the start and end
+of each match. The catch is that it only works on a somewhat small subset of
+regexes known as “one-pass.” You’ll want to use this for cases when you need
+capture group matches and the regex is one-pass since it is likely to be faster
+than any alternative. A one-pass DFA can handle all types of regexes, but does
+have some reasonable limits on the number of capture groups it can handle.</li>
+<li><a href="nfa/thompson/backtrack/struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker"><code>nfa::thompson::backtrack::BoundedBacktracker</code></a> is a regex engine that uses
+backtracking, but keeps track of the work it has done to avoid catastrophic
+backtracking. Like the one-pass DFA, it provides the matches of each capture
+group. It retains the <code>O(m * n)</code> worst case time bound. This tends to be slower
+than the one-pass DFA regex engine, but faster than the PikeVM. It can handle
+all types of regexes, but usually only works well with small haystacks and
+small regexes due to the memory required to avoid redoing work.</li>
+<li><a href="nfa/thompson/pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>nfa::thompson::pikevm::PikeVM</code></a> is a regex engine that can handle all
+regexes, of all sizes and provides capture group matches. It tends to be a tool
+of last resort because it is also usually the slowest regex engine.</li>
+<li><a href="meta/struct.Regex.html" title="struct regex_automata::meta::Regex"><code>meta::Regex</code></a> is the meta regex engine that combines <em>all</em> of the above
+engines into one. The reason for this is that each of the engines above have
+their own caveats such as, “only handles a subset of regexes” or “is generally
+slow.” The meta regex engine accounts for all of these caveats and composes
+the engines in a way that attempts to mitigate each engine’s weaknesses while
+emphasizing its strengths. For example, it will attempt to run a lazy DFA even
+if it might fail. In which case, it will restart the search with a likely
+slower but more capable regex engine. The meta regex engine is what you should
+default to. Use one of the above engines directly only if you have a specific
+reason to.</li>
+</ul>
+<h2 id="api-themes"><a class="doc-anchor" href="#api-themes">§</a>API themes</h2>
+<p>While each regex engine has its own APIs and configuration options, there are
+some general themes followed by all of them.</p>
+<h4 id="the-input-abstraction"><a class="doc-anchor" href="#the-input-abstraction">§</a>The <code>Input</code> abstraction</h4>
+<p>Most search routines in this crate accept anything that implements
+<code>Into&lt;Input&gt;</code>. Both <code>&amp;str</code> and <code>&amp;[u8]</code> haystacks satisfy this constraint, which
+means that things like <code>engine.search("foo")</code> will work as you would expect.</p>
+<p>By virtue of accepting an <code>Into&lt;Input&gt;</code> though, callers can provide more than
+just a haystack. Indeed, the <a href="struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a> type has more details, but briefly,
+callers can use it to configure various aspects of the search:</p>
+<ul>
+<li>The span of the haystack to search via <a href="struct.Input.html#method.span" title="method regex_automata::Input::span"><code>Input::span</code></a> or <a href="struct.Input.html#method.range" title="method regex_automata::Input::range"><code>Input::range</code></a>,
+which might be a substring of the haystack.</li>
+<li>Whether to run an anchored search or not via <a href="struct.Input.html#method.anchored" title="method regex_automata::Input::anchored"><code>Input::anchored</code></a>. This
+permits one to require matches to start at the same offset that the search
+started.</li>
+<li>Whether to ask the regex engine to stop as soon as a match is seen via
+<a href="struct.Input.html#method.earliest" title="method regex_automata::Input::earliest"><code>Input::earliest</code></a>. This can be used to find the offset of a match as soon
+as it is known without waiting for the full leftmost-first match to be found.
+This can also be used to avoid the worst case <code>O(m * n^2)</code> time complexity
+of iteration.</li>
+</ul>
+<p>Some lower level search routines accept an <code>&amp;Input</code> for performance reasons.
+In which case, <code>&amp;Input::new("haystack")</code> can be used for a simple search.</p>
+<h4 id="error-reporting"><a class="doc-anchor" href="#error-reporting">§</a>Error reporting</h4>
+<p>Most, but not all, regex engines in this crate can fail to execute a search.
+When a search fails, callers cannot determine whether or not a match exists.
+That is, the result is indeterminate.</p>
+<p>Search failure, in all cases in this crate, is represented by a <a href="struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a>.
+Routines that can fail start with the <code>try_</code> prefix in their name. For example,
+<a href="hybrid/regex/struct.Regex.html#method.try_search" title="method regex_automata::hybrid::regex::Regex::try_search"><code>hybrid::regex::Regex::try_search</code></a> can fail for a number of reasons.
+Conversely, routines that either can’t fail or can panic on failure lack the
+<code>try_</code> prefix. For example, <a href="hybrid/regex/struct.Regex.html#method.find" title="method regex_automata::hybrid::regex::Regex::find"><code>hybrid::regex::Regex::find</code></a> will panic in
+cases where <a href="hybrid/regex/struct.Regex.html#method.try_search" title="method regex_automata::hybrid::regex::Regex::try_search"><code>hybrid::regex::Regex::try_search</code></a> would return an error, and
+<a href="meta/struct.Regex.html#method.find" title="method regex_automata::meta::Regex::find"><code>meta::Regex::find</code></a> will never panic. Therefore, callers need to pay close
+attention to the panicking conditions in the documentation.</p>
+<p>In most cases, the reasons that a search fails are either predictable or
+configurable, albeit at some additional cost.</p>
+<p>An example of predictable failure is
+<a href="nfa/thompson/backtrack/struct.BoundedBacktracker.html#method.try_search" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::try_search"><code>BoundedBacktracker::try_search</code></a>.
+Namely, it fails whenever the multiplication of the haystack, the regex and some
+constant exceeds the
+<a href="nfa/thompson/backtrack/struct.Config.html#method.visited_capacity" title="method regex_automata::nfa::thompson::backtrack::Config::visited_capacity">configured visited capacity</a>.
+Callers can predict the failure in terms of haystack length via the
+<a href="nfa/thompson/backtrack/struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>
+method. While this form of failure is technically avoidable by increasing the
+visited capacity, it isn’t practical to do so for all inputs because the
+memory usage required for larger haystacks becomes impractically large. So in
+practice, if one is using the bounded backtracker, you really do have to deal
+with the failure.</p>
+<p>An example of configurable failure happens when one enables heuristic support
+for Unicode word boundaries in a DFA. Namely, since the DFAs in this crate
+(except for the one-pass DFA) do not support Unicode word boundaries on
+non-ASCII haystacks, building a DFA from an NFA that contains a Unicode word
+boundary will itself fail. However, one can configure DFAs to still be built in
+this case by
+<a href="hybrid/dfa/struct.Config.html#method.unicode_word_boundary" title="method regex_automata::hybrid::dfa::Config::unicode_word_boundary">configuring heuristic support for Unicode word boundaries</a>.
+If the NFA the DFA is built from contains a Unicode word boundary, then the
+DFA will still be built, but special transitions will be added to every state
+that cause the DFA to fail if any non-ASCII byte is seen. This failure happens
+at search time and it requires the caller to opt into this.</p>
+<p>There are other ways for regex engines to fail in this crate, but the above
+two should represent the general theme of failures one can find. Dealing
+with these failures is, in part, one the responsibilities of the <a href="meta/index.html" title="mod regex_automata::meta">meta regex
+engine</a>. Notice, for example, that the meta regex engine exposes an API
+that never returns an error nor panics. It carefully manages all of the ways
+in which the regex engines can fail and either avoids the predictable ones
+entirely (e.g., the bounded backtracker) or reacts to configured failures by
+falling back to a different engine (e.g., the lazy DFA quitting because it saw
+a non-ASCII byte).</p>
+<h4 id="configuration-and-builders"><a class="doc-anchor" href="#configuration-and-builders">§</a>Configuration and Builders</h4>
+<p>Most of the regex engines in this crate come with two types to facilitate
+building the regex engine: a <code>Config</code> and a <code>Builder</code>. A <code>Config</code> is usually
+specific to that particular regex engine, but other objects such as parsing and
+NFA compilation have <code>Config</code> types too. A <code>Builder</code> is the thing responsible
+for taking inputs (either pattern strings or already-parsed patterns or even
+NFAs directly) and turning them into an actual regex engine that can be used
+for searching.</p>
+<p>The main reason why building a regex engine is a bit complicated is because
+of the desire to permit composition with de-coupled components. For example,
+you might want to <a href="nfa/thompson/struct.Builder.html" title="struct regex_automata::nfa::thompson::Builder">manually construct a Thompson NFA</a>
+and then build a regex engine from it without ever using a regex parser
+at all. On the other hand, you might also want to build a regex engine directly
+from the concrete syntax. This demonstrates why regex engine construction is
+so flexible: it needs to support not just convenient construction, but also
+construction from parts built elsewhere.</p>
+<p>This is also in turn why there are many different <code>Config</code> structs in this
+crate. Let’s look more closely at an example: <a href="hybrid/regex/struct.Builder.html" title="struct regex_automata::hybrid::regex::Builder"><code>hybrid::regex::Builder</code></a>. It
+accepts three different <code>Config</code> types for configuring construction of a lazy
+DFA regex:</p>
+<ul>
+<li><a href="hybrid/regex/struct.Builder.html#method.syntax" title="method regex_automata::hybrid::regex::Builder::syntax"><code>hybrid::regex::Builder::syntax</code></a> accepts a
+<a href="util/syntax/struct.Config.html" title="struct regex_automata::util::syntax::Config"><code>util::syntax::Config</code></a> for configuring the options found in the
+<a href="../regex_syntax/index.html" title="mod regex_syntax"><code>regex-syntax</code></a> crate. For example, whether to match
+case insensitively.</li>
+<li><a href="hybrid/regex/struct.Builder.html#method.thompson" title="method regex_automata::hybrid::regex::Builder::thompson"><code>hybrid::regex::Builder::thompson</code></a> accepts a <a href="nfa/thompson/struct.Config.html" title="struct regex_automata::nfa::thompson::Config"><code>nfa::thompson::Config</code></a> for
+configuring construction of a <a href="nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">Thompson NFA</a>. For example,
+whether to build an NFA that matches the reverse language described by the
+regex.</li>
+<li><a href="hybrid/regex/struct.Builder.html#method.dfa" title="method regex_automata::hybrid::regex::Builder::dfa"><code>hybrid::regex::Builder::dfa</code></a> accept a <a href="hybrid/dfa/struct.Config.html" title="struct regex_automata::hybrid::dfa::Config"><code>hybrid::dfa::Config</code></a> for
+configuring construction of the pair of underlying lazy DFAs that make up the
+lazy DFA regex engine. For example, changing the capacity of the cache used to
+store the transition table.</li>
+</ul>
+<p>The lazy DFA regex engine uses all three of those configuration objects for
+methods like <a href="hybrid/regex/struct.Builder.html#method.build" title="method regex_automata::hybrid::regex::Builder::build"><code>hybrid::regex::Builder::build</code></a>, which accepts a pattern
+string containing the concrete syntax of your regex. It uses the syntax
+configuration to parse it into an AST and translate it into an HIR. Then the
+NFA configuration when compiling the HIR into an NFA. And then finally the DFA
+configuration when lazily determinizing the NFA into a DFA.</p>
+<p>Notice though that the builder also has a
+<a href="hybrid/regex/struct.Builder.html#method.build_from_dfas" title="method regex_automata::hybrid::regex::Builder::build_from_dfas"><code>hybrid::regex::Builder::build_from_dfas</code></a> constructor. This permits callers
+to build the underlying pair of lazy DFAs themselves (one for the forward
+searching to find the end of a match and one for the reverse searching to find
+the start of a match), and then build the regex engine from them. The lazy
+DFAs, in turn, have their own builder that permits <a href="hybrid/dfa/struct.Builder.html#method.build_from_nfa" title="method regex_automata::hybrid::dfa::Builder::build_from_nfa">construction directly from
+a Thompson NFA</a>. Continuing down the
+rabbit hole, a Thompson NFA has its own compiler that permits <a href="nfa/thompson/struct.Compiler.html#method.build_from_hir" title="method regex_automata::nfa::thompson::Compiler::build_from_hir">construction
+directly from an HIR</a>. The lazy DFA
+regex engine builder lets you follow this rabbit hole all the way down, but
+also provides convenience routines that do it for you when you don’t need
+precise control over every component.</p>
+<p>The <a href="meta/index.html" title="mod regex_automata::meta">meta regex engine</a> is a good example of something that utilizes the
+full flexibility of these builders. It often needs not only precise control
+over each component, but also shares them across multiple regex engines.
+(Most sharing is done by internal reference accounting. For example, an
+<a href="nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA"><code>NFA</code></a> is reference counted internally which makes cloning
+cheap.)</p>
+<h4 id="size-limits"><a class="doc-anchor" href="#size-limits">§</a>Size limits</h4>
+<p>Unlike the <code>regex</code> crate, the <code>regex-automata</code> crate specifically does not
+enable any size limits by default. That means users of this crate need to
+be quite careful when using untrusted patterns. Namely, because bounded
+repetitions can grow exponentially by stacking them, it is possible to build a
+very large internal regex object from just a small pattern string. For example,
+the NFA built from the pattern <code>a{10}{10}{10}{10}{10}{10}{10}</code> is over 240MB.</p>
+<p>There are multiple size limit options in this crate. If one or more size limits
+are relevant for the object you’re building, they will be configurable via
+methods on a corresponding <code>Config</code> type.</p>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<p>This crate has a dizzying number of features. The main idea is to be able to
+control how much stuff you pull in for your specific use case, since the full
+crate is quite large and can dramatically increase compile times and binary
+size.</p>
+<p>The most barebones but useful configuration is to disable all default features
+and enable only <code>dfa-search</code>. This will bring in just the DFA deserialization
+and search routines without any dependency on <code>std</code> or <code>alloc</code>. This does
+require generating and serializing a DFA, and then storing it somewhere, but
+it permits regex searches in freestanding or embedded environments.</p>
+<p>Because there are so many features, they are split into a few groups.</p>
+<p>The default set of features is: <code>std</code>, <code>syntax</code>, <code>perf</code>, <code>unicode</code>, <code>meta</code>,
+<code>nfa</code>, <code>dfa</code> and <code>hybrid</code>. Basically, the default is to enable everything
+except for development related features like <code>logging</code>.</p>
+<h4 id="ecosystem-features"><a class="doc-anchor" href="#ecosystem-features">§</a>Ecosystem features</h4>
+<ul>
+<li><strong>std</strong> - Enables use of the standard library. In terms of APIs, this usually
+just means that error types implement the <code>std::error::Error</code> trait. Otherwise,
+<code>std</code> sometimes enables the code to be faster, for example, using a <code>HashMap</code>
+instead of a <code>BTreeMap</code>. (The <code>std</code> feature matters more for dependencies like
+<code>aho-corasick</code> and <code>memchr</code>, where <code>std</code> is required to enable certain classes
+of SIMD optimizations.) Enabling <code>std</code> automatically enables <code>alloc</code>.</li>
+<li><strong>alloc</strong> - Enables use of the <code>alloc</code> library. This is required for most
+APIs in this crate. The main exception is deserializing and searching with
+fully compiled DFAs.</li>
+<li><strong>logging</strong> - Adds a dependency on the <code>log</code> crate and makes this crate emit
+log messages of varying degrees of utility. The log messages are especially
+useful in trying to understand what the meta regex engine is doing.</li>
+</ul>
+<h4 id="performance-features"><a class="doc-anchor" href="#performance-features">§</a>Performance features</h4>
+<ul>
+<li><strong>perf</strong> - Enables all of the below features.</li>
+<li><strong>perf-inline</strong> - When enabled, <code>inline(always)</code> is used in (many) strategic
+locations to help performance at the expense of longer compile times and
+increased binary size.</li>
+<li><strong>perf-literal</strong> - Enables all literal related optimizations.
+<ul>
+<li><strong>perf-literal-substring</strong> - Enables all single substring literal
+optimizations. This includes adding a dependency on the <code>memchr</code> crate.</li>
+<li><strong>perf-literal-multisubstring</strong> - Enables all multiple substring literal
+optimizations. This includes adding a dependency on the <code>aho-corasick</code>
+crate.</li>
+</ul>
+</li>
+</ul>
+<h4 id="unicode-features"><a class="doc-anchor" href="#unicode-features">§</a>Unicode features</h4>
+<ul>
+<li><strong>unicode</strong> -
+Enables all Unicode features. This feature is enabled by default, and will
+always cover all Unicode features, even if more are added in the future.</li>
+<li><strong>unicode-age</strong> -
+Provide the data for the
+<a href="https://www.unicode.org/reports/tr44/tr44-24.html#Character_Age">Unicode <code>Age</code> property</a>.
+This makes it possible to use classes like <code>\p{Age:6.0}</code> to refer to all
+codepoints first introduced in Unicode 6.0</li>
+<li><strong>unicode-bool</strong> -
+Provide the data for numerous Unicode boolean properties. The full list
+is not included here, but contains properties like <code>Alphabetic</code>, <code>Emoji</code>,
+<code>Lowercase</code>, <code>Math</code>, <code>Uppercase</code> and <code>White_Space</code>.</li>
+<li><strong>unicode-case</strong> -
+Provide the data for case insensitive matching using
+<a href="https://www.unicode.org/reports/tr18/#Simple_Loose_Matches">Unicode’s “simple loose matches” specification</a>.</li>
+<li><strong>unicode-gencat</strong> -
+Provide the data for
+<a href="https://www.unicode.org/reports/tr44/tr44-24.html#General_Category_Values">Unicode general categories</a>.
+This includes, but is not limited to, <code>Decimal_Number</code>, <code>Letter</code>,
+<code>Math_Symbol</code>, <code>Number</code> and <code>Punctuation</code>.</li>
+<li><strong>unicode-perl</strong> -
+Provide the data for supporting the Unicode-aware Perl character classes,
+corresponding to <code>\w</code>, <code>\s</code> and <code>\d</code>. This is also necessary for using
+Unicode-aware word boundary assertions. Note that if this feature is
+disabled, the <code>\s</code> and <code>\d</code> character classes are still available if the
+<code>unicode-bool</code> and <code>unicode-gencat</code> features are enabled, respectively.</li>
+<li><strong>unicode-script</strong> -
+Provide the data for
+<a href="https://www.unicode.org/reports/tr24/">Unicode scripts and script extensions</a>.
+This includes, but is not limited to, <code>Arabic</code>, <code>Cyrillic</code>, <code>Hebrew</code>,
+<code>Latin</code> and <code>Thai</code>.</li>
+<li><strong>unicode-segment</strong> -
+Provide the data necessary to provide the properties used to implement the
+<a href="https://www.unicode.org/reports/tr29/">Unicode text segmentation algorithms</a>.
+This enables using classes like <code>\p{gcb=Extend}</code>, <code>\p{wb=Katakana}</code> and
+<code>\p{sb=ATerm}</code>.</li>
+<li><strong>unicode-word-boundary</strong> -
+Enables support for Unicode word boundaries, i.e., <code>\b</code>, in regexes. When
+this and <code>unicode-perl</code> are enabled, then data tables from <code>regex-syntax</code> are
+used to implement Unicode word boundaries. However, if <code>regex-syntax</code> isn’t
+enabled as a dependency then one can still enable this feature. It will
+cause <code>regex-automata</code> to bundle its own data table that would otherwise be
+redundant with <code>regex-syntax</code>’s table.</li>
+</ul>
+<h4 id="regex-engine-features"><a class="doc-anchor" href="#regex-engine-features">§</a>Regex engine features</h4>
+<ul>
+<li><strong>syntax</strong> - Enables a dependency on <code>regex-syntax</code>. This makes APIs
+for building regex engines from pattern strings available. Without the
+<code>regex-syntax</code> dependency, the only way to build a regex engine is generally
+to deserialize a previously built DFA or to hand assemble an NFA using its
+<a href="nfa/thompson/struct.Builder.html" title="struct regex_automata::nfa::thompson::Builder">builder API</a>. Once you have an NFA, you can build any
+of the regex engines in this crate. The <code>syntax</code> feature also enables <code>alloc</code>.</li>
+<li><strong>meta</strong> - Enables the meta regex engine. This also enables the <code>syntax</code> and
+<code>nfa-pikevm</code> features, as both are the minimal requirements needed. The meta
+regex engine benefits from enabling any of the other regex engines and will
+use them automatically when appropriate.</li>
+<li><strong>nfa</strong> - Enables all NFA related features below.
+<ul>
+<li><strong>nfa-thompson</strong> - Enables the Thompson NFA APIs. This enables <code>alloc</code>.</li>
+<li><strong>nfa-pikevm</strong> - Enables the PikeVM regex engine. This enables
+<code>nfa-thompson</code>.</li>
+<li><strong>nfa-backtrack</strong> - Enables the bounded backtracker regex engine. This
+enables <code>nfa-thompson</code>.</li>
+</ul>
+</li>
+<li><strong>dfa</strong> - Enables all DFA related features below.
+<ul>
+<li><strong>dfa-build</strong> - Enables APIs for determinizing DFAs from NFAs. This
+enables <code>nfa-thompson</code> and <code>dfa-search</code>.</li>
+<li><strong>dfa-search</strong> - Enables APIs for searching with DFAs.</li>
+<li><strong>dfa-onepass</strong> - Enables the one-pass DFA API. This enables
+<code>nfa-thompson</code>.</li>
+</ul>
+</li>
+<li><strong>hybrid</strong> - Enables the hybrid NFA/DFA or “lazy DFA” regex engine. This
+enables <code>alloc</code> and <code>nfa-thompson</code>.</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="dfa/index.html" title="mod regex_automata::dfa">dfa</a></div><div class="desc docblock-short">A module for building and searching with deterministic finite automata (DFAs).</div></li><li><div class="item-name"><a class="mod" href="hybrid/index.html" title="mod regex_automata::hybrid">hybrid</a></div><div class="desc docblock-short">A module for building and searching with lazy deterministic finite automata
+(DFAs).</div></li><li><div class="item-name"><a class="mod" href="meta/index.html" title="mod regex_automata::meta">meta</a></div><div class="desc docblock-short">Provides a regex matcher that composes several other regex matchers
+automatically.</div></li><li><div class="item-name"><a class="mod" href="nfa/index.html" title="mod regex_automata::nfa">nfa</a></div><div class="desc docblock-short">Provides non-deterministic finite automata (NFA) and regex engines that use
+them.</div></li><li><div class="item-name"><a class="mod" href="util/index.html" title="mod regex_automata::util">util</a></div><div class="desc docblock-short">A collection of modules that provide APIs that are useful across many regex
+engines.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a></div><div class="desc docblock-short">A representation of “half” of a match reported by a DFA.</div></li><li><div class="item-name"><a class="struct" href="struct.Input.html" title="struct regex_automata::Input">Input</a></div><div class="desc docblock-short">The parameters for a regex search including the haystack to search.</div></li><li><div class="item-name"><a class="struct" href="struct.Match.html" title="struct regex_automata::Match">Match</a></div><div class="desc docblock-short">A representation of a match reported by a regex engine.</div></li><li><div class="item-name"><a class="struct" href="struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a></div><div class="desc docblock-short">An error indicating that a search stopped before reporting whether a
+match exists or not.</div></li><li><div class="item-name"><a class="struct" href="struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a></div><div class="desc docblock-short">The identifier of a regex pattern, represented by a <a href="util/primitives/struct.SmallIndex.html" title="struct regex_automata::util::primitives::SmallIndex"><code>SmallIndex</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.PatternSet.html" title="struct regex_automata::PatternSet">PatternSet</a></div><div class="desc docblock-short">A set of <code>PatternID</code>s.</div></li><li><div class="item-name"><a class="struct" href="struct.PatternSetInsertError.html" title="struct regex_automata::PatternSetInsertError">PatternSetInsertError</a></div><div class="desc docblock-short">An error that occurs when a <code>PatternID</code> failed to insert into a
+<code>PatternSet</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.PatternSetIter.html" title="struct regex_automata::PatternSetIter">PatternSetIter</a></div><div class="desc docblock-short">An iterator over all pattern identifiers in a <a href="struct.PatternSet.html" title="struct regex_automata::PatternSet"><code>PatternSet</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Span.html" title="struct regex_automata::Span">Span</a></div><div class="desc docblock-short">A representation of a span reported by a regex engine.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Anchored.html" title="enum regex_automata::Anchored">Anchored</a></div><div class="desc docblock-short">The type of anchored search to perform.</div></li><li><div class="item-name"><a class="enum" href="enum.MatchErrorKind.html" title="enum regex_automata::MatchErrorKind">MatchErrorKind</a></div><div class="desc docblock-short">The underlying kind of a <a href="struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.MatchKind.html" title="enum regex_automata::MatchKind">MatchKind</a></div><div class="desc docblock-short">The kind of match semantics to use for a regex pattern.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="pest. The Elegant Parser"><title>pest - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/pest-parser/pest/master/pest-logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../pest/index.html"><img src="https://raw.githubusercontent.com/pest-parser/pest/master/pest-logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../pest/index.html"><img src="https://raw.githubusercontent.com/pest-parser/pest/master/pest-logo.svg" alt="logo"></a><h2><a href="../pest/index.html">pest</a><span class="version">2.7.13</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">pest</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pest/lib.rs.html#9-378">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="pest-the-elegant-parser"><a class="doc-anchor" href="#pest-the-elegant-parser">§</a>pest. The Elegant Parser</h2>
+<p>pest is a general purpose parser written in Rust with a focus on accessibility, correctness,
+and performance. It uses parsing expression grammars (or <a href="https://en.wikipedia.org/wiki/Parsing_expression_grammar">PEG</a>) as input, which are similar in
+spirit to regular expressions, but which offer the enhanced expressivity needed to parse
+complex languages.</p>
+<h3 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting started</h3>
+<p>The recommended way to start parsing with pest is to read the official <a href="https://pest.rs/book">book</a>.</p>
+<p>Other helpful resources:</p>
+<ul>
+<li>API reference on <a href="https://docs.rs/pest">docs.rs</a></li>
+<li>play with grammars and share them on our <a href="https://pest.rs/#editor">fiddle</a></li>
+<li>find previous common questions answered or ask questions on <a href="https://github.com/pest-parser/pest/discussions">GitHub Discussions</a></li>
+<li>leave feedback, ask questions, or greet us on <a href="https://gitter.im/pest-parser/pest">Gitter</a> or <a href="https://discord.gg/XEGACtWpT2">Discord</a></li>
+</ul>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>The core of pest is the trait <a href="trait.Parser.html"><code>Parser</code></a>, which provides an interface to the parsing
+functionality.</p>
+<p>The accompanying crate <code>pest_derive</code> can automatically generate a <a href="trait.Parser.html"><code>Parser</code></a> from a PEG
+grammar. Using <code>pest_derive</code> is highly encouraged, but it is also possible to implement
+<a href="trait.Parser.html"><code>Parser</code></a> manually if required.</p>
+<h3 id="pest-files"><a class="doc-anchor" href="#pest-files">§</a><code>.pest</code> files</h3>
+<p>Grammar definitions reside in custom <code>.pest</code> files located in the crate <code>src</code> directory.
+Parsers are automatically generated from these files using <code>#[derive(Parser)]</code> and a special
+<code>#[grammar = "..."]</code> attribute on a dummy struct.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Parser)]
+#[grammar = <span class="string">"path/to/my_grammar.pest"</span>] </span><span class="comment">// relative to src
+</span><span class="kw">struct </span>MyParser;</code></pre></div>
+<p>The syntax of <code>.pest</code> files is documented in the <a href="https://docs.rs/pest_derive/"><code>pest_derive</code> crate</a>.</p>
+<h3 id="inline-grammars"><a class="doc-anchor" href="#inline-grammars">§</a>Inline grammars</h3>
+<p>Grammars can also be inlined by using the <code>#[grammar_inline = "..."]</code> attribute.</p>
+<h3 id="grammar"><a class="doc-anchor" href="#grammar">§</a>Grammar</h3>
+<p>A grammar is a series of rules separated by whitespace, possibly containing comments.</p>
+<h4 id="comments"><a class="doc-anchor" href="#comments">§</a>Comments</h4>
+<p>Comments start with <code>//</code> and end at the end of the line.</p>
+<div class="example-wrap"><pre class="language-text"><code>// a comment
+</code></pre></div><h4 id="rules"><a class="doc-anchor" href="#rules">§</a>Rules</h4>
+<p>Rules have the following form:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>name = optional_modifier { expression }</code></pre></div>
+<p>The name of the rule is formed from alphanumeric characters or <code>_</code> with the condition that the
+first character is not a digit and is used to create token pairs. When the rule starts being
+parsed, the starting part of the token is being produced, with the ending part being produced
+when the rule finishes parsing.</p>
+<p>The following token pair notation <code>a(b(), c())</code> denotes the tokens: start <code>a</code>, start <code>b</code>, end
+<code>b</code>, start <code>c</code>, end <code>c</code>, end <code>a</code>.</p>
+<h5 id="modifiers"><a class="doc-anchor" href="#modifiers">§</a>Modifiers</h5>
+<p>Modifiers are optional and can be one of <code>_</code>, <code>@</code>, <code>$</code>, or <code>!</code>. These modifiers change the
+behavior of the rules.</p>
+<ol>
+<li>
+<p>Silent (<code>_</code>)</p>
+<p>Silent rules do not create token pairs during parsing, nor are they error-reported.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a = <span class="kw">_</span>{ <span class="string">"a" </span>}
+b =  { a ~ <span class="string">"b" </span>}</code></pre></div>
+<p>Parsing <code>"ab"</code> produces the token pair <code>b()</code>.</p>
+</li>
+<li>
+<p>Atomic (<code>@</code>)</p>
+<p>Atomic rules do not accept whitespace or comments within their expressions and have a
+cascading effect on any rule they call. I.e. rules that are not atomic but are called by atomic
+rules behave atomically.</p>
+<p>Any rules called by atomic rules do not generate token pairs.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a =  { <span class="string">"a" </span>}
+b = @{ a ~ <span class="string">"b" </span>}
+
+WHITESPACE = <span class="kw">_</span>{ <span class="string">" " </span>}</code></pre></div>
+<p>Parsing <code>"ab"</code> produces the token pair <code>b()</code>, while <code>"a   b"</code> produces an error.</p>
+</li>
+<li>
+<p>Compound-atomic (<code>$</code>)</p>
+<p>Compound-atomic are identical to atomic rules with the exception that rules called by them are
+not forbidden from generating token pairs.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a =  { <span class="string">"a" </span>}
+b = ${ a ~ <span class="string">"b" </span>}
+
+WHITESPACE = <span class="kw">_</span>{ <span class="string">" " </span>}</code></pre></div>
+<p>Parsing <code>"ab"</code> produces the token pairs <code>b(a())</code>, while <code>"a   b"</code> produces an error.</p>
+</li>
+<li>
+<p>Non-atomic (<code>!</code>)</p>
+<p>Non-atomic are identical to normal rules with the exception that they stop the cascading effect
+of atomic and compound-atomic rules.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a =  { <span class="string">"a" </span>}
+b = !{ a ~ <span class="string">"b" </span>}
+c = @{ b }
+
+WHITESPACE = <span class="kw">_</span>{ <span class="string">" " </span>}</code></pre></div>
+<p>Parsing both <code>"ab"</code> and <code>"a   b"</code> produce the token pairs <code>c(a())</code>.</p>
+</li>
+</ol>
+<h5 id="expressions"><a class="doc-anchor" href="#expressions">§</a>Expressions</h5>
+<p>Expressions can be either terminals or non-terminals.</p>
+<ol>
+<li>Terminals</li>
+</ol>
+<div><table><thead><tr><th>Terminal</th><th>Usage</th></tr></thead><tbody>
+<tr><td><code>"a"</code></td><td>matches the exact string <code>"a"</code></td></tr>
+<tr><td><code>^"a"</code></td><td>matches the exact string <code>"a"</code> case insensitively (ASCII only)</td></tr>
+<tr><td><code>'a'..'z'</code></td><td>matches one character between <code>'a'</code> and <code>'z'</code></td></tr>
+<tr><td><code>a</code></td><td>matches rule <code>a</code></td></tr>
+</tbody></table>
+</div>
+<p>Strings and characters follow
+<a href="https://doc.rust-lang.org/reference/tokens.html#byte-escapes">Rust’s escape mechanisms</a>, while
+identifiers can contain alphanumeric characters and underscores (<code>_</code>), as long as they do not
+start with a digit.</p>
+<ol start="2">
+<li>Non-terminals</li>
+</ol>
+<div><table><thead><tr><th>Non-terminal</th><th>Usage</th></tr></thead><tbody>
+<tr><td><code>(e)</code></td><td>matches <code>e</code></td></tr>
+<tr><td><code>e1 ~ e2</code></td><td>matches the sequence <code>e1</code> <code>e2</code></td></tr>
+<tr><td><code>e1 | e2</code></td><td>matches either <code>e1</code> or <code>e2</code></td></tr>
+<tr><td><code>e*</code></td><td>matches <code>e</code> zero or more times</td></tr>
+<tr><td><code>e+</code></td><td>matches <code>e</code> one or more times</td></tr>
+<tr><td><code>e{n}</code></td><td>matches <code>e</code> exactly <code>n</code> times</td></tr>
+<tr><td><code>e{, n}</code></td><td>matches <code>e</code> at most <code>n</code> times</td></tr>
+<tr><td><code>e{n,}</code></td><td>matches <code>e</code> at least <code>n</code> times</td></tr>
+<tr><td><code>e{m, n}</code></td><td>matches <code>e</code> between <code>m</code> and <code>n</code> times inclusively</td></tr>
+<tr><td><code>e?</code></td><td>optionally matches <code>e</code></td></tr>
+<tr><td><code>&amp;e</code></td><td>matches <code>e</code> without making progress</td></tr>
+<tr><td><code>!e</code></td><td>matches if <code>e</code> doesn’t match without making progress</td></tr>
+<tr><td><code>PUSH(e)</code></td><td>matches <code>e</code> and pushes it’s captured string down the stack</td></tr>
+</tbody></table>
+</div>
+<p>where <code>e</code>, <code>e1</code>, and <code>e2</code> are expressions.</p>
+<p>Matching is greedy, without backtracking.  Note the difference in behavior for
+these two rules in matching identifiers that don’t end in an underscore:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// input: ab_bb_b
+
+</span>identifier = @{ <span class="string">"a" </span>~ (<span class="string">"b"</span>|<span class="string">"_"</span>)* ~ <span class="string">"b" </span>}
+<span class="comment">// matches:      a     b_bb_b       nothing -&gt; error!      
+
+</span>identifier = @{ <span class="string">"a" </span>~ (<span class="string">"_"</span>* ~ <span class="string">"b"</span>)* }
+<span class="comment">// matches:      a     b, _bb, _b   in three repetitions</span></code></pre></div>
+<p>Expressions can modify the stack only if they match the input. For example,
+if <code>e1</code> in the compound expression <code>e1 | e2</code> does not match the input, then
+it does not modify the stack, so <code>e2</code> sees the stack in the same state as
+<code>e1</code> did. Repetitions and optionals (<code>e*</code>, <code>e+</code>, <code>e{, n}</code>, <code>e{n,}</code>,
+<code>e{m,n}</code>, <code>e?</code>) can modify the stack each time <code>e</code> matches. The <code>!e</code> and <code>&amp;e</code>
+expressions are a special case; they never modify the stack.
+Many languages have “keyword” tokens (e.g. if, for, while) as well as general
+tokens (e.g. identifier) that matches any word. In order to match a keyword,
+generally, you may need to restrict that is not immediately followed by another
+letter or digit (otherwise it would be matched as an identifier).</p>
+<h3 id="special-rules"><a class="doc-anchor" href="#special-rules">§</a>Special rules</h3>
+<p>Special rules can be called within the grammar. They are:</p>
+<ul>
+<li><code>WHITESPACE</code> - runs between rules and sub-rules</li>
+<li><code>COMMENT</code> - runs between rules and sub-rules</li>
+<li><code>ANY</code> - matches exactly one <code>char</code></li>
+<li><code>SOI</code> - (start-of-input) matches only when a <code>Parser</code> is still at the starting position</li>
+<li><code>EOI</code> - (end-of-input) matches only when a <code>Parser</code> has reached its end</li>
+<li><code>POP</code> - pops a string from the stack and matches it</li>
+<li><code>POP_ALL</code> - pops the entire state of the stack and matches it</li>
+<li><code>PEEK</code> - peeks a string from the stack and matches it</li>
+<li><code>PEEK[a..b]</code> - peeks part of the stack and matches it</li>
+<li><code>PEEK_ALL</code> - peeks the entire state of the stack and matches it</li>
+<li><code>DROP</code> - drops the top of the stack (fails to match if the stack is empty)</li>
+</ul>
+<p><code>WHITESPACE</code> and <code>COMMENT</code> should be defined manually if needed. All other rules cannot be
+overridden.</p>
+<h3 id="whitespace-and-comment"><a class="doc-anchor" href="#whitespace-and-comment">§</a><code>WHITESPACE</code> and <code>COMMENT</code></h3>
+<p>When defined, these rules get matched automatically in sequences (<code>~</code>) and repetitions
+(<code>*</code>, <code>+</code>) between expressions. Atomic rules and those rules called by atomic rules are exempt
+from this behavior.</p>
+<p>These rules should be defined so as to match one whitespace character and one comment only since
+they are run in repetitions.</p>
+<p>If both <code>WHITESPACE</code> and <code>COMMENT</code> are defined, this grammar:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a = { b ~ c }</code></pre></div>
+<p>is effectively transformed into this one behind the scenes:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a = { b ~ WHITESPACE* ~ (COMMENT ~ WHITESPACE<span class="kw-2">*</span>)* ~ c }</code></pre></div>
+<h3 id="push-pop-drop-and-peek"><a class="doc-anchor" href="#push-pop-drop-and-peek">§</a><code>PUSH</code>, <code>POP</code>, <code>DROP</code>, and <code>PEEK</code></h3>
+<p><code>PUSH(e)</code> simply pushes the captured string of the expression <code>e</code> down a stack. This stack can
+then later be used to match grammar based on its content with <code>POP</code> and <code>PEEK</code>.</p>
+<p><code>PEEK</code> always matches the string at the top of stack. So, if the stack contains <code>["b", "a"]</code>
+(<code>"a"</code> being on top), this grammar:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a = { PEEK }</code></pre></div>
+<p>is effectively transformed into at parse time:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>a = { <span class="string">"a" </span>}</code></pre></div>
+<p><code>POP</code> works the same way with the exception that it pops the string off of the stack if the
+match worked. With the stack from above, if <code>POP</code> matches <code>"a"</code>, the stack will be mutated
+to <code>["b"]</code>.</p>
+<p><code>DROP</code> makes it possible to remove the string at the top of the stack
+without matching it. If the stack is nonempty, <code>DROP</code> drops the top of the
+stack. If the stack is empty, then <code>DROP</code> fails to match.</p>
+<h4 id="advanced-peeking"><a class="doc-anchor" href="#advanced-peeking">§</a>Advanced peeking</h4>
+<p><code>PEEK[start..end]</code> and <code>PEEK_ALL</code> allow to peek deeper into the stack. The syntax works exactly
+like Rust’s exclusive slice syntax. Additionally, negative indices can be used to indicate an
+offset from the top. If the end lies before or at the start, the expression matches (as does
+a <code>PEEK_ALL</code> on an empty stack). With the stack <code>["c", "b", "a"]</code> (<code>"a"</code> on top):</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>fill = PUSH(<span class="string">"c"</span>) ~ PUSH(<span class="string">"b"</span>) ~ PUSH(<span class="string">"a"</span>)
+v = { PEEK_ALL } = { <span class="string">"a" </span>~ <span class="string">"b" </span>~ <span class="string">"c" </span>}  <span class="comment">// top to bottom
+</span>w = { PEEK[..] } = { <span class="string">"c" </span>~ <span class="string">"b" </span>~ <span class="string">"a" </span>}  <span class="comment">// bottom to top
+</span>x = { PEEK[<span class="number">1</span>..<span class="number">2</span>] } = { PEEK[<span class="number">1</span>..-<span class="number">1</span>] } = { <span class="string">"b" </span>}
+y = { PEEK[..-<span class="number">2</span>] } = { PEEK[<span class="number">0</span>..<span class="number">1</span>] } = { <span class="string">"a" </span>}
+z = { PEEK[<span class="number">1</span>..] } = { PEEK[-<span class="number">2</span>..<span class="number">3</span>] } = { <span class="string">"c" </span>~ <span class="string">"b" </span>}
+n = { PEEK[<span class="number">2</span>..-<span class="number">2</span>] } = { PEEK[<span class="number">2</span>..<span class="number">1</span>] } = { <span class="string">"" </span>}</code></pre></div>
+<p>For historical reasons, <code>PEEK_ALL</code> matches from top to bottom, while <code>PEEK[start..end]</code> matches
+from bottom to top. There is currently no syntax to match a slice of the stack top to bottom.</p>
+<h3 id="rule"><a class="doc-anchor" href="#rule">§</a><code>Rule</code></h3>
+<p>All rules defined or used in the grammar populate a generated <code>enum</code> called <code>Rule</code>. This
+implements <code>pest</code>’s <code>RuleType</code> and can be used throughout the API.</p>
+<h3 id="built-in-rules"><a class="doc-anchor" href="#built-in-rules">§</a><code>Built-in rules</code></h3>
+<p>Pest also comes with a number of built-in rules for convenience. They are:</p>
+<ul>
+<li><code>ASCII_DIGIT</code> - matches a numeric character from 0..9</li>
+<li><code>ASCII_NONZERO_DIGIT</code> - matches a numeric character from 1..9</li>
+<li><code>ASCII_BIN_DIGIT</code> - matches a numeric character from 0..1</li>
+<li><code>ASCII_OCT_DIGIT</code> - matches a numeric character from 0..7</li>
+<li><code>ASCII_HEX_DIGIT</code> - matches a numeric character from 0..9 or a..f or A..F</li>
+<li><code>ASCII_ALPHA_LOWER</code> - matches a character from a..z</li>
+<li><code>ASCII_ALPHA_UPPER</code> - matches a character from A..Z</li>
+<li><code>ASCII_ALPHA</code> - matches a character from a..z or A..Z</li>
+<li><code>ASCII_ALPHANUMERIC</code> - matches a character from a..z or A..Z or 0..9</li>
+<li><code>ASCII</code> - matches a character from \x00..\x7f</li>
+<li><code>NEWLINE</code> - matches either “\n” or “\r\n” or “\r”</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod pest::error">error</a></div><div class="desc docblock-short">Types for different kinds of parsing failures.</div></li><li><div class="item-name"><a class="mod" href="iterators/index.html" title="mod pest::iterators">iterators</a></div><div class="desc docblock-short">Types and iterators for parser output.</div></li><li><div class="item-name"><a class="mod" href="pratt_parser/index.html" title="mod pest::pratt_parser">pratt_parser</a></div><div class="desc docblock-short">Constructs useful in prefix, postfix, and infix operator parsing with the
+Pratt parsing method.</div></li><li><div class="item-name"><a class="mod" href="prec_climber/index.html" title="mod pest::prec_climber">prec_climber</a><span class="stab deprecated" title="">Deprecated</span></div><div class="desc docblock-short">Constructs useful in infix operator parsing with the precedence climbing method.</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.fails_with.html" title="macro pest::fails_with">fails_with</a></div><div class="desc docblock-short">Testing tool that compares produced errors.</div></li><li><div class="item-name"><a class="macro" href="macro.parses_to.html" title="macro pest::parses_to">parses_to</a></div><div class="desc docblock-short">Testing tool that compares produced tokens.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Lines.html" title="struct pest::Lines">Lines</a></div><div class="desc docblock-short">Line iterator for Spans, created by <a href="struct.Span.html#method.lines"><code>Span::lines()</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.LinesSpan.html" title="struct pest::LinesSpan">LinesSpan</a></div><div class="desc docblock-short">Line iterator for Spans, created by <a href="struct.Span.html#method.lines_span"><code>Span::lines_span()</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ParserState.html" title="struct pest::ParserState">ParserState</a></div><div class="desc docblock-short">The complete state of a <a href="trait.Parser.html"><code>Parser</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Position.html" title="struct pest::Position">Position</a></div><div class="desc docblock-short">A cursor position in a <code>&amp;str</code> which provides useful methods to manually parse that string.</div></li><li><div class="item-name"><a class="struct" href="struct.Span.html" title="struct pest::Span">Span</a></div><div class="desc docblock-short">A span over a <code>&amp;str</code>. It is created from either <a href="struct.Position.html#method.span">two <code>Position</code>s</a> or from a <a href="../iterators/struct.Pair.html#method.span"><code>Pair</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Stack.html" title="struct pest::Stack">Stack</a></div><div class="desc docblock-short">Implementation of a <code>Stack</code> which maintains popped elements and length of previous states
+in order to rewind the stack to a previous state.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Atomicity.html" title="enum pest::Atomicity">Atomicity</a></div><div class="desc docblock-short">The current atomicity of a <a href="struct.ParserState.html"><code>ParserState</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.Lookahead.html" title="enum pest::Lookahead">Lookahead</a></div><div class="desc docblock-short">The current lookahead status of a <a href="struct.ParserState.html"><code>ParserState</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.MatchDir.html" title="enum pest::MatchDir">MatchDir</a></div><div class="desc docblock-short">Match direction for the stack. Used in <code>PEEK[a..b]</code>/<code>stack_match_peek_slice</code>.</div></li><li><div class="item-name"><a class="enum" href="enum.Token.html" title="enum pest::Token">Token</a></div><div class="desc docblock-short">A token generated by a <code>Parser</code>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Parser.html" title="trait pest::Parser">Parser</a></div><div class="desc docblock-short">A trait with a single method that parses strings.</div></li><li><div class="item-name"><a class="trait" href="trait.RuleType.html" title="trait pest::RuleType">RuleType</a></div><div class="desc docblock-short">A trait which parser rules must implement.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.merge_spans.html" title="fn pest::merge_spans">merge_spans</a></div><div class="desc docblock-short">Merges two spans into one.</div></li><li><div class="item-name"><a class="fn" href="fn.set_call_limit.html" title="fn pest::set_call_limit">set_call_limit</a></div><div class="desc docblock-short">Sets the maximum call limit for the parser state
+to prevent stack overflows or excessive execution times
+in some grammars.
+If set, the calls are tracked as a running total
+over all non-terminal rules that can nest closures
+(which are passed to transform the parser state).</div></li><li><div class="item-name"><a class="fn" href="fn.set_error_detail.html" title="fn pest::set_error_detail">set_error_detail</a></div><div class="desc docblock-short">Sets whether information for more error details
+should be collected. This is useful for debugging
+parser errors (as it leads to more comprehensive
+error messages), but it has a higher performance cost.
+(hence, it’s off by default)</div></li><li><div class="item-name"><a class="fn" href="fn.state.html" title="fn pest::state">state</a></div><div class="desc docblock-short">Creates a <code>ParserState</code> from a <code>&amp;str</code>, supplying it to a closure <code>f</code>.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ParseResult.html" title="type pest::ParseResult">ParseResult</a></div><div class="desc docblock-short">Type alias to simplify specifying the return value of chained closures.</div></li></ul></section></div></main></body></html>

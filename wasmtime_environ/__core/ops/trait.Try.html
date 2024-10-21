@@ -1,0 +1,152 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `?` operator and `try {}` blocks."><title>Try in wasmtime_environ::__core::ops - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Try</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Output">Output</a></li><li><a href="#associatedtype.Residual">Residual</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.branch">branch</a></li><li><a href="#tymethod.from_output">from_output</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In wasmtime_environ::__core::ops</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">ops</a>::<wbr><a class="trait" href="#">Try</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ops/try_trait.rs.html#131">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Try: <a class="trait" href="trait.FromResidual.html" title="trait wasmtime_environ::__core::ops::FromResidual">FromResidual</a> {
+    type <a href="#associatedtype.Output" class="associatedtype">Output</a>;
+    type <a href="#associatedtype.Residual" class="associatedtype">Residual</a>;
+
+    // Required methods
+    fn <a href="#tymethod.from_output" class="fn">from_output</a>(output: Self::<a class="associatedtype" href="trait.Try.html#associatedtype.Output" title="type wasmtime_environ::__core::ops::Try::Output">Output</a>) -&gt; Self;
+<span class="item-spacer"></span>    fn <a href="#tymethod.branch" class="fn">branch</a>(self) -&gt; <a class="enum" href="enum.ControlFlow.html" title="enum wasmtime_environ::__core::ops::ControlFlow">ControlFlow</a>&lt;Self::<a class="associatedtype" href="trait.Try.html#associatedtype.Residual" title="type wasmtime_environ::__core::ops::Try::Residual">Residual</a>, Self::<a class="associatedtype" href="trait.Try.html#associatedtype.Output" title="type wasmtime_environ::__core::ops::Try::Output">Output</a>&gt;;
+}</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>try_trait_v2</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <code>?</code> operator and <code>try {}</code> blocks.</p>
+<p><code>try_*</code> methods typically involve a type implementing this trait.  For
+example, the closures passed to <a href="../iter/trait.Iterator.html#method.try_fold" title="method wasmtime_environ::__core::iter::Iterator::try_fold"><code>Iterator::try_fold</code></a> and
+<a href="../iter/trait.Iterator.html#method.try_for_each" title="method wasmtime_environ::__core::iter::Iterator::try_for_each"><code>Iterator::try_for_each</code></a> must return such a type.</p>
+<p><code>Try</code> types are typically those containing two or more categories of values,
+some subset of which are so commonly handled via early returns that it’s
+worth providing a terse (but still visible) syntax to make that easy.</p>
+<p>This is most often seen for error handling with <a href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result"><code>Result</code></a> and <a href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option"><code>Option</code></a>.
+The quintessential implementation of this trait is on <a href="enum.ControlFlow.html" title="enum wasmtime_environ::__core::ops::ControlFlow"><code>ControlFlow</code></a>.</p>
+<h2 id="using-try-in-generic-code"><a class="doc-anchor" href="#using-try-in-generic-code">§</a>Using <code>Try</code> in Generic Code</h2>
+<p><code>Iterator::try_fold</code> was stabilized to call back in Rust 1.27, but
+this trait is much newer.  To illustrate the various associated types and
+methods, let’s implement our own version.</p>
+<p>As a reminder, an infallible version of a fold looks something like this:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>simple_fold&lt;A, T&gt;(
+    iter: <span class="kw">impl </span>Iterator&lt;Item = T&gt;,
+    <span class="kw-2">mut </span>accum: A,
+    <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(A, T) -&gt; A,
+) -&gt; A {
+    <span class="kw">for </span>x <span class="kw">in </span>iter {
+        accum = f(accum, x);
+    }
+    accum
+}</code></pre></div>
+<p>So instead of <code>f</code> returning just an <code>A</code>, we’ll need it to return some other
+type that produces an <code>A</code> in the “don’t short circuit” path.  Conveniently,
+that’s also the type we need to return from the function.</p>
+<p>Let’s add a new generic parameter <code>R</code> for that type, and bound it to the
+output type that we want:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>simple_try_fold_1&lt;A, T, R: Try&lt;Output = A&gt;&gt;(
+    iter: <span class="kw">impl </span>Iterator&lt;Item = T&gt;,
+    <span class="kw-2">mut </span>accum: A,
+    <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(A, T) -&gt; R,
+) -&gt; R {
+    <span class="macro">todo!</span>()
+}</code></pre></div>
+<p>If we get through the entire iterator, we need to wrap up the accumulator
+into the return type using <a href="trait.Try.html#tymethod.from_output" title="associated function wasmtime_environ::__core::ops::Try::from_output"><code>Try::from_output</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>simple_try_fold_2&lt;A, T, R: Try&lt;Output = A&gt;&gt;(
+    iter: <span class="kw">impl </span>Iterator&lt;Item = T&gt;,
+    <span class="kw-2">mut </span>accum: A,
+    <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(A, T) -&gt; R,
+) -&gt; R {
+    <span class="kw">for </span>x <span class="kw">in </span>iter {
+        <span class="kw">let </span>cf = f(accum, x).branch();
+        <span class="kw">match </span>cf {
+            ControlFlow::Continue(a) =&gt; accum = a,
+            ControlFlow::Break(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
+        }
+    }
+    R::from_output(accum)
+}</code></pre></div>
+<p>We’ll also need <a href="trait.FromResidual.html#tymethod.from_residual" title="associated function wasmtime_environ::__core::ops::FromResidual::from_residual"><code>FromResidual::from_residual</code></a> to turn the residual back
+into the original type.  But because it’s a supertrait of <code>Try</code>, we don’t
+need to mention it in the bounds.  All types which implement <code>Try</code> can be
+recreated from their corresponding residual, so we’ll just call it:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub fn </span>simple_try_fold_3&lt;A, T, R: Try&lt;Output = A&gt;&gt;(
+    iter: <span class="kw">impl </span>Iterator&lt;Item = T&gt;,
+    <span class="kw-2">mut </span>accum: A,
+    <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(A, T) -&gt; R,
+) -&gt; R {
+    <span class="kw">for </span>x <span class="kw">in </span>iter {
+        <span class="kw">let </span>cf = f(accum, x).branch();
+        <span class="kw">match </span>cf {
+            ControlFlow::Continue(a) =&gt; accum = a,
+            ControlFlow::Break(r) =&gt; <span class="kw">return </span>R::from_residual(r),
+        }
+    }
+    R::from_output(accum)
+}</code></pre></div>
+<p>But this “call <code>branch</code>, then <code>match</code> on it, and <code>return</code> if it was a
+<code>Break</code>” is exactly what happens inside the <code>?</code> operator.  So rather than
+do all this manually, we can just use <code>?</code> instead:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>simple_try_fold&lt;A, T, R: Try&lt;Output = A&gt;&gt;(
+    iter: <span class="kw">impl </span>Iterator&lt;Item = T&gt;,
+    <span class="kw-2">mut </span>accum: A,
+    <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(A, T) -&gt; R,
+) -&gt; R {
+    <span class="kw">for </span>x <span class="kw">in </span>iter {
+        accum = f(accum, x)<span class="question-mark">?</span>;
+    }
+    R::from_output(accum)
+}</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Output" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/ops/try_trait.rs.html#134">source</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>try_trait_v2</code>)</span></div></span></summary><div class="docblock"><p>The type of the value produced by <code>?</code> when <em>not</em> short-circuiting.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.Residual" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/ops/try_trait.rs.html#158">source</a><h4 class="code-header">type <a href="#associatedtype.Residual" class="associatedtype">Residual</a></h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>try_trait_v2</code>)</span></div></span></summary><div class="docblock"><p>The type of the value passed to <a href="trait.FromResidual.html#tymethod.from_residual" title="associated function wasmtime_environ::__core::ops::FromResidual::from_residual"><code>FromResidual::from_residual</code></a>
+as part of <code>?</code> when short-circuiting.</p>
+<p>This represents the possible values of the <code>Self</code> type which are <em>not</em>
+represented by the <code>Output</code> type.</p>
+<h5 id="note-to-implementors"><a class="doc-anchor" href="#note-to-implementors">§</a>Note to Implementors</h5>
+<p>The choice of this type is critical to interconversion.
+Unlike the <code>Output</code> type, which will often be a raw generic type,
+this type is typically a newtype of some sort to “color” the type
+so that it’s distinguishable from the residuals of other types.</p>
+<p>This is why <code>Result&lt;T, E&gt;::Residual</code> is not <code>E</code>, but <code>Result&lt;Infallible, E&gt;</code>.
+That way it’s distinct from <code>ControlFlow&lt;E&gt;::Residual</code>, for example,
+and thus <code>?</code> on <code>ControlFlow</code> cannot be used in a method returning <code>Result</code>.</p>
+<p>If you’re making a generic type <code>Foo&lt;T&gt;</code> that implements <code>Try&lt;Output = T&gt;</code>,
+then typically you can use <code>Foo&lt;std::convert::Infallible&gt;</code> as its <code>Residual</code>
+type: that type will have a “hole” in the correct place, and will maintain the
+“foo-ness” of the residual so other types need to opt-in to interconversion.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.from_output" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/ops/try_trait.rs.html#190">source</a><h4 class="code-header">fn <a href="#tymethod.from_output" class="fn">from_output</a>(output: Self::<a class="associatedtype" href="trait.Try.html#associatedtype.Output" title="type wasmtime_environ::__core::ops::Try::Output">Output</a>) -&gt; Self</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>try_trait_v2</code>)</span></div></span></summary><div class="docblock"><p>Constructs the type from its <code>Output</code> type.</p>
+<p>This should be implemented consistently with the <code>branch</code> method
+such that applying the <code>?</code> operator will get back the original value:
+<code>Try::from_output(x).branch() --&gt; ControlFlow::Continue(x)</code>.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(try_trait_v2)]
+</span><span class="kw">use </span>std::ops::Try;
+
+<span class="macro">assert_eq!</span>(&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, String&gt; <span class="kw">as </span>Try&gt;::from_output(<span class="number">3</span>), <span class="prelude-val">Ok</span>(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt; <span class="kw">as </span>Try&gt;::from_output(<span class="number">4</span>), <span class="prelude-val">Some</span>(<span class="number">4</span>));
+<span class="macro">assert_eq!</span>(
+    &lt;std::ops::ControlFlow&lt;String, <span class="kw">_</span>&gt; <span class="kw">as </span>Try&gt;::from_output(<span class="number">5</span>),
+    std::ops::ControlFlow::Continue(<span class="number">5</span>),
+);
+
+<span class="macro">assert_eq!</span>(Option::from_output(<span class="number">4</span>)<span class="question-mark">?</span>, <span class="number">4</span>);
+
+<span class="comment">// This is used, for example, on the accumulator in `try_fold`:
+</span><span class="kw">let </span>r = std::iter::empty().try_fold(<span class="number">4</span>, |<span class="kw">_</span>, ()| -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt; { <span class="macro">unreachable!</span>() });
+<span class="macro">assert_eq!</span>(r, <span class="prelude-val">Some</span>(<span class="number">4</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.branch" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/ops/try_trait.rs.html#217">source</a><h4 class="code-header">fn <a href="#tymethod.branch" class="fn">branch</a>(self) -&gt; <a class="enum" href="enum.ControlFlow.html" title="enum wasmtime_environ::__core::ops::ControlFlow">ControlFlow</a>&lt;Self::<a class="associatedtype" href="trait.Try.html#associatedtype.Residual" title="type wasmtime_environ::__core::ops::Try::Residual">Residual</a>, Self::<a class="associatedtype" href="trait.Try.html#associatedtype.Output" title="type wasmtime_environ::__core::ops::Try::Output">Output</a>&gt;</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>try_trait_v2</code>)</span></div></span></summary><div class="docblock"><p>Used in <code>?</code> to decide whether the operator should produce a value
+(because this returned <a href="enum.ControlFlow.html#variant.Continue" title="variant wasmtime_environ::__core::ops::ControlFlow::Continue"><code>ControlFlow::Continue</code></a>)
+or propagate a value back to the caller
+(because this returned <a href="enum.ControlFlow.html#variant.Break" title="variant wasmtime_environ::__core::ops::ControlFlow::Break"><code>ControlFlow::Break</code></a>).</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(try_trait_v2)]
+</span><span class="kw">use </span>std::ops::{ControlFlow, Try};
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, String&gt;(<span class="number">3</span>).branch(), ControlFlow::Continue(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>::&lt;String, <span class="kw">_</span>&gt;(<span class="number">3</span>).branch(), ControlFlow::Break(<span class="prelude-val">Err</span>(<span class="number">3</span>)));
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">3</span>).branch(), ControlFlow::Continue(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>::&lt;String&gt;.branch(), ControlFlow::Break(<span class="prelude-val">None</span>));
+
+<span class="macro">assert_eq!</span>(ControlFlow::&lt;String, <span class="kw">_</span>&gt;::Continue(<span class="number">3</span>).branch(), ControlFlow::Continue(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(
+    ControlFlow::&lt;<span class="kw">_</span>, String&gt;::Break(<span class="number">3</span>).branch(),
+    ControlFlow::Break(ControlFlow::Break(<span class="number">3</span>)),
+);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-Try-for-ControlFlow%3CB,+C%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/ops/control_flow.rs.html#100">source</a><a href="#impl-Try-for-ControlFlow%3CB,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;B, C&gt; <a class="trait" href="trait.Try.html" title="trait wasmtime_environ::__core::ops::Try">Try</a> for <a class="enum" href="enum.ControlFlow.html" title="enum wasmtime_environ::__core::ops::ControlFlow">ControlFlow</a>&lt;B, C&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Output-1" class="associatedtype trait-impl"><a href="#associatedtype.Output-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a> = C</h4></section><section id="associatedtype.Residual-1" class="associatedtype trait-impl"><a href="#associatedtype.Residual-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Residual" class="associatedtype">Residual</a> = <a class="enum" href="enum.ControlFlow.html" title="enum wasmtime_environ::__core::ops::ControlFlow">ControlFlow</a>&lt;B, <a class="enum" href="../convert/enum.Infallible.html" title="enum wasmtime_environ::__core::convert::Infallible">Infallible</a>&gt;</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Try-for-Option%3CT%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/option.rs.html#2482">source</a><a href="#impl-Try-for-Option%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Try.html" title="trait wasmtime_environ::__core::ops::Try">Try</a> for <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Output-2" class="associatedtype trait-impl"><a href="#associatedtype.Output-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a> = T</h4></section><section id="associatedtype.Residual-2" class="associatedtype trait-impl"><a href="#associatedtype.Residual-2" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Residual" class="associatedtype">Residual</a> = <a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="enum" href="../convert/enum.Infallible.html" title="enum wasmtime_environ::__core::convert::Infallible">Infallible</a>&gt;</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Try-for-Result%3CT,+E%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/result.rs.html#1965">source</a><a href="#impl-Try-for-Result%3CT,+E%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, E&gt; <a class="trait" href="trait.Try.html" title="trait wasmtime_environ::__core::ops::Try">Try</a> for <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;T, E&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Output-3" class="associatedtype trait-impl"><a href="#associatedtype.Output-3" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a> = T</h4></section><section id="associatedtype.Residual-3" class="associatedtype trait-impl"><a href="#associatedtype.Residual-3" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Residual" class="associatedtype">Residual</a> = <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;<a class="enum" href="../convert/enum.Infallible.html" title="enum wasmtime_environ::__core::convert::Infallible">Infallible</a>, E&gt;</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Try-for-Poll%3COption%3CResult%3CT,+E%3E%3E%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/task/poll.rs.html#261">source</a><a href="#impl-Try-for-Poll%3COption%3CResult%3CT,+E%3E%3E%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, E&gt; <a class="trait" href="trait.Try.html" title="trait wasmtime_environ::__core::ops::Try">Try</a> for <a class="enum" href="../task/enum.Poll.html" title="enum wasmtime_environ::__core::task::Poll">Poll</a>&lt;<a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;<a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;T, E&gt;&gt;&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Output-4" class="associatedtype trait-impl"><a href="#associatedtype.Output-4" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a> = <a class="enum" href="../task/enum.Poll.html" title="enum wasmtime_environ::__core::task::Poll">Poll</a>&lt;<a class="enum" href="../option/enum.Option.html" title="enum wasmtime_environ::__core::option::Option">Option</a>&lt;T&gt;&gt;</h4></section><section id="associatedtype.Residual-4" class="associatedtype trait-impl"><a href="#associatedtype.Residual-4" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Residual" class="associatedtype">Residual</a> = <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;<a class="enum" href="../convert/enum.Infallible.html" title="enum wasmtime_environ::__core::convert::Infallible">Infallible</a>, E&gt;</h4></section></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Try-for-Poll%3CResult%3CT,+E%3E%3E" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/task/poll.rs.html#231">source</a><a href="#impl-Try-for-Poll%3CResult%3CT,+E%3E%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T, E&gt; <a class="trait" href="trait.Try.html" title="trait wasmtime_environ::__core::ops::Try">Try</a> for <a class="enum" href="../task/enum.Poll.html" title="enum wasmtime_environ::__core::task::Poll">Poll</a>&lt;<a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;T, E&gt;&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Output-5" class="associatedtype trait-impl"><a href="#associatedtype.Output-5" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Output" class="associatedtype">Output</a> = <a class="enum" href="../task/enum.Poll.html" title="enum wasmtime_environ::__core::task::Poll">Poll</a>&lt;T&gt;</h4></section><section id="associatedtype.Residual-5" class="associatedtype trait-impl"><a href="#associatedtype.Residual-5" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Residual" class="associatedtype">Residual</a> = <a class="enum" href="../result/enum.Result.html" title="enum wasmtime_environ::__core::result::Result">Result</a>&lt;<a class="enum" href="../convert/enum.Infallible.html" title="enum wasmtime_environ::__core::convert::Infallible">Infallible</a>, E&gt;</h4></section></div></details></div><script src="../../../trait.impl/core/ops/try_trait/trait.Try.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>

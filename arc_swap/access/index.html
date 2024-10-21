@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Abstracting over accessing parts of stored value."><title>arc_swap::access - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="arc_swap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../arc_swap/index.html">arc_swap</a><span class="version">1.7.1</span></h2></div><h2 class="location"><a href="#">Module access</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate arc_swap</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">arc_swap</a>::<wbr><a class="mod" href="#">access</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/arc_swap/access.rs.html#1-546">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Abstracting over accessing parts of stored value.</p>
+<p>Sometimes, there’s a big globalish data structure (like a configuration for the whole program).
+Then there are parts of the program that need access to up-to-date version of their <em>part</em> of
+the configuration, but for reasons of code separation and reusability, it is not desirable to
+pass the whole configuration to each of the parts.</p>
+<p>This module provides means to grant the parts access to the relevant subsets of such global
+data structure while masking the fact it is part of the bigger whole from the component.</p>
+<p>Note that the <a href="../cache/index.html" title="mod arc_swap::cache"><code>cache</code></a> module has its own <a href="../cache/trait.Access.html" title="trait arc_swap::cache::Access"><code>Access</code></a> trait
+that serves a similar purpose, but with cached access. The signatures are different, therefore
+an incompatible trait.</p>
+<h2 id="the-general-idea"><a class="doc-anchor" href="#the-general-idea">§</a>The general idea</h2>
+<p>Each part of the code accepts generic <a href="trait.Access.html" title="trait arc_swap::access::Access"><code>Access&lt;T&gt;</code></a> for the <code>T</code> of its interest. This
+provides means to load current version of the structure behind the scenes and get only the
+relevant part, without knowing what the big structure is.</p>
+<p>For technical reasons, the <a href="trait.Access.html" title="trait arc_swap::access::Access"><code>Access</code></a> trait is not object safe. If type erasure is desired, it
+is possible use the <a href="trait.DynAccess.html" title="trait arc_swap::access::DynAccess"><code>DynAccess</code></a> instead, which is object safe, but
+slightly slower.</p>
+<p>For some cases, it is possible to use <a href="../struct.ArcSwapAny.html#method.map" title="method arc_swap::ArcSwapAny::map"><code>ArcSwapAny::map</code></a>. If that is not flexible enough, the
+<a href="struct.Map.html" title="struct arc_swap::access::Map"><code>Map</code></a> type can be created directly.</p>
+<p>Note that the <a href="trait.Access.html" title="trait arc_swap::access::Access"><code>Access</code></a> trait is also implemented for <a href="../struct.ArcSwapAny.html" title="struct arc_swap::ArcSwapAny"><code>ArcSwapAny</code></a> itself. Additionally,
+there’s the <a href="struct.Constant.html" title="struct arc_swap::access::Constant"><code>Constant</code></a> helper type, which is useful mostly for
+testing (it doesn’t allow reloading).</p>
+<h2 id="performance"><a class="doc-anchor" href="#performance">§</a>Performance</h2>
+<p>In general, these utilities use <a href="../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>ArcSwapAny::load</code></a> internally and then apply the provided
+transformation. This has several consequences:</p>
+<ul>
+<li>Limitations of the <a href="../struct.ArcSwapAny.html#method.load" title="method arc_swap::ArcSwapAny::load"><code>load</code></a> apply ‒ including the recommendation to not
+hold the returned guard object for too long, but long enough to get consistency.</li>
+<li>The transformation should be cheap ‒ optimally just borrowing into the structure.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::thread::{<span class="self">self</span>, JoinHandle};
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">use </span>arc_swap::ArcSwap;
+<span class="kw">use </span>arc_swap::access::{Access, Constant, Map};
+
+<span class="kw">fn </span>work_with_usize&lt;A: Access&lt;usize&gt; + Send + <span class="lifetime">'static</span>&gt;(a: A) -&gt; JoinHandle&lt;()&gt; {
+    thread::spawn(<span class="kw">move </span>|| {
+        <span class="kw">let </span><span class="kw-2">mut </span>value = <span class="number">0</span>;
+        <span class="kw">while </span>value != <span class="number">42 </span>{
+            <span class="kw">let </span>guard = a.load();
+            value = <span class="kw-2">*</span>guard;
+            <span class="macro">println!</span>(<span class="string">"{}"</span>, value);
+            <span class="comment">// Not strictly necessary, but dropping the guard can free some resources, like
+            // slots for tracking what values are still in use. We do it before the sleeping,
+            // not at the end of the scope.
+            </span>drop(guard);
+            thread::sleep(Duration::from_millis(<span class="number">50</span>));
+        }
+    })
+}
+
+<span class="comment">// Passing the whole thing directly
+// (If we kept another Arc to it, we could change the value behind the scenes)
+</span>work_with_usize(Arc::new(ArcSwap::from_pointee(<span class="number">42</span>))).join().unwrap();
+
+<span class="comment">// Passing a subset of a structure
+</span><span class="kw">struct </span>Cfg {
+    value: usize,
+}
+
+<span class="kw">let </span>cfg = Arc::new(ArcSwap::from_pointee(Cfg { value: <span class="number">0 </span>}));
+<span class="kw">let </span>thread = work_with_usize(Map::new(Arc::clone(<span class="kw-2">&amp;</span>cfg), |cfg: <span class="kw-2">&amp;</span>Cfg| <span class="kw-2">&amp;</span>cfg.value));
+cfg.store(Arc::new(Cfg { value: <span class="number">42 </span>}));
+thread.join().unwrap();
+
+<span class="comment">// Passing a constant that can't change. Useful mostly for testing purposes.
+</span>work_with_usize(Constant(<span class="number">42</span>)).join().unwrap();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AccessConvert.html" title="struct arc_swap::access::AccessConvert">AccessConvert</a></div><div class="desc docblock-short"><a href="trait.DynAccess.html" title="trait arc_swap::access::DynAccess">DynAccess</a> to <a href="trait.Access.html" title="trait arc_swap::access::Access">Access</a> wrapper.</div></li><li><div class="item-name"><a class="struct" href="struct.Constant.html" title="struct arc_swap::access::Constant">Constant</a></div><div class="desc docblock-short">Access to an constant.</div></li><li><div class="item-name"><a class="struct" href="struct.Map.html" title="struct arc_swap::access::Map">Map</a></div><div class="desc docblock-short">An adaptor to provide access to a part of larger structure.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Access.html" title="trait arc_swap::access::Access">Access</a></div><div class="desc docblock-short">Abstracts over ways code can get access to a value of type <code>T</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.DynAccess.html" title="trait arc_swap::access::DynAccess">DynAccess</a></div><div class="desc docblock-short">An object-safe version of the <a href="trait.Access.html" title="trait arc_swap::access::Access"><code>Access</code></a> trait.</div></li></ul></section></div></main></body></html>

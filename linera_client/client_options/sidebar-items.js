@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ClientCommand","Error","NetCommand","ProjectCommand","ResourceControlPolicyConfig","WalletCommand"],"struct":["ApplicationPermissionsConfig","ChainOwnershipConfig","ClientOptions"]};

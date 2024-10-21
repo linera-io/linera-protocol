@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="AWS IAM Identity Center (successor to AWS Single Sign-On) Portal is a web service that makes it easy for you to assign user access to IAM Identity Center resources such as the AWS access portal. Users can get AWS account applications and roles assigned to them and get federated into the application."><title>aws_sdk_sso - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="aws_sdk_sso" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../aws_sdk_sso/index.html">aws_sdk_sso</a><span class="version">1.43.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">aws_sdk_sso</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/aws_sdk_sso/lib.rs.html#1-159">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>AWS IAM Identity Center (successor to AWS Single Sign-On) Portal is a web service that makes it easy for you to assign user access to IAM Identity Center resources such as the AWS access portal. Users can get AWS account applications and roles assigned to them and get federated into the application.</p>
+<p>This reference guide describes the IAM Identity Center Portal operations that you can call programatically and includes detailed information on data types and errors.</p>
+<h3 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting Started</h3>
+<blockquote>
+<p>Examples are available for many services and operations, check out the
+<a href="https://github.com/awslabs/aws-sdk-rust/tree/main/examples">examples folder in GitHub</a>.</p>
+</blockquote>
+<p>The SDK provides one crate per AWS service. You must add <a href="https://crates.io/crates/tokio">Tokio</a>
+as a dependency within your Rust project to execute asynchronous code. To add <code>aws-sdk-sso</code> to
+your project, add the following to your <strong>Cargo.toml</strong> file:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+aws-config = { version = &quot;1.1.7&quot;, features = [&quot;behavior-version-latest&quot;] }
+aws-sdk-sso = &quot;1.43.0&quot;
+tokio = { version = &quot;1&quot;, features = [&quot;full&quot;] }
+</code></pre></div>
+<p>Then in code, a client can be created with the following:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_sdk_sso <span class="kw">as </span>sso;
+
+<span class="attr">#[::tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), sso::Error&gt; {
+    <span class="kw">let </span>config = aws_config::load_from_env().<span class="kw">await</span>;
+    <span class="kw">let </span>client = aws_sdk_sso::Client::new(<span class="kw-2">&amp;</span>config);
+
+    <span class="comment">// ... make some calls with the client
+
+    </span><span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<p>See the <a href="https://docs.rs/aws-sdk-sso/latest/aws_sdk_sso/client/struct.Client.html">client documentation</a>
+for information on what calls can be made, and the inputs and outputs for each of those calls.</p>
+<h3 id="using-the-sdk"><a class="doc-anchor" href="#using-the-sdk">§</a>Using the SDK</h3>
+<p>Until the SDK is released, we will be adding information about using the SDK to the
+<a href="https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html">Developer Guide</a>. Feel free to suggest
+additional sections for the guide by opening an issue and describing what you are trying to do.</p>
+<h3 id="getting-help"><a class="doc-anchor" href="#getting-help">§</a>Getting Help</h3>
+<ul>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/discussions">GitHub discussions</a> - For ideas, RFCs &amp; general questions</li>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/issues/new/choose">GitHub issues</a> - For bug reports &amp; feature requests</li>
+<li><a href="https://awslabs.github.io/aws-sdk-rust/">Generated Docs (latest version)</a></li>
+<li><a href="https://github.com/awslabs/aws-sdk-rust/tree/main/examples">Usage examples</a></li>
+</ul>
+<h2 id="crate-organization"><a class="doc-anchor" href="#crate-organization">§</a>Crate Organization</h2>
+<p>The entry point for most customers will be <a href="struct.Client.html" title="struct aws_sdk_sso::Client"><code>Client</code></a>, which exposes one method for each API
+offered by AWS Single Sign-On. The return value of each of these methods is a “fluent builder”,
+where the different inputs for that API are added by builder-style function call chaining,
+followed by calling <code>send()</code> to get a <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> that will result in
+either a successful output or a <a href="error/type.SdkError.html" title="type aws_sdk_sso::error::SdkError"><code>SdkError</code></a>.</p>
+<p>Some of these API inputs may be structs or enums to provide more complex structured information.
+These structs and enums live in <a href="types/index.html" title="mod aws_sdk_sso::types"><code>types</code></a>. There are some simpler types for
+representing data such as date times or binary blobs that live in <a href="primitives/index.html" title="mod aws_sdk_sso::primitives"><code>primitives</code></a>.</p>
+<p>All types required to configure a client via the <a href="struct.Config.html" title="struct aws_sdk_sso::Config"><code>Config</code></a> struct live
+in <a href="config/index.html" title="mod aws_sdk_sso::config"><code>config</code></a>.</p>
+<p>The <a href="operation/index.html" title="mod aws_sdk_sso::operation"><code>operation</code></a> module has a submodule for every API, and in each submodule
+is the input, output, and error type for that API, as well as builders to construct each of those.</p>
+<p>There is a top-level <a href="enum.Error.html" title="enum aws_sdk_sso::Error"><code>Error</code></a> type that encompasses all the errors that the
+client can return. Any other error type can be converted to this <code>Error</code> type via the
+<a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From</code></a> trait.</p>
+<p>The other modules within this crate are not required for normal usage.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="client/index.html" title="mod aws_sdk_sso::client">client</a></div><div class="desc docblock-short">Client for calling AWS Single Sign-On.</div></li><li><div class="item-name"><a class="mod" href="config/index.html" title="mod aws_sdk_sso::config">config</a></div><div class="desc docblock-short">Configuration for AWS Single Sign-On.</div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod aws_sdk_sso::error">error</a></div><div class="desc docblock-short">Common errors and error handling utilities.</div></li><li><div class="item-name"><a class="mod" href="meta/index.html" title="mod aws_sdk_sso::meta">meta</a></div><div class="desc docblock-short">Information about this crate.</div></li><li><div class="item-name"><a class="mod" href="operation/index.html" title="mod aws_sdk_sso::operation">operation</a></div><div class="desc docblock-short">All operations that this crate can perform.</div></li><li><div class="item-name"><a class="mod" href="primitives/index.html" title="mod aws_sdk_sso::primitives">primitives</a></div><div class="desc docblock-short">Primitives such as <code>Blob</code> or <code>DateTime</code> used by other types.</div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod aws_sdk_sso::types">types</a></div><div class="desc docblock-short">Data structures used by operation inputs/outputs.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Client.html" title="struct aws_sdk_sso::Client">Client</a></div><div class="desc docblock-short">Client for AWS Single Sign-On</div></li><li><div class="item-name"><a class="struct" href="struct.Config.html" title="struct aws_sdk_sso::Config">Config</a></div><div class="desc docblock-short">Configuration for a aws_sdk_sso service client.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum aws_sdk_sso::Error">Error</a></div><div class="desc docblock-short">All possible error types for this service.</div></li></ul></section></div></main></body></html>

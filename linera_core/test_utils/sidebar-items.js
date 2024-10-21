@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FaultType"],"fn":["register_mock_applications"],"struct":["DynamoDbStorageBuilder","LocalValidatorClient","MemoryStorageBuilder","NodeProvider","RocksDbStorageBuilder","ScyllaDbStorageBuilder","ServiceStorageBuilder","TestBuilder"],"trait":["StorageBuilder"]};

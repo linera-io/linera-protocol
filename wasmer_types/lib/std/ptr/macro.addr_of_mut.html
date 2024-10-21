@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a `mut` raw pointer to a place, without creating an intermediate reference."><title>addr_of_mut in wasmer_types::lib::std::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmer_types::lib::std::ptr</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">ptr</a>::<wbr><a class="macro" href="#">addr_of_mut</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.51.0">1.51.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/ptr/mod.rs.html#2294">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="kw">pub macro </span>addr_of_mut(<span class="macro-nonterminal">$place</span>:expr) {
+    ...
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a <code>mut</code> raw pointer to a place, without creating an intermediate reference.</p>
+<p>Creating a reference with <code>&amp;</code>/<code>&amp;mut</code> is only allowed if the pointer is properly aligned
+and points to initialized data. For cases where those requirements do not hold,
+raw pointers should be used instead. However, <code>&amp;mut expr as *mut _</code> creates a reference
+before casting it to a raw pointer, and that reference is subject to the same rules
+as all other references. This macro can create a raw pointer <em>without</em> creating
+a reference first.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>The <code>expr</code> in <code>addr_of_mut!(expr)</code> is evaluated as a place expression, but never loads from the
+place or requires the place to be dereferenceable. This means that <code>addr_of_mut!((*ptr).field)</code>
+still requires the projection to <code>field</code> to be in-bounds, using the same rules as <a href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>offset</code></a>.
+However, <code>addr_of_mut!(*ptr)</code> is defined behavior even if <code>ptr</code> is null, dangling, or misaligned.</p>
+<p>Note that <code>Deref</code>/<code>Index</code> coercions (and their mutable counterparts) are applied inside
+<code>addr_of_mut!</code> like everywhere else, in which case a reference is created to call <code>Deref::deref</code>
+or <code>Index::index</code>, respectively. The statements above only apply when no such coercions are
+applied.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><strong>Correct usage: Creating a pointer to unaligned data</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="attr">#[repr(packed)]
+</span><span class="kw">struct </span>Packed {
+    f1: u8,
+    f2: u16,
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>packed = Packed { f1: <span class="number">1</span>, f2: <span class="number">2 </span>};
+<span class="comment">// `&amp;mut packed.f2` would create an unaligned reference, and thus be Undefined Behavior!
+</span><span class="kw">let </span>raw_f2 = <span class="macro">ptr::addr_of_mut!</span>(packed.f2);
+<span class="kw">unsafe </span>{ raw_f2.write_unaligned(<span class="number">42</span>); }
+<span class="macro">assert_eq!</span>({packed.f2}, <span class="number">42</span>); <span class="comment">// `{...}` forces copying the field instead of creating a reference.</span></code></pre></div>
+<p><strong>Correct usage: Creating a pointer to uninitialized data</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{ptr, mem::MaybeUninit};
+
+<span class="kw">struct </span>Demo {
+    field: bool,
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>uninit = MaybeUninit::&lt;Demo&gt;::uninit();
+<span class="comment">// `&amp;uninit.as_mut().field` would create a reference to an uninitialized `bool`,
+// and thus be Undefined Behavior!
+</span><span class="kw">let </span>f1_ptr = <span class="kw">unsafe </span>{ <span class="macro">ptr::addr_of_mut!</span>((<span class="kw-2">*</span>uninit.as_mut_ptr()).field) };
+<span class="kw">unsafe </span>{ f1_ptr.write(<span class="bool-val">true</span>); }
+<span class="kw">let </span>init = <span class="kw">unsafe </span>{ uninit.assume_init() };</code></pre></div>
+<p><strong>Incorrect usage: Out-of-bounds fields projection</strong></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="attr">#[repr(C)]
+</span><span class="kw">struct </span>MyStruct {
+    field1: i32,
+    field2: i32,
+}
+
+<span class="kw">let </span>ptr: <span class="kw-2">*mut </span>MyStruct = ptr::null_mut();
+<span class="kw">let </span>fieldptr = <span class="kw">unsafe </span>{ <span class="macro">ptr::addr_of_mut!</span>((<span class="kw-2">*</span>ptr).field2) }; <span class="comment">// Undefined Behavior ⚠️</span></code></pre></div>
+<p>The field projection <code>.field2</code> would offset the pointer by 4 bytes,
+but the pointer is not in-bounds of an allocation for 4 bytes,
+so this offset is Undefined Behavior.
+See the <a href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html#method.offset" title="method pointer::offset"><code>offset</code></a> docs for a full list of requirements for inbounds pointer arithmetic; the
+same requirements apply to field projections, even inside <code>addr_of_mut!</code>. (In particular, it
+makes no difference whether the pointer is null or dangling.)</p>
+</div></details></section></div></main></body></html>

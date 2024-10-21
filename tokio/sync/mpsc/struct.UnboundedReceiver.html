@@ -1,0 +1,294 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Receive values from the associated `UnboundedSender`."><title>UnboundedReceiver in tokio::sync::mpsc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">UnboundedReceiver</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.blocking_recv">blocking_recv</a></li><li><a href="#method.close">close</a></li><li><a href="#method.is_closed">is_closed</a></li><li><a href="#method.is_empty">is_empty</a></li><li><a href="#method.len">len</a></li><li><a href="#method.poll_recv">poll_recv</a></li><li><a href="#method.poll_recv_many">poll_recv_many</a></li><li><a href="#method.recv">recv</a></li><li><a href="#method.recv_many">recv_many</a></li><li><a href="#method.sender_strong_count">sender_strong_count</a></li><li><a href="#method.sender_weak_count">sender_weak_count</a></li><li><a href="#method.try_recv">try_recv</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-UnboundedReceiver%3CT%3E">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-UnboundedReceiver%3CT%3E">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-UnboundedReceiver%3CT%3E">RefUnwindSafe</a></li><li><a href="#impl-Send-for-UnboundedReceiver%3CT%3E">Send</a></li><li><a href="#impl-Sync-for-UnboundedReceiver%3CT%3E">Sync</a></li><li><a href="#impl-Unpin-for-UnboundedReceiver%3CT%3E">Unpin</a></li><li><a href="#impl-UnwindSafe-for-UnboundedReceiver%3CT%3E">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In tokio::sync::mpsc</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">sync</a>::<wbr><a href="index.html">mpsc</a>::<wbr><a class="struct" href="#">UnboundedReceiver</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#72-75">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct UnboundedReceiver&lt;T&gt; { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Receive values from the associated <code>UnboundedSender</code>.</p>
+<p>Instances are created by the <a href="fn.unbounded_channel.html" title="fn tokio::sync::mpsc::unbounded_channel"><code>unbounded_channel</code></a> function.</p>
+<p>This receiver can be turned into a <code>Stream</code> using <a href="https://docs.rs/tokio-stream/0.1/tokio_stream/wrappers/struct.UnboundedReceiverStream.html"><code>UnboundedReceiverStream</code></a>.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-UnboundedReceiver%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#108-511">source</a><a href="#impl-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.recv" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#167-171">source</a><h4 class="code-header">pub async fn <a href="#method.recv" class="fn">recv</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Receives the next value for this receiver.</p>
+<p>This method returns <code>None</code> if the channel has been closed and there are
+no remaining messages in the channel’s buffer. This indicates that no
+further values can ever be received from this <code>Receiver</code>. The channel is
+closed when all senders have been dropped, or when <a href="struct.UnboundedReceiver.html#method.close" title="method tokio::sync::mpsc::UnboundedReceiver::close"><code>close</code></a> is called.</p>
+<p>If there are no messages in the channel’s buffer, but the channel has
+not yet been closed, this method will sleep until a message is sent or
+the channel is closed.</p>
+<h5 id="cancel-safety"><a class="doc-anchor" href="#cancel-safety">§</a>Cancel safety</h5>
+<p>This method is cancel safe. If <code>recv</code> is used as the event in a
+<a href="../../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some other branch
+completes first, it is guaranteed that no messages were received on this
+channel.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel();
+
+    tokio::spawn(<span class="kw">async move </span>{
+        tx.send(<span class="string">"hello"</span>).unwrap();
+    });
+
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"hello"</span>), rx.recv().<span class="kw">await</span>);
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, rx.recv().<span class="kw">await</span>);
+}</code></pre></div>
+<p>Values are buffered:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel();
+
+    tx.send(<span class="string">"hello"</span>).unwrap();
+    tx.send(<span class="string">"world"</span>).unwrap();
+
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"hello"</span>), rx.recv().<span class="kw">await</span>);
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="string">"world"</span>), rx.recv().<span class="kw">await</span>);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.recv_many" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#241-244">source</a><h4 class="code-header">pub async fn <a href="#method.recv_many" class="fn">recv_many</a>(&amp;mut self, buffer: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;T&gt;, limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Receives the next values for this receiver and extends <code>buffer</code>.</p>
+<p>This method extends <code>buffer</code> by no more than a fixed number of values
+as specified by <code>limit</code>. If <code>limit</code> is zero, the function returns
+immediately with <code>0</code>. The return value is the number of values added to
+<code>buffer</code>.</p>
+<p>For <code>limit &gt; 0</code>, if there are no messages in the channel’s queue,
+but the channel has not yet been closed, this method will sleep
+until a message is sent or the channel is closed.</p>
+<p>For non-zero values of <code>limit</code>, this method will never return <code>0</code> unless
+the channel has been closed and there are no remaining messages in the
+channel’s queue. This indicates that no further values can ever be
+received from this <code>Receiver</code>. The channel is closed when all senders
+have been dropped, or when <a href="struct.UnboundedReceiver.html#method.close" title="method tokio::sync::mpsc::UnboundedReceiver::close"><code>close</code></a> is called.</p>
+<p>The capacity of <code>buffer</code> is increased as needed.</p>
+<h5 id="cancel-safety-1"><a class="doc-anchor" href="#cancel-safety-1">§</a>Cancel safety</h5>
+<p>This method is cancel safe. If <code>recv_many</code> is used as the event in a
+<a href="../../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> statement and some other branch
+completes first, it is guaranteed that no messages were received on this
+channel.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = Vec::with_capacity(<span class="number">2</span>);
+    <span class="kw">let </span>limit = <span class="number">2</span>;
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel();
+    <span class="kw">let </span>tx2 = tx.clone();
+    tx2.send(<span class="string">"first"</span>).unwrap();
+    tx2.send(<span class="string">"second"</span>).unwrap();
+    tx2.send(<span class="string">"third"</span>).unwrap();
+
+    <span class="comment">// Call `recv_many` to receive up to `limit` (2) values.
+    </span><span class="macro">assert_eq!</span>(<span class="number">2</span>, rx.recv_many(<span class="kw-2">&amp;mut </span>buffer, limit).<span class="kw">await</span>);
+    <span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="string">"first"</span>, <span class="string">"second"</span>], buffer);
+
+    <span class="comment">// If the buffer is full, the next call to `recv_many`
+    // reserves additional capacity.
+    </span><span class="macro">assert_eq!</span>(<span class="number">1</span>, rx.recv_many(<span class="kw-2">&amp;mut </span>buffer, limit).<span class="kw">await</span>);
+
+    tokio::spawn(<span class="kw">async move </span>{
+        tx.send(<span class="string">"fourth"</span>).unwrap();
+    });
+
+    <span class="comment">// 'tx' is dropped, but `recv_many`
+    // is guaranteed not to return 0 as the channel
+    // is not yet closed.
+    </span><span class="macro">assert_eq!</span>(<span class="number">1</span>, rx.recv_many(<span class="kw-2">&amp;mut </span>buffer, limit).<span class="kw">await</span>);
+    <span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="string">"first"</span>, <span class="string">"second"</span>, <span class="string">"third"</span>, <span class="string">"fourth"</span>], buffer);
+
+    <span class="comment">// Once the last sender is dropped, the channel is
+    // closed and `recv_many` returns 0, capacity unchanged.
+    </span>drop(tx2);
+    <span class="macro">assert_eq!</span>(<span class="number">0</span>, rx.recv_many(<span class="kw-2">&amp;mut </span>buffer, limit).<span class="kw">await</span>);
+    <span class="macro">assert_eq!</span>(<span class="macro">vec!</span>[<span class="string">"first"</span>, <span class="string">"second"</span>, <span class="string">"third"</span>, <span class="string">"fourth"</span>], buffer);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_recv" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#286-288">source</a><h4 class="code-header">pub fn <a href="#method.try_recv" class="fn">try_recv</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, <a class="enum" href="error/enum.TryRecvError.html" title="enum tokio::sync::mpsc::error::TryRecvError">TryRecvError</a>&gt;</h4></section></summary><div class="docblock"><p>Tries to receive the next value for this receiver.</p>
+<p>This method returns the <a href="error/enum.TryRecvError.html#variant.Empty" title="variant tokio::sync::mpsc::error::TryRecvError::Empty"><code>Empty</code></a> error if the channel is currently
+empty, but there are still outstanding <a href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender">senders</a> or <a href="struct.Permit.html" title="struct tokio::sync::mpsc::Permit">permits</a>.</p>
+<p>This method returns the <a href="error/enum.TryRecvError.html#variant.Disconnected" title="variant tokio::sync::mpsc::error::TryRecvError::Disconnected"><code>Disconnected</code></a> error if the channel is
+currently empty, and there are no outstanding <a href="struct.Sender.html" title="struct tokio::sync::mpsc::Sender">senders</a> or <a href="struct.Permit.html" title="struct tokio::sync::mpsc::Permit">permits</a>.</p>
+<p>Unlike the <a href="struct.UnboundedReceiver.html#method.poll_recv" title="method tokio::sync::mpsc::UnboundedReceiver::poll_recv"><code>poll_recv</code></a> method, this method will never return an
+<a href="error/enum.TryRecvError.html#variant.Empty" title="variant tokio::sync::mpsc::error::TryRecvError::Empty"><code>Empty</code></a> error spuriously.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+<span class="kw">use </span>tokio::sync::mpsc::error::TryRecvError;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel();
+
+    tx.send(<span class="string">"hello"</span>).unwrap();
+
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Ok</span>(<span class="string">"hello"</span>), rx.try_recv());
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(TryRecvError::Empty), rx.try_recv());
+
+    tx.send(<span class="string">"hello"</span>).unwrap();
+    <span class="comment">// Drop the last sender, closing the channel.
+    </span>drop(tx);
+
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Ok</span>(<span class="string">"hello"</span>), rx.try_recv());
+    <span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(TryRecvError::Disconnected), rx.try_recv());
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.blocking_recv" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#318-320">source</a><h4 class="code-header">pub fn <a href="#method.blocking_recv" class="fn">blocking_recv</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Blocking receive to call outside of asynchronous contexts.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This function panics if called within an asynchronous execution
+context.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel::&lt;u8&gt;();
+
+    <span class="kw">let </span>sync_code = thread::spawn(<span class="kw">move </span>|| {
+        <span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">10</span>), rx.blocking_recv());
+    });
+
+    <span class="kw">let _ </span>= tx.send(<span class="number">10</span>);
+    sync_code.join().unwrap();
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.close" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#329-331">source</a><h4 class="code-header">pub fn <a href="#method.close" class="fn">close</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Closes the receiving half of a channel, without dropping it.</p>
+<p>This prevents any further messages from being sent on the channel while
+still enabling the receiver to drain messages that are buffered.</p>
+<p>To guarantee that no messages are dropped, after calling <code>close()</code>,
+<code>recv()</code> must be called until <code>None</code> is returned.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_closed" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#355-357">source</a><h4 class="code-header">pub fn <a href="#method.is_closed" class="fn">is_closed</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Checks if a channel is closed.</p>
+<p>This method returns <code>true</code> if the channel has been closed. The channel is closed
+when all <a href="struct.UnboundedSender.html" title="struct tokio::sync::mpsc::UnboundedSender"><code>UnboundedSender</code></a> have been dropped, or when <a href="struct.UnboundedReceiver.html#method.close" title="method tokio::sync::mpsc::UnboundedReceiver::close"><code>UnboundedReceiver::close</code></a> is called.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(_tx, <span class="kw-2">mut </span>rx) = mpsc::unbounded_channel::&lt;()&gt;();
+    <span class="macro">assert!</span>(!rx.is_closed());
+
+    rx.close();
+
+    <span class="macro">assert!</span>(rx.is_closed());
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_empty" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#377-379">source</a><h4 class="code-header">pub fn <a href="#method.is_empty" class="fn">is_empty</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Checks if a channel is empty.</p>
+<p>This method returns <code>true</code> if the channel has no messages.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, rx) = mpsc::unbounded_channel();
+    <span class="macro">assert!</span>(rx.is_empty());
+
+    tx.send(<span class="number">0</span>).unwrap();
+    <span class="macro">assert!</span>(!rx.is_empty());
+}
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.len" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#396-398">source</a><h4 class="code-header">pub fn <a href="#method.len" class="fn">len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the number of messages in the channel.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::mpsc;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, rx) = mpsc::unbounded_channel();
+    <span class="macro">assert_eq!</span>(<span class="number">0</span>, rx.len());
+
+    tx.send(<span class="number">0</span>).unwrap();
+    <span class="macro">assert_eq!</span>(<span class="number">1</span>, rx.len());
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.poll_recv" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#421-423">source</a><h4 class="code-header">pub fn <a href="#method.poll_recv" class="fn">poll_recv</a>(&amp;mut self, cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;&gt;</h4></section></summary><div class="docblock"><p>Polls to receive the next message on this channel.</p>
+<p>This method returns:</p>
+<ul>
+<li><code>Poll::Pending</code> if no messages are available but the channel is not
+closed, or if a spurious failure happens.</li>
+<li><code>Poll::Ready(Some(message))</code> if a message is available.</li>
+<li><code>Poll::Ready(None)</code> if the channel has been closed and all messages
+sent before it was closed have been received.</li>
+</ul>
+<p>When the method returns <code>Poll::Pending</code>, the <code>Waker</code> in the provided
+<code>Context</code> is scheduled to receive a wakeup when a message is sent on any
+receiver, or when the channel is closed.  Note that on multiple calls to
+<code>poll_recv</code> or <code>poll_recv_many</code>, only the <code>Waker</code> from the <code>Context</code>
+passed to the most recent call is scheduled to receive a wakeup.</p>
+<p>If this method returns <code>Poll::Pending</code> due to a spurious failure, then
+the <code>Waker</code> will be notified when the situation causing the spurious
+failure has been resolved. Note that receiving such a wakeup does not
+guarantee that the next call will succeed — it could fail with another
+spurious failure.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.poll_recv_many" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#493-500">source</a><h4 class="code-header">pub fn <a href="#method.poll_recv_many" class="fn">poll_recv_many</a>(
+    &amp;mut self,
+    cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;,
+    buffer: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;T&gt;,
+    limit: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>Polls to receive multiple messages on this channel, extending the provided buffer.</p>
+<p>This method returns:</p>
+<ul>
+<li><code>Poll::Pending</code> if no messages are available but the channel is not closed, or if a
+spurious failure happens.</li>
+<li><code>Poll::Ready(count)</code> where <code>count</code> is the number of messages successfully received and
+stored in <code>buffer</code>. This can be less than, or equal to, <code>limit</code>.</li>
+<li><code>Poll::Ready(0)</code> if <code>limit</code> is set to zero or when the channel is closed.</li>
+</ul>
+<p>When the method returns <code>Poll::Pending</code>, the <code>Waker</code> in the provided
+<code>Context</code> is scheduled to receive a wakeup when a message is sent on any
+receiver, or when the channel is closed.  Note that on multiple calls to
+<code>poll_recv</code> or <code>poll_recv_many</code>, only the <code>Waker</code> from the <code>Context</code>
+passed to the most recent call is scheduled to receive a wakeup.</p>
+<p>Note that this method does not guarantee that exactly <code>limit</code> messages
+are received. Rather, if at least one message is available, it returns
+as many messages as it can up to the given limit. This method returns
+zero only if the channel is closed (or if <code>limit</code> is zero).</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::task::{Context, Poll};
+<span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>tokio::sync::mpsc;
+<span class="kw">use </span>futures::Future;
+
+<span class="kw">struct </span>MyReceiverFuture&lt;<span class="lifetime">'a</span>&gt; {
+    receiver: mpsc::UnboundedReceiver&lt;i32&gt;,
+    buffer: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Vec&lt;i32&gt;,
+    limit: usize,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Future <span class="kw">for </span>MyReceiverFuture&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">type </span>Output = usize; <span class="comment">// Number of messages received
+
+    </span><span class="kw">fn </span>poll(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="kw">let </span>MyReceiverFuture { receiver, buffer, limit } = <span class="kw-2">&amp;mut *</span><span class="self">self</span>;
+
+        <span class="comment">// Now `receiver` and `buffer` are mutable references, and `limit` is copied
+        </span><span class="kw">match </span>receiver.poll_recv_many(cx, <span class="kw-2">*</span>buffer, <span class="kw-2">*</span>limit) {
+            Poll::Pending =&gt; Poll::Pending,
+            Poll::Ready(count) =&gt; Poll::Ready(count),
+        }
+    }
+}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, rx) = mpsc::unbounded_channel::&lt;i32&gt;();
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+
+    <span class="kw">let </span>my_receiver_future = MyReceiverFuture {
+        receiver: rx,
+        buffer: <span class="kw-2">&amp;mut </span>buffer,
+        limit: <span class="number">3</span>,
+    };
+
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">10 </span>{
+        tx.send(i).expect(<span class="string">"Unable to send integer"</span>);
+    }
+
+    <span class="kw">let </span>count = my_receiver_future.<span class="kw">await</span>;
+    <span class="macro">assert_eq!</span>(count, <span class="number">3</span>);
+    <span class="macro">assert_eq!</span>(buffer, <span class="macro">vec!</span>[<span class="number">0</span>,<span class="number">1</span>,<span class="number">2</span>])
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.sender_strong_count" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#503-505">source</a><h4 class="code-header">pub fn <a href="#method.sender_strong_count" class="fn">sender_strong_count</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the number of <a href="struct.UnboundedSender.html" title="struct tokio::sync::mpsc::UnboundedSender"><code>UnboundedSender</code></a> handles.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.sender_weak_count" class="method"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#508-510">source</a><h4 class="code-header">pub fn <a href="#method.sender_weak_count" class="fn">sender_weak_count</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the number of <a href="struct.WeakUnboundedSender.html" title="struct tokio::sync::mpsc::WeakUnboundedSender"><code>WeakUnboundedSender</code></a> handles.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-UnboundedReceiver%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#77-83">source</a><a href="#impl-Debug-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/tokio/sync/mpsc/unbounded.rs.html#78-82">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, fmt: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-UnboundedReceiver%3CT%3E" class="impl"><a href="#impl-Freeze-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;</h3></section><section id="impl-RefUnwindSafe-for-UnboundedReceiver%3CT%3E" class="impl"><a href="#impl-RefUnwindSafe-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;</h3></section><section id="impl-Send-for-UnboundedReceiver%3CT%3E" class="impl"><a href="#impl-Send-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h3></section><section id="impl-Sync-for-UnboundedReceiver%3CT%3E" class="impl"><a href="#impl-Sync-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h3></section><section id="impl-Unpin-for-UnboundedReceiver%3CT%3E" class="impl"><a href="#impl-Unpin-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;</h3></section><section id="impl-UnwindSafe-for-UnboundedReceiver%3CT%3E" class="impl"><a href="#impl-UnwindSafe-for-UnboundedReceiver%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.UnboundedReceiver.html" title="struct tokio::sync::mpsc::UnboundedReceiver">UnboundedReceiver</a>&lt;T&gt;</h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

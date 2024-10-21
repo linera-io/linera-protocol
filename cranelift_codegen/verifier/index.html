@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A verifier for ensuring that functions are well formed. It verifies:"><title>cranelift_codegen::verifier - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="cranelift_codegen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../cranelift_codegen/index.html">cranelift_codegen</a><span class="version">0.112.1</span></h2></div><h2 class="location"><a href="#">Module verifier</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate cranelift_codegen</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">cranelift_codegen</a>::<wbr><a class="mod" href="#">verifier</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/cranelift_codegen/verifier/mod.rs.html#1-1941">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A verifier for ensuring that functions are well formed.
+It verifies:</p>
+<p>block integrity</p>
+<ul>
+<li>All instructions reached from the <code>block_insts</code> iterator must belong to
+the block as reported by <code>inst_block()</code>.</li>
+<li>Every block must end in a terminator instruction, and no other instruction
+can be a terminator.</li>
+<li>Every value in the <code>block_params</code> iterator belongs to the block as reported by <code>value_block</code>.</li>
+</ul>
+<p>Instruction integrity</p>
+<ul>
+<li>The instruction format must match the opcode.</li>
+<li>All result values must be created for multi-valued instructions.</li>
+<li>All referenced entities must exist. (Values, blocks, stack slots, …)</li>
+<li>Instructions must not reference (eg. branch to) the entry block.</li>
+</ul>
+<p>SSA form</p>
+<ul>
+<li>Values must be defined by an instruction that exists and that is inserted in
+a block, or be an argument of an existing block.</li>
+<li>Values used by an instruction must dominate the instruction.</li>
+</ul>
+<p>Control flow graph and dominator tree integrity:</p>
+<ul>
+<li>All predecessors in the CFG must be branches to the block.</li>
+<li>All branches to a block must be present in the CFG.</li>
+<li>A recomputed dominator tree is identical to the existing one.</li>
+<li>The entry block must not be a cold block.</li>
+</ul>
+<p>Type checking</p>
+<ul>
+<li>Compare input and output values against the opcode’s type constraints.
+For polymorphic opcodes, determine the controlling type variable first.</li>
+<li>Branches and jumps must pass arguments to destination blocks that match the
+expected types exactly. The number of arguments must match.</li>
+<li>All blocks in a jump table must take no arguments.</li>
+<li>Function calls are type checked against their signature.</li>
+<li>The entry block must take arguments that match the signature of the current
+function.</li>
+<li>All return instructions must have return value operands matching the current
+function signature.</li>
+</ul>
+<p>Global values</p>
+<ul>
+<li>Detect cycles in global values.</li>
+<li>Detect use of ‘vmctx’ global value when no corresponding parameter is defined.</li>
+</ul>
+<p>Memory types</p>
+<ul>
+<li>Ensure that struct fields are in offset order.</li>
+<li>Ensure that struct fields are completely within the overall
+struct size, and do not overlap.</li>
+</ul>
+<p>TODO:
+Ad hoc checking</p>
+<ul>
+<li>Stack slot loads and stores must be in-bounds.</li>
+<li>Immediate constraints for certain opcodes, like <code>udiv_imm v3, 0</code>.</li>
+<li><code>Insertlane</code> and <code>extractlane</code> instructions have immediate lane numbers that must be in
+range for their polymorphic type.</li>
+<li>Swizzle and shuffle instructions take a variable number of lane arguments. The number
+of arguments must match the destination type, and the lane indexes must be in range.</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.VerifierError.html" title="struct cranelift_codegen::verifier::VerifierError">VerifierError</a></div><div class="desc docblock-short">A verifier error.</div></li><li><div class="item-name"><a class="struct" href="struct.VerifierErrors.html" title="struct cranelift_codegen::verifier::VerifierErrors">VerifierErrors</a></div><div class="desc docblock-short">List of verifier errors.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.verify_context.html" title="fn cranelift_codegen::verifier::verify_context">verify_context</a></div><div class="desc docblock-short">Verify <code>func</code> after checking the integrity of associated context data structures <code>cfg</code> and
+<code>domtree</code>.</div></li><li><div class="item-name"><a class="fn" href="fn.verify_function.html" title="fn cranelift_codegen::verifier::verify_function">verify_function</a></div><div class="desc docblock-short">Verify <code>func</code>.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.VerifierResult.html" title="type cranelift_codegen::verifier::VerifierResult">VerifierResult</a></div><div class="desc docblock-short">Result of a verification operation.</div></li><li><div class="item-name"><a class="type" href="type.VerifierStepResult.html" title="type cranelift_codegen::verifier::VerifierStepResult">VerifierStepResult</a></div><div class="desc docblock-short">Result of a step in the verification process.</div></li></ul></section></div></main></body></html>

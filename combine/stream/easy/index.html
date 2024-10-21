@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Stream wrapper which provides an informative and easy to use error type."><title>combine::stream::easy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="combine" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../combine/index.html">combine</a><span class="version">3.8.1</span></h2></div><h2 class="location"><a href="#">Module easy</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In combine::stream</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">combine</a>::<wbr><a href="../index.html">stream</a>::<wbr><a class="mod" href="#">easy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/combine/stream/easy.rs.html#1-815">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Stream wrapper which provides an informative and easy to use error type.</p>
+<p>Unless you have specific constraints preventing you from using this error type (such as being
+a <code>no_std</code> environment) you probably want to use this stream type. It can easily be used
+through the <a href="../parser/trait.Parser.html#method.easy_parse"><code>Parser::easy_parse</code></a> method.</p>
+<p>The provided <code>Errors</code> type is roughly the same as <code>ParseError</code> in combine 1.x and 2.x.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[macro_use]
+</span><span class="kw">extern crate </span>combine;
+<span class="kw">use </span>combine::{easy, Parser, Stream, many1};
+<span class="kw">use </span>combine::parser::char::letter;
+<span class="kw">use </span>combine::stream::StreamErrorFor;
+<span class="kw">use </span>combine::error::{ParseError, StreamError};
+
+<span class="kw">fn </span>main() {
+    <span class="macro">parser!</span>{
+       <span class="kw">fn </span>parser[I]()(I) -&gt; String
+        <span class="kw">where </span>[
+            I: Stream&lt;Item=char, Error = easy::ParseError&lt;I&gt;&gt;,
+            <span class="comment">// If we want to use the error type explicitly we need to help rustc infer
+            // `StreamError` to `easy::Error` (rust-lang/rust#24159)
+            </span>I::Error: ParseError&lt;
+                I::Item,
+                I::Range,
+                I::Position,
+                StreamError = easy::Error&lt;I::Item, I::Range&gt;
+            &gt;
+        ]
+        {
+            many1(letter()).and_then(|word: String| {
+                <span class="kw">if </span>word == <span class="string">"combine" </span>{
+                    <span class="prelude-val">Ok</span>(word)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(easy::Error::Expected(easy::Info::Borrowed(<span class="string">"combine"</span>)))
+                }
+            })
+        }
+    }
+
+    <span class="macro">parser!</span>{
+       <span class="kw">fn </span>parser2[I]()(I) -&gt; String
+        <span class="kw">where </span>[
+            I: Stream&lt;Item=char&gt;,
+        ]
+        {
+            many1(letter()).and_then(|word: String| {
+                <span class="kw">if </span>word == <span class="string">"combine" </span>{
+                    <span class="prelude-val">Ok</span>(word)
+                } <span class="kw">else </span>{
+                    <span class="comment">// Alternatively it is possible to only use the methods provided by the
+                    // `StreamError` trait.
+                    // In that case the extra bound is not necessary (and this method will work
+                    // for other errors than `easy::Errors`)
+                    </span><span class="prelude-val">Err</span>(StreamErrorFor::&lt;I&gt;::expected_static_message(<span class="string">"combine"</span>))
+                }
+            })
+        }
+    }
+
+    <span class="kw">let </span>input = <span class="string">"combin"</span>;
+    <span class="kw">let </span>expected_error = <span class="prelude-val">Err</span>(easy::Errors {
+        errors: <span class="macro">vec!</span>[
+            easy::Error::Expected(<span class="string">"combine"</span>.into())
+        ],
+        position: <span class="number">0</span>,
+    });
+    <span class="macro">assert_eq!</span>(
+        parser().easy_parse(input).map_err(|err| err.map_position(|p| p.translate_position(input))),
+        expected_error
+    );
+    <span class="macro">assert_eq!</span>(
+        parser2().easy_parse(input).map_err(|err| err.map_position(|p| p.translate_position(input))),
+        expected_error
+    );
+}
+</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Errors.html" title="struct combine::stream::easy::Errors">Errors</a></div><div class="desc docblock-short">Struct which hold information about an error that occurred at a specific position.
+Can hold multiple instances of <code>Error</code> if more that one error occurred in the same position.</div></li><li><div class="item-name"><a class="struct" href="struct.Stream.html" title="struct combine::stream::easy::Stream">Stream</a></div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Error.html" title="enum combine::stream::easy::Error">Error</a></div><div class="desc docblock-short">Enum used to store information about an error that has occurred during parsing.</div></li><li><div class="item-name"><a class="enum" href="enum.Info.html" title="enum combine::stream::easy::Info">Info</a></div><div class="desc docblock-short">Enum holding error information. Variants are defined for <code>Stream::Item</code> and <code>Stream::Range</code> as
+well as string variants holding easy descriptions.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ParseError.html" title="type combine::stream::easy::ParseError">ParseError</a></div><div class="desc docblock-short">Convenience alias over <code>Errors</code> for <code>StreamOnce</code> types which makes it possible to specify the
+<code>Errors</code> type from a <code>StreamOnce</code> by writing <code>ParseError&lt;I&gt;</code> instead of <code>Errors&lt;I::Item, I::Range, I::Position&gt;</code></div></li></ul></section></div></main></body></html>

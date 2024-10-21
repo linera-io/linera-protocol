@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Policy that decides which nodes to contact for each query."><title>LoadBalancingPolicy in scylla::transport::load_balancing - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="scylla" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../scylla/index.html">scylla</a><span class="version">0.12.0</span></h2></div><h2 class="location"><a href="#">LoadBalancingPolicy</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.fallback">fallback</a></li><li><a href="#tymethod.name">name</a></li><li><a href="#tymethod.pick">pick</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.on_query_failure">on_query_failure</a></li><li><a href="#method.on_query_success">on_query_success</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In scylla::transport::load_balancing</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">scylla</a>::<wbr><a href="../index.html">transport</a>::<wbr><a href="index.html">load_balancing</a>::<wbr><a class="trait" href="#">LoadBalancingPolicy</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/scylla/transport/load_balancing/mod.rs.html#63-86">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait LoadBalancingPolicy: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> {
+    // Required methods
+    fn <a href="#tymethod.pick" class="fn">pick</a>&lt;'a&gt;(
+        &amp;'a self,
+        query: &amp;'a <a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+        cluster: &amp;'a <a class="struct" href="../struct.ClusterData.html" title="struct scylla::transport::ClusterData">ClusterData</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="../type.NodeRef.html" title="type scylla::transport::NodeRef">NodeRef</a>&lt;'a&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.fallback" class="fn">fallback</a>&lt;'a&gt;(
+        &amp;'a self,
+        query: &amp;'a <a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+        cluster: &amp;'a <a class="struct" href="../struct.ClusterData.html" title="struct scylla::transport::ClusterData">ClusterData</a>,
+    ) -&gt; <a class="type" href="type.FallbackPlan.html" title="type scylla::transport::load_balancing::FallbackPlan">FallbackPlan</a>&lt;'a&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.name" class="fn">name</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>;
+
+    // Provided methods
+    fn <a href="#method.on_query_success" class="fn">on_query_success</a>(
+        &amp;self,
+        _query: &amp;<a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+        _latency: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>,
+        _node: <a class="type" href="../type.NodeRef.html" title="type scylla::transport::NodeRef">NodeRef</a>&lt;'_&gt;,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.on_query_failure" class="fn">on_query_failure</a>(
+        &amp;self,
+        _query: &amp;<a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+        _latency: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>,
+        _node: <a class="type" href="../type.NodeRef.html" title="type scylla::transport::NodeRef">NodeRef</a>&lt;'_&gt;,
+        _error: &amp;<a class="enum" href="../errors/enum.QueryError.html" title="enum scylla::transport::errors::QueryError">QueryError</a>,
+    ) { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Policy that decides which nodes to contact for each query.</p>
+<p>When a query is prepared to be sent to ScyllaDB/Cassandra, a <code>LoadBalancingPolicy</code>
+implementation constructs a load balancing plan. That plan is a list of nodes to which
+the driver will try to send the query. The first elements of the plan are the nodes which are
+the best to contact (e.g. they might have the lowest latency).</p>
+<p>Most queries are send on the first try, so the query execution layer rarely needs to know more
+than one node from plan. To better optimize that case, <code>LoadBalancingPolicy</code> has two methods:
+<code>pick</code> and <code>fallback</code>. <code>pick</code> returns a first node to contact for a given query, <code>fallback</code>
+returns the rest of the load balancing plan.</p>
+<p><code>fallback</code> is called not only if a send to <code>pick</code>ed node failed (or when executing
+speculatively), but also if <code>pick</code> returns <code>None</code>.</p>
+<p>Usually the driver needs only the first node from load balancing plan (most queries are send
+successfully, and there is no need to retry).</p>
+<p>This trait is used to produce an iterator of nodes to contact for a given query.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.pick" class="method"><a class="src rightside" href="../../../src/scylla/transport/load_balancing/mod.rs.html#65">source</a><h4 class="code-header">fn <a href="#tymethod.pick" class="fn">pick</a>&lt;'a&gt;(
+    &amp;'a self,
+    query: &amp;'a <a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+    cluster: &amp;'a <a class="struct" href="../struct.ClusterData.html" title="struct scylla::transport::ClusterData">ClusterData</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="../type.NodeRef.html" title="type scylla::transport::NodeRef">NodeRef</a>&lt;'a&gt;&gt;</h4></section></summary><div class="docblock"><p>Returns the first node to contact for a given query.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.fallback" class="method"><a class="src rightside" href="../../../src/scylla/transport/load_balancing/mod.rs.html#68-69">source</a><h4 class="code-header">fn <a href="#tymethod.fallback" class="fn">fallback</a>&lt;'a&gt;(
+    &amp;'a self,
+    query: &amp;'a <a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+    cluster: &amp;'a <a class="struct" href="../struct.ClusterData.html" title="struct scylla::transport::ClusterData">ClusterData</a>,
+) -&gt; <a class="type" href="type.FallbackPlan.html" title="type scylla::transport::load_balancing::FallbackPlan">FallbackPlan</a>&lt;'a&gt;</h4></section></summary><div class="docblock"><p>Returns all contact-appropriate nodes for a given query.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.name" class="method"><a class="src rightside" href="../../../src/scylla/transport/load_balancing/mod.rs.html#85">source</a><h4 class="code-header">fn <a href="#tymethod.name" class="fn">name</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a></h4></section></summary><div class="docblock"><p>Returns the name of load balancing policy.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.on_query_success" class="method"><a class="src rightside" href="../../../src/scylla/transport/load_balancing/mod.rs.html#72">source</a><h4 class="code-header">fn <a href="#method.on_query_success" class="fn">on_query_success</a>(
+    &amp;self,
+    _query: &amp;<a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+    _latency: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>,
+    _node: <a class="type" href="../type.NodeRef.html" title="type scylla::transport::NodeRef">NodeRef</a>&lt;'_&gt;,
+)</h4></section></summary><div class="docblock"><p>Invoked each time a query succeeds.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.on_query_failure" class="method"><a class="src rightside" href="../../../src/scylla/transport/load_balancing/mod.rs.html#75-82">source</a><h4 class="code-header">fn <a href="#method.on_query_failure" class="fn">on_query_failure</a>(
+    &amp;self,
+    _query: &amp;<a class="struct" href="struct.RoutingInfo.html" title="struct scylla::transport::load_balancing::RoutingInfo">RoutingInfo</a>&lt;'_&gt;,
+    _latency: <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>,
+    _node: <a class="type" href="../type.NodeRef.html" title="type scylla::transport::NodeRef">NodeRef</a>&lt;'_&gt;,
+    _error: &amp;<a class="enum" href="../errors/enum.QueryError.html" title="enum scylla::transport::errors::QueryError">QueryError</a>,
+)</h4></section></summary><div class="docblock"><p>Invoked each time a query fails.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-LoadBalancingPolicy-for-DefaultPolicy" class="impl"><a class="src rightside" href="../../../src/scylla/transport/load_balancing/default.rs.html#94-366">source</a><a href="#impl-LoadBalancingPolicy-for-DefaultPolicy" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.LoadBalancingPolicy.html" title="trait scylla::transport::load_balancing::LoadBalancingPolicy">LoadBalancingPolicy</a> for <a class="struct" href="struct.DefaultPolicy.html" title="struct scylla::transport::load_balancing::DefaultPolicy">DefaultPolicy</a></h3></section></div><script src="../../../trait.impl/scylla/transport/load_balancing/trait.LoadBalancingPolicy.js" async></script></section></div></main></body></html>

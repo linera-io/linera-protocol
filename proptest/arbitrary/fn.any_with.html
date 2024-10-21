@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generates a `Strategy` producing `Arbitrary` values of `A` with the given configuration arguments passed in `args`. Unlike `arbitrary_with`, it should be used for being explicit on what `A` is. For clarity, this may be a good idea."><title>any_with in proptest::arbitrary - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="proptest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../proptest/index.html">proptest</a><span class="version">1.5.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In proptest::arbitrary</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">proptest</a>::<wbr><a href="index.html">arbitrary</a>::<wbr><a class="fn" href="#">any_with</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/proptest/arbitrary/traits.rs.html#208-211">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn any_with&lt;A: <a class="trait" href="trait.Arbitrary.html" title="trait proptest::arbitrary::Arbitrary">Arbitrary</a>&gt;(args: <a class="type" href="type.ParamsFor.html" title="type proptest::arbitrary::ParamsFor">ParamsFor</a>&lt;A&gt;) -&gt; <a class="type" href="type.StrategyFor.html" title="type proptest::arbitrary::StrategyFor">StrategyFor</a>&lt;A&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates a <a href="../strategy/trait.Strategy.html"><code>Strategy</code></a> producing <a href="trait.Arbitrary.html"><code>Arbitrary</code></a> values of <code>A</code> with the
+given configuration arguments passed in <code>args</code>. Unlike <a href="fn.arbitrary_with.html"><code>arbitrary_with</code></a>,
+it should be used for being explicit on what <code>A</code> is.
+For clarity, this may be a good idea.</p>
+<p>Use this version instead of <a href="fn.arbitrary_with.html"><code>arbitrary_with</code></a> if you want to be clear which
+type you want to generate a <code>Strategy</code> for, or if you don’t have an anchoring
+type for type inference to work with.</p>
+<p>If you don’t want to specify any arguments and instead use the default
+behavior, you should use <a href="fn.any.html"><code>any::&lt;A&gt;()</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>The function can be used as:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>proptest::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>proptest::collection::size_range;
+
+<span class="macro">proptest!</span> {
+    <span class="kw">fn </span>reverse_reverse_is_identity
+        (<span class="kw-2">ref </span>vec <span class="kw">in </span>any_with::&lt;Vec&lt;u32&gt;&gt;(size_range(<span class="number">1000</span>).lift()))
+    {
+        <span class="kw">let </span>vec2 = vec.iter().cloned().rev().rev().collect::&lt;Vec&lt;u32&gt;&gt;();
+        <span class="macro">prop_assert_eq!</span>(vec, <span class="kw-2">&amp;</span>vec2);
+    }
+}
+
+<span class="kw">fn </span>main() {
+    reverse_reverse_is_identity();
+}</code></pre></div>
+</div></details></section></div></main></body></html>

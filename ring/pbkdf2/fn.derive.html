@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Fills `out` with the key derived using PBKDF2 with the given inputs."><title>derive in ring::pbkdf2 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ring" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../ring/index.html">ring</a><span class="version">0.17.8</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In ring::pbkdf2</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">ring</a>::<wbr><a href="index.html">pbkdf2</a>::<wbr><a class="fn" href="#">derive</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/ring/pbkdf2.rs.html#155-181">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn derive(
+    algorithm: <a class="struct" href="struct.Algorithm.html" title="struct ring::pbkdf2::Algorithm">Algorithm</a>,
+    iterations: <a class="type" href="https://doc.rust-lang.org/1.81.0/core/num/nonzero/type.NonZeroU32.html" title="type core::num::nonzero::NonZeroU32">NonZeroU32</a>,
+    salt: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    secret: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    out: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Fills <code>out</code> with the key derived using PBKDF2 with the given inputs.</p>
+<p>Do not use <code>derive</code> as part of verifying a secret; use <code>verify</code> instead, to
+minimize the effectiveness of timing attacks.</p>
+<p><code>out.len()</code> must be no larger than the digest length * (2**32 - 1), per the
+PBKDF2 specification.</p>
+<div><table><thead><tr><th>Parameter</th><th>RFC 2898 Section 5.2 Term</th></tr></thead><tbody>
+<tr><td>digest_alg</td><td>PRF (HMAC with the given digest algorithm)</td></tr>
+<tr><td>iterations</td><td>c (iteration count)</td></tr>
+<tr><td>salt</td><td>S (salt)</td></tr>
+<tr><td>secret</td><td>P (password)</td></tr>
+<tr><td>out</td><td>dk (derived key)</td></tr>
+<tr><td>out.len()</td><td>dkLen (derived key length)</td></tr>
+</tbody></table>
+</div><h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p><code>derive</code> panics if <code>out.len()</code> is larger than (2**32 - 1) * the digest
+algorithm’s output length, per the PBKDF2 specification.</p>
+</div></details></section></div></main></body></html>

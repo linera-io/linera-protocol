@@ -1,0 +1,529 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An interceptor allows injecting code into the SDK ’s request execution pipeline."><title>Intercept in aws_smithy_runtime_api::client::interceptors - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aws_smithy_runtime_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../aws_smithy_runtime_api/index.html">aws_smithy_runtime_api</a><span class="version">1.7.2</span></h2></div><h2 class="location"><a href="#">Intercept</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.name">name</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.modify_before_attempt_completion">modify_before_attempt_completion</a></li><li><a href="#method.modify_before_completion">modify_before_completion</a></li><li><a href="#method.modify_before_deserialization">modify_before_deserialization</a></li><li><a href="#method.modify_before_retry_loop">modify_before_retry_loop</a></li><li><a href="#method.modify_before_serialization">modify_before_serialization</a></li><li><a href="#method.modify_before_signing">modify_before_signing</a></li><li><a href="#method.modify_before_transmit">modify_before_transmit</a></li><li><a href="#method.read_after_attempt">read_after_attempt</a></li><li><a href="#method.read_after_deserialization">read_after_deserialization</a></li><li><a href="#method.read_after_execution">read_after_execution</a></li><li><a href="#method.read_after_serialization">read_after_serialization</a></li><li><a href="#method.read_after_signing">read_after_signing</a></li><li><a href="#method.read_after_transmit">read_after_transmit</a></li><li><a href="#method.read_before_attempt">read_before_attempt</a></li><li><a href="#method.read_before_deserialization">read_before_deserialization</a></li><li><a href="#method.read_before_execution">read_before_execution</a></li><li><a href="#method.read_before_serialization">read_before_serialization</a></li><li><a href="#method.read_before_signing">read_before_signing</a></li><li><a href="#method.read_before_transmit">read_before_transmit</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In aws_smithy_runtime_api::client::interceptors</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">aws_smithy_runtime_api</a>::<wbr><a href="../index.html">client</a>::<wbr><a href="index.html">interceptors</a>::<wbr><a class="trait" href="#">Intercept</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#68-588">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Intercept: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 20 methods</span></summary>    // Required method
+    fn <a href="#tymethod.name" class="fn">name</a>(&amp;self) -&gt; &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>;
+
+    // Provided methods
+    fn <a href="#method.read_before_execution" class="fn">read_before_execution</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeSerializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef">BeforeSerializationInterceptorContextRef</a>&lt;'_&gt;,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_serialization" class="fn">modify_before_serialization</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.BeforeSerializationInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut">BeforeSerializationInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_before_serialization" class="fn">read_before_serialization</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeSerializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef">BeforeSerializationInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_after_serialization" class="fn">read_after_serialization</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_retry_loop" class="fn">modify_before_retry_loop</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.BeforeTransmitInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut">BeforeTransmitInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_before_attempt" class="fn">read_before_attempt</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_signing" class="fn">modify_before_signing</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.BeforeTransmitInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut">BeforeTransmitInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_before_signing" class="fn">read_before_signing</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_after_signing" class="fn">read_after_signing</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_transmit" class="fn">modify_before_transmit</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.BeforeTransmitInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut">BeforeTransmitInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_before_transmit" class="fn">read_before_transmit</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_after_transmit" class="fn">read_after_transmit</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeDeserializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextRef">BeforeDeserializationInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_deserialization" class="fn">modify_before_deserialization</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.BeforeDeserializationInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextMut">BeforeDeserializationInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_before_deserialization" class="fn">read_before_deserialization</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.BeforeDeserializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextRef">BeforeDeserializationInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_after_deserialization" class="fn">read_after_deserialization</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.AfterDeserializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::AfterDeserializationInterceptorContextRef">AfterDeserializationInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_attempt_completion" class="fn">modify_before_attempt_completion</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.FinalizerInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextMut">FinalizerInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_after_attempt" class="fn">read_after_attempt</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.FinalizerInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef">FinalizerInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.modify_before_completion" class="fn">modify_before_completion</a>(
+        &amp;self,
+        context: &amp;mut <a class="struct" href="context/struct.FinalizerInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextMut">FinalizerInterceptorContextMut</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_after_execution" class="fn">read_after_execution</a>(
+        &amp;self,
+        context: &amp;<a class="struct" href="context/struct.FinalizerInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef">FinalizerInterceptorContextRef</a>&lt;'_&gt;,
+        runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+        cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt; { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An interceptor allows injecting code into the SDK ’s request execution pipeline.</p>
+<h3 id="terminology"><a class="doc-anchor" href="#terminology">§</a>Terminology:</h3>
+<ul>
+<li>An execution is one end-to-end invocation against an SDK client.</li>
+<li>An attempt is an attempt at performing an execution. By default executions are retried multiple
+times based on the client ’s retry strategy.</li>
+<li>A hook is a single method on the interceptor, allowing injection of code into a specific part
+of the SDK ’s request execution pipeline. Hooks are either “read” hooks, which make it possible
+to read in-flight request or response messages, or “read/write” hooks, which make it possible
+to modify in-flight request or output messages.</li>
+</ul>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.name" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#70">source</a><h4 class="code-header">fn <a href="#tymethod.name" class="fn">name</a>(&amp;self) -&gt; &amp;'static <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a></h4></section></summary><div class="docblock"><p>The name of this interceptor, used in error messages for debugging.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.read_before_execution" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#89-96">source</a><h4 class="code-header">fn <a href="#method.read_before_execution" class="fn">read_before_execution</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeSerializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef">BeforeSerializationInterceptorContextRef</a>&lt;'_&gt;,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called at the start of an execution, before the SDK
+does anything else.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per execution. The duration
+between invocation of this hook and <code>after_execution</code> is very close
+to full duration of the execution.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available.</p>
+<p><strong>Error Behavior:</strong> Errors raised by this hook will be stored
+until all interceptors have had their <code>before_execution</code> invoked.
+Other hooks will then be skipped and execution will jump to
+<code>modify_before_completion</code> with the raised error as the
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>. If multiple
+<code>before_execution</code> methods raise errors, the latest
+will be used and earlier ones will be logged and dropped.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_serialization" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#98-123">source</a><h4 class="code-header">fn <a href="#method.modify_before_serialization" class="fn">modify_before_serialization</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.BeforeSerializationInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut">BeforeSerializationInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the input message is marshalled into a
+transport message.
+This method has the ability to modify and return a new
+request message of the same type.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per execution, except when a
+failure occurs earlier in the request pipeline.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a> is
+<strong>ALWAYS</strong> available. This request may have been modified by earlier
+<code>modify_before_serialization</code> hooks, and may be modified further by
+later hooks. Other information <strong>WILL NOT</strong> be available.</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this hook,
+execution will jump to <code>modify_before_completion</code> with the raised
+error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> The input message returned by this hook
+MUST be the same type of input message passed into this hook.
+If not, an error will immediately be raised.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_before_serialization" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#125-145">source</a><h4 class="code-header">fn <a href="#method.read_before_serialization" class="fn">read_before_serialization</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeSerializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef">BeforeSerializationInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the input message is marshalled
+into a transport
+message.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per execution, except when a
+failure occurs earlier in the request pipeline. The
+duration between invocation of this hook and <code>after_serialization</code> is
+very close to the amount of time spent marshalling the request.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a> is
+<strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available.</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this hook,
+execution will jump to <code>modify_before_completion</code> with the raised
+error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_after_serialization" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#147-166">source</a><h4 class="code-header">fn <a href="#method.read_after_serialization" class="fn">read_after_serialization</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called after the input message is marshalled into
+a transport message.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per execution, except when a
+failure occurs earlier in the request pipeline. The duration
+between invocation of this hook and <code>before_serialization</code> is very
+close to the amount of time spent marshalling the request.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available.</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this hook,
+execution will jump to <code>modify_before_completion</code> with the raised
+error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_retry_loop" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#168-187">source</a><h4 class="code-header">fn <a href="#method.modify_before_retry_loop" class="fn">modify_before_retry_loop</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.BeforeTransmitInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut">BeforeTransmitInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the retry loop is entered. This method
+has the ability to modify and return a new transport request
+message of the same type, except when a failure occurs earlier in the request pipeline.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available.</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this hook,
+execution will jump to <code>modify_before_completion</code> with the raised
+error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> The transport request message returned by this
+hook MUST be the same type of request message passed into this hook
+If not, an error will immediately be raised.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_before_attempt" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#189-213">source</a><h4 class="code-header">fn <a href="#method.read_before_attempt" class="fn">read_before_attempt</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before each attempt at sending the transmission
+request message to the service.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method will be
+called multiple times in the event of retries.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available. In the event of retries,
+the <code>InterceptorContext</code> will not include changes made in previous
+attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> Errors raised by this hook will be stored
+until all interceptors have had their <code>before_attempt</code> invoked.
+Other hooks will then be skipped and execution will jump to
+<code>modify_before_attempt_completion</code> with the raised error as the
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>. If multiple
+<code>before_attempt</code> methods raise errors, the latest will be used
+and earlier ones will be logged and dropped.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_signing" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#215-243">source</a><h4 class="code-header">fn <a href="#method.modify_before_signing" class="fn">modify_before_signing</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.BeforeTransmitInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut">BeforeTransmitInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the transport request message is signed.
+This method has the ability to modify and return a new transport
+request message of the same type.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>
+is <strong>ALWAYS</strong> available. The <code>http::Request</code> may have been modified by earlier
+<code>modify_before_signing</code> hooks, and may be modified further by later
+hooks. Other information <strong>WILL NOT</strong> be available. In the event of
+retries, the <code>InterceptorContext</code> will not include changes made
+in previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> The transport request message returned by this
+hook MUST be the same type of request message passed into this hook</p>
+<p>If not, an error will immediately be raised.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_before_signing" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#245-266">source</a><h4 class="code-header">fn <a href="#method.read_before_signing" class="fn">read_before_signing</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the transport request message is signed.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries. The duration between
+invocation of this hook and <code>after_signing</code> is very close to
+the amount of time spent signing the request.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a> is <strong>ALWAYS</strong> available.
+Other information <strong>WILL NOT</strong> be available. In the event of retries,
+the <code>InterceptorContext</code> will not include changes made in previous
+attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_after_signing" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#268-289">source</a><h4 class="code-header">fn <a href="#method.read_after_signing" class="fn">read_after_signing</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called after the transport request message is signed.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries. The duration between
+invocation of this hook and <code>before_signing</code> is very close to
+the amount of time spent signing the request.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a> is <strong>ALWAYS</strong> available.
+Other information <strong>WILL NOT</strong> be available. In the event of retries,
+the <code>InterceptorContext</code> will not include changes made in previous
+attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_transmit" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#291-320">source</a><h4 class="code-header">fn <a href="#method.modify_before_transmit" class="fn">modify_before_transmit</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.BeforeTransmitInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut">BeforeTransmitInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the transport request message is sent to the
+service. This method has the ability to modify and return
+a new transport request message of the same type.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>
+is <strong>ALWAYS</strong> available. The <code>http::Request</code> may have been modified by earlier
+<code>modify_before_transmit</code> hooks, and may be modified further by later
+hooks. Other information <strong>WILL NOT</strong> be available.
+In the event of retries, the <code>InterceptorContext</code> will not include
+changes made in previous attempts (e.g. by request signers or
+other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> The transport request message returned by this
+hook MUST be the same type of request message passed into this hook</p>
+<p>If not, an error will immediately be raised.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_before_transmit" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#322-347">source</a><h4 class="code-header">fn <a href="#method.read_before_transmit" class="fn">read_before_transmit</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeTransmitInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef">BeforeTransmitInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the transport request message is sent to the
+service.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries. The duration between
+invocation of this hook and <code>after_transmit</code> is very close to
+the amount of time spent communicating with the service.
+Depending on the protocol, the duration may not include the
+time spent reading the response data.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available. In the event of retries,
+the <code>InterceptorContext</code> will not include changes made in previous
+attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_after_transmit" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#349-373">source</a><h4 class="code-header">fn <a href="#method.read_after_transmit" class="fn">read_after_transmit</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeDeserializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextRef">BeforeDeserializationInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called after the transport request message is sent to the
+service and a transport response message is received.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries. The duration between
+invocation of this hook and <code>before_transmit</code> is very close to
+the amount of time spent communicating with the service.
+Depending on the protocol, the duration may not include the time
+spent reading the response data.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available. In the event of retries,
+the <code>InterceptorContext</code> will not include changes made in previous
+attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_deserialization" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#375-403">source</a><h4 class="code-header">fn <a href="#method.modify_before_deserialization" class="fn">modify_before_deserialization</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.BeforeDeserializationInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextMut">BeforeDeserializationInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the transport response message is unmarshalled.
+This method has the ability to modify and return a new transport
+response message of the same type.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>
+is <strong>ALWAYS</strong> available. The transmit_response may have been modified by earlier
+<code>modify_before_deserialization</code> hooks, and may be modified further by
+later hooks. Other information <strong>WILL NOT</strong> be available. In the event of
+retries, the <code>InterceptorContext</code> will not include changes made in
+previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> The transport response message returned by this
+hook MUST be the same type of response message passed into
+this hook. If not, an error will immediately be raised.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_before_deserialization" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#405-428">source</a><h4 class="code-header">fn <a href="#method.read_before_deserialization" class="fn">read_before_deserialization</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.BeforeDeserializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextRef">BeforeDeserializationInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called before the transport response message is unmarshalled</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. This method may be
+called multiple times in the event of retries. The duration between
+invocation of this hook and <code>after_deserialization</code> is very close
+to the amount of time spent unmarshalling the service response.
+Depending on the protocol and operation, the duration may include
+the time spent downloading the response data.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>
+is <strong>ALWAYS</strong> available. Other information <strong>WILL NOT</strong> be available. In the event of retries,
+the <code>InterceptorContext</code> will not include changes made in previous
+attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code>
+with the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_after_deserialization" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#430-453">source</a><h4 class="code-header">fn <a href="#method.read_after_deserialization" class="fn">read_after_deserialization</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.AfterDeserializationInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::AfterDeserializationInterceptorContextRef">AfterDeserializationInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called after the transport response message is unmarshalled.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs earlier in the request pipeline. The duration
+between invocation of this hook and <code>before_deserialization</code> is
+very close to the amount of time spent unmarshalling the
+service response. Depending on the protocol and operation,
+the duration may include the time spent downloading
+the response data.</p>
+<p><strong>Available Information:</strong> The <a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>
+and <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>
+are <strong>ALWAYS</strong> available. In the event of retries, the <code>InterceptorContext</code> will not include changes made
+in previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>modify_before_attempt_completion</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_attempt_completion" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#480-488">source</a><h4 class="code-header">fn <a href="#method.modify_before_attempt_completion" class="fn">modify_before_attempt_completion</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.FinalizerInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextMut">FinalizerInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called when an attempt is completed. This method has the
+ability to modify and return a new output message or error
+matching the currently-executing operation.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, except when a
+failure occurs before <code>before_attempt</code>. This method may
+be called multiple times in the event of retries.</p>
+<p><strong>Available Information:</strong>
+The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a>,
+<a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>,
+<a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>, or
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a> <strong>MAY</strong> be available.
+If the operation succeeded, the <code>output</code> will be available. Otherwise, any of the other
+pieces of information may be available depending on where in the operation lifecycle it failed.
+In the event of retries, the <code>InterceptorContext</code> will not include changes made
+in previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook, execution will jump to <code>after_attempt</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> Any output message returned by this
+hook MUST match the operation being invoked. Any error type can be
+returned, replacing the response currently in the context.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_after_attempt" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#513-521">source</a><h4 class="code-header">fn <a href="#method.read_after_attempt" class="fn">read_after_attempt</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.FinalizerInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef">FinalizerInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called when an attempt is completed.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per attempt, as long as
+<code>before_attempt</code> has been executed.</p>
+<p><strong>Available Information:</strong>
+The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a>,
+<a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>,
+<a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>, or
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a> <strong>MAY</strong> be available.
+If the operation succeeded, the <code>output</code> will be available. Otherwise, any of the other
+pieces of information may be available depending on where in the operation lifecycle it failed.
+In the event of retries, the <code>InterceptorContext</code> will not include changes made
+in previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> Errors raised by this hook will be stored
+until all interceptors have had their <code>after_attempt</code> invoked.
+If multiple <code>after_execution</code> methods raise errors, the latest
+will be used and earlier ones will be logged and dropped. If the
+retry strategy determines that the execution is retryable,
+execution will then jump to <code>before_attempt</code>. Otherwise,
+execution will jump to <code>modify_before_attempt_completion</code> with the
+raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.modify_before_completion" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#547-555">source</a><h4 class="code-header">fn <a href="#method.modify_before_completion" class="fn">modify_before_completion</a>(
+    &amp;self,
+    context: &amp;mut <a class="struct" href="context/struct.FinalizerInterceptorContextMut.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextMut">FinalizerInterceptorContextMut</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called when an execution is completed.
+This method has the ability to modify and return a new
+output message or error matching the currently - executing
+operation.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per execution.</p>
+<p><strong>Available Information:</strong>
+The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a>,
+<a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>,
+<a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>, or
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a> <strong>MAY</strong> be available.
+If the operation succeeded, the <code>output</code> will be available. Otherwise, any of the other
+pieces of information may be available depending on where in the operation lifecycle it failed.
+In the event of retries, the <code>InterceptorContext</code> will not include changes made
+in previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> If errors are raised by this
+hook , execution will jump to <code>after_attempt</code> with
+the raised error as the <a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>.</p>
+<p><strong>Return Constraints:</strong> Any output message returned by this
+hook MUST match the operation being invoked. Any error type can be
+returned , replacing the response currently in the context.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_after_execution" class="method"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#579-587">source</a><h4 class="code-header">fn <a href="#method.read_after_execution" class="fn">read_after_execution</a>(
+    &amp;self,
+    context: &amp;<a class="struct" href="context/struct.FinalizerInterceptorContextRef.html" title="struct aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef">FinalizerInterceptorContextRef</a>&lt;'_&gt;,
+    runtime_components: &amp;<a class="struct" href="../runtime_components/struct.RuntimeComponents.html" title="struct aws_smithy_runtime_api::client::runtime_components::RuntimeComponents">RuntimeComponents</a>,
+    cfg: &amp;mut <a class="struct" href="../../../aws_smithy_types/config_bag/struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="type" href="../../box_error/type.BoxError.html" title="type aws_smithy_runtime_api::box_error::BoxError">BoxError</a>&gt;</h4></section></summary><div class="docblock"><p>A hook called when an execution is completed.</p>
+<p><strong>When:</strong> This will <strong>ALWAYS</strong> be called once per execution. The duration
+between invocation of this hook and <code>before_execution</code> is very
+close to the full duration of the execution.</p>
+<p><strong>Available Information:</strong>
+The <a href="context/struct.InterceptorContext.html#method.input" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::input"><code>InterceptorContext::input</code></a>,
+<a href="context/struct.InterceptorContext.html#method.request" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::request"><code>InterceptorContext::request</code></a>,
+<a href="context/struct.InterceptorContext.html#method.response" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::response"><code>InterceptorContext::response</code></a>, or
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a> <strong>MAY</strong> be available.
+If the operation succeeded, the <code>output</code> will be available. Otherwise, any of the other
+pieces of information may be available depending on where in the operation lifecycle it failed.
+In the event of retries, the <code>InterceptorContext</code> will not include changes made
+in previous attempts (e.g. by request signers or other interceptors).</p>
+<p><strong>Error Behavior:</strong> Errors raised by this hook will be stored
+until all interceptors have had their <code>after_execution</code> invoked.
+The error will then be treated as the
+<a href="context/struct.InterceptorContext.html#method.output_or_error" title="method aws_smithy_runtime_api::client::interceptors::context::InterceptorContext::output_or_error"><code>InterceptorContext::output_or_error</code></a>
+to the customer. If multiple <code>after_execution</code> methods raise errors , the latest will be
+used and earlier ones will be logged and dropped.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Intercept-for-SharedInterceptor" class="impl"><a class="src rightside" href="../../../src/aws_smithy_runtime_api/client/interceptors.rs.html#624-816">source</a><a href="#impl-Intercept-for-SharedInterceptor" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Intercept.html" title="trait aws_smithy_runtime_api::client::interceptors::Intercept">Intercept</a> for <a class="struct" href="struct.SharedInterceptor.html" title="struct aws_smithy_runtime_api::client::interceptors::SharedInterceptor">SharedInterceptor</a></h3></section></div><script src="../../../trait.impl/aws_smithy_runtime_api/client/interceptors/trait.Intercept.js" async></script></section></div></main></body></html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Wasmtime’s embedding API"><title>wasmtime - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime/index.html">wasmtime</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#traits">Traits</a></li><li><a href="#unions">Unions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">wasmtime</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime/lib.rs.html#1-406">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="wasmtimes-embedding-api"><a class="doc-anchor" href="#wasmtimes-embedding-api">§</a>Wasmtime’s embedding API</h2>
+<p>Wasmtime is a WebAssembly engine for JIT-compiled or ahead-of-time compiled
+WebAssembly modules and components. More information about the Wasmtime
+project as a whole can be found <a href="https://docs.wasmtime.dev">in the documentation
+book</a> whereas this documentation mostly focuses
+on the API reference of the <code>wasmtime</code> crate itself.</p>
+<p>This crate contains an API used to interact with <a href="https://webassembly.github.io/spec">WebAssembly modules</a> or
+<a href="https://component-model.bytecodealliance.org">WebAssembly components</a>. For example you can compile WebAssembly, create
+instances, call functions, etc. As an embedder of WebAssembly you can also
+provide guests functionality from the host by creating host-defined
+functions, memories, globals, etc, which can do things that WebAssembly
+cannot (such as print to the screen).</p>
+<p>The <code>wasmtime</code> crate is designed to be safe, efficient, and ergonomic.
+This enables executing WebAssembly without the embedder needing to use
+<code>unsafe</code> code, meaning that you’re guaranteed there is no undefined behavior
+or segfaults in either the WebAssembly guest or the host itself.</p>
+<p>The <code>wasmtime</code> crate can roughly be thought of as being split into two
+halves:</p>
+<ul>
+<li>
+<p>One half of the crate is similar to the <a href="https://developer.mozilla.org/en-US/docs/WebAssembly">JS WebAssembly
+API</a> as well as the
+<a href="https://github.com/webassembly/wasm-c-api">proposed C API</a> and is
+intended for working with <a href="https://webassembly.github.io/spec">WebAssembly modules</a>. This API resides in the
+root of the <code>wasmtime</code> crate’s namespace, for example
+<a href="struct.Module.html" title="struct wasmtime::Module"><code>wasmtime::Module</code></a>.</p>
+</li>
+<li>
+<p>The second half of the crate is for use with the <a href="https://component-model.bytecodealliance.org">WebAssembly Component
+Model</a>. The implementation of the component model is present in
+<a href="%60component%60"><code>wasmtime::component</code></a> and roughly mirrors the structure for
+core WebAssembly, for example [<code>component::Func</code>] mirrors <a href="struct.Func.html" title="struct wasmtime::Func"><code>Func</code></a>.</p>
+</li>
+</ul>
+<p>An example of using Wasmtime to run a core WebAssembly module looks like:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasmtime::<span class="kw-2">*</span>;
+
+<span class="kw">fn </span>main() -&gt; wasmtime::Result&lt;()&gt; {
+    <span class="kw">let </span>engine = Engine::default();
+
+    <span class="comment">// Modules can be compiled through either the text or binary format
+    </span><span class="kw">let </span>wat = <span class="string">r#"
+        (module
+            (import "host" "host_func" (func $host_hello (param i32)))
+
+            (func (export "hello")
+                i32.const 3
+                call $host_hello)
+        )
+    "#</span>;
+    <span class="kw">let </span>module = Module::new(<span class="kw-2">&amp;</span>engine, wat)<span class="question-mark">?</span>;
+
+    <span class="comment">// Host functionality can be arbitrary Rust functions and is provided
+    // to guests through a `Linker`.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>linker = Linker::new(<span class="kw-2">&amp;</span>engine);
+    linker.func_wrap(<span class="string">"host"</span>, <span class="string">"host_func"</span>, |caller: Caller&lt;<span class="lifetime">'_</span>, u32&gt;, param: i32| {
+        <span class="macro">println!</span>(<span class="string">"Got {} from WebAssembly"</span>, param);
+        <span class="macro">println!</span>(<span class="string">"my host state is: {}"</span>, caller.data());
+    })<span class="question-mark">?</span>;
+
+    <span class="comment">// All wasm objects operate within the context of a "store". Each
+    // `Store` has a type parameter to store host-specific data, which in
+    // this case we're using `4` for.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>store: Store&lt;u32&gt; = Store::new(<span class="kw-2">&amp;</span>engine, <span class="number">4</span>);
+
+    <span class="comment">// Instantiation of a module requires specifying its imports and then
+    // afterwards we can fetch exports by name, as well as asserting the
+    // type signature of the function with `get_typed_func`.
+    </span><span class="kw">let </span>instance = linker.instantiate(<span class="kw-2">&amp;mut </span>store, <span class="kw-2">&amp;</span>module)<span class="question-mark">?</span>;
+    <span class="kw">let </span>hello = instance.get_typed_func::&lt;(), ()&gt;(<span class="kw-2">&amp;mut </span>store, <span class="string">"hello"</span>)<span class="question-mark">?</span>;
+
+    <span class="comment">// And finally we can call the wasm!
+    </span>hello.call(<span class="kw-2">&amp;mut </span>store, ())<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h3 id="core-concepts"><a class="doc-anchor" href="#core-concepts">§</a>Core Concepts</h3>
+<p>There are a number of core types and concepts that are important to be aware
+of when using the <code>wasmtime</code> crate:</p>
+<ul>
+<li>
+<p><a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a> - a global compilation and runtime environment for WebAssembly.
+An <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a> is an object that can be shared concurrently across threads
+and is created with a <a href="struct.Config.html" title="struct wasmtime::Config"><code>Config</code></a> with many knobs for configuring
+behavior. Compiling or executing any WebAssembly requires first
+configuring and creating an <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a>. All <a href="struct.Module.html" title="struct wasmtime::Module"><code>Module</code></a>s and
+<a href="component::Component"><code>Component</code></a>s belong to an <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a>, and
+typically there’s one <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a> per process.</p>
+</li>
+<li>
+<p><a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> - container for all information related to WebAssembly objects
+such as functions, instances, memories, etc. A <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store&lt;T&gt;</code></a>
+allows customization of the <code>T</code> to store arbitrary host data within a
+<a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a>. This host data can be accessed through host functions via the
+<a href="struct.Caller.html" title="struct wasmtime::Caller"><code>Caller</code></a> function parameter in host-defined functions. A <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> is
+required for all WebAssembly operations, such as calling a wasm function.
+The <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> is passed in as a “context” to methods like <a href="struct.Func.html#method.call" title="method wasmtime::Func::call"><code>Func::call</code></a>.
+Dropping a <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> will deallocate all memory associated with
+WebAssembly objects within the <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a>. A <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> is cheap to create
+and destroy and does not GC objects such as unused instances internally,
+so it’s intended to be short-lived (or no longer than the instances it
+contains).</p>
+</li>
+<li>
+<p><a href="struct.Linker.html" title="struct wasmtime::Linker"><code>Linker</code></a> (or [<code>component::Linker</code>]) - host functions are defined within
+a linker to provide them a string-based name which can be looked up when
+instantiating a WebAssembly module or component. Linkers are traditionally
+populated at startup and then reused for all future instantiations of all
+instances, assuming the set of host functions does not change over time.
+Host functions are <code>Fn(..) + Send + Sync</code> and typically do not close over
+mutable state. Instead it’s recommended to store mutable state in the <code>T</code>
+of <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store&lt;T&gt;</code></a> which is accessed through <a href="struct.Caller.html" title="struct wasmtime::Caller"><code>Caller&lt;'_, T&gt;</code></a> provided to host functions.</p>
+</li>
+<li>
+<p><a href="struct.Module.html" title="struct wasmtime::Module"><code>Module</code></a> (or <a href="component::Component"><code>Component</code></a>) - a compiled
+WebAssembly module or component. These structures contain compiled
+executable code from a WebAssembly binary which is ready to execute after
+being instantiated. These are expensive to create as they require
+compilation of the input WebAssembly. Modules and components are safe to
+share across threads, however. Modules and components can additionally be
+<a href="struct.Module.html#method.serialize" title="method wasmtime::Module::serialize">serialized into a list of bytes</a> to later be
+<a href="struct.Module.html#method.deserialize" title="associated function wasmtime::Module::deserialize">deserialized</a> quickly. This enables JIT-style
+compilation through constructors such as <a href="struct.Module.html#method.new" title="associated function wasmtime::Module::new"><code>Module::new</code></a> and AOT-style
+compilation by having the compilation process use <a href="struct.Module.html#method.serialize" title="method wasmtime::Module::serialize"><code>Module::serialize</code></a>
+and the execution process use <a href="struct.Module.html#method.deserialize" title="associated function wasmtime::Module::deserialize"><code>Module::deserialize</code></a>.</p>
+</li>
+<li>
+<p><a href="struct.Instance.html" title="struct wasmtime::Instance"><code>Instance</code></a> (or [<code>component::Instance</code>]) - an instantiated WebAssembly
+module or component. An instance is where you can actually acquire a
+<a href="struct.Func.html" title="struct wasmtime::Func"><code>Func</code></a> (or [<code>component::Func</code>]) from, for example, to call.</p>
+</li>
+<li>
+<p><a href="struct.Func.html" title="struct wasmtime::Func"><code>Func</code></a> (or [<code>component::Func</code>]) - a WebAssembly function. This can be
+acquired as the export of an <a href="struct.Instance.html" title="struct wasmtime::Instance"><code>Instance</code></a> to call WebAssembly functions,
+or it can be created via functions like <a href="struct.Func.html#method.wrap" title="associated function wasmtime::Func::wrap"><code>Func::wrap</code></a> to wrap
+host-defined functionality and give it to WebAssembly. Functions also have
+typed views as <a href="struct.TypedFunc.html" title="struct wasmtime::TypedFunc"><code>TypedFunc</code></a> or [<code>component::TypedFunc</code>] for a more
+efficient calling convention.</p>
+</li>
+<li>
+<p><a href="struct.Table.html" title="struct wasmtime::Table"><code>Table</code></a>, <a href="struct.Global.html" title="struct wasmtime::Global"><code>Global</code></a>, <a href="struct.Memory.html" title="struct wasmtime::Memory"><code>Memory</code></a>, [<code>component::Resource</code>] - other
+WebAssembly objects which can either be defined on the host or in wasm
+itself (via instances). These all have various ways of being interacted
+with like <a href="struct.Func.html" title="struct wasmtime::Func"><code>Func</code></a>.</p>
+</li>
+</ul>
+<p>All “store-connected” types such as <a href="struct.Func.html" title="struct wasmtime::Func"><code>Func</code></a>, <a href="struct.Memory.html" title="struct wasmtime::Memory"><code>Memory</code></a>, etc, require the
+store to be passed in as a context to each method. Methods in wasmtime
+frequently have their first parameter as either <a href="trait.AsContext.html" title="trait wasmtime::AsContext"><code>impl AsContext</code></a> or <a href="trait.AsContextMut.html" title="trait wasmtime::AsContextMut"><code>impl AsContextMut</code></a>. These
+traits are implemented for a variety of types, allowing you to, for example,
+pass the following types into methods:</p>
+<ul>
+<li><code>&amp;Store&lt;T&gt;</code></li>
+<li><code>&amp;mut Store&lt;T&gt;</code></li>
+<li><code>&amp;Caller&lt;'_, T&gt;</code></li>
+<li><code>&amp;mut Caller&lt;'_, T&gt;</code></li>
+<li><code>StoreContext&lt;'_, T&gt;</code></li>
+<li><code>StoreContextMut&lt;'_, T&gt;</code></li>
+</ul>
+<p>A <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> is the sole owner of all WebAssembly internals. Types like
+<a href="struct.Func.html" title="struct wasmtime::Func"><code>Func</code></a> point within the <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> and require the <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> to be provided
+to actually access the internals of the WebAssembly function, for instance.</p>
+<h3 id="wasi"><a class="doc-anchor" href="#wasi">§</a>WASI</h3>
+<p>The <code>wasmtime</code> crate does not natively provide support for WASI, but you can
+use the <a href="https://crates.io/crates/wasmtime-wasi"><code>wasmtime-wasi</code></a> crate for that purpose. With <a href="https://crates.io/crates/wasmtime-wasi"><code>wasmtime-wasi</code></a> all
+WASI functions can be added to a <a href="struct.Linker.html" title="struct wasmtime::Linker"><code>Linker</code></a> and then used to instantiate
+WASI-using modules. For more information see the <a href="https://docs.wasmtime.dev/examples-rust-wasi.html">WASI example in the
+documentation</a>.</p>
+<h3 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate Features</h3>
+<p>The <code>wasmtime</code> crate comes with a number of compile-time features that can
+be used to customize what features it supports. Some of these features are
+just internal details, but some affect the public API of the <code>wasmtime</code>
+crate. Wasmtime APIs gated behind a Cargo feature should be indicated as
+such in the documentation.</p>
+<ul>
+<li>
+<p><code>runtime</code> - Enabled by default, this feature enables executing
+WebAssembly modules and components. If a compiler is not available (such
+as <code>cranelift</code>) then <a href="struct.Module.html#method.deserialize" title="associated function wasmtime::Module::deserialize"><code>Module::deserialize</code></a> must be used, for example, to
+provide an ahead-of-time compiled artifact to execute WebAssembly.</p>
+</li>
+<li>
+<p><code>cranelift</code> - Enabled by default, this features enables using Cranelift at
+runtime to compile a WebAssembly module to native code. This feature is
+required to process and compile new WebAssembly modules and components.</p>
+</li>
+<li>
+<p><code>cache</code> - Enabled by default, this feature adds support for wasmtime to
+perform internal caching of modules in a global location. This must still
+be enabled explicitly through [<code>Config::cache_config_load</code>] or
+[<code>Config::cache_config_load_default</code>].</p>
+</li>
+<li>
+<p><code>wat</code> - Enabled by default, this feature adds support for accepting the
+text format of WebAssembly in <a href="struct.Module.html#method.new" title="associated function wasmtime::Module::new"><code>Module::new</code></a> and
+<a href="component::Component::new"><code>Component::new</code></a>. The text format will be
+automatically recognized and translated to binary when compiling a
+module.</p>
+</li>
+<li>
+<p><code>parallel-compilation</code> - Enabled by default, this feature enables support
+for compiling functions in parallel with <code>rayon</code>.</p>
+</li>
+<li>
+<p><code>async</code> - Enabled by default, this feature enables APIs and runtime
+support for defining asynchronous host functions and calling WebAssembly
+asynchronously. For more information see <a href="struct.Config.html#structfield.async_support" title="field wasmtime::Config::async_support"><code>Config::async_support</code></a>.</p>
+</li>
+<li>
+<p><code>profiling</code> - Enabled by default, this feature compiles in support for
+profiling guest code via a number of possible strategies. See
+<a href="struct.Config.html#method.profiler" title="method wasmtime::Config::profiler"><code>Config::profiler</code></a> for more information.</p>
+</li>
+<li>
+<p><code>all-arch</code> - Not enabled by default. This feature compiles in support for
+all architectures for both the JIT compiler and the <code>wasmtime compile</code> CLI
+command. This can be combined with <a href="struct.Config.html#method.target" title="method wasmtime::Config::target"><code>Config::target</code></a> to precompile
+modules for a different platform than the host.</p>
+</li>
+<li>
+<p><code>pooling-allocator</code> - Enabled by default, this feature adds support for
+[<code>PoolingAllocationConfig</code>] to pass to <a href="struct.Config.html#method.allocation_strategy" title="method wasmtime::Config::allocation_strategy"><code>Config::allocation_strategy</code></a>.
+The pooling allocator can enable efficient reuse of resources for
+high-concurrency and high-instantiation-count scenarios.</p>
+</li>
+<li>
+<p><code>demangle</code> - Enabled by default, this will affect how backtraces are
+printed and whether symbol names from WebAssembly are attempted to be
+demangled. Rust and C++ demanglings are currently supported.</p>
+</li>
+<li>
+<p><code>coredump</code> - Enabled by default, this will provide support for generating
+a core dump when a trap happens. This can be configured via
+<a href="struct.Config.html#structfield.coredump_on_trap" title="field wasmtime::Config::coredump_on_trap"><code>Config::coredump_on_trap</code></a>.</p>
+</li>
+<li>
+<p><code>addr2line</code> - Enabled by default, this feature configures whether traps
+will attempt to parse DWARF debug information and convert WebAssembly
+addresses to source filenames and line numbers.</p>
+</li>
+<li>
+<p><code>debug-builtins</code> - Enabled by default, this feature includes some built-in
+debugging utilities and symbols for native debuggers such as GDB and LLDB
+to attach to the process Wasmtime is used within. The intrinsics provided
+will enable debugging guest code compiled to WebAssembly. This must also
+be enabled via <a href="struct.Config.html#method.debug_info" title="method wasmtime::Config::debug_info"><code>Config::debug_info</code></a> as well for guests.</p>
+</li>
+<li>
+<p><code>component-model</code> - Enabled by default, this enables support for the
+<a href="component"><code>wasmtime::component</code></a> API for working with components.</p>
+</li>
+<li>
+<p><code>gc</code> - Enabled by default, this enables support for a number of
+WebAssembly proposals such as <code>reference-types</code>, <code>function-references</code>,
+and <code>gc</code>. Note that the implementation of the <code>gc</code> proposal itself is not
+yet complete at this time.</p>
+</li>
+<li>
+<p><code>threads</code> - Enabled by default, this enables compile-time support for the
+WebAssembly <code>threads</code> proposal, notably shared memories.</p>
+</li>
+<li>
+<p><code>call-hook</code> - Disabled by default, this enables support for the
+[<code>Store::call_hook</code>] API. This incurs a small overhead on all
+entries/exits from WebAssembly and may want to be disabled by some
+embedders.</p>
+</li>
+<li>
+<p><code>memory-protection-keys</code> - Disabled by default, this enables support for
+the [<code>PoolingAllocationConfig::memory_protection_keys</code>] API. This feature
+currently only works on x64 Linux and can enable compacting the virtual
+memory allocation for linear memories in the pooling allocator. This comes
+with the same overhead as the <code>call-hook</code> feature where entries/exits into
+WebAssembly will have more overhead than before.</p>
+</li>
+</ul>
+<p>More crate features can be found in the <a href="https://github.com/bytecodealliance/wasmtime/blob/main/crates/wasmtime/Cargo.toml">manifest</a> of Wasmtime itself for
+seeing what can be enabled and disabled.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.Error"><code>pub use anyhow::<a class="struct" href="../anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>;</code></div></li><li><div class="item-name" id="reexport.Result"><code>pub use anyhow::<a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="unix/index.html" title="mod wasmtime::unix">unix</a></div><div class="desc docblock-short">Unix-specific extension for the <code>wasmtime</code> crate.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ArrayType.html" title="struct wasmtime::ArrayType">ArrayType</a></div><div class="desc docblock-short">The type of a WebAssembly array.</div></li><li><div class="item-name"><a class="struct" href="struct.Caller.html" title="struct wasmtime::Caller">Caller</a></div><div class="desc docblock-short">A structure representing the caller’s context when creating a function
+via <a href="struct.Func.html#method.wrap" title="associated function wasmtime::Func::wrap"><code>Func::wrap</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.CodeBuilder.html" title="struct wasmtime::CodeBuilder">CodeBuilder</a></div><div class="desc docblock-short">Builder-style structure used to create a <a href="struct.Module.html" title="struct wasmtime::Module"><code>Module</code></a> or
+pre-compile a module to a serialized list of bytes.</div></li><li><div class="item-name"><a class="struct" href="struct.CodeMemory.html" title="struct wasmtime::CodeMemory">CodeMemory</a></div><div class="desc docblock-short">Management of executable memory within a <code>MmapVec</code></div></li><li><div class="item-name"><a class="struct" href="struct.CompiledModule.html" title="struct wasmtime::CompiledModule">CompiledModule</a></div><div class="desc docblock-short">A compiled wasm module, ready to be instantiated.</div></li><li><div class="item-name"><a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></div><div class="desc docblock-short">Global configuration options used to create an <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a>
+and customize its behavior.</div></li><li><div class="item-name"><a class="struct" href="struct.Engine.html" title="struct wasmtime::Engine">Engine</a></div><div class="desc docblock-short">An <code>Engine</code> which is a global context for compilation and management of wasm
+modules.</div></li><li><div class="item-name"><a class="struct" href="struct.EngineWeak.html" title="struct wasmtime::EngineWeak">EngineWeak</a></div><div class="desc docblock-short">A weak reference to an <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Export.html" title="struct wasmtime::Export">Export</a></div><div class="desc docblock-short">An exported WebAssembly value.</div></li><li><div class="item-name"><a class="struct" href="struct.ExportType.html" title="struct wasmtime::ExportType">ExportType</a></div><div class="desc docblock-short">A descriptor for an exported WebAssembly value.</div></li><li><div class="item-name"><a class="struct" href="struct.FieldType.html" title="struct wasmtime::FieldType">FieldType</a></div><div class="desc docblock-short">The type of a <code>struct</code> field or an <code>array</code>’s elements.</div></li><li><div class="item-name"><a class="struct" href="struct.FrameInfo.html" title="struct wasmtime::FrameInfo">FrameInfo</a></div><div class="desc docblock-short">Description of a frame in a backtrace for a <a href="struct.WasmBacktrace.html" title="struct wasmtime::WasmBacktrace"><code>WasmBacktrace</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.FrameSymbol.html" title="struct wasmtime::FrameSymbol">FrameSymbol</a></div><div class="desc docblock-short">Debug information for a symbol that is attached to a <a href="struct.FrameInfo.html" title="struct wasmtime::FrameInfo"><code>FrameInfo</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Func.html" title="struct wasmtime::Func">Func</a></div><div class="desc docblock-short">A WebAssembly function which can be called.</div></li><li><div class="item-name"><a class="struct" href="struct.FuncType.html" title="struct wasmtime::FuncType">FuncType</a></div><div class="desc docblock-short">The type of a WebAssembly function.</div></li><li><div class="item-name"><a class="struct" href="struct.GcHeapOutOfMemory.html" title="struct wasmtime::GcHeapOutOfMemory">GcHeapOutOfMemory</a></div><div class="desc docblock-short">An error returned when attempting to allocate a GC-managed object, but the
+GC heap is out of memory.</div></li><li><div class="item-name"><a class="struct" href="struct.Global.html" title="struct wasmtime::Global">Global</a></div><div class="desc docblock-short">A WebAssembly <code>global</code> value which can be read and written to.</div></li><li><div class="item-name"><a class="struct" href="struct.GlobalType.html" title="struct wasmtime::GlobalType">GlobalType</a></div><div class="desc docblock-short">A WebAssembly global descriptor.</div></li><li><div class="item-name"><a class="struct" href="struct.ImportType.html" title="struct wasmtime::ImportType">ImportType</a></div><div class="desc docblock-short">A descriptor for an imported value into a wasm module.</div></li><li><div class="item-name"><a class="struct" href="struct.Instance.html" title="struct wasmtime::Instance">Instance</a></div><div class="desc docblock-short">An instantiated WebAssembly module.</div></li><li><div class="item-name"><a class="struct" href="struct.InstancePre.html" title="struct wasmtime::InstancePre">InstancePre</a></div><div class="desc docblock-short">An instance, pre-instantiation, that is ready to be instantiated.</div></li><li><div class="item-name"><a class="struct" href="struct.Linker.html" title="struct wasmtime::Linker">Linker</a></div><div class="desc docblock-short">Structure used to link wasm modules/instances together.</div></li><li><div class="item-name"><a class="struct" href="struct.ManuallyRooted.html" title="struct wasmtime::ManuallyRooted">ManuallyRooted</a></div><div class="desc docblock-short">This type has been disabled because the <code>gc</code> cargo feature was not enabled
+at compile time.</div></li><li><div class="item-name"><a class="struct" href="struct.Memory.html" title="struct wasmtime::Memory">Memory</a></div><div class="desc docblock-short">A WebAssembly linear memory.</div></li><li><div class="item-name"><a class="struct" href="struct.MemoryAccessError.html" title="struct wasmtime::MemoryAccessError">MemoryAccessError</a></div><div class="desc docblock-short">Error for out of bounds <a href="struct.Memory.html" title="struct wasmtime::Memory"><code>Memory</code></a> access.</div></li><li><div class="item-name"><a class="struct" href="struct.MemoryType.html" title="struct wasmtime::MemoryType">MemoryType</a></div><div class="desc docblock-short">A descriptor for a WebAssembly memory type.</div></li><li><div class="item-name"><a class="struct" href="struct.MemoryTypeBuilder.html" title="struct wasmtime::MemoryTypeBuilder">MemoryTypeBuilder</a></div><div class="desc docblock-short">A builder for <a href="struct.MemoryType.html" title="struct wasmtime::MemoryType"><code>MemoryType</code></a>s.</div></li><li><div class="item-name"><a class="struct" href="struct.Module.html" title="struct wasmtime::Module">Module</a></div><div class="desc docblock-short">A compiled WebAssembly module, ready to be instantiated.</div></li><li><div class="item-name"><a class="struct" href="struct.ModuleExport.html" title="struct wasmtime::ModuleExport">ModuleExport</a></div><div class="desc docblock-short">Describes the location of an export in a module.</div></li><li><div class="item-name"><a class="struct" href="struct.NoExtern.html" title="struct wasmtime::NoExtern">NoExtern</a></div><div class="desc docblock-short">A reference to the abstract <code>noextern</code> heap value.</div></li><li><div class="item-name"><a class="struct" href="struct.NoFunc.html" title="struct wasmtime::NoFunc">NoFunc</a></div><div class="desc docblock-short">A reference to the abstract <code>nofunc</code> heap value.</div></li><li><div class="item-name"><a class="struct" href="struct.RefType.html" title="struct wasmtime::RefType">RefType</a></div><div class="desc docblock-short">Opaque references to data in the Wasm heap or to host data.</div></li><li><div class="item-name"><a class="struct" href="struct.ResourcesRequired.html" title="struct wasmtime::ResourcesRequired">ResourcesRequired</a></div><div class="desc docblock-short">A summary of the amount of resources required to instantiate a particular
+<a href="struct.Module.html" title="struct wasmtime::Module"><code>Module</code></a> or [<code>Component</code>][crate::component::Component].</div></li><li><div class="item-name"><a class="struct" href="struct.RootScope.html" title="struct wasmtime::RootScope">RootScope</a></div><div class="desc docblock-short">This type has been disabled because the <code>gc</code> cargo feature was not enabled
+at compile time.</div></li><li><div class="item-name"><a class="struct" href="struct.Rooted.html" title="struct wasmtime::Rooted">Rooted</a></div><div class="desc docblock-short">This type is disabled because the <code>gc</code> cargo feature was not enabled at
+compile time.</div></li><li><div class="item-name"><a class="struct" href="struct.SharedMemory.html" title="struct wasmtime::SharedMemory">SharedMemory</a></div><div class="desc docblock-short">A constructor for externally-created shared memory.</div></li><li><div class="item-name"><a class="struct" href="struct.Store.html" title="struct wasmtime::Store">Store</a></div><div class="desc docblock-short">A <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> is a collection of WebAssembly instances and host-defined state.</div></li><li><div class="item-name"><a class="struct" href="struct.StoreContext.html" title="struct wasmtime::StoreContext">StoreContext</a></div><div class="desc docblock-short">A temporary handle to a <a href="struct.Store.html" title="struct wasmtime::Store"><code>&amp;Store&lt;T&gt;</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.StoreContextMut.html" title="struct wasmtime::StoreContextMut">StoreContextMut</a></div><div class="desc docblock-short">A temporary handle to a <a href="struct.Store.html" title="struct wasmtime::Store"><code>&amp;mut Store&lt;T&gt;</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.StoreLimits.html" title="struct wasmtime::StoreLimits">StoreLimits</a></div><div class="desc docblock-short">Provides limits for a <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.StoreLimitsBuilder.html" title="struct wasmtime::StoreLimitsBuilder">StoreLimitsBuilder</a></div><div class="desc docblock-short">Used to build <a href="struct.StoreLimits.html" title="struct wasmtime::StoreLimits"><code>StoreLimits</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.StructType.html" title="struct wasmtime::StructType">StructType</a></div><div class="desc docblock-short">The type of a WebAssembly struct.</div></li><li><div class="item-name"><a class="struct" href="struct.Table.html" title="struct wasmtime::Table">Table</a></div><div class="desc docblock-short">A WebAssembly <code>table</code>, or an array of values.</div></li><li><div class="item-name"><a class="struct" href="struct.TableType.html" title="struct wasmtime::TableType">TableType</a></div><div class="desc docblock-short">A descriptor for a table in a WebAssembly module.</div></li><li><div class="item-name"><a class="struct" href="struct.TypedFunc.html" title="struct wasmtime::TypedFunc">TypedFunc</a></div><div class="desc docblock-short">A statically typed WebAssembly function.</div></li><li><div class="item-name"><a class="struct" href="struct.UnknownImportError.html" title="struct wasmtime::UnknownImportError">UnknownImportError</a></div><div class="desc docblock-short">Error for an unresolvable import.</div></li><li><div class="item-name"><a class="struct" href="struct.V128.html" title="struct wasmtime::V128">V128</a></div><div class="desc docblock-short">Representation of a 128-bit vector type, <code>v128</code>, for WebAssembly.</div></li><li><div class="item-name"><a class="struct" href="struct.WasmBacktrace.html" title="struct wasmtime::WasmBacktrace">WasmBacktrace</a></div><div class="desc docblock-short">Representation of a backtrace of function frames in a WebAssembly module for
+where an error happened.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.AnyRef.html" title="enum wasmtime::AnyRef">AnyRef</a></div><div class="desc docblock-short">Support for <code>anyref</code> disabled at compile time because the <code>gc</code> cargo feature
+was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.ArrayRef.html" title="enum wasmtime::ArrayRef">ArrayRef</a></div><div class="desc docblock-short">Support for <code>arrayref</code> disabled at compile time because the <code>gc</code> cargo feature
+was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.ArrayRefPre.html" title="enum wasmtime::ArrayRefPre">ArrayRefPre</a></div><div class="desc docblock-short">Support for <code>ArrayRefPre</code> disabled at compile time because the <code>gc</code> cargo
+feature was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.CallHook.html" title="enum wasmtime::CallHook">CallHook</a></div><div class="desc docblock-short">Passed to the argument of [<code>Store::call_hook</code>] to indicate a state transition in
+the WebAssembly VM.</div></li><li><div class="item-name"><a class="enum" href="enum.CodeHint.html" title="enum wasmtime::CodeHint">CodeHint</a></div><div class="desc docblock-short">Return value of <a href="struct.CodeBuilder.html#method.hint" title="method wasmtime::CodeBuilder::hint"><code>CodeBuilder::hint</code></a></div></li><li><div class="item-name"><a class="enum" href="enum.Extern.html" title="enum wasmtime::Extern">Extern</a></div><div class="desc docblock-short">An external item to a WebAssembly module, or a list of what can possibly be
+exported from a wasm module.</div></li><li><div class="item-name"><a class="enum" href="enum.ExternRef.html" title="enum wasmtime::ExternRef">ExternRef</a></div><div class="desc docblock-short">Support for <code>externref</code> disabled at compile time because the <code>gc</code> cargo
+feature was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.ExternType.html" title="enum wasmtime::ExternType">ExternType</a></div><div class="desc docblock-short">A list of all possible types which can be externally referenced from a
+WebAssembly module.</div></li><li><div class="item-name"><a class="enum" href="enum.Finality.html" title="enum wasmtime::Finality">Finality</a></div><div class="desc docblock-short">Indicator of whether a type is final or not.</div></li><li><div class="item-name"><a class="enum" href="enum.HeapType.html" title="enum wasmtime::HeapType">HeapType</a></div><div class="desc docblock-short">The heap types that can Wasm can have references to.</div></li><li><div class="item-name"><a class="enum" href="enum.I31.html" title="enum wasmtime::I31">I31</a></div><div class="desc docblock-short">Support for <code>i31ref</code> disabled at compile time because the <code>gc</code> cargo feature
+was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.InstanceAllocationStrategy.html" title="enum wasmtime::InstanceAllocationStrategy">InstanceAllocationStrategy</a></div><div class="desc docblock-short">Represents the module instance allocation strategy to use.</div></li><li><div class="item-name"><a class="enum" href="enum.ModuleVersionStrategy.html" title="enum wasmtime::ModuleVersionStrategy">ModuleVersionStrategy</a></div><div class="desc docblock-short">Configure the strategy used for versioning in serializing and deserializing <a href="struct.Module.html" title="struct wasmtime::Module"><code>crate::Module</code></a>.</div></li><li><div class="item-name"><a class="enum" href="enum.Mutability.html" title="enum wasmtime::Mutability">Mutability</a></div><div class="desc docblock-short">Indicator of whether a global value, struct’s field, or array type’s
+elements are mutable or not.</div></li><li><div class="item-name"><a class="enum" href="enum.OptLevel.html" title="enum wasmtime::OptLevel">OptLevel</a></div><div class="desc docblock-short">Possible optimization levels for the Cranelift codegen backend.</div></li><li><div class="item-name"><a class="enum" href="enum.Precompiled.html" title="enum wasmtime::Precompiled">Precompiled</a></div><div class="desc docblock-short">Return value from the <a href="struct.Engine.html#method.detect_precompiled" title="method wasmtime::Engine::detect_precompiled"><code>Engine::detect_precompiled</code></a> API.</div></li><li><div class="item-name"><a class="enum" href="enum.ProfilingStrategy.html" title="enum wasmtime::ProfilingStrategy">ProfilingStrategy</a></div><div class="desc docblock-short">Select which profiling technique to support.</div></li><li><div class="item-name"><a class="enum" href="enum.Ref.html" title="enum wasmtime::Ref">Ref</a></div><div class="desc docblock-short">A reference.</div></li><li><div class="item-name"><a class="enum" href="enum.StorageType.html" title="enum wasmtime::StorageType">StorageType</a></div><div class="desc docblock-short">The storage type of a <code>struct</code> field or <code>array</code> element.</div></li><li><div class="item-name"><a class="enum" href="enum.Strategy.html" title="enum wasmtime::Strategy">Strategy</a></div><div class="desc docblock-short">Possible Compilation strategies for a wasm module.</div></li><li><div class="item-name"><a class="enum" href="enum.StructRef.html" title="enum wasmtime::StructRef">StructRef</a></div><div class="desc docblock-short">Support for <code>structref</code> disabled at compile time because the <code>gc</code> cargo feature
+was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.StructRefPre.html" title="enum wasmtime::StructRefPre">StructRefPre</a></div><div class="desc docblock-short">Support for <code>StructRefPre</code> disabled at compile time because the <code>gc</code> cargo
+feature was not enabled.</div></li><li><div class="item-name"><a class="enum" href="enum.Trap.html" title="enum wasmtime::Trap">Trap</a></div><div class="desc docblock-short">Representation of a WebAssembly trap and what caused it to occur.</div></li><li><div class="item-name"><a class="enum" href="enum.UpdateDeadline.html" title="enum wasmtime::UpdateDeadline">UpdateDeadline</a></div><div class="desc docblock-short">What to do after returning from a callback when the engine epoch reaches
+the deadline for a Store during execution of a function using that store.</div></li><li><div class="item-name"><a class="enum" href="enum.Val.html" title="enum wasmtime::Val">Val</a></div><div class="desc docblock-short">Possible runtime values that a WebAssembly module can either consume or
+produce.</div></li><li><div class="item-name"><a class="enum" href="enum.ValType.html" title="enum wasmtime::ValType">ValType</a></div><div class="desc docblock-short">A list of all possible value types in WebAssembly.</div></li><li><div class="item-name"><a class="enum" href="enum.WaitResult.html" title="enum wasmtime::WaitResult">WaitResult</a></div><div class="desc docblock-short">Result of <code>Memory::atomic_wait32</code> and <code>Memory::atomic_wait64</code></div></li><li><div class="item-name"><a class="enum" href="enum.WasmBacktraceDetails.html" title="enum wasmtime::WasmBacktraceDetails">WasmBacktraceDetails</a></div><div class="desc docblock-short">Select how wasm backtrace detailed information is handled.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.DEFAULT_INSTANCE_LIMIT.html" title="constant wasmtime::DEFAULT_INSTANCE_LIMIT">DEFAULT_INSTANCE_LIMIT</a></div><div class="desc docblock-short">Value returned by <a href="trait.ResourceLimiter.html#method.instances" title="method wasmtime::ResourceLimiter::instances"><code>ResourceLimiter::instances</code></a> default method</div></li><li><div class="item-name"><a class="constant" href="constant.DEFAULT_MEMORY_LIMIT.html" title="constant wasmtime::DEFAULT_MEMORY_LIMIT">DEFAULT_MEMORY_LIMIT</a></div><div class="desc docblock-short">Value returned by <a href="trait.ResourceLimiter.html#method.memories" title="method wasmtime::ResourceLimiter::memories"><code>ResourceLimiter::memories</code></a> default method</div></li><li><div class="item-name"><a class="constant" href="constant.DEFAULT_TABLE_LIMIT.html" title="constant wasmtime::DEFAULT_TABLE_LIMIT">DEFAULT_TABLE_LIMIT</a></div><div class="desc docblock-short">Value returned by <a href="trait.ResourceLimiter.html#method.tables" title="method wasmtime::ResourceLimiter::tables"><code>ResourceLimiter::tables</code></a> default method</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.AsContext.html" title="trait wasmtime::AsContext">AsContext</a></div><div class="desc docblock-short">A trait used to get shared access to a <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> in Wasmtime.</div></li><li><div class="item-name"><a class="trait" href="trait.AsContextMut.html" title="trait wasmtime::AsContextMut">AsContextMut</a></div><div class="desc docblock-short">A trait used to get exclusive mutable access to a <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> in Wasmtime.</div></li><li><div class="item-name"><a class="trait" href="trait.GcRef.html" title="trait wasmtime::GcRef">GcRef</a></div><div class="desc docblock-short">A common trait implemented by all garbage-collected reference types.</div></li><li><div class="item-name"><a class="trait" href="trait.IntoFunc.html" title="trait wasmtime::IntoFunc">IntoFunc</a></div><div class="desc docblock-short">Internal trait implemented for all arguments that can be passed to
+<a href="struct.Func.html#method.wrap" title="associated function wasmtime::Func::wrap"><code>Func::wrap</code></a> and <a href="struct.Linker.html#method.func_wrap" title="method wasmtime::Linker::func_wrap"><code>Linker::func_wrap</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.LinearMemory.html" title="trait wasmtime::LinearMemory">LinearMemory</a></div><div class="desc docblock-short">A linear memory. This trait provides an interface for raw memory buffers
+which are used by wasmtime, e.g. inside [‘Memory’]. Such buffers are in
+principle not thread safe. By implementing this trait together with
+MemoryCreator, one can supply wasmtime with custom allocated host managed
+memory.</div></li><li><div class="item-name"><a class="trait" href="trait.MemoryCreator.html" title="trait wasmtime::MemoryCreator">MemoryCreator</a></div><div class="desc docblock-short">A memory creator. Can be used to provide a memory creator
+to wasmtime which supplies host managed memory.</div></li><li><div class="item-name"><a class="trait" href="trait.ResourceLimiter.html" title="trait wasmtime::ResourceLimiter">ResourceLimiter</a></div><div class="desc docblock-short">Used by hosts to limit resource consumption of instances.</div></li><li><div class="item-name"><a class="trait" href="trait.RootedGcRef.html" title="trait wasmtime::RootedGcRef">RootedGcRef</a></div><div class="desc docblock-short">A trait implemented for GC references that are guaranteed to be rooted:</div></li><li><div class="item-name"><a class="trait" href="trait.WasmParams.html" title="trait wasmtime::WasmParams">WasmParams</a></div><div class="desc docblock-short">A trait used for <a href="struct.Func.html#method.typed" title="method wasmtime::Func::typed"><code>Func::typed</code></a> and with <a href="struct.TypedFunc.html" title="struct wasmtime::TypedFunc"><code>TypedFunc</code></a> to represent the set of
+parameters for wasm functions.</div></li><li><div class="item-name"><a class="trait" href="trait.WasmResults.html" title="trait wasmtime::WasmResults">WasmResults</a></div><div class="desc docblock-short">A trait used for <a href="struct.Func.html#method.typed" title="method wasmtime::Func::typed"><code>Func::typed</code></a> and with <a href="struct.TypedFunc.html" title="struct wasmtime::TypedFunc"><code>TypedFunc</code></a> to represent the set of
+results for wasm functions.</div></li><li><div class="item-name"><a class="trait" href="trait.WasmRet.html" title="trait wasmtime::WasmRet">WasmRet</a></div><div class="desc docblock-short">A trait implemented for types which can be returned from closures passed to
+<a href="struct.Func.html#method.wrap" title="associated function wasmtime::Func::wrap"><code>Func::wrap</code></a> and friends.</div></li><li><div class="item-name"><a class="trait" href="trait.WasmTy.html" title="trait wasmtime::WasmTy">WasmTy</a></div><div class="desc docblock-short">A trait implemented for types which can be arguments and results for
+closures passed to <a href="struct.Func.html#method.wrap" title="associated function wasmtime::Func::wrap"><code>Func::wrap</code></a> as well as parameters to <a href="struct.Func.html#method.typed" title="method wasmtime::Func::typed"><code>Func::typed</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.WasmTyList.html" title="trait wasmtime::WasmTyList">WasmTyList</a></div><div class="desc docblock-short">Trait implemented for various tuples made up of types which implement
+<a href="trait.WasmTy.html" title="trait wasmtime::WasmTy"><code>WasmTy</code></a> that can be passed to <a href="struct.Func.html#method.wrap_inner" title="associated function wasmtime::Func::wrap_inner"><code>Func::wrap_inner</code></a> and
+[<code>HostContext::from_closure</code>].</div></li></ul><h2 id="unions" class="section-header">Unions<a href="#unions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="union" href="union.ValRaw.html" title="union wasmtime::ValRaw">ValRaw</a></div><div class="desc docblock-short">A “raw” and unsafe representation of a WebAssembly value.</div></li></ul></section></div></main></body></html>

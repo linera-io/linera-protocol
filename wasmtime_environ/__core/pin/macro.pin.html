@@ -1,0 +1,120 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Constructs a Pin&lt;&amp;mut T&gt;, by pinning a `value: T` locally."><title>pin in wasmtime_environ::__core::pin - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::pin</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">pin</a>::<wbr><a class="macro" href="#">pin</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.68.0">1.68.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/pin.rs.html#1893">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="kw">pub macro </span>pin(<span class="macro-nonterminal">$value</span>:expr $(,)<span class="question-mark">?</span>) {
+    ...
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Constructs a <code><a href="struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="primitive reference">&amp;mut</a> T&gt;</code>, by pinning a <code>value: T</code> locally.</p>
+<p>Unlike <a href="../../std/boxed/struct.Box.html#method.pin"><code>Box::pin</code></a>, this does not create a new heap allocation. As explained
+below, the element might still end up on the heap however.</p>
+<p>The local pinning performed by this macro is usually dubbed “stack”-pinning.
+Outside of <code>async</code> contexts locals do indeed get stored on the stack. In
+<code>async</code> functions or blocks however, any locals crossing an <code>.await</code> point
+are part of the state captured by the <code>Future</code>, and will use the storage of
+those. That storage can either be on the heap or on the stack. Therefore,
+local pinning is a more accurate term.</p>
+<p>If the type of the given value does not implement <a href="../marker/trait.Unpin.html" title="trait wasmtime_environ::__core::marker::Unpin"><code>Unpin</code></a>, then this macro
+pins the value in memory in a way that prevents moves. On the other hand,
+if the type does implement <a href="../marker/trait.Unpin.html" title="trait wasmtime_environ::__core::marker::Unpin"><code>Unpin</code></a>, <code><a href="struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="primitive reference">&amp;mut</a> T&gt;</code> behaves
+like <code><a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="primitive reference">&amp;mut</a> T</code>, and operations such as
+<a href="../mem/fn.replace.html" title="fn wasmtime_environ::__core::mem::replace"><code>mem::replace()</code></a> or <a href="../mem/fn.take.html" title="fn wasmtime_environ::__core::mem::take"><code>mem::take()</code></a>
+will allow moves of the value.
+See <a href="index.html#unpin" title="mod wasmtime_environ::__core::pin">the <code>Unpin</code> section of the <code>pin</code> module</a> for details.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3><h4 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic usage</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::pin::{pin, Pin};
+
+<span class="kw">fn </span>stuff(foo: Pin&lt;<span class="kw-2">&amp;mut </span>Foo&gt;) {
+    <span class="comment">// …
+</span>}
+
+<span class="kw">let </span>pinned_foo = <span class="macro">pin!</span>(Foo { <span class="comment">/* … */ </span>});
+stuff(pinned_foo);
+<span class="comment">// or, directly:
+</span>stuff(<span class="macro">pin!</span>(Foo { <span class="comment">/* … */ </span>}));</code></pre></div>
+<h4 id="manually-polling-a-future-without-unpin-bounds"><a class="doc-anchor" href="#manually-polling-a-future-without-unpin-bounds">§</a>Manually polling a <code>Future</code> (without <code>Unpin</code> bounds)</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{
+    future::Future,
+    pin::pin,
+    task::{Context, Poll},
+    thread,
+};
+
+<span class="doccomment">/// Runs a future to completion.
+</span><span class="kw">fn </span>block_on&lt;Fut: Future&gt;(fut: Fut) -&gt; Fut::Output {
+    <span class="kw">let </span>waker_that_unparks_thread = <span class="comment">// …
+    </span><span class="kw">let </span><span class="kw-2">mut </span>cx = Context::from_waker(<span class="kw-2">&amp;</span>waker_that_unparks_thread);
+    <span class="comment">// Pin the future so it can be polled.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>pinned_fut = <span class="macro">pin!</span>(fut);
+    <span class="kw">loop </span>{
+        <span class="kw">match </span>pinned_fut.as_mut().poll(<span class="kw-2">&amp;mut </span>cx) {
+            Poll::Pending =&gt; thread::park(),
+            Poll::Ready(res) =&gt; <span class="kw">return </span>res,
+        }
+    }
+}</code></pre></div>
+<h4 id="with-coroutines"><a class="doc-anchor" href="#with-coroutines">§</a>With <code>Coroutine</code>s</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(coroutines)]
+#![feature(coroutine_trait)]
+</span><span class="kw">use </span>core::{
+    ops::{Coroutine, CoroutineState},
+    pin::pin,
+};
+
+<span class="kw">fn </span>coroutine_fn() -&gt; <span class="kw">impl </span>Coroutine&lt;Yield = usize, Return = ()&gt; <span class="comment">/* not Unpin */ </span>{
+ <span class="comment">// Allow coroutine to be self-referential (not `Unpin`)
+ // vvvvvv        so that locals can cross yield points.
+    </span><span class="attr">#[coroutine] </span><span class="kw">static </span>|| {
+        <span class="kw">let </span>foo = String::from(<span class="string">"foo"</span>);
+        <span class="kw">let </span>foo_ref = <span class="kw-2">&amp;</span>foo; <span class="comment">// ------+
+        </span><span class="kw">yield </span><span class="number">0</span>;                  <span class="comment">// | &lt;- crosses yield point!
+        </span><span class="macro">println!</span>(<span class="string">"{foo_ref}"</span>); <span class="comment">// &lt;--+
+        </span><span class="kw">yield </span>foo.len();
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>coroutine = <span class="macro">pin!</span>(coroutine_fn());
+    <span class="kw">match </span>coroutine.as_mut().resume(()) {
+        CoroutineState::Yielded(<span class="number">0</span>) =&gt; {},
+        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+    }
+    <span class="kw">match </span>coroutine.as_mut().resume(()) {
+        CoroutineState::Yielded(<span class="number">3</span>) =&gt; {},
+        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+    }
+    <span class="kw">match </span>coroutine.resume(()) {
+        CoroutineState::Yielded(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(),
+        CoroutineState::Complete(()) =&gt; {},
+    }
+}</code></pre></div>
+<h3 id="remarks"><a class="doc-anchor" href="#remarks">§</a>Remarks</h3>
+<p>Precisely because a value is pinned to local storage, the resulting <code><a href="struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin">Pin</a>&lt;<a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="primitive reference">&amp;mut</a> T&gt;</code>
+reference ends up borrowing a local tied to that block: it can’t escape it.</p>
+<p>The following, for instance, fails to compile:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::pin::{pin, Pin};
+
+<span class="kw">let </span>x: Pin&lt;<span class="kw-2">&amp;mut </span>Foo&gt; = {
+    <span class="kw">let </span>x: Pin&lt;<span class="kw-2">&amp;mut </span>Foo&gt; = <span class="macro">pin!</span>(Foo { <span class="comment">/* … */ </span>});
+    x
+}; <span class="comment">// &lt;- Foo is dropped
+</span>stuff(x); <span class="comment">// Error: use of dropped value</span></code></pre></div>
+<details><summary>Error message</summary>
+<div class="example-wrap"><pre class="language-console"><code>error[E0716]: temporary value dropped while borrowed
+  --&gt; src/main.rs:9:28
+   |
+8  | let x: Pin&lt;&amp;mut Foo&gt; = {
+   |     - borrow later stored here
+9  |     let x: Pin&lt;&amp;mut Foo&gt; = pin!(Foo { /* … */ });
+   |                            ^^^^^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use
+10 |     x
+11 | }; // &lt;- Foo is dropped
+   | - temporary value is freed at the end of this statement
+   |
+   = note: consider using a `let` binding to create a longer lived value
+</code></pre></div></details>
+<p>This makes <a href="macro.pin.html" title="macro wasmtime_environ::__core::pin::pin"><code>pin!</code></a> <strong>unsuitable to pin values when intending to <em>return</em> them</strong>. Instead, the
+value is expected to be passed around <em>unpinned</em> until the point where it is to be consumed,
+where it is then useful and even sensible to pin the value locally using <a href="macro.pin.html" title="macro wasmtime_environ::__core::pin::pin"><code>pin!</code></a>.</p>
+<p>If you really need to return a pinned value, consider using <a href="../../std/boxed/struct.Box.html#method.pin"><code>Box::pin</code></a> instead.</p>
+<p>On the other hand, local pinning using <a href="macro.pin.html" title="macro wasmtime_environ::__core::pin::pin"><code>pin!</code></a> is likely to be cheaper than
+pinning into a fresh heap allocation using <a href="../../std/boxed/struct.Box.html#method.pin"><code>Box::pin</code></a>. Moreover, by virtue of not
+requiring an allocator, <a href="macro.pin.html" title="macro wasmtime_environ::__core::pin::pin"><code>pin!</code></a> is the main non-<code>unsafe</code> <code>#![no_std]</code>-compatible <a href="struct.Pin.html" title="struct wasmtime_environ::__core::pin::Pin"><code>Pin</code></a>
+constructor.</p>
+</div></details></section></div></main></body></html>

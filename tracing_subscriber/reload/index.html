@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Wrapper for a `Layer` to allow it to be dynamically reloaded."><title>tracing_subscriber::reload - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tracing_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../../tracing_subscriber/index.html">tracing_subscriber</a><span class="version">0.3.18</span></h2></div><h2 class="location"><a href="#">Module reload</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate tracing_subscriber</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tracing_subscriber</a>::<wbr><a class="mod" href="#">reload</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tracing_subscriber/reload.rs.html#1-384">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Wrapper for a <code>Layer</code> to allow it to be dynamically reloaded.</p>
+<p>This module provides a <a href="struct.Layer.html" title="struct tracing_subscriber::reload::Layer"><code>Layer</code> type</a> implementing the <a href="../layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code> trait</a> or <a href="../layer/trait.Filter.html" title="trait tracing_subscriber::layer::Filter"><code>Filter</code> trait</a>
+which wraps another type implementing the corresponding trait. This
+allows the wrapped type to be replaced with another
+instance of that type at runtime.</p>
+<p>This can be used in cases where a subset of <code>Layer</code> or <code>Filter</code> functionality
+should be dynamically reconfigured, such as when filtering directives may
+change at runtime. Note that this layer introduces a (relatively small)
+amount of overhead, and should thus only be used as needed.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Reloading a <a href="../layer/index.html#global-filtering" title="mod tracing_subscriber::layer">global filtering</a> layer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter, fmt, reload, prelude::<span class="kw-2">*</span>};
+<span class="kw">let </span>filter = filter::LevelFilter::WARN;
+<span class="kw">let </span>(filter, reload_handle) = reload::Layer::new(filter);
+tracing_subscriber::registry()
+  .with(filter)
+  .with(fmt::Layer::default())
+  .init();
+<span class="macro">info!</span>(<span class="string">"This will be ignored"</span>);
+reload_handle.modify(|filter| <span class="kw-2">*</span>filter = filter::LevelFilter::INFO);
+<span class="macro">info!</span>(<span class="string">"This will be logged"</span>);</code></pre></div>
+<p>Reloading a <a href="../filter/struct.Filtered.html" title="struct tracing_subscriber::filter::Filtered"><code>Filtered</code></a> layer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter, fmt, reload, prelude::<span class="kw-2">*</span>};
+<span class="kw">let </span>filtered_layer = fmt::Layer::default().with_filter(filter::LevelFilter::WARN);
+<span class="kw">let </span>(filtered_layer, reload_handle) = reload::Layer::new(filtered_layer);
+tracing_subscriber::registry()
+  .with(filtered_layer)
+  .init();
+<span class="macro">info!</span>(<span class="string">"This will be ignored"</span>);
+reload_handle.modify(|layer| <span class="kw-2">*</span>layer.filter_mut() = filter::LevelFilter::INFO);
+<span class="macro">info!</span>(<span class="string">"This will be logged"</span>);</code></pre></div>
+<h3 id="note"><a class="doc-anchor" href="#note">§</a>Note</h3>
+<p>The <a href="struct.Layer.html" title="struct tracing_subscriber::reload::Layer"><code>Layer</code></a> implementation is unable to implement downcasting functionality,
+so certain <a href="struct.Layer.html" title="struct tracing_subscriber::reload::Layer"><code>Layer</code></a> will fail to downcast if wrapped in a <code>reload::Layer</code>.</p>
+<p>If you only want to be able to dynamically change the
+<code>Filter</code> on a layer, prefer wrapping that <code>Filter</code> in the <code>reload::Layer</code>.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct tracing_subscriber::reload::Error">Error</a></div><div class="desc docblock-short">Indicates that an error occurred when reloading a layer.</div></li><li><div class="item-name"><a class="struct" href="struct.Handle.html" title="struct tracing_subscriber::reload::Handle">Handle</a></div><div class="desc docblock-short">Allows reloading the state of an associated <a href="../layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Layer.html" title="struct tracing_subscriber::reload::Layer">Layer</a></div><div class="desc docblock-short">Wraps a <code>Layer</code> or <code>Filter</code>, allowing it to be reloaded dynamically at runtime.</div></li></ul></section></div></main></body></html>

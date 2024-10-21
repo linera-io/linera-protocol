@@ -1,0 +1,532 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The `Layer` trait, a composable abstraction for building `Subscriber`s."><title>tracing_subscriber::layer - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tracing_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../../tracing_subscriber/index.html">tracing_subscriber</a><span class="version">0.3.18</span></h2></div><h2 class="location"><a href="#">Module layer</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate tracing_subscriber</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">tracing_subscriber</a>::<wbr><a class="mod" href="#">layer</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tracing_subscriber/layer/mod.rs.html#1-1909">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait, a composable abstraction for building <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>s.</p>
+<p>The <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> trait in <code>tracing-core</code> represents the <em>complete</em> set of
+functionality required to consume <code>tracing</code> instrumentation. This means that
+a single <code>Subscriber</code> instance is a self-contained implementation of a
+complete strategy for collecting traces; but it <em>also</em> means that the
+<code>Subscriber</code> trait cannot easily be composed with other <code>Subscriber</code>s.</p>
+<p>In particular, <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>s are responsible for generating <a href="../../tracing_core/span/struct.Id.html" title="struct tracing_core::span::Id">span IDs</a> and
+assigning them to spans. Since these IDs must uniquely identify a span
+within the context of the current trace, this means that there may only be
+a single <code>Subscriber</code> for a given thread at any point in time —
+otherwise, there would be no authoritative source of span IDs.</p>
+<p>On the other hand, the majority of the <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> trait’s functionality
+is composable: any number of subscribers may <em>observe</em> events, span entry
+and exit, and so on, provided that there is a single authoritative source of
+span IDs. The <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait represents this composable subset of the
+<a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> behavior; it can <em>observe</em> events and spans, but does not
+assign IDs.</p>
+<h2 id="composing-layers"><a class="doc-anchor" href="#composing-layers">§</a>Composing Layers</h2>
+<p>Since a <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> does not implement a complete strategy for collecting
+traces, it must be composed with a <code>Subscriber</code> in order to be used. The
+<a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait is generic over a type parameter (called <code>S</code> in the trait
+definition), representing the types of <code>Subscriber</code> they can be composed
+with. Thus, a <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> may be implemented that will only compose with a
+particular <code>Subscriber</code> implementation, or additional trait bounds may be
+added to constrain what types implementing <code>Subscriber</code> a <code>Layer</code> can wrap.</p>
+<p><code>Layer</code>s may be added to a <code>Subscriber</code> by using the <a href="trait.SubscriberExt.html#method.with" title="method tracing_subscriber::layer::SubscriberExt::with"><code>SubscriberExt::with</code></a>
+method, which is provided by <code>tracing-subscriber</code>’s <a href="../prelude/index.html" title="mod tracing_subscriber::prelude">prelude</a>. This method
+returns a <a href="struct.Layered.html" title="struct tracing_subscriber::layer::Layered"><code>Layered</code></a> struct that implements <code>Subscriber</code> by composing the
+<code>Layer</code> with the <code>Subscriber</code>.</p>
+<p>For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::Layer;
+<span class="kw">use </span>tracing_subscriber::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>tracing::Subscriber;
+
+<span class="kw">pub struct </span>MyLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl</span>&lt;S: Subscriber&gt; Layer&lt;S&gt; <span class="kw">for </span>MyLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">pub struct </span>MySubscriber {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl </span>Subscriber <span class="kw">for </span>MySubscriber {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>subscriber = MySubscriber::new()
+    .with(MyLayer::new());
+
+tracing::subscriber::set_global_default(subscriber);</code></pre></div>
+<p>Multiple <code>Layer</code>s may be composed in the same manner:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>MyOtherLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl</span>&lt;S: Subscriber&gt; Layer&lt;S&gt; <span class="kw">for </span>MyOtherLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">pub struct </span>MyThirdLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl</span>&lt;S: Subscriber&gt; Layer&lt;S&gt; <span class="kw">for </span>MyThirdLayer {
+    <span class="comment">// ...
+</span>}
+}
+
+<span class="kw">let </span>subscriber = MySubscriber::new()
+    .with(MyLayer::new())
+    .with(MyOtherLayer::new())
+    .with(MyThirdLayer::new());
+
+tracing::subscriber::set_global_default(subscriber);</code></pre></div>
+<p>The <a href="trait.Layer.html#method.with_subscriber" title="method tracing_subscriber::layer::Layer::with_subscriber"><code>Layer::with_subscriber</code></a> constructs the <a href="struct.Layered.html" title="struct tracing_subscriber::layer::Layered"><code>Layered</code></a> type from a
+<a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> and <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>, and is called by <a href="trait.SubscriberExt.html#method.with" title="method tracing_subscriber::layer::SubscriberExt::with"><code>SubscriberExt::with</code></a>. In
+general, it is more idiomatic to use <a href="trait.SubscriberExt.html#method.with" title="method tracing_subscriber::layer::SubscriberExt::with"><code>SubscriberExt::with</code></a>, and treat
+<a href="trait.Layer.html#method.with_subscriber" title="method tracing_subscriber::layer::Layer::with_subscriber"><code>Layer::with_subscriber</code></a> as an implementation detail, as <code>with_subscriber</code>
+calls must be nested, leading to less clear code for the reader.</p>
+<h3 id="runtime-configuration-with-layers"><a class="doc-anchor" href="#runtime-configuration-with-layers">§</a>Runtime Configuration With <code>Layer</code>s</h3>
+<p>In some cases, a particular <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> may be enabled or disabled based on
+runtime configuration. This can introduce challenges, because the type of a
+layered <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> depends on which layers are added to it: if an <code>if</code>
+or <code>match</code> expression adds some <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> implementation in one branch,
+and other layers in another, the <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> values returned by those
+branches will have different types. For example, the following <em>will not</em>
+work:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>tracing_subscriber::{Registry, prelude::<span class="kw-2">*</span>};
+
+<span class="kw">let </span>stdout_log = tracing_subscriber::fmt::layer().pretty();
+<span class="kw">let </span>subscriber = Registry::default().with(stdout_log);
+
+<span class="comment">// The compile error will occur here because the if and else
+// branches have different (and therefore incompatible) types.
+</span><span class="kw">let </span>subscriber = <span class="kw">if </span>cfg.is_prod {
+    <span class="kw">let </span>file = File::create(cfg.path)<span class="question-mark">?</span>;
+    <span class="kw">let </span>layer = tracing_subscriber::fmt::layer()
+        .json()
+        .with_writer(Arc::new(file));
+    layer.with(subscriber)
+} <span class="kw">else </span>{
+    layer
+};
+
+tracing::subscriber::set_global_default(subscriber)
+    .expect(<span class="string">"Unable to set global subscriber"</span>);</code></pre></div>
+<p>However, a <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> wrapped in an <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option</code></a> <a href="trait.Layer.html#impl-Layer%3CS%3E-for-Option%3CL%3E" title="trait tracing_subscriber::layer::Layer">also implements the <code>Layer</code>
+trait</a>. This allows individual layers to be enabled or disabled at
+runtime while always producing a <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> of the same type. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>tracing_subscriber::{Registry, prelude::<span class="kw-2">*</span>};
+
+<span class="kw">let </span>stdout_log = tracing_subscriber::fmt::layer().pretty();
+<span class="kw">let </span>subscriber = Registry::default().with(stdout_log);
+
+<span class="comment">// if `cfg.is_prod` is true, also log JSON-formatted logs to a file.
+</span><span class="kw">let </span>json_log = <span class="kw">if </span>cfg.is_prod {
+    <span class="kw">let </span>file = File::create(cfg.path)<span class="question-mark">?</span>;
+    <span class="kw">let </span>json_log = tracing_subscriber::fmt::layer()
+        .json()
+        .with_writer(file);
+    <span class="prelude-val">Some</span>(json_log)
+} <span class="kw">else </span>{
+    <span class="prelude-val">None
+</span>};
+
+<span class="comment">// If `cfg.is_prod` is false, then `json` will be `None`, and this layer
+// will do nothing. However, the subscriber will still have the same type
+// regardless of whether the `Option`'s value is `None` or `Some`.
+</span><span class="kw">let </span>subscriber = subscriber.with(json_log);
+
+tracing::subscriber::set_global_default(subscriber)
+   .expect(<span class="string">"Unable to set global subscriber"</span>);</code></pre></div>
+<p>If a <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> may be one of several different types, note that <a href="trait.Layer.html#impl-Layer%3CS%3E-for-Box%3Cdyn%20Layer%3CS%3E%20+%20Send%20+%20Sync%3E" title="trait tracing_subscriber::layer::Layer"><code>Box&lt;dyn  Layer&lt;S&gt; + Send + Sync&gt;</code> implements <code>Layer</code></a>.
+This may be used to erase the type of a <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>.</p>
+<p>For example, a function that configures a <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> to log to one of
+several outputs might return a <code>Box&lt;dyn Layer&lt;S&gt; + Send + Sync + 'static&gt;</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{
+    Layer,
+    registry::LookupSpan,
+    prelude::<span class="kw-2">*</span>,
+};
+<span class="kw">use </span>std::{path::PathBuf, fs::File, io};
+
+<span class="doccomment">/// Configures whether logs are emitted to a file, to stdout, or to stderr.
+</span><span class="kw">pub enum </span>LogConfig {
+    File(PathBuf),
+    Stdout,
+    Stderr,
+}
+
+<span class="kw">impl </span>LogConfig {
+    <span class="kw">pub fn </span>layer&lt;S&gt;(<span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>Layer&lt;S&gt; + Send + Sync + <span class="lifetime">'static</span>&gt;
+    <span class="kw">where
+        </span>S: tracing_core::Subscriber,
+        <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; S: LookupSpan&lt;<span class="lifetime">'a</span>&gt;,
+    {
+        <span class="comment">// Shared configuration regardless of where logs are output to.
+        </span><span class="kw">let </span>fmt = tracing_subscriber::fmt::layer()
+            .with_target(<span class="bool-val">true</span>)
+            .with_thread_names(<span class="bool-val">true</span>);
+
+        <span class="comment">// Configure the writer based on the desired log target:
+        </span><span class="kw">match </span><span class="self">self </span>{
+            LogConfig::File(path) =&gt; {
+                <span class="kw">let </span>file = File::create(path).expect(<span class="string">"failed to create log file"</span>);
+                Box::new(fmt.with_writer(file))
+            },
+            LogConfig::Stdout =&gt; Box::new(fmt.with_writer(io::stdout)),
+            LogConfig::Stderr =&gt; Box::new(fmt.with_writer(io::stderr)),
+        }
+    }
+}
+
+<span class="kw">let </span>config = LogConfig::Stdout;
+tracing_subscriber::registry()
+    .with(config.layer())
+    .init();</code></pre></div>
+<p>The <a href="trait.Layer.html#method.boxed" title="method tracing_subscriber::layer::Layer::boxed"><code>Layer::boxed</code></a> method is provided to make boxing a <code>Layer</code>
+more convenient, but <a href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html#method.new" title="associated function alloc::boxed::Box::new"><code>Box::new</code></a> may be used as well.</p>
+<p>When the number of <code>Layer</code>s varies at runtime, note that a
+<a href="trait.Layer.html#impl-Layer%3CS%3E-for-Vec%3CL%3E" title="trait tracing_subscriber::layer::Layer"><code>Vec&lt;L&gt; where L: Layer</code> also implements <code>Layer</code></a>. This
+can be used to add a variable number of <code>Layer</code>s to a <code>Subscriber</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{Layer, prelude::<span class="kw-2">*</span>};
+<span class="kw">struct </span>MyLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl</span>&lt;S: tracing_core::Subscriber&gt; Layer&lt;S&gt; <span class="kw">for </span>MyLayer {
+    <span class="comment">// ...
+</span>}
+
+<span class="doccomment">/// Returns how many layers we need
+</span><span class="kw">fn </span>how_many_layers() -&gt; usize {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// Create a variable-length `Vec` of layers
+</span><span class="kw">let </span><span class="kw-2">mut </span>layers = Vec::new();
+<span class="kw">for _ in </span><span class="number">0</span>..how_many_layers() {
+    layers.push(MyLayer::new());
+}
+
+tracing_subscriber::registry()
+    .with(layers)
+    .init();</code></pre></div>
+<p>If a variable number of <code>Layer</code> is needed and those <code>Layer</code>s have
+different types, a <code>Vec</code> of <a href="trait.Layer.html#impl-Layer%3CS%3E-for-Box%3Cdyn%20Layer%3CS%3E%20+%20Send%20+%20Sync%3E" title="trait tracing_subscriber::layer::Layer">boxed <code>Layer</code> trait objects</a> may
+be used. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter::LevelFilter, Layer, prelude::<span class="kw-2">*</span>};
+<span class="kw">use </span>std::fs::File;
+<span class="kw">struct </span>Config {
+    enable_log_file: bool,
+    enable_stdout: bool,
+    enable_stderr: bool,
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">let </span>cfg = Config::from_config_file()<span class="question-mark">?</span>;
+
+<span class="comment">// Based on our dynamically loaded config file, create any number of layers:
+</span><span class="kw">let </span><span class="kw-2">mut </span>layers = Vec::new();
+
+<span class="kw">if </span>cfg.enable_log_file {
+    <span class="kw">let </span>file = File::create(<span class="string">"myapp.log"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>layer = tracing_subscriber::fmt::layer()
+        .with_thread_names(<span class="bool-val">true</span>)
+        .with_target(<span class="bool-val">true</span>)
+        .json()
+        .with_writer(file)
+        <span class="comment">// Box the layer as a type-erased trait object, so that it can
+        // be pushed to the `Vec`.
+        </span>.boxed();
+    layers.push(layer);
+}
+
+<span class="kw">if </span>cfg.enable_stdout {
+    <span class="kw">let </span>layer = tracing_subscriber::fmt::layer()
+        .pretty()
+        .with_filter(LevelFilter::INFO)
+        <span class="comment">// Box the layer as a type-erased trait object, so that it can
+        // be pushed to the `Vec`.
+        </span>.boxed();
+    layers.push(layer);
+}
+
+<span class="kw">if </span>cfg.enable_stdout {
+    <span class="kw">let </span>layer = tracing_subscriber::fmt::layer()
+        .with_target(<span class="bool-val">false</span>)
+        .with_filter(LevelFilter::WARN)
+        <span class="comment">// Box the layer as a type-erased trait object, so that it can
+        // be pushed to the `Vec`.
+        </span>.boxed();
+    layers.push(layer);
+}
+
+tracing_subscriber::registry()
+    .with(layers)
+    .init();</code></pre></div>
+<p>Finally, if the number of layers <em>changes</em> at runtime, a <code>Vec</code> of
+subscribers can be used alongside the <a href="../reload/index.html" title="mod tracing_subscriber::reload"><code>reload</code></a> module to
+add or remove subscribers dynamically at runtime.</p>
+<h2 id="recording-traces"><a class="doc-anchor" href="#recording-traces">§</a>Recording Traces</h2>
+<p>The <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait defines a set of methods for consuming notifications from
+tracing instrumentation, which are generally equivalent to the similarly
+named methods on <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>. Unlike <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>, the methods on
+<code>Layer</code> are additionally passed a <a href="struct.Context.html" title="struct tracing_subscriber::layer::Context"><code>Context</code></a> type, which exposes additional
+information provided by the wrapped subscriber (such as <a href="struct.Context.html#method.current_span" title="method tracing_subscriber::layer::Context::current_span">the current span</a>)
+to the layer.</p>
+<h2 id="filtering-with-layers"><a class="doc-anchor" href="#filtering-with-layers">§</a>Filtering with <code>Layer</code>s</h2>
+<p>As well as strategies for handling trace events, the <code>Layer</code> trait may also
+be used to represent composable <em>filters</em>. This allows the determination of
+what spans and events should be recorded to be decoupled from <em>how</em> they are
+recorded: a filtering layer can be applied to other layers or
+subscribers. <code>Layer</code>s can be used to implement <em>global filtering</em>, where a
+<code>Layer</code> provides a filtering strategy for the entire subscriber.
+Additionally, individual recording <code>Layer</code>s or sets of <code>Layer</code>s may be
+combined with <em>per-layer filters</em> that control what spans and events are
+recorded by those layers.</p>
+<h3 id="global-filtering"><a class="doc-anchor" href="#global-filtering">§</a>Global Filtering</h3>
+<p>A <code>Layer</code> that implements a filtering strategy should override the
+<a href="trait.Layer.html#method.register_callsite" title="method tracing_subscriber::layer::Layer::register_callsite"><code>register_callsite</code></a> and/or <a href="trait.Layer.html#method.enabled" title="method tracing_subscriber::layer::Layer::enabled"><code>enabled</code></a> methods. It may also choose to implement
+methods such as <a href="trait.Layer.html#method.on_enter" title="method tracing_subscriber::layer::Layer::on_enter"><code>on_enter</code></a>, if it wishes to filter trace events based on
+the current span context.</p>
+<p>Note that the <a href="trait.Layer.html#method.register_callsite" title="method tracing_subscriber::layer::Layer::register_callsite"><code>Layer::register_callsite</code></a> and <a href="trait.Layer.html#method.enabled" title="method tracing_subscriber::layer::Layer::enabled"><code>Layer::enabled</code></a> methods
+determine whether a span or event is enabled <em>globally</em>. Thus, they should
+<strong>not</strong> be used to indicate whether an individual layer wishes to record a
+particular span or event. Instead, if a layer is only interested in a subset
+of trace data, but does <em>not</em> wish to disable other spans and events for the
+rest of the layer stack should ignore those spans and events in its
+notification methods.</p>
+<p>The filtering methods on a stack of <code>Layer</code>s are evaluated in a top-down
+order, starting with the outermost <code>Layer</code> and ending with the wrapped
+<a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>. If any layer returns <code>false</code> from its <a href="trait.Layer.html#method.enabled" title="method tracing_subscriber::layer::Layer::enabled"><code>enabled</code></a> method, or
+<a href="../../tracing_core/subscriber/struct.Interest.html#method.never" title="associated function tracing_core::subscriber::Interest::never"><code>Interest::never()</code></a> from its <a href="trait.Layer.html#method.register_callsite" title="method tracing_subscriber::layer::Layer::register_callsite"><code>register_callsite</code></a> method, filter
+evaluation will short-circuit and the span or event will be disabled.</p>
+<h4 id="enabling-interest"><a class="doc-anchor" href="#enabling-interest">§</a>Enabling Interest</h4>
+<p>Whenever an tracing event (or span) is emitted, it goes through a number of
+steps to determine how and how much it should be processed. The earlier an
+event is disabled, the less work has to be done to process the event, so
+<code>Layer</code>s that implement filtering should attempt to disable unwanted
+events as early as possible. In order, each event checks:</p>
+<ul>
+<li><a href="trait.Layer.html#method.register_callsite" title="method tracing_subscriber::layer::Layer::register_callsite"><code>register_callsite</code></a>, once per callsite (roughly: once per time that
+<code>event!</code> or <code>span!</code> is written in the source code; this is cached at the
+callsite). See <a href="../../tracing_core/subscriber/trait.Subscriber.html#method.register_callsite" title="method tracing_core::subscriber::Subscriber::register_callsite"><code>Subscriber::register_callsite</code></a> and
+<a href="../../tracing_core/callsite/index.html" title="mod tracing_core::callsite"><code>tracing_core::callsite</code></a> for a summary of how this behaves.</li>
+<li><a href="trait.Layer.html#method.enabled" title="method tracing_subscriber::layer::Layer::enabled"><code>enabled</code></a>, once per emitted event (roughly: once per time that <code>event!</code>
+or <code>span!</code> is <em>executed</em>), and only if <code>register_callsite</code> regesters an
+<a href="../../tracing_core/subscriber/struct.Interest.html#method.sometimes" title="associated function tracing_core::subscriber::Interest::sometimes"><code>Interest::sometimes</code></a>. This is the main customization point to globally
+filter events based on their <a href="../../tracing_core/metadata/struct.Metadata.html" title="struct tracing_core::metadata::Metadata"><code>Metadata</code></a>. If an event can be disabled
+based only on <a href="../../tracing_core/metadata/struct.Metadata.html" title="struct tracing_core::metadata::Metadata"><code>Metadata</code></a>, it should be, as this allows the construction
+of the actual <code>Event</code>/<code>Span</code> to be skipped.</li>
+<li>For events only (and not spans), <a href="trait.Layer.html#method.event_enabled" title="method tracing_subscriber::layer::Layer::event_enabled"><code>event_enabled</code></a> is called just before
+processing the event. This gives layers one last chance to say that
+an event should be filtered out, now that the event’s fields are known.</li>
+</ul>
+<h3 id="per-layer-filtering"><a class="doc-anchor" href="#per-layer-filtering">§</a>Per-Layer Filtering</h3>
+<p><strong>Note</strong>: per-layer filtering APIs currently require the <a href="../index.html#feature-flags" title="mod tracing_subscriber"><code>"registry"</code> crate
+feature flag</a> to be enabled.</p>
+<p>Sometimes, it may be desirable for one <code>Layer</code> to record a particular subset
+of spans and events, while a different subset of spans and events are
+recorded by other <code>Layer</code>s. For example:</p>
+<ul>
+<li>A layer that records metrics may wish to observe only events including
+particular tracked values, while a logging layer ignores those events.</li>
+<li>If recording a distributed trace is expensive, it might be desirable to
+only send spans with <code>INFO</code> and lower verbosity to the distributed tracing
+system, while logging more verbose spans to a file.</li>
+<li>Spans and events with a particular target might be recorded differently
+from others, such as by generating an HTTP access log from a span that
+tracks the lifetime of an HTTP request.</li>
+</ul>
+<p>The <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a> trait is used to control what spans and events are
+observed by an individual <code>Layer</code>, while still allowing other <code>Layer</code>s to
+potentially record them. The <a href="trait.Layer.html#method.with_filter" title="method tracing_subscriber::layer::Layer::with_filter"><code>Layer::with_filter</code></a> method combines a
+<code>Layer</code> with a <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a>, returning a <a href="../filter/struct.Filtered.html" title="struct tracing_subscriber::filter::Filtered"><code>Filtered</code></a> layer.</p>
+<p>This crate’s <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>filter</code></a> module provides a number of types which implement
+the <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a> trait, such as <a href="../filter/struct.LevelFilter.html" title="struct tracing_subscriber::filter::LevelFilter"><code>LevelFilter</code></a>, <a href="../filter/targets/struct.Targets.html" title="struct tracing_subscriber::filter::targets::Targets"><code>Targets</code></a>, and
+<a href="../filter/struct.FilterFn.html" title="struct tracing_subscriber::filter::FilterFn"><code>FilterFn</code></a>. These <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a>s provide ready-made implementations of
+common forms of filtering. For custom filtering policies, the <a href="../filter/struct.FilterFn.html" title="struct tracing_subscriber::filter::FilterFn"><code>FilterFn</code></a>
+and <a href="../filter/struct.DynFilterFn.html" title="struct tracing_subscriber::filter::DynFilterFn"><code>DynFilterFn</code></a> types allow implementing a <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a> with a closure or
+function pointer. In addition, when more control is required, the <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a>
+trait may also be implemented for user-defined types.</p>
+<p>//! <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option"><code>Option&lt;Filter&gt;</code></a> also implements <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a>, which allows for an optional
+filter. <a href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html#variant.None" title="variant core::option::Option::None"><code>None</code></a> filters out <em>nothing</em> (that is, allows
+everything through). For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>setup_tracing&lt;S: Subscriber&gt;(filter_config: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;) {
+    <span class="kw">let </span>layer = MyLayer::&lt;S&gt;::new()
+        .with_filter(filter_config.map(|config| filter_fn(my_filter(config))));
+<span class="comment">//...
+</span>}</code></pre></div>
+ <pre class="compile_fail" style="white-space:normal;font:inherit;">
+     <strong>Warning</strong>: Currently, the <a href="../struct.Registry.html">
+     <code>Registry</code></a> type defined in this crate is the only root
+     <code>Subscriber</code> capable of supporting <code>Layer</code>s with
+     per-layer filters. In the future, new APIs will be added to allow other
+     root <code>Subscriber</code>s to support per-layer filters.
+ </pre>
+<p>For example, to generate an HTTP access log based on spans with
+the <code>http_access</code> target, while logging other spans and events to
+standard out, a <a href="../filter/index.html" title="mod tracing_subscriber::filter"><code>Filter</code></a> can be added to the access log layer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter, prelude::<span class="kw-2">*</span>};
+
+<span class="comment">// Generates an HTTP access log.
+</span><span class="kw">let </span>access_log = <span class="comment">// ...
+
+// Add a filter to the access log layer so that it only observes
+// spans and events with the `http_access` target.
+</span><span class="kw">let </span>access_log = access_log.with_filter(filter::filter_fn(|metadata| {
+    <span class="comment">// Returns `true` if and only if the span or event's target is
+    // "http_access".
+    </span>metadata.target() == <span class="string">"http_access"
+</span>}));
+
+<span class="comment">// A general-purpose logging layer.
+</span><span class="kw">let </span>fmt_layer = tracing_subscriber::fmt::layer();
+
+<span class="comment">// Build a subscriber that combines the access log and stdout log
+// layers.
+</span>tracing_subscriber::registry()
+    .with(fmt_layer)
+    .with(access_log)
+    .init();</code></pre></div>
+<p>Multiple layers can have their own, separate per-layer filters. A span or
+event will be recorded if it is enabled by <em>any</em> per-layer filter, but it
+will be skipped by the layers whose filters did not enable it. Building on
+the previous example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter::{filter_fn, LevelFilter}, prelude::<span class="kw-2">*</span>};
+
+<span class="kw">let </span>access_log = <span class="comment">// ...
+</span><span class="kw">let </span>fmt_layer = tracing_subscriber::fmt::layer();
+
+tracing_subscriber::registry()
+    <span class="comment">// Add the filter for the "http_access" target to the access
+    // log layer, like before.
+    </span>.with(access_log.with_filter(filter_fn(|metadata| {
+        metadata.target() == <span class="string">"http_access"
+    </span>})))
+    <span class="comment">// Add a filter for spans and events with the INFO level
+    // and below to the logging layer.
+    </span>.with(fmt_layer.with_filter(LevelFilter::INFO))
+    .init();
+
+<span class="comment">// Neither layer will observe this event
+</span><span class="macro">tracing::debug!</span>(does_anyone_care = <span class="bool-val">false</span>, <span class="string">"a tree fell in the forest"</span>);
+
+<span class="comment">// This event will be observed by the logging layer, but not
+// by the access log layer.
+</span><span class="macro">tracing::warn!</span>(dose_roentgen = %<span class="number">3.8</span>, <span class="string">"not great, but not terrible"</span>);
+
+<span class="comment">// This event will be observed only by the access log layer.
+</span><span class="macro">tracing::trace!</span>(target: <span class="string">"http_access"</span>, <span class="string">"HTTP request started"</span>);
+
+<span class="comment">// Both layers will observe this event.
+</span><span class="macro">tracing::error!</span>(target: <span class="string">"http_access"</span>, <span class="string">"HTTP request failed with a very bad error!"</span>);</code></pre></div>
+<p>A per-layer filter can be applied to multiple <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s at a time, by
+combining them into a <a href="struct.Layered.html" title="struct tracing_subscriber::layer::Layered"><code>Layered</code></a> layer using <a href="trait.Layer.html#method.and_then" title="method tracing_subscriber::layer::Layer::and_then"><code>Layer::and_then</code></a>, and then
+calling <a href="trait.Layer.html#method.with_filter" title="method tracing_subscriber::layer::Layer::with_filter"><code>Layer::with_filter</code></a> on the resulting <a href="struct.Layered.html" title="struct tracing_subscriber::layer::Layered"><code>Layered</code></a> layer.</p>
+<p>Consider the following:</p>
+<ul>
+<li><code>layer_a</code> and <code>layer_b</code>, which should only receive spans and events at
+the <a href="../../tracing_core/metadata/struct.Level.html#associatedconstant.INFO" title="associated constant tracing_core::metadata::Level::INFO"><code>INFO</code></a> <a href="../../tracing_core/metadata/struct.Level.html" title="struct tracing_core::metadata::Level">level</a> and above.</li>
+<li>A third layer, <code>layer_c</code>, which should receive spans and events at
+the <a href="../../tracing_core/metadata/struct.Level.html#associatedconstant.DEBUG" title="associated constant tracing_core::metadata::Level::DEBUG"><code>DEBUG</code></a> <a href="../../tracing_core/metadata/struct.Level.html" title="struct tracing_core::metadata::Level">level</a> as well.
+The layers and filters would be composed thusly:</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter::LevelFilter, prelude::<span class="kw-2">*</span>};
+
+<span class="kw">let </span>layer_a = <span class="comment">// ...
+</span><span class="kw">let </span>layer_b =  <span class="comment">// ...
+</span><span class="kw">let </span>layer_c =  <span class="comment">// ...
+
+</span><span class="kw">let </span>info_layers = layer_a
+    <span class="comment">// Combine `layer_a` and `layer_b` into a `Layered` layer:
+    </span>.and_then(layer_b)
+    <span class="comment">// ...and then add an `INFO` `LevelFilter` to that layer:
+    </span>.with_filter(LevelFilter::INFO);
+
+tracing_subscriber::registry()
+    <span class="comment">// Add `layer_c` with a `DEBUG` filter.
+    </span>.with(layer_c.with_filter(LevelFilter::DEBUG))
+    .with(info_layers)
+    .init();</code></pre></div>
+<p>If a <a href="../filter/struct.Filtered.html" title="struct tracing_subscriber::filter::Filtered"><code>Filtered</code></a> <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> is combined with another <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>
+<a href="trait.Layer.html#method.and_then" title="method tracing_subscriber::layer::Layer::and_then"><code>Layer::and_then</code></a>, and a filter is added to the <a href="struct.Layered.html" title="struct tracing_subscriber::layer::Layered"><code>Layered</code></a> layer, that
+layer will be filtered by <em>both</em> the inner filter and the outer filter.
+Only spans and events that are enabled by <em>both</em> filters will be
+observed by that layer. This can be used to implement complex filtering
+trees.</p>
+<p>As an example, consider the following constraints:</p>
+<ul>
+<li>Suppose that a particular <a href="../../tracing_core/metadata/struct.Metadata.html#method.target" title="method tracing_core::metadata::Metadata::target">target</a> is used to indicate events that
+should be counted as part of a metrics system, which should be only
+observed by a layer that collects metrics.</li>
+<li>A log of high-priority events (<a href="../../tracing_core/metadata/struct.Level.html#associatedconstant.INFO" title="associated constant tracing_core::metadata::Level::INFO"><code>INFO</code></a> and above) should be logged
+to stdout, while more verbose events should be logged to a debugging log file.</li>
+<li>Metrics-focused events should <em>not</em> be included in either log output.</li>
+</ul>
+<p>In that case, it is possible to apply a filter to both logging layers to
+exclude the metrics events, while additionally adding a <a href="../filter/struct.LevelFilter.html" title="struct tracing_subscriber::filter::LevelFilter"><code>LevelFilter</code></a>
+to the stdout log:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing_subscriber::{filter, prelude::<span class="kw-2">*</span>};
+<span class="kw">use </span>std::{fs::File, sync::Arc};
+
+<span class="comment">// A layer that logs events to stdout using the human-readable "pretty"
+// format.
+</span><span class="kw">let </span>stdout_log = tracing_subscriber::fmt::layer()
+    .pretty();
+
+<span class="comment">// A layer that logs events to a file.
+</span><span class="kw">let </span>file = File::create(<span class="string">"debug.log"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>debug_log = tracing_subscriber::fmt::layer()
+    .with_writer(Arc::new(file));
+
+<span class="comment">// A layer that collects metrics using specific events.
+</span><span class="kw">let </span>metrics_layer = <span class="comment">/* ... */ </span>filter::LevelFilter::INFO;
+
+tracing_subscriber::registry()
+    .with(
+        stdout_log
+            <span class="comment">// Add an `INFO` filter to the stdout logging layer
+            </span>.with_filter(filter::LevelFilter::INFO)
+            <span class="comment">// Combine the filtered `stdout_log` layer with the
+            // `debug_log` layer, producing a new `Layered` layer.
+            </span>.and_then(debug_log)
+            <span class="comment">// Add a filter to *both* layers that rejects spans and
+            // events whose targets start with `metrics`.
+            </span>.with_filter(filter::filter_fn(|metadata| {
+                !metadata.target().starts_with(<span class="string">"metrics"</span>)
+            }))
+    )
+    .with(
+        <span class="comment">// Add a filter to the metrics label that *only* enables
+        // events whose targets start with `metrics`.
+        </span>metrics_layer.with_filter(filter::filter_fn(|metadata| {
+            metadata.target().starts_with(<span class="string">"metrics"</span>)
+        }))
+    )
+    .init();
+
+<span class="comment">// This event will *only* be recorded by the metrics layer.
+</span><span class="macro">tracing::info!</span>(target: <span class="string">"metrics::cool_stuff_count"</span>, value = <span class="number">42</span>);
+
+<span class="comment">// This event will only be seen by the debug log file layer:
+</span><span class="macro">tracing::debug!</span>(<span class="string">"this is a message, and part of a system of messages"</span>);
+
+<span class="comment">// This event will be seen by both the stdout log layer *and*
+// the debug log file layer, but not by the metrics layer.
+</span><span class="macro">tracing::warn!</span>(<span class="string">"the message is a warning about danger!"</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Context.html" title="struct tracing_subscriber::layer::Context">Context</a></div><div class="desc docblock-short">Represents information about the current context provided to <a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s by the
+wrapped <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Identity.html" title="struct tracing_subscriber::layer::Identity">Identity</a></div><div class="desc docblock-short">A layer that does nothing.</div></li><li><div class="item-name"><a class="struct" href="struct.Layered.html" title="struct tracing_subscriber::layer::Layered">Layered</a></div><div class="desc docblock-short">A <a href="../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> composed of a <code>Subscriber</code> wrapped by one or more
+<a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Filter.html" title="trait tracing_subscriber::layer::Filter">Filter</a></div><div class="desc docblock-short">A per-<a href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> filter that determines whether a span or event is enabled
+for an individual layer.</div></li><li><div class="item-name"><a class="trait" href="trait.Layer.html" title="trait tracing_subscriber::layer::Layer">Layer</a></div><div class="desc docblock-short">A composable handler for <code>tracing</code> events.</div></li><li><div class="item-name"><a class="trait" href="trait.SubscriberExt.html" title="trait tracing_subscriber::layer::SubscriberExt">SubscriberExt</a></div><div class="desc docblock-short">Extension trait adding a <code>with(Layer)</code> combinator to <code>Subscriber</code>s.</div></li></ul></section></div></main></body></html>

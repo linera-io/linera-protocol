@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="AWS SDK Credentials"><title>aws_credential_types::provider - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aws_credential_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aws_credential_types/index.html">aws_credential_types</a><span class="version">1.2.1</span></h2></div><h2 class="location"><a href="#">Module provider</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section><h2><a href="../index.html">In crate aws_credential_types</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">aws_credential_types</a>::<wbr><a class="mod" href="#">provider</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aws_credential_types/provider.rs.html#6-79">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>AWS SDK Credentials</p>
+<h3 id="implementing-your-own-credentials-provider"><a class="doc-anchor" href="#implementing-your-own-credentials-provider">§</a>Implementing your own credentials provider</h3>
+<p>While for many use cases, using a built in credentials provider is sufficient, you may want to
+implement your own credential provider.</p>
+<h4 id="with-static-credentials"><a class="doc-anchor" href="#with-static-credentials">§</a>With static credentials</h4>
+<p><em>Note: In general, you should prefer to use the credential providers that come
+with the AWS SDK to get credentials. It is <strong>NOT</strong> secure to hardcode credentials
+into your application. Only use this approach if you really know what you’re doing.</em></p>
+<p>Enable the <code>hardcoded-credentials</code> feature to be able to use <code>Credentials::from_keys</code> to
+construct credentials from hardcoded values.</p>
+<h4 id="with-dynamically-loaded-credentials"><a class="doc-anchor" href="#with-dynamically-loaded-credentials">§</a>With dynamically loaded credentials</h4>
+<p>If you are loading credentials dynamically, you can provide your own implementation of
+<a href="trait.ProvideCredentials.html" title="trait aws_credential_types::provider::ProvideCredentials"><code>ProvideCredentials</code></a>. Generally, this is best done by
+defining an inherent <code>async fn</code> on your structure, then calling that method directly from
+the trait implementation.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_credential_types::{
+    provider::{<span class="self">self</span>, future, error::CredentialsError, ProvideCredentials},
+    Credentials,
+};
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SubprocessCredentialProvider;
+
+<span class="kw">async fn </span>invoke_command(command: <span class="kw-2">&amp;</span>str) -&gt; String {
+    <span class="comment">// implementation elided...
+</span>}
+
+<span class="doccomment">/// Parse access key and secret from the first two lines of a string
+</span><span class="kw">fn </span>parse_credentials(creds: <span class="kw-2">&amp;</span>str) -&gt; provider::Result {
+    <span class="kw">let </span><span class="kw-2">mut </span>lines = creds.lines();
+    <span class="kw">let </span>akid = lines.next().ok_or(CredentialsError::provider_error(<span class="string">"invalid credentials"</span>))<span class="question-mark">?</span>;
+    <span class="kw">let </span>secret = lines.next().ok_or(CredentialsError::provider_error(<span class="string">"invalid credentials"</span>))<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Credentials::new(akid, secret, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="string">"CustomCommand"</span>))
+}
+
+<span class="kw">impl </span>SubprocessCredentialProvider {
+    <span class="kw">async fn </span>load_credentials(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; provider::Result {
+        <span class="kw">let </span>creds = invoke_command(<span class="string">"load-credentials.py"</span>).<span class="kw">await</span>;
+        parse_credentials(<span class="kw-2">&amp;</span>creds)
+    }
+}
+
+<span class="kw">impl </span>ProvideCredentials <span class="kw">for </span>SubprocessCredentialProvider {
+    <span class="kw">fn </span>provide_credentials&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; future::ProvideCredentials&lt;<span class="lifetime">'a</span>&gt; <span class="kw">where </span><span class="self">Self</span>: <span class="lifetime">'a </span>{
+        future::ProvideCredentials::new(<span class="self">self</span>.load_credentials())
+    }
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod aws_credential_types::provider::error">error</a></div><div class="desc docblock-short">Credentials provider errors</div></li><li><div class="item-name"><a class="mod" href="future/index.html" title="mod aws_credential_types::provider::future">future</a></div><div class="desc docblock-short">Convenience <code>ProvideCredentials</code> struct that implements the <code>ProvideCredentials</code> trait.</div></li><li><div class="item-name"><a class="mod" href="token/index.html" title="mod aws_credential_types::provider::token">token</a></div><div class="desc docblock-short">AWS Access Tokens for SSO</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.SharedCredentialsProvider.html" title="struct aws_credential_types::provider::SharedCredentialsProvider">SharedCredentialsProvider</a></div><div class="desc docblock-short">Credentials Provider wrapper that may be shared</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.ProvideCredentials.html" title="trait aws_credential_types::provider::ProvideCredentials">ProvideCredentials</a></div><div class="desc docblock-short">Asynchronous Credentials Provider</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Result.html" title="type aws_credential_types::provider::Result">Result</a></div><div class="desc docblock-short">Result type for credential providers.</div></li></ul></section></div></main></body></html>

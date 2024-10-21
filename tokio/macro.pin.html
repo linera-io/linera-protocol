@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Pins a value on the stack."><title>pin in tokio - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">tokio</a>::<wbr><a class="macro" href="#">pin</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tokio/macros/pin.rs.html#125-144">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> pin {
+    ($(<span class="macro-nonterminal">$x</span>:ident),<span class="kw-2">*</span>) =&gt; { ... };
+    ($(
+            <span class="kw">let </span><span class="macro-nonterminal">$x</span>:ident = <span class="macro-nonterminal">$init</span>:expr;
+    )<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Pins a value on the stack.</p>
+<p>Calls to <code>async fn</code> return anonymous <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> values that are <code>!Unpin</code>.
+These values must be pinned before they can be polled. Calling <code>.await</code> will
+handle this, but consumes the future. If it is required to call <code>.await</code> on
+a <code>&amp;mut _</code> reference, the caller is responsible for pinning the future.</p>
+<p>Pinning may be done by allocating with <a href="https://doc.rust-lang.org/1.81.0/alloc/boxed/struct.Box.html#method.pin" title="associated function alloc::boxed::Box::pin"><code>Box::pin</code></a> or by using the stack
+with the <code>pin!</code> macro.</p>
+<p>The following will <strong>fail to compile</strong>:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>my_async_fn() {
+    <span class="comment">// async logic here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>future = my_async_fn();
+    (<span class="kw-2">&amp;mut </span>future).<span class="kw">await</span>;
+}</code></pre></div>
+<p>To make this work requires pinning:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::pin;
+
+<span class="kw">async fn </span>my_async_fn() {
+    <span class="comment">// async logic here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>future = my_async_fn();
+    <span class="macro">pin!</span>(future);
+
+    (<span class="kw-2">&amp;mut </span>future).<span class="kw">await</span>;
+}</code></pre></div>
+<p>Pinning is useful when using <code>select!</code> and stream operators that require <code>T: Stream + Unpin</code>.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>The <code>pin!</code> macro takes <strong>identifiers</strong> as arguments. It does <strong>not</strong> work
+with expressions.</p>
+<p>The following does not compile as an expression is passed to <code>pin!</code>.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>my_async_fn() {
+    <span class="comment">// async logic here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>future = <span class="macro">pin!</span>(my_async_fn());
+    (<span class="kw-2">&amp;mut </span>future).<span class="kw">await</span>;
+}</code></pre></div>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Using with select:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::{pin, select};
+<span class="kw">use </span>tokio_stream::{<span class="self">self </span><span class="kw">as </span>stream, StreamExt};
+
+<span class="kw">async fn </span>my_async_fn() {
+    <span class="comment">// async logic here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>stream = stream::iter(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
+
+    <span class="kw">let </span>future = my_async_fn();
+    <span class="macro">pin!</span>(future);
+
+    <span class="kw">loop </span>{
+        <span class="macro">select!</span> {
+            <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>future =&gt; {
+                <span class="comment">// Stop looping `future` will be polled after completion
+                </span><span class="kw">break</span>;
+            }
+            <span class="prelude-val">Some</span>(val) = stream.next() =&gt; {
+                <span class="macro">println!</span>(<span class="string">"got value = {}"</span>, val);
+            }
+        }
+    }
+}</code></pre></div>
+<p>Because assigning to a variable followed by pinning is common, there is also
+a variant of the macro that supports doing both in one go.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::{pin, select};
+
+<span class="kw">async fn </span>my_async_fn() {
+    <span class="comment">// async logic here
+</span>}
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="macro">pin!</span> {
+        <span class="kw">let </span>future1 = my_async_fn();
+        <span class="kw">let </span>future2 = my_async_fn();
+    }
+
+    <span class="macro">select!</span> {
+        <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>future1 =&gt; {}
+        <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>future2 =&gt; {}
+    }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

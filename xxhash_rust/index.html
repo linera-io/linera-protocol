@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Implementation of xxHash in Rust"><title>xxhash_rust - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="xxhash_rust" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../xxhash_rust/index.html">xxhash_rust</a><span class="version">0.8.12</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">xxhash_rust</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/xxhash_rust/lib.rs.html#1-103">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Implementation of <a href="https://github.com/Cyan4973/xxHash">xxHash</a> in Rust</p>
+<p>Version corresponds to xxHash <a href="https://github.com/Cyan4973/xxHash/releases">releases</a></p>
+<p>Each algorithm is implemented via feature, allowing precise control over code size.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<ul>
+<li>Cargo.toml</li>
+</ul>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies.xxhash-rust]
+version = &quot;0.8.5&quot;
+features = [&quot;xxh3&quot;, &quot;const_xxh3&quot;]
+</code></pre></div>
+<ul>
+<li>main.rs</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>xxhash_rust::const_xxh3::xxh3_64 <span class="kw">as </span>const_xxh3;
+<span class="kw">use </span>xxhash_rust::xxh3::xxh3_64;
+
+<span class="kw">const </span>TEST: u64 = const_xxh3(<span class="string">b"TEST"</span>);
+
+<span class="kw">fn </span>test_input(text: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    <span class="kw">match </span>xxh3_64(text.as_bytes()) {
+        TEST =&gt; <span class="bool-val">true</span>,
+        <span class="kw">_ </span>=&gt; <span class="bool-val">false
+    </span>}
+}
+
+<span class="macro">assert!</span>(!test_input(<span class="string">"tEST"</span>));
+<span class="macro">assert!</span>(test_input(<span class="string">"TEST"</span>));</code></pre></div>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features:</h3>
+<p>By default all features are off.</p>
+<ul>
+<li><code>std</code> - Enables <code>std::io::Write</code> trait implementation</li>
+<li><code>xxh32</code> - Enables 32bit algorithm. Suitable for x86 targets</li>
+<li><code>const_xxh32</code> - <code>const fn</code> version of <code>xxh32</code> algorithm</li>
+<li><code>xxh64</code> - Enables 64 algorithm. Suitable for x86_64 targets</li>
+<li><code>const_xxh64</code> - <code>const fn</code> version of <code>xxh64</code> algorithm</li>
+<li><code>xxh3</code> - Enables <code>xxh3</code> family of algorithms, superior to <code>xxh32</code> and <code>xxh64</code> in terms of performance.</li>
+<li><code>const_xxh3</code> - <code>const fn</code> version of <code>xxh3</code> algorithm</li>
+</ul>
+<h3 id="hw-acceleration"><a class="doc-anchor" href="#hw-acceleration">§</a>HW acceleration</h3>
+<p>Similar to reference implementation, crate implements various SIMDs in <code>xxh3</code> depending on provided flags.
+All checks are performed only at compile time, hence user is encouraged to enable these accelerations (for example via <code>-C target_cpu=native</code>)</p>
+<p>Used SIMD acceleration:</p>
+<ul>
+<li>SSE2 - widely available, can be safely enabled in 99% of cases. Enabled by default in <code>x86_64</code> targets.</li>
+<li>AVX2;</li>
+<li>Neon - Enabled by default on aarch64 targets (most likely);</li>
+<li>Wasm SIMD128 - Has to be enabled via rust flag: <code>-Ctarget-feature=+simd128</code></li>
+</ul>
+<h3 id="streaming-vs-one-shot"><a class="doc-anchor" href="#streaming-vs-one-shot">§</a>Streaming vs One-shot</h3>
+<p>For performance reasons one-shot version of algorithm does not re-use streaming version.
+Unless needed, user is advised to use one-shot version which tends to be more optimal.</p>
+<h3 id="cosnt-fn-version"><a class="doc-anchor" href="#cosnt-fn-version">§</a><code>cosnt fn</code> version</h3>
+<p>While <code>const fn</code> provides compile time implementation, it does so at performance cost.
+Hence you should only use it at <em>compile</em> time.</p>
+<p>To guarantee that something is computed at compile time make sure to initialize hash output
+as <code>const</code> or <code>static</code> variable, otherwise it is possible function is executed at runtime, which
+would be worse than regular algorithm.</p>
+<p><code>const fn</code> is implemented in best possible way while conforming to limitations of Rust <code>const fn</code>, but these limitations are quite strict making any high performance code impossible.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="xxh64/index.html" title="mod xxhash_rust::xxh64">xxh64</a></div><div class="desc docblock-short">64 bit version of xxhash algorithm</div></li></ul></section></div></main></body></html>

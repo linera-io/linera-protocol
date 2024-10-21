@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DirEntryAttr","DirEntryValue","TransitProcessResult","TransitState"],"fn":["copy","copy_with_progress","create","create_all","get_details_entry","get_dir_content","get_dir_content2","get_size","ls","move_dir","move_dir_with_progress","remove"],"struct":["CopyOptions","DirContent","DirOptions","LsResult","TransitProcess"]};

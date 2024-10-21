@@ -1,0 +1,664 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Container for parse results."><title>ArgMatches in clap_builder::parser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="clap_builder" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../clap_builder/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../clap_builder/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt="logo"></a><h2><a href="../../clap_builder/index.html">clap_builder</a><span class="version">4.5.18</span></h2></div><h2 class="location"><a href="#">ArgMatches</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.args_present">args_present</a></li><li><a href="#method.contains_id">contains_id</a></li><li><a href="#method.get_count">get_count</a></li><li><a href="#method.get_flag">get_flag</a></li><li><a href="#method.get_many">get_many</a></li><li><a href="#method.get_occurrences">get_occurrences</a></li><li><a href="#method.get_one">get_one</a></li><li><a href="#method.get_raw">get_raw</a></li><li><a href="#method.get_raw_occurrences">get_raw_occurrences</a></li><li><a href="#method.ids">ids</a></li><li><a href="#method.index_of">index_of</a></li><li><a href="#method.indices_of">indices_of</a></li><li><a href="#method.remove_many">remove_many</a></li><li><a href="#method.remove_occurrences">remove_occurrences</a></li><li><a href="#method.remove_one">remove_one</a></li><li><a href="#method.remove_subcommand">remove_subcommand</a></li><li><a href="#method.subcommand">subcommand</a></li><li><a href="#method.subcommand_matches">subcommand_matches</a></li><li><a href="#method.subcommand_name">subcommand_name</a></li><li><a href="#method.try_contains_id">try_contains_id</a></li><li><a href="#method.try_get_many">try_get_many</a></li><li><a href="#method.try_get_occurrences">try_get_occurrences</a></li><li><a href="#method.try_get_one">try_get_one</a></li><li><a href="#method.try_get_raw">try_get_raw</a></li><li><a href="#method.try_get_raw_occurrences">try_get_raw_occurrences</a></li><li><a href="#method.try_remove_many">try_remove_many</a></li><li><a href="#method.try_remove_occurrences">try_remove_occurrences</a></li><li><a href="#method.try_remove_one">try_remove_one</a></li><li><a href="#method.value_source">value_source</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-ArgMatches">Clone</a></li><li><a href="#impl-Debug-for-ArgMatches">Debug</a></li><li><a href="#impl-Default-for-ArgMatches">Default</a></li><li><a href="#impl-Eq-for-ArgMatches">Eq</a></li><li><a href="#impl-PartialEq-for-ArgMatches">PartialEq</a></li><li><a href="#impl-StructuralPartialEq-for-ArgMatches">StructuralPartialEq</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-RefUnwindSafe-for-ArgMatches">!RefUnwindSafe</a></li><li><a href="#impl-UnwindSafe-for-ArgMatches">!UnwindSafe</a></li><li><a href="#impl-Freeze-for-ArgMatches">Freeze</a></li><li><a href="#impl-Send-for-ArgMatches">Send</a></li><li><a href="#impl-Sync-for-ArgMatches">Sync</a></li><li><a href="#impl-Unpin-for-ArgMatches">Unpin</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In clap_builder::parser</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../index.html">clap_builder</a>::<wbr><a href="index.html">parser</a>::<wbr><a class="struct" href="#">ArgMatches</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#67-74">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct ArgMatches { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Container for parse results.</p>
+<p>Used to get information about the arguments that were supplied to the program at runtime by
+the user. New instances of this struct are obtained by using the <a href="../builder/struct.Command.html#method.get_matches" title="method clap_builder::builder::Command::get_matches"><code>Command::get_matches</code></a> family of
+methods.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>matches = Command::new(<span class="string">"MyApp"</span>)
+    .arg(Arg::new(<span class="string">"out"</span>)
+        .long(<span class="string">"output"</span>)
+        .required(<span class="bool-val">true</span>)
+        .action(ArgAction::Set)
+        .default_value(<span class="string">"-"</span>))
+    .arg(Arg::new(<span class="string">"cfg"</span>)
+        .short(<span class="string">'c'</span>)
+        .action(ArgAction::Set))
+    .get_matches(); <span class="comment">// builds the instance of ArgMatches
+
+// to get information about the "cfg" argument we created, such as the value supplied we use
+// various ArgMatches methods, such as [ArgMatches::get_one]
+</span><span class="kw">if let </span><span class="prelude-val">Some</span>(c) = matches.get_one::&lt;String&gt;(<span class="string">"cfg"</span>) {
+    <span class="macro">println!</span>(<span class="string">"Value for -c: {c}"</span>);
+}
+
+<span class="comment">// The ArgMatches::get_one method returns an Option because the user may not have supplied
+// that argument at runtime. But if we specified that the argument was "required" as we did
+// with the "out" argument, we can safely unwrap because `clap` verifies that was actually
+// used at runtime.
+</span><span class="macro">println!</span>(<span class="string">"Value for --output: {}"</span>, matches.get_one::&lt;String&gt;(<span class="string">"out"</span>).unwrap());
+
+<span class="comment">// You can check the presence of an argument's values
+</span><span class="kw">if </span>matches.contains_id(<span class="string">"out"</span>) {
+    <span class="comment">// However, if you want to know where the value came from
+    </span><span class="kw">if </span>matches.value_source(<span class="string">"out"</span>).expect(<span class="string">"checked contains_id"</span>) == ValueSource::CommandLine {
+        <span class="macro">println!</span>(<span class="string">"`out` set by user"</span>);
+    } <span class="kw">else </span>{
+        <span class="macro">println!</span>(<span class="string">"`out` is defaulted"</span>);
+    }
+}</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#77-841">source</a><a href="#impl-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="docblock"><h4 id="arguments"><a class="doc-anchor" href="#arguments">§</a>Arguments</h4></div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.get_one" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#114-116">source</a><h4 class="code-header">pub fn <a href="#method.get_one" class="fn">get_one</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;</h4></section></summary><div class="docblock"><p>Gets the value of a specific option or positional argument.</p>
+<p>i.e. an argument that <a href="../builder/struct.Arg.html#method.num_args" title="method clap_builder::builder::Arg::num_args">takes an additional value</a> at runtime.</p>
+<p>Returns an error if the wrong type was used.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<p><em>NOTE:</em> This will always return <code>Some(value)</code> if <a href="../builder/struct.Arg.html#method.default_value" title="method clap_builder::builder::Arg::default_value"><code>default_value</code></a> has been set.
+<a href="struct.ArgMatches.html#method.value_source" title="method clap_builder::parser::ArgMatches::value_source"><code>ArgMatches::value_source</code></a> can be used to check if a value is present at runtime.</p>
+<h5 id="panic"><a class="doc-anchor" href="#panic">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_get_one" title="method clap_builder::parser::ArgMatches::try_get_one"><code>ArgMatches::try_get_one</code></a>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"port"</span>)
+        .value_parser(<span class="macro">value_parser!</span>(usize))
+        .action(ArgAction::Set)
+        .required(<span class="bool-val">true</span>))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"2020"</span>]);
+
+<span class="kw">let </span>port: usize = <span class="kw-2">*</span>m
+    .get_one(<span class="string">"port"</span>)
+    .expect(<span class="string">"`port`is required"</span>);
+<span class="macro">assert_eq!</span>(port, <span class="number">2020</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_count" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#144-148">source</a><h4 class="code-header">pub fn <a href="#method.get_count" class="fn">get_count</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a></h4></section></summary><div class="docblock"><p>Gets the value of a specific <a href="../builder/enum.ArgAction.html#variant.Count" title="variant clap_builder::builder::ArgAction::Count"><code>ArgAction::Count</code></a> flag</p>
+<h5 id="panic-1"><a class="doc-anchor" href="#panic-1">§</a>Panic</h5>
+<p>If the argument’s action is not <a href="../builder/enum.ArgAction.html#variant.Count" title="variant clap_builder::builder::ArgAction::Count"><code>ArgAction::Count</code></a></p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>cmd = Command::new(<span class="string">"mycmd"</span>)
+    .arg(
+        Arg::new(<span class="string">"flag"</span>)
+            .long(<span class="string">"flag"</span>)
+            .action(clap::ArgAction::Count)
+    );
+
+<span class="kw">let </span>matches = cmd.clone().try_get_matches_from([<span class="string">"mycmd"</span>, <span class="string">"--flag"</span>, <span class="string">"--flag"</span>]).unwrap();
+<span class="macro">assert_eq!</span>(
+    matches.get_count(<span class="string">"flag"</span>),
+    <span class="number">2
+</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_flag" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#177-185">source</a><h4 class="code-header">pub fn <a href="#method.get_flag" class="fn">get_flag</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Gets the value of a specific <a href="../builder/enum.ArgAction.html#variant.SetTrue" title="variant clap_builder::builder::ArgAction::SetTrue"><code>ArgAction::SetTrue</code></a> or <a href="../builder/enum.ArgAction.html#variant.SetFalse" title="variant clap_builder::builder::ArgAction::SetFalse"><code>ArgAction::SetFalse</code></a> flag</p>
+<h5 id="panic-2"><a class="doc-anchor" href="#panic-2">§</a>Panic</h5>
+<p>If the argument’s action is not <a href="../builder/enum.ArgAction.html#variant.SetTrue" title="variant clap_builder::builder::ArgAction::SetTrue"><code>ArgAction::SetTrue</code></a> or <a href="../builder/enum.ArgAction.html#variant.SetFalse" title="variant clap_builder::builder::ArgAction::SetFalse"><code>ArgAction::SetFalse</code></a></p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>cmd = Command::new(<span class="string">"mycmd"</span>)
+    .arg(
+        Arg::new(<span class="string">"flag"</span>)
+            .long(<span class="string">"flag"</span>)
+            .action(clap::ArgAction::SetTrue)
+    );
+
+<span class="kw">let </span>matches = cmd.clone().try_get_matches_from([<span class="string">"mycmd"</span>, <span class="string">"--flag"</span>]).unwrap();
+<span class="macro">assert!</span>(matches.contains_id(<span class="string">"flag"</span>));
+<span class="macro">assert_eq!</span>(
+    matches.get_flag(<span class="string">"flag"</span>),
+    <span class="bool-val">true
+</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_many" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#221-226">source</a><h4 class="code-header">pub fn <a href="#method.get_many" class="fn">get_many</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.ValuesRef.html" title="struct clap_builder::parser::ValuesRef">ValuesRef</a>&lt;'_, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Iterate over values of a specific option or positional argument.</p>
+<p>i.e. an argument that takes multiple values at runtime.</p>
+<p>Returns an error if the wrong type was used.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<h5 id="panic-3"><a class="doc-anchor" href="#panic-3">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_get_many" title="method clap_builder::parser::ArgMatches::try_get_many"><code>ArgMatches::try_get_many</code></a>.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"ports"</span>)
+        .action(ArgAction::Append)
+        .value_parser(<span class="macro">value_parser!</span>(usize))
+        .short(<span class="string">'p'</span>)
+        .required(<span class="bool-val">true</span>))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"-p"</span>, <span class="string">"22"</span>, <span class="string">"-p"</span>, <span class="string">"80"</span>, <span class="string">"-p"</span>, <span class="string">"2020"
+    </span>]);
+<span class="kw">let </span>vals: Vec&lt;usize&gt; = m.get_many(<span class="string">"ports"</span>)
+    .expect(<span class="string">"`port`is required"</span>)
+    .copied()
+    .collect();
+<span class="macro">assert_eq!</span>(vals, [<span class="number">22</span>, <span class="number">80</span>, <span class="number">2020</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_occurrences" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#259-264">source</a><h4 class="code-header">pub fn <a href="#method.get_occurrences" class="fn">get_occurrences</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;OccurrencesRef&lt;'_, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Iterate over the values passed to each occurrence of an option.</p>
+<p>Each item is itself an iterator containing the arguments passed to a single occurrence
+of the option.</p>
+<p>If the option doesn’t support multiple occurrences, or there was only a single occurrence,
+the iterator will only contain a single item.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If the argument definition and access mismatch (debug builds). To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_get_occurrences" title="method clap_builder::parser::ArgMatches::try_get_occurrences"><code>ArgMatches::try_get_occurrences</code></a>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"x"</span>)
+        .short(<span class="string">'x'</span>)
+        .num_args(<span class="number">2</span>)
+        .action(ArgAction::Append)
+        .value_parser(<span class="macro">value_parser!</span>(String)))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"-x"</span>, <span class="string">"a"</span>, <span class="string">"b"</span>, <span class="string">"-x"</span>, <span class="string">"c"</span>, <span class="string">"d"</span>]);
+<span class="kw">let </span>vals: Vec&lt;Vec&lt;<span class="kw-2">&amp;</span>String&gt;&gt; = m.get_occurrences(<span class="string">"x"</span>).unwrap().map(Iterator::collect).collect();
+<span class="macro">assert_eq!</span>(vals, [[<span class="string">"a"</span>, <span class="string">"b"</span>], [<span class="string">"c"</span>, <span class="string">"d"</span>]]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_raw" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#310-312">source</a><h4 class="code-header">pub fn <a href="#method.get_raw" class="fn">get_raw</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.RawValues.html" title="struct clap_builder::parser::RawValues">RawValues</a>&lt;'_&gt;&gt;</h4></section></summary><div class="docblock"><p>Iterate over the original argument values.</p>
+<p>An <code>OsStr</code> on Unix-like systems is any series of bytes, regardless of whether or not they
+contain valid UTF-8. Since <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a>s in Rust are guaranteed to be valid UTF-8, a valid
+filename on a Unix system as an argument value may contain invalid UTF-8.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<h5 id="panic-4"><a class="doc-anchor" href="#panic-4">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_get_raw" title="method clap_builder::parser::ArgMatches::try_get_raw"><code>ArgMatches::try_get_raw</code></a>.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::PathBuf;
+
+<span class="kw">let </span>m = Command::new(<span class="string">"utf8"</span>)
+    .arg(<span class="macro">arg!</span>(&lt;arg&gt; ... <span class="string">"some arg"</span>).value_parser(<span class="macro">value_parser!</span>(PathBuf)))
+    .get_matches_from(<span class="macro">vec!</span>[OsString::from(<span class="string">"myprog"</span>),
+                                <span class="comment">// "Hi"
+                                </span>OsString::from_vec(<span class="macro">vec!</span>[<span class="string">b'H'</span>, <span class="string">b'i'</span>]),
+                                <span class="comment">// "{0xe9}!"
+                                </span>OsString::from_vec(<span class="macro">vec!</span>[<span class="number">0xe9</span>, <span class="string">b'!'</span>])]);
+
+<span class="kw">let </span><span class="kw-2">mut </span>itr = m.get_raw(<span class="string">"arg"</span>)
+    .expect(<span class="string">"`port`is required"</span>)
+    .into_iter();
+<span class="macro">assert_eq!</span>(itr.next(), <span class="prelude-val">Some</span>(OsStr::new(<span class="string">"Hi"</span>)));
+<span class="macro">assert_eq!</span>(itr.next(), <span class="prelude-val">Some</span>(OsStr::from_bytes(<span class="kw-2">&amp;</span>[<span class="number">0xe9</span>, <span class="string">b'!'</span>])));
+<span class="macro">assert_eq!</span>(itr.next(), <span class="prelude-val">None</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_raw_occurrences" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#365-367">source</a><h4 class="code-header">pub fn <a href="#method.get_raw_occurrences" class="fn">get_raw_occurrences</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;RawOccurrences&lt;'_&gt;&gt;</h4></section></summary><div class="docblock"><p>Iterate over the original values for each occurrence of an option.</p>
+<p>Similar to <a href="struct.ArgMatches.html#method.get_occurrences" title="method clap_builder::parser::ArgMatches::get_occurrences"><code>ArgMatches::get_occurrences</code></a> but returns raw values.</p>
+<p>An <code>OsStr</code> on Unix-like systems is any series of bytes, regardless of whether or not they
+contain valid UTF-8. Since <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a>s in Rust are guaranteed to be valid UTF-8, a valid
+filename on a Unix system as an argument value may contain invalid UTF-8.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<h5 id="panic-5"><a class="doc-anchor" href="#panic-5">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_get_raw_occurrences" title="method clap_builder::parser::ArgMatches::try_get_raw_occurrences"><code>ArgMatches::try_get_raw_occurrences</code></a>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::path::PathBuf;
+
+<span class="kw">let </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"x"</span>)
+        .short(<span class="string">'x'</span>)
+        .num_args(<span class="number">2</span>)
+        .action(ArgAction::Append)
+        .value_parser(<span class="macro">value_parser!</span>(PathBuf)))
+    .get_matches_from(<span class="macro">vec!</span>[OsString::from(<span class="string">"myprog"</span>),
+                            OsString::from(<span class="string">"-x"</span>),
+                            OsString::from(<span class="string">"a"</span>), OsString::from(<span class="string">"b"</span>),
+                            OsString::from(<span class="string">"-x"</span>),
+                            OsString::from(<span class="string">"c"</span>),
+                            <span class="comment">// "{0xe9}!"
+                            </span>OsString::from_vec(<span class="macro">vec!</span>[<span class="number">0xe9</span>, <span class="string">b'!'</span>])]);
+<span class="kw">let </span><span class="kw-2">mut </span>itr = m.get_raw_occurrences(<span class="string">"x"</span>)
+    .expect(<span class="string">"`-x`is required"</span>)
+    .map(Iterator::collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;);
+<span class="macro">assert_eq!</span>(itr.next(), <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[OsStr::new(<span class="string">"a"</span>), OsStr::new(<span class="string">"b"</span>)]));
+<span class="macro">assert_eq!</span>(itr.next(), <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[OsStr::new(<span class="string">"c"</span>), OsStr::from_bytes(<span class="kw-2">&amp;</span>[<span class="number">0xe9</span>, <span class="string">b'!'</span>])]));
+<span class="macro">assert_eq!</span>(itr.next(), <span class="prelude-val">None</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.remove_one" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#404-406">source</a><h4 class="code-header">pub fn <a href="#method.remove_one" class="fn">remove_one</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;mut self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;</h4></section></summary><div class="docblock"><p>Returns the value of a specific option or positional argument.</p>
+<p>i.e. an argument that <a href="../builder/struct.Arg.html#method.num_args" title="method clap_builder::builder::Arg::num_args">takes an additional value</a> at runtime.</p>
+<p>Returns an error if the wrong type was used.  No item will have been removed.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<p><em>NOTE:</em> This will always return <code>Some(value)</code> if <a href="../builder/struct.Arg.html#method.default_value" title="method clap_builder::builder::Arg::default_value"><code>default_value</code></a> has been set.
+<a href="struct.ArgMatches.html#method.value_source" title="method clap_builder::parser::ArgMatches::value_source"><code>ArgMatches::value_source</code></a> can be used to check if a value is present at runtime.</p>
+<h5 id="panic-6"><a class="doc-anchor" href="#panic-6">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_remove_one" title="method clap_builder::parser::ArgMatches::try_remove_one"><code>ArgMatches::try_remove_one</code></a>.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"file"</span>)
+        .required(<span class="bool-val">true</span>)
+        .action(ArgAction::Set))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"file.txt"</span>,
+    ]);
+<span class="kw">let </span>vals: String = m.remove_one(<span class="string">"file"</span>)
+    .expect(<span class="string">"`file`is required"</span>);
+<span class="macro">assert_eq!</span>(vals, <span class="string">"file.txt"</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.remove_many" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#440-445">source</a><h4 class="code-header">pub fn <a href="#method.remove_many" class="fn">remove_many</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;mut self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Values.html" title="struct clap_builder::parser::Values">Values</a>&lt;T&gt;&gt;</h4></section></summary><div class="docblock"><p>Return values of a specific option or positional argument.</p>
+<p>i.e. an argument that takes multiple values at runtime.</p>
+<p>Returns an error if the wrong type was used.  No item will have been removed.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<h5 id="panic-7"><a class="doc-anchor" href="#panic-7">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_remove_many" title="method clap_builder::parser::ArgMatches::try_remove_many"><code>ArgMatches::try_remove_many</code></a>.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"file"</span>)
+        .action(ArgAction::Append)
+        .num_args(<span class="number">1</span>..)
+        .required(<span class="bool-val">true</span>))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"file1.txt"</span>, <span class="string">"file2.txt"</span>, <span class="string">"file3.txt"</span>, <span class="string">"file4.txt"</span>,
+    ]);
+<span class="kw">let </span>vals: Vec&lt;String&gt; = m.remove_many(<span class="string">"file"</span>)
+    .expect(<span class="string">"`file`is required"</span>)
+    .collect();
+<span class="macro">assert_eq!</span>(vals, [<span class="string">"file1.txt"</span>, <span class="string">"file2.txt"</span>, <span class="string">"file3.txt"</span>, <span class="string">"file4.txt"</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.remove_occurrences" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#479-484">source</a><h4 class="code-header">pub fn <a href="#method.remove_occurrences" class="fn">remove_occurrences</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;mut self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Occurrences&lt;T&gt;&gt;</h4></section></summary><div class="docblock"><p>Return values for each occurrence of an option.</p>
+<p>Each item is itself an iterator containing the arguments passed to a single occurrence of
+the option.</p>
+<p>If the option doesn’t support multiple occurrences, or there was only a single occurrence,
+the iterator will only contain a single item.</p>
+<p>Returns <code>None</code> if the option wasn’t present.</p>
+<h5 id="panic-8"><a class="doc-anchor" href="#panic-8">§</a>Panic</h5>
+<p>If the argument definition and access mismatch.  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_remove_occurrences" title="method clap_builder::parser::ArgMatches::try_remove_occurrences"><code>ArgMatches::try_remove_occurrences</code></a>.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"x"</span>)
+        .short(<span class="string">'x'</span>)
+        .num_args(<span class="number">2</span>)
+        .action(ArgAction::Append)
+        .value_parser(<span class="macro">value_parser!</span>(String)))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"-x"</span>, <span class="string">"a"</span>, <span class="string">"b"</span>, <span class="string">"-x"</span>, <span class="string">"c"</span>, <span class="string">"d"</span>]);
+<span class="kw">let </span>vals: Vec&lt;Vec&lt;String&gt;&gt; = m.remove_occurrences(<span class="string">"x"</span>).unwrap().map(Iterator::collect).collect();
+<span class="macro">assert_eq!</span>(vals, [[<span class="string">"a"</span>, <span class="string">"b"</span>], [<span class="string">"c"</span>, <span class="string">"d"</span>]]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.contains_id" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#513-515">source</a><h4 class="code-header">pub fn <a href="#method.contains_id" class="fn">contains_id</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Check if values are present for the argument or group id</p>
+<p><em>NOTE:</em> This will always return <code>true</code> if <a href="../builder/struct.Arg.html#method.default_value" title="method clap_builder::builder::Arg::default_value"><code>default_value</code></a> has been set.
+<a href="struct.ArgMatches.html#method.value_source" title="method clap_builder::parser::ArgMatches::value_source"><code>ArgMatches::value_source</code></a> can be used to check if a value is present at runtime.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If <code>id</code> is not a valid argument or group name (debug builds).  To handle this case programmatically, see
+<a href="struct.ArgMatches.html#method.try_contains_id" title="method clap_builder::parser::ArgMatches::try_contains_id"><code>ArgMatches::try_contains_id</code></a>.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"debug"</span>)
+        .short(<span class="string">'d'</span>)
+        .action(ArgAction::SetTrue))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"-d"
+    </span>]);
+
+<span class="macro">assert!</span>(m.contains_id(<span class="string">"debug"</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ids" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#539-543">source</a><h4 class="code-header">pub fn <a href="#method.ids" class="fn">ids</a>(&amp;self) -&gt; <a class="struct" href="struct.IdsRef.html" title="struct clap_builder::parser::IdsRef">IdsRef</a>&lt;'_&gt; <a href="#" class="tooltip" data-notable-ty="IdsRef&lt;&#39;_&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Iterate over <a href="../builder/struct.Arg.html" title="struct clap_builder::builder::Arg"><code>Arg</code></a> and <a href="../builder/struct.ArgGroup.html" title="struct clap_builder::builder::ArgGroup"><code>ArgGroup</code></a> <a href="../struct.Id.html" title="struct clap_builder::Id"><code>Id</code></a>s via <a href="struct.ArgMatches.html#method.ids" title="method clap_builder::parser::ArgMatches::ids"><code>ArgMatches::ids</code></a>.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">let </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(<span class="macro">arg!</span>(--color &lt;when&gt;)
+        .value_parser([<span class="string">"auto"</span>, <span class="string">"always"</span>, <span class="string">"never"</span>]))
+    .arg(<span class="macro">arg!</span>(--config &lt;path&gt;)
+        .value_parser(<span class="macro">value_parser!</span>(std::path::PathBuf)))
+    .get_matches_from([<span class="string">"myprog"</span>, <span class="string">"--config=config.toml"</span>, <span class="string">"--color=auto"</span>]);
+<span class="macro">assert_eq!</span>(m.ids().len(), <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(
+    m.ids()
+        .map(|id| id.as_str())
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+    [<span class="string">"config"</span>, <span class="string">"color"</span>]
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.args_present" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#565-567">source</a><h4 class="code-header">pub fn <a href="#method.args_present" class="fn">args_present</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Check if any args were present on the command line</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>cmd = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"output"</span>)
+        .action(ArgAction::Set));
+
+<span class="kw">let </span>m = cmd
+    .try_get_matches_from_mut(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"something"</span>])
+    .unwrap();
+<span class="macro">assert!</span>(m.args_present());
+
+<span class="kw">let </span>m = cmd
+    .try_get_matches_from_mut(<span class="macro">vec!</span>[<span class="string">"myapp"</span>])
+    .unwrap();
+<span class="macro">assert!</span>(! m.args_present());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.value_source" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#594-598">source</a><h4 class="code-header">pub fn <a href="#method.value_source" class="fn">value_source</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="enum.ValueSource.html" title="enum clap_builder::parser::ValueSource">ValueSource</a>&gt;</h4></section></summary><div class="docblock"><p>Report where argument value came from</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>If <code>id</code> is not a valid argument or group id (debug builds).</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"debug"</span>)
+        .short(<span class="string">'d'</span>)
+        .action(ArgAction::SetTrue))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"-d"
+    </span>]);
+
+<span class="macro">assert_eq!</span>(m.value_source(<span class="string">"debug"</span>), <span class="prelude-val">Some</span>(ValueSource::CommandLine));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.index_of" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#748-752">source</a><h4 class="code-header">pub fn <a href="#method.index_of" class="fn">index_of</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;</h4></section></summary><div class="docblock"><p>The first index of that an argument showed up.</p>
+<p>Indices are similar to argv indices, but are not exactly 1:1.</p>
+<p>For flags (i.e. those arguments which don’t have an associated value), indices refer
+to occurrence of the switch, such as <code>-f</code>, or <code>--flag</code>. However, for options the indices
+refer to the <em>values</em> <code>-o val</code> would therefore not represent two distinct indices, only the
+index for <code>val</code> would be recorded. This is by design.</p>
+<p>Besides the flag/option discrepancy, the primary difference between an argv index and clap
+index, is that clap continues counting once all arguments have properly separated, whereas
+an argv index does not.</p>
+<p>The examples should clear this up.</p>
+<p><em>NOTE:</em> If an argument is allowed multiple times, this method will only give the <em>first</em>
+index.  See <a href="struct.ArgMatches.html#method.indices_of" title="method clap_builder::parser::ArgMatches::indices_of"><code>ArgMatches::indices_of</code></a>.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>If <code>id</code> is not a valid argument or group id (debug builds).</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>The argv indices are listed in the comments below. See how they correspond to the clap
+indices. Note that if it’s not listed in a clap index, this is because it’s not saved in
+in an <code>ArgMatches</code> struct for querying.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"flag"</span>)
+        .short(<span class="string">'f'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .action(ArgAction::Set))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-f"</span>, <span class="string">"-o"</span>, <span class="string">"val"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1    ^2    ^3
+           // clap indices:          ^1          ^3
+
+</span><span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag"</span>), <span class="prelude-val">Some</span>(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"option"</span>), <span class="prelude-val">Some</span>(<span class="number">3</span>));</code></pre></div>
+<p>Now notice, if we use one of the other styles of options:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"flag"</span>)
+        .short(<span class="string">'f'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .action(ArgAction::Set))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-f"</span>, <span class="string">"-o=val"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1    ^2
+           // clap indices:          ^1       ^3
+
+</span><span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag"</span>), <span class="prelude-val">Some</span>(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"option"</span>), <span class="prelude-val">Some</span>(<span class="number">3</span>));</code></pre></div>
+<p>Things become much more complicated, or clear if we look at a more complex combination of
+flags. Let’s also throw in the final option style for good measure.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"flag"</span>)
+        .short(<span class="string">'f'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"flag2"</span>)
+        .short(<span class="string">'F'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"flag3"</span>)
+        .short(<span class="string">'z'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .action(ArgAction::Set))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-fzF"</span>, <span class="string">"-oval"</span>]);
+           <span class="comment">// ARGV indices: ^0      ^1       ^2
+           // clap indices:         ^1,2,3    ^5
+           //
+           // clap sees the above as 'myapp -f -z -F -o val'
+           //                         ^0    ^1 ^2 ^3 ^4 ^5
+</span><span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag"</span>), <span class="prelude-val">Some</span>(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag2"</span>), <span class="prelude-val">Some</span>(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag3"</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"option"</span>), <span class="prelude-val">Some</span>(<span class="number">5</span>));</code></pre></div>
+<p>One final combination of flags/options to see how they combine:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"flag"</span>)
+        .short(<span class="string">'f'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"flag2"</span>)
+        .short(<span class="string">'F'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"flag3"</span>)
+        .short(<span class="string">'z'</span>)
+        .action(ArgAction::SetTrue))
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .action(ArgAction::Set))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-fzFoval"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1
+           // clap indices:          ^1,2,3^5
+           //
+           // clap sees the above as 'myapp -f -z -F -o val'
+           //                         ^0    ^1 ^2 ^3 ^4 ^5
+</span><span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag"</span>), <span class="prelude-val">Some</span>(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag2"</span>), <span class="prelude-val">Some</span>(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"flag3"</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(m.index_of(<span class="string">"option"</span>), <span class="prelude-val">Some</span>(<span class="number">5</span>));</code></pre></div>
+<p>The last part to mention is when values are sent in multiple groups with a <a href="../builder/struct.Arg.html#method.value_delimiter" title="method clap_builder::builder::Arg::value_delimiter">delimiter</a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .value_delimiter(<span class="string">','</span>)
+        .num_args(<span class="number">1</span>..))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-o=val1,val2,val3"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1
+           // clap indices:             ^2   ^3   ^4
+           //
+           // clap sees the above as 'myapp -o val1 val2 val3'
+           //                         ^0    ^1 ^2   ^3   ^4
+</span><span class="macro">assert_eq!</span>(m.index_of(<span class="string">"option"</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(m.indices_of(<span class="string">"option"</span>).unwrap().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="kw-2">&amp;</span>[<span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.indices_of" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#833-840">source</a><h4 class="code-header">pub fn <a href="#method.indices_of" class="fn">indices_of</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Indices.html" title="struct clap_builder::parser::Indices">Indices</a>&lt;'_&gt;&gt;</h4></section></summary><div class="docblock"><p>All indices an argument appeared at when parsing.</p>
+<p>Indices are similar to argv indices, but are not exactly 1:1.</p>
+<p>For flags (i.e. those arguments which don’t have an associated value), indices refer
+to occurrence of the switch, such as <code>-f</code>, or <code>--flag</code>. However, for options the indices
+refer to the <em>values</em> <code>-o val</code> would therefore not represent two distinct indices, only the
+index for <code>val</code> would be recorded. This is by design.</p>
+<p><em>NOTE:</em> For more information about how clap indices compared to argv indices, see
+<a href="struct.ArgMatches.html#method.index_of" title="method clap_builder::parser::ArgMatches::index_of"><code>ArgMatches::index_of</code></a></p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>If <code>id</code> is not a valid argument or group id (debug builds).</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .value_delimiter(<span class="string">','</span>))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-o=val1,val2,val3"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1
+           // clap indices:             ^2   ^3   ^4
+           //
+           // clap sees the above as 'myapp -o val1 val2 val3'
+           //                         ^0    ^1 ^2   ^3   ^4
+</span><span class="macro">assert_eq!</span>(m.indices_of(<span class="string">"option"</span>).unwrap().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="kw-2">&amp;</span>[<span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);</code></pre></div>
+<p>Another quick example is when flags and options are used together</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .action(ArgAction::Set)
+        .action(ArgAction::Append))
+    .arg(Arg::new(<span class="string">"flag"</span>)
+        .short(<span class="string">'f'</span>)
+        .action(ArgAction::Count))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-o"</span>, <span class="string">"val1"</span>, <span class="string">"-f"</span>, <span class="string">"-o"</span>, <span class="string">"val2"</span>, <span class="string">"-f"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1    ^2      ^3    ^4    ^5      ^6
+           // clap indices:                ^2      ^3          ^5      ^6
+
+</span><span class="macro">assert_eq!</span>(m.indices_of(<span class="string">"option"</span>).unwrap().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="kw-2">&amp;</span>[<span class="number">2</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(m.indices_of(<span class="string">"flag"</span>).unwrap().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="kw-2">&amp;</span>[<span class="number">6</span>]);</code></pre></div>
+<p>One final example, which is an odd case; if we <em>don’t</em> use  value delimiter as we did with
+the first example above instead of <code>val1</code>, <code>val2</code> and <code>val3</code> all being distinc values, they
+would all be a single value of <code>val1,val2,val3</code>, in which case they’d only receive a single
+index.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>m = Command::new(<span class="string">"myapp"</span>)
+    .arg(Arg::new(<span class="string">"option"</span>)
+        .short(<span class="string">'o'</span>)
+        .action(ArgAction::Set)
+        .num_args(<span class="number">1</span>..))
+    .get_matches_from(<span class="macro">vec!</span>[<span class="string">"myapp"</span>, <span class="string">"-o=val1,val2,val3"</span>]);
+           <span class="comment">// ARGV indices: ^0       ^1
+           // clap indices:             ^2
+           //
+           // clap sees the above as 'myapp -o "val1,val2,val3"'
+           //                         ^0    ^1  ^2
+</span><span class="macro">assert_eq!</span>(m.indices_of(<span class="string">"option"</span>).unwrap().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(), <span class="kw-2">&amp;</span>[<span class="number">2</span>]);</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-ArgMatches-1" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#844-1054">source</a><a href="#impl-ArgMatches-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="docblock"><h4 id="subcommands"><a class="doc-anchor" href="#subcommands">§</a>Subcommands</h4></div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.subcommand" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#900-902">source</a><h4 class="code-header">pub fn <a href="#method.subcommand" class="fn">subcommand</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, &amp;<a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a>)&gt;</h4></section></summary><div class="docblock"><p>The name and <code>ArgMatches</code> of the current <a href="../builder/struct.Command.html#method.subcommand" title="method clap_builder::builder::Command::subcommand">subcommand</a>.</p>
+<p>Subcommand values are put in a child <a href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches"><code>ArgMatches</code></a></p>
+<p>Returns <code>None</code> if the subcommand wasn’t present at runtime,</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="kw">let </span>app_m = Command::new(<span class="string">"git"</span>)
+     .subcommand(Command::new(<span class="string">"clone"</span>))
+     .subcommand(Command::new(<span class="string">"push"</span>))
+     .subcommand(Command::new(<span class="string">"commit"</span>))
+     .get_matches();
+
+<span class="kw">match </span>app_m.subcommand() {
+    <span class="prelude-val">Some</span>((<span class="string">"clone"</span>,  sub_m)) =&gt; {}, <span class="comment">// clone was used
+    </span><span class="prelude-val">Some</span>((<span class="string">"push"</span>,   sub_m)) =&gt; {}, <span class="comment">// push was used
+    </span><span class="prelude-val">Some</span>((<span class="string">"commit"</span>, sub_m)) =&gt; {}, <span class="comment">// commit was used
+    </span><span class="kw">_                       </span>=&gt; {}, <span class="comment">// Either no subcommand or one not tested for...
+</span>}</code></pre></div>
+<p>Another useful scenario is when you want to support third party, or external, subcommands.
+In these cases you can’t know the subcommand name ahead of time, so use a variable instead
+with pattern matching!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Assume there is an external subcommand named "subcmd"
+</span><span class="kw">let </span>app_m = Command::new(<span class="string">"myprog"</span>)
+    .allow_external_subcommands(<span class="bool-val">true</span>)
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"subcmd"</span>, <span class="string">"--option"</span>, <span class="string">"value"</span>, <span class="string">"-fff"</span>, <span class="string">"--flag"
+    </span>]);
+
+<span class="comment">// All trailing arguments will be stored under the subcommand's sub-matches using an empty
+// string argument name
+</span><span class="kw">match </span>app_m.subcommand() {
+    <span class="prelude-val">Some</span>((external, sub_m)) =&gt; {
+         <span class="kw">let </span>ext_args: Vec&lt;<span class="kw-2">&amp;</span>OsStr&gt; = sub_m.get_many::&lt;OsString&gt;(<span class="string">""</span>)
+            .unwrap().map(|s| s.as_os_str()).collect();
+         <span class="macro">assert_eq!</span>(external, <span class="string">"subcmd"</span>);
+         <span class="macro">assert_eq!</span>(ext_args, [<span class="string">"--option"</span>, <span class="string">"value"</span>, <span class="string">"-fff"</span>, <span class="string">"--flag"</span>]);
+    },
+    <span class="kw">_ </span>=&gt; {},
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.remove_subcommand" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#960-962">source</a><h4 class="code-header">pub fn <a href="#method.remove_subcommand" class="fn">remove_subcommand</a>(&amp;mut self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;(<a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a>)&gt;</h4></section></summary><div class="docblock"><p>Return the name and <code>ArgMatches</code> of the current <a href="../builder/struct.Command.html#method.subcommand" title="method clap_builder::builder::Command::subcommand">subcommand</a>.</p>
+<p>Subcommand values are put in a child <a href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches"><code>ArgMatches</code></a></p>
+<p>Returns <code>None</code> if the subcommand wasn’t present at runtime,</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="kw">let </span><span class="kw-2">mut </span>app_m = Command::new(<span class="string">"git"</span>)
+     .subcommand(Command::new(<span class="string">"clone"</span>))
+     .subcommand(Command::new(<span class="string">"push"</span>))
+     .subcommand(Command::new(<span class="string">"commit"</span>))
+     .subcommand_required(<span class="bool-val">true</span>)
+     .get_matches();
+
+<span class="kw">let </span>(name, sub_m) = app_m.remove_subcommand().expect(<span class="string">"required"</span>);
+<span class="kw">match </span>(name.as_str(), sub_m) {
+    (<span class="string">"clone"</span>,  sub_m) =&gt; {}, <span class="comment">// clone was used
+    </span>(<span class="string">"push"</span>,   sub_m) =&gt; {}, <span class="comment">// push was used
+    </span>(<span class="string">"commit"</span>, sub_m) =&gt; {}, <span class="comment">// commit was used
+    </span>(name, <span class="kw">_</span>)         =&gt; <span class="macro">unimplemented!</span>(<span class="string">"{name}"</span>),
+}</code></pre></div>
+<p>Another useful scenario is when you want to support third party, or external, subcommands.
+In these cases you can’t know the subcommand name ahead of time, so use a variable instead
+with pattern matching!</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Assume there is an external subcommand named "subcmd"
+</span><span class="kw">let </span><span class="kw-2">mut </span>app_m = Command::new(<span class="string">"myprog"</span>)
+    .allow_external_subcommands(<span class="bool-val">true</span>)
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"subcmd"</span>, <span class="string">"--option"</span>, <span class="string">"value"</span>, <span class="string">"-fff"</span>, <span class="string">"--flag"
+    </span>]);
+
+<span class="comment">// All trailing arguments will be stored under the subcommand's sub-matches using an empty
+// string argument name
+</span><span class="kw">match </span>app_m.remove_subcommand() {
+    <span class="prelude-val">Some</span>((external, <span class="kw-2">mut </span>sub_m)) =&gt; {
+         <span class="kw">let </span>ext_args: Vec&lt;OsString&gt; = sub_m.remove_many(<span class="string">""</span>)
+            .expect(<span class="string">"`file`is required"</span>)
+            .collect();
+         <span class="macro">assert_eq!</span>(external, <span class="string">"subcmd"</span>);
+         <span class="macro">assert_eq!</span>(ext_args, [<span class="string">"--option"</span>, <span class="string">"value"</span>, <span class="string">"-fff"</span>, <span class="string">"--flag"</span>]);
+    },
+    <span class="kw">_ </span>=&gt; {},
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.subcommand_matches" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1004-1006">source</a><h4 class="code-header">pub fn <a href="#method.subcommand_matches" class="fn">subcommand_matches</a>(&amp;self, name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a>&gt;</h4></section></summary><div class="docblock"><p>The <code>ArgMatches</code> for the current <a href="../builder/struct.Command.html#method.subcommand" title="method clap_builder::builder::Command::subcommand">subcommand</a>.</p>
+<p>Subcommand values are put in a child <a href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches"><code>ArgMatches</code></a></p>
+<p>Returns <code>None</code> if the subcommand wasn’t present at runtime,</p>
+<h5 id="panics-5"><a class="doc-anchor" href="#panics-5">§</a>Panics</h5>
+<p>If <code>id</code> is not a valid subcommand (debug builds).</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>app_m = Command::new(<span class="string">"myprog"</span>)
+    .arg(Arg::new(<span class="string">"debug"</span>)
+        .short(<span class="string">'d'</span>)
+        .action(ArgAction::SetTrue)
+    )
+    .subcommand(Command::new(<span class="string">"test"</span>)
+        .arg(Arg::new(<span class="string">"opt"</span>)
+            .long(<span class="string">"option"</span>)
+            .action(ArgAction::Set)))
+    .get_matches_from(<span class="macro">vec!</span>[
+        <span class="string">"myprog"</span>, <span class="string">"-d"</span>, <span class="string">"test"</span>, <span class="string">"--option"</span>, <span class="string">"val"
+    </span>]);
+
+<span class="comment">// Both parent commands, and child subcommands can have arguments present at the same times
+</span><span class="macro">assert!</span>(app_m.get_flag(<span class="string">"debug"</span>));
+
+<span class="comment">// Get the subcommand's ArgMatches instance
+</span><span class="kw">if let </span><span class="prelude-val">Some</span>(sub_m) = app_m.subcommand_matches(<span class="string">"test"</span>) {
+    <span class="comment">// Use the struct like normal
+    </span><span class="macro">assert_eq!</span>(sub_m.get_one::&lt;String&gt;(<span class="string">"opt"</span>).map(|s| s.as_str()), <span class="prelude-val">Some</span>(<span class="string">"val"</span>));
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.subcommand_name" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1033-1035">source</a><h4 class="code-header">pub fn <a href="#method.subcommand_name" class="fn">subcommand_name</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;</h4></section></summary><div class="docblock"><p>The name of the current <a href="../builder/struct.Command.html#method.subcommand" title="method clap_builder::builder::Command::subcommand">subcommand</a>.</p>
+<p>Returns <code>None</code> if the subcommand wasn’t present at runtime,</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="kw">let </span>app_m = Command::new(<span class="string">"git"</span>)
+     .subcommand(Command::new(<span class="string">"clone"</span>))
+     .subcommand(Command::new(<span class="string">"push"</span>))
+     .subcommand(Command::new(<span class="string">"commit"</span>))
+     .get_matches();
+
+<span class="kw">match </span>app_m.subcommand_name() {
+    <span class="prelude-val">Some</span>(<span class="string">"clone"</span>)  =&gt; {}, <span class="comment">// clone was used
+    </span><span class="prelude-val">Some</span>(<span class="string">"push"</span>)   =&gt; {}, <span class="comment">// push was used
+    </span><span class="prelude-val">Some</span>(<span class="string">"commit"</span>) =&gt; {}, <span class="comment">// commit was used
+    </span><span class="kw">_              </span>=&gt; {}, <span class="comment">// Either no subcommand or one not tested for...
+</span>}</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-ArgMatches-2" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1057-1204">source</a><a href="#impl-ArgMatches-2" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="docblock"><h4 id="advanced"><a class="doc-anchor" href="#advanced">§</a>Advanced</h4></div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.try_get_one" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1059-1074">source</a><h4 class="code-header">pub fn <a href="#method.try_get_one" class="fn">try_get_one</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.get_one" title="method clap_builder::parser::ArgMatches::get_one"><code>ArgMatches::get_one</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_get_many" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1077-1093">source</a><h4 class="code-header">pub fn <a href="#method.try_get_many" class="fn">try_get_many</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.ValuesRef.html" title="struct clap_builder::parser::ValuesRef">ValuesRef</a>&lt;'_, T&gt;&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.get_many" title="method clap_builder::parser::ArgMatches::get_many"><code>ArgMatches::get_many</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_get_occurrences" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1096-1110">source</a><h4 class="code-header">pub fn <a href="#method.try_get_occurrences" class="fn">try_get_occurrences</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;OccurrencesRef&lt;'_, T&gt;&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.get_occurrences" title="method clap_builder::parser::ArgMatches::get_occurrences"><code>ArgMatches::get_occurrences</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_get_raw" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1113-1125">source</a><h4 class="code-header">pub fn <a href="#method.try_get_raw" class="fn">try_get_raw</a>(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.RawValues.html" title="struct clap_builder::parser::RawValues">RawValues</a>&lt;'_&gt;&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.get_raw" title="method clap_builder::parser::ArgMatches::get_raw"><code>ArgMatches::get_raw</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_get_raw_occurrences" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1128-1143">source</a><h4 class="code-header">pub fn <a href="#method.try_get_raw_occurrences" class="fn">try_get_raw_occurrences</a>(
+    &amp;self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;RawOccurrences&lt;'_&gt;&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.get_raw_occurrences" title="method clap_builder::parser::ArgMatches::get_raw_occurrences"><code>ArgMatches::get_raw_occurrences</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_remove_one" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1146-1158">source</a><h4 class="code-header">pub fn <a href="#method.try_remove_one" class="fn">try_remove_one</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;mut self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.remove_one" title="method clap_builder::parser::ArgMatches::remove_one"><code>ArgMatches::remove_one</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_remove_many" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1161-1177">source</a><h4 class="code-header">pub fn <a href="#method.try_remove_many" class="fn">try_remove_many</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;mut self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Values.html" title="struct clap_builder::parser::Values">Values</a>&lt;T&gt;&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.remove_many" title="method clap_builder::parser::ArgMatches::remove_many"><code>ArgMatches::remove_many</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_remove_occurrences" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1180-1195">source</a><h4 class="code-header">pub fn <a href="#method.try_remove_occurrences" class="fn">try_remove_occurrences</a>&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static&gt;(
+    &amp;mut self,
+    id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Occurrences&lt;T&gt;&gt;, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.remove_occurrences" title="method clap_builder::parser::ArgMatches::remove_occurrences"><code>ArgMatches::remove_occurrences</code></a></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_contains_id" class="method"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#1198-1203">source</a><h4 class="code-header">pub fn <a href="#method.try_contains_id" class="fn">try_contains_id</a>(&amp;self, id: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, <a class="enum" href="enum.MatchesError.html" title="enum clap_builder::parser::MatchesError">MatchesError</a>&gt;</h4></section></summary><div class="docblock"><p>Non-panicking version of <a href="struct.ArgMatches.html#method.contains_id" title="method clap_builder::parser::ArgMatches::contains_id"><code>ArgMatches::contains_id</code></a></p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#impl-Clone-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#impl-Debug-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#impl-Default-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-PartialEq-for-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#impl-PartialEq-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq">PartialEq</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.eq" class="method trait-impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#method.eq" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html#tymethod.eq" class="fn">eq</a>(&amp;self, other: &amp;<a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>This method tests for <code>self</code> and <code>other</code> values to be equal, and is used
+by <code>==</code>.</div></details><details class="toggle method-toggle" open><summary><section id="method.ne" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/cmp.rs.html#262">source</a></span><a href="#method.ne" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.PartialEq.html#method.ne" class="fn">ne</a>(&amp;self, other: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Rhs</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>This method tests for <code>!=</code>. The default implementation is almost always
+sufficient, and should not be overridden without very good reason.</div></details></div></details><section id="impl-Eq-for-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#impl-Eq-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section><section id="impl-StructuralPartialEq-for-ArgMatches" class="impl"><a class="src rightside" href="../../src/clap_builder/parser/matches/arg_matches.rs.html#66">source</a><a href="#impl-StructuralPartialEq-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.StructuralPartialEq.html" title="trait core::marker::StructuralPartialEq">StructuralPartialEq</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-ArgMatches" class="impl"><a href="#impl-Freeze-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section><section id="impl-RefUnwindSafe-for-ArgMatches" class="impl"><a href="#impl-RefUnwindSafe-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section><section id="impl-Send-for-ArgMatches" class="impl"><a href="#impl-Send-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section><section id="impl-Sync-for-ArgMatches" class="impl"><a href="#impl-Sync-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section><section id="impl-Unpin-for-ArgMatches" class="impl"><a href="#impl-Unpin-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section><section id="impl-UnwindSafe-for-ArgMatches" class="impl"><a href="#impl-UnwindSafe-for-ArgMatches" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.ArgMatches.html" title="struct clap_builder::parser::ArgMatches">ArgMatches</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"IdsRef<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.IdsRef.html\" title=\"struct clap_builder::parser::IdsRef\">IdsRef</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.IdsRef.html\" title=\"struct clap_builder::parser::IdsRef\">IdsRef</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = &amp;'a <a class=\"struct\" href=\"../struct.Id.html\" title=\"struct clap_builder::Id\">Id</a>;</div>"}</script></section></div></main></body></html>

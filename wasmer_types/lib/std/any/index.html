@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Utilities for dynamic typing or type reflection."><title>wasmer_types::lib::std::any - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_types</a><span class="version">4.4.0</span></h2></div><h2 class="location"><a href="#">Module any</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In wasmer_types::lib::std</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a class="mod" href="#">any</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/lib.rs.html#378">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Utilities for dynamic typing or type reflection.</p>
+<h2 id="any-and-typeid"><a class="doc-anchor" href="#any-and-typeid">§</a><code>Any</code> and <code>TypeId</code></h2>
+<p><code>Any</code> itself can be used to get a <code>TypeId</code>, and has more features when used
+as a trait object. As <code>&amp;dyn Any</code> (a borrowed trait object), it has the <code>is</code>
+and <code>downcast_ref</code> methods, to test if the contained value is of a given type,
+and to get a reference to the inner value as a type. As <code>&amp;mut dyn Any</code>, there
+is also the <code>downcast_mut</code> method, for getting a mutable reference to the
+inner value. <code>Box&lt;dyn Any&gt;</code> adds the <code>downcast</code> method, which attempts to
+convert to a <code>Box&lt;T&gt;</code>. See the <a href="../../std/boxed/struct.Box.html"><code>Box</code></a> documentation for the full details.</p>
+<p>Note that <code>&amp;dyn Any</code> is limited to testing whether a value is of a specified
+concrete type, and cannot be used to test whether a type implements a trait.</p>
+<h2 id="smart-pointers-and-dyn-any"><a class="doc-anchor" href="#smart-pointers-and-dyn-any">§</a>Smart pointers and <code>dyn Any</code></h2>
+<p>One piece of behavior to keep in mind when using <code>Any</code> as a trait object,
+especially with types like <code>Box&lt;dyn Any&gt;</code> or <code>Arc&lt;dyn Any&gt;</code>, is that simply
+calling <code>.type_id()</code> on the value will produce the <code>TypeId</code> of the
+<em>container</em>, not the underlying trait object. This can be avoided by
+converting the smart pointer into a <code>&amp;dyn Any</code> instead, which will return
+the object’s <code>TypeId</code>. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::any::{Any, TypeId};
+
+<span class="kw">let </span>boxed: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(<span class="number">3_i32</span>);
+
+<span class="comment">// You're more likely to want this:
+</span><span class="kw">let </span>actual_id = (<span class="kw-2">&amp;*</span>boxed).type_id();
+<span class="comment">// ... than this:
+</span><span class="kw">let </span>boxed_id = boxed.type_id();
+
+<span class="macro">assert_eq!</span>(actual_id, TypeId::of::&lt;i32&gt;());
+<span class="macro">assert_eq!</span>(boxed_id, TypeId::of::&lt;Box&lt;<span class="kw">dyn </span>Any&gt;&gt;());</code></pre></div>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3>
+<p>Consider a situation where we want to log a value passed to a function.
+We know the value we’re working on implements <code>Debug</code>, but we don’t know its
+concrete type. We want to give special treatment to certain types: in this
+case printing out the length of <code>String</code> values prior to their value.
+We don’t know the concrete type of our value at compile time, so we need to
+use runtime reflection instead.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::any::Any;
+
+<span class="comment">// Logger function for any type that implements `Debug`.
+</span><span class="kw">fn </span>log&lt;T: Any + Debug&gt;(value: <span class="kw-2">&amp;</span>T) {
+    <span class="kw">let </span>value_any = value <span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>Any;
+
+    <span class="comment">// Try to convert our value to a `String`. If successful, we want to
+    // output the `String`'s length as well as its value. If not, it's a
+    // different type: just print it out unadorned.
+    </span><span class="kw">match </span>value_any.downcast_ref::&lt;String&gt;() {
+        <span class="prelude-val">Some</span>(as_string) =&gt; {
+            <span class="macro">println!</span>(<span class="string">"String ({}): {}"</span>, as_string.len(), as_string);
+        }
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="macro">println!</span>(<span class="string">"{value:?}"</span>);
+        }
+    }
+}
+
+<span class="comment">// This function wants to log its parameter out prior to doing work with it.
+</span><span class="kw">fn </span>do_work&lt;T: Any + Debug&gt;(value: <span class="kw-2">&amp;</span>T) {
+    log(value);
+    <span class="comment">// ...do some other work
+</span>}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>my_string = <span class="string">"Hello World"</span>.to_string();
+    do_work(<span class="kw-2">&amp;</span>my_string);
+
+    <span class="kw">let </span>my_i8: i8 = <span class="number">100</span>;
+    do_work(<span class="kw-2">&amp;</span>my_i8);
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.TypeId.html" title="struct wasmer_types::lib::std::any::TypeId">TypeId</a></div><div class="desc docblock-short">A <code>TypeId</code> represents a globally unique identifier for a type.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Any.html" title="trait wasmer_types::lib::std::any::Any">Any</a></div><div class="desc docblock-short">A trait to emulate dynamic typing.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.type_name.html" title="fn wasmer_types::lib::std::any::type_name">type_name</a></div><div class="desc docblock-short">Returns the name of a type as a string slice.</div></li><li><div class="item-name"><a class="fn" href="fn.type_name_of_val.html" title="fn wasmer_types::lib::std::any::type_name_of_val">type_name_of_val</a></div><div class="desc docblock-short">Returns the type name of the pointed-to value as a string slice.</div></li></ul></section></div></main></body></html>

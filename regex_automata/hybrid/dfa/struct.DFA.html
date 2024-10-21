@@ -1,0 +1,1192 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A hybrid NFA/DFA (also called a “lazy DFA”) for regex searching."><title>DFA in regex_automata::hybrid::dfa - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">DFA</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.always_match">always_match</a></li><li><a href="#method.builder">builder</a></li><li><a href="#method.byte_classes">byte_classes</a></li><li><a href="#method.config">config</a></li><li><a href="#method.create_cache">create_cache</a></li><li><a href="#method.get_config">get_config</a></li><li><a href="#method.get_nfa">get_nfa</a></li><li><a href="#method.match_len">match_len</a></li><li><a href="#method.match_pattern">match_pattern</a></li><li><a href="#method.memory_usage">memory_usage</a></li><li><a href="#method.never_match">never_match</a></li><li><a href="#method.new">new</a></li><li><a href="#method.new_many">new_many</a></li><li><a href="#method.next_eoi_state">next_eoi_state</a></li><li><a href="#method.next_state">next_state</a></li><li><a href="#method.next_state_untagged">next_state_untagged</a></li><li><a href="#method.next_state_untagged_unchecked">next_state_untagged_unchecked</a></li><li><a href="#method.pattern_len">pattern_len</a></li><li><a href="#method.reset_cache">reset_cache</a></li><li><a href="#method.start_state">start_state</a></li><li><a href="#method.start_state_forward">start_state_forward</a></li><li><a href="#method.start_state_reverse">start_state_reverse</a></li><li><a href="#method.try_search_fwd">try_search_fwd</a></li><li><a href="#method.try_search_overlapping_fwd">try_search_overlapping_fwd</a></li><li><a href="#method.try_search_overlapping_rev">try_search_overlapping_rev</a></li><li><a href="#method.try_search_rev">try_search_rev</a></li><li><a href="#method.try_which_overlapping_matches">try_which_overlapping_matches</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-DFA">Clone</a></li><li><a href="#impl-Debug-for-DFA">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-DFA">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-DFA">RefUnwindSafe</a></li><li><a href="#impl-Send-for-DFA">Send</a></li><li><a href="#impl-Sync-for-DFA">Sync</a></li><li><a href="#impl-Unpin-for-DFA">Unpin</a></li><li><a href="#impl-UnwindSafe-for-DFA">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::hybrid::dfa</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">hybrid</a>::<wbr><a href="index.html">dfa</a>::<wbr><a class="struct" href="#">DFA</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/hybrid/dfa.rs.html#118-126">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct DFA { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A hybrid NFA/DFA (also called a “lazy DFA”) for regex searching.</p>
+<p>A lazy DFA is a DFA that builds itself at search time. It otherwise has
+very similar characteristics as a <a href="crate::dfa::dense::DFA"><code>dense::DFA</code></a>.
+Indeed, both support precisely the same regex features with precisely the
+same semantics.</p>
+<p>Where as a <code>dense::DFA</code> must be completely built to handle any input before
+it may be used for search, a lazy DFA starts off effectively empty. During
+a search, a lazy DFA will build itself depending on whether it has already
+computed the next transition or not. If it has, then it looks a lot like
+a <code>dense::DFA</code> internally: it does a very fast table based access to find
+the next transition. Otherwise, if the state hasn’t been computed, then it
+does determinization <em>for that specific transition</em> to compute the next DFA
+state.</p>
+<p>The main selling point of a lazy DFA is that, in practice, it has
+the performance profile of a <code>dense::DFA</code> without the weakness of it
+taking worst case exponential time to build. Indeed, for each byte of
+input, the lazy DFA will construct as most one new DFA state. Thus, a
+lazy DFA achieves worst case <code>O(mn)</code> time for regex search (where <code>m ~ pattern.len()</code> and <code>n ~ haystack.len()</code>).</p>
+<p>The main downsides of a lazy DFA are:</p>
+<ol>
+<li>It requires mutable “cache” space during search. This is where the
+transition table, among other things, is stored.</li>
+<li>In pathological cases (e.g., if the cache is too small), it will run
+out of room and either require a bigger cache capacity or will repeatedly
+clear the cache and thus repeatedly regenerate DFA states. Overall, this
+will tend to be slower than a typical NFA simulation.</li>
+</ol>
+<h2 id="capabilities"><a class="doc-anchor" href="#capabilities">§</a>Capabilities</h2>
+<p>Like a <code>dense::DFA</code>, a single lazy DFA fundamentally supports the following
+operations:</p>
+<ol>
+<li>Detection of a match.</li>
+<li>Location of the end of a match.</li>
+<li>In the case of a lazy DFA with multiple patterns, which pattern matched
+is reported as well.</li>
+</ol>
+<p>A notable absence from the above list of capabilities is the location of
+the <em>start</em> of a match. In order to provide both the start and end of
+a match, <em>two</em> lazy DFAs are required. This functionality is provided by a
+<a href="../regex/struct.Regex.html" title="struct regex_automata::hybrid::regex::Regex"><code>Regex</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This shows how to build a lazy DFA with the default configuration and
+execute a search. Notice how, in contrast to a <code>dense::DFA</code>, we must create
+a cache and pass it to our search routine.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">"foo[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">8</span>));
+<span class="macro">assert_eq!</span>(expected, dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo12345"</span>))<span class="question-mark">?</span>,
+);</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-DFA" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#128-455">source</a><a href="#impl-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#151-153">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(pattern: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::hybrid::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Parse the given regular expression using a default configuration and
+return the corresponding lazy DFA.</p>
+<p>If you want a non-default configuration, then use the <a href="struct.Builder.html" title="struct regex_automata::hybrid::dfa::Builder"><code>Builder</code></a> to
+set your own configuration.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">"foo[0-9]+bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">11</span>);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(expected),
+    dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo12345bar"</span>))<span class="question-mark">?</span>,
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_many" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#177-179">source</a><h4 class="code-header">pub fn <a href="#method.new_many" class="fn">new_many</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;&gt;(patterns: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[P]</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::hybrid::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Parse the given regular expressions using a default configuration and
+return the corresponding lazy multi-DFA.</p>
+<p>If you want a non-default configuration, then use the <a href="struct.Builder.html" title="struct regex_automata::hybrid::dfa::Builder"><code>Builder</code></a> to
+set your own configuration.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>dfa = DFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[0-9]+"</span>, <span class="string">"[a-z]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">1</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(expected),
+    dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo12345bar"</span>))<span class="question-mark">?</span>,
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.always_match" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#200-203">source</a><h4 class="code-header">pub fn <a href="#method.always_match" class="fn">always_match</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::hybrid::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new lazy DFA that matches every input.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>dfa = DFA::always_match()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">""</span>))<span class="question-mark">?</span>,
+);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo"</span>))<span class="question-mark">?</span>,
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.never_match" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#219-222">source</a><h4 class="code-header">pub fn <a href="#method.never_match" class="fn">never_match</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::hybrid::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new lazy DFA that never matches any input.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input};
+
+<span class="kw">let </span>dfa = DFA::never_match()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">""</span>))<span class="question-mark">?</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo"</span>))<span class="question-mark">?</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.config" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#258-260">source</a><h4 class="code-header">pub fn <a href="#method.config" class="fn">config</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Return a default configuration for a <code>DFA</code>.</p>
+<p>This is a convenience routine to avoid needing to import the <a href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config"><code>Config</code></a>
+type when customizing the construction of a lazy DFA.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>This example shows how to build a lazy DFA that heuristically supports
+Unicode word boundaries.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, MatchError, Input};
+
+<span class="kw">let </span>re = DFA::builder()
+    .configure(DFA::config().unicode_word_boundary(<span class="bool-val">true</span>))
+    .build(<span class="string">r"\b\w+\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="comment">// Since our haystack is all ASCII, the DFA search sees then and knows
+// it is legal to interpret Unicode word boundaries as ASCII word
+// boundaries.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"!!foo!!"</span>);
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">5</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>);
+
+<span class="comment">// But if our haystack contains non-ASCII, then the search will fail
+// with an error.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"!!βββ!!"</span>);
+<span class="kw">let </span>expected = MatchError::quit(<span class="string">b'\xCE'</span>, <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Err</span>(expected), re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.builder" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#288-290">source</a><h4 class="code-header">pub fn <a href="#method.builder" class="fn">builder</a>() -&gt; <a class="struct" href="struct.Builder.html" title="struct regex_automata::hybrid::dfa::Builder">Builder</a></h4></section></summary><div class="docblock"><p>Return a builder for configuring the construction of a <code>Regex</code>.</p>
+<p>This is a convenience routine to avoid needing to import the
+<a href="struct.Builder.html" title="struct regex_automata::hybrid::dfa::Builder"><code>Builder</code></a> type in common cases.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows how to use the builder to disable UTF-8 mode
+everywhere for lazy DFAs.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, util::syntax, HalfMatch, Input};
+
+<span class="kw">let </span>re = DFA::builder()
+    .syntax(syntax::Config::new().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">r"foo(?-u:[^b])ar.*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">b"\xFEfoo\xFFarzz\xE2\x98\xFF\n"</span>);
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">9</span>));
+<span class="kw">let </span>got = re.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_cache" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#298-300">source</a><h4 class="code-header">pub fn <a href="#method.create_cache" class="fn">create_cache</a>(&amp;self) -&gt; <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a></h4></section></summary><div class="docblock"><p>Create a new cache for this lazy DFA.</p>
+<p>The cache returned should only be used for searches for this
+lazy DFA. If you want to reuse the cache for another DFA, then
+you must call <a href="struct.Cache.html#method.reset" title="method regex_automata::hybrid::dfa::Cache::reset"><code>Cache::reset</code></a> with that DFA (or, equivalently,
+<a href="struct.DFA.html#method.reset_cache" title="method regex_automata::hybrid::dfa::DFA::reset_cache"><code>DFA::reset_cache</code></a>).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.reset_cache" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#346-348">source</a><h4 class="code-header">pub fn <a href="#method.reset_cache" class="fn">reset_cache</a>(&amp;self, cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>)</h4></section></summary><div class="docblock"><p>Reset the given cache such that it can be used for searching with the
+this lazy DFA (and only this DFA).</p>
+<p>A cache reset permits reusing memory already allocated in this cache
+with a different lazy DFA.</p>
+<p>Resetting a cache sets its “clear count” to 0. This is relevant if the
+lazy DFA has been configured to “give up” after it has cleared the
+cache a certain number of times.</p>
+<p>Any lazy state ID generated by the cache prior to resetting it is
+invalid after the reset.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This shows how to re-purpose a cache for use with a different DFA.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>dfa1 = DFA::new(<span class="string">r"\w"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>dfa2 = DFA::new(<span class="string">r"\W"</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa1.create_cache();
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">2</span>)),
+    dfa1.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"Δ"</span>))<span class="question-mark">?</span>,
+);
+
+<span class="comment">// Using 'cache' with dfa2 is not allowed. It may result in panics or
+// incorrect results. In order to re-purpose the cache, we must reset
+// it with the DFA we'd like to use it with.
+//
+// Similarly, after this reset, using the cache with 'dfa1' is also not
+// allowed.
+</span>dfa2.reset_cache(<span class="kw-2">&amp;mut </span>cache);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>)),
+    dfa2.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"☃"</span>))<span class="question-mark">?</span>,
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pattern_len" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#385-387">source</a><h4 class="code-header">pub fn <a href="#method.pattern_len" class="fn">pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of patterns compiled into this lazy DFA.</p>
+<p>In the case of a DFA that contains no patterns, this returns <code>0</code>.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<p>This example shows the pattern length for a DFA that never matches:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::hybrid::dfa::DFA;
+
+<span class="kw">let </span>dfa = DFA::never_match()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(dfa.pattern_len(), <span class="number">0</span>);</code></pre></div>
+<p>And another example for a DFA that matches at every position:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::hybrid::dfa::DFA;
+
+<span class="kw">let </span>dfa = DFA::always_match()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(dfa.pattern_len(), <span class="number">1</span>);</code></pre></div>
+<p>And finally, a DFA that was constructed from multiple patterns:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::hybrid::dfa::DFA;
+
+<span class="kw">let </span>dfa = DFA::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[0-9]+"</span>, <span class="string">"[a-z]+"</span>, <span class="string">"[A-Z]+"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(dfa.pattern_len(), <span class="number">3</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.byte_classes" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#402-404">source</a><h4 class="code-header">pub fn <a href="#method.byte_classes" class="fn">byte_classes</a>(&amp;self) -&gt; &amp;<a class="struct" href="../../util/alphabet/struct.ByteClasses.html" title="struct regex_automata::util::alphabet::ByteClasses">ByteClasses</a></h4></section></summary><div class="docblock"><p>Returns the equivalence classes that make up the alphabet for this DFA.</p>
+<p>Unless <a href="struct.Config.html#method.byte_classes" title="method regex_automata::hybrid::dfa::Config::byte_classes"><code>Config::byte_classes</code></a> was disabled, it is possible that
+multiple distinct bytes are grouped into the same equivalence class
+if it is impossible for them to discriminate between a match and a
+non-match. This has the effect of reducing the overall alphabet size
+and in turn potentially substantially reducing the size of the DFA’s
+transition table.</p>
+<p>The downside of using equivalence classes like this is that every state
+transition will automatically use this map to convert an arbitrary
+byte to its corresponding equivalence class. In practice this has a
+negligible impact on performance.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_config" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#407-409">source</a><h4 class="code-header">pub fn <a href="#method.get_config" class="fn">get_config</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.Config.html" title="struct regex_automata::hybrid::dfa::Config">Config</a></h4></section></summary><div class="docblock"><p>Returns this lazy DFA’s configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_nfa" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#412-414">source</a><h4 class="code-header">pub fn <a href="#method.get_nfa" class="fn">get_nfa</a>(&amp;self) -&gt; &amp;<a class="struct" href="../../nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a></h4></section></summary><div class="docblock"><p>Returns a reference to the underlying NFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memory_usage" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#446-454">source</a><h4 class="code-header">pub fn <a href="#method.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the memory usage, in bytes, of this lazy DFA.</p>
+<p>This does <strong>not</strong> include the stack size used up by this lazy DFA. To
+compute that, use <code>std::mem::size_of::&lt;DFA&gt;()</code>. This also does not
+include the size of the <code>Cache</code> used.</p>
+<p>This also does not include any heap memory used by the NFA inside of
+this hybrid NFA/DFA. This is because the NFA’s ownership is shared, and
+thus not owned by this hybrid NFA/DFA. More practically, several regex
+engines in this crate embed an NFA, and reporting the NFA’s memory
+usage in all of them would likely result in reporting higher heap
+memory than is actually used.</p>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-DFA-1" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#457-1148">source</a><a href="#impl-DFA-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.try_search_fwd" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#589-618">source</a><h4 class="code-header">pub fn <a href="#method.try_search_fwd" class="fn">try_search_fwd</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a forward search and returns the end position of the leftmost
+match that is found. If no match exists, then <code>None</code> is returned.</p>
+<p>In particular, this method continues searching even after it enters
+a match state. The search only terminates once it has reached the
+end of the input or when it has entered a dead or quit state. Upon
+termination, the position of the last byte seen while still in a match
+state is returned.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in a number of circumstances:</p>
+<ul>
+<li>The configuration of the lazy DFA may permit it to “quit” the search.
+For example, setting quit bytes or enabling heuristic support for
+Unicode word boundaries. The default configuration does not enable any
+option that could result in the lazy DFA quitting.</li>
+<li>The configuration of the lazy DFA may also permit it to “give up”
+on a search if it makes ineffective use of its transition table
+cache. The default configuration does not enable this by default,
+although it is typically a good idea to.</li>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<p>This example shows how to run a basic search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">"foo[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">8</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo12345"</span>))<span class="question-mark">?</span>,
+);
+
+<span class="comment">// Even though a match is found after reading the first byte (`a`),
+// the leftmost first match semantics demand that we find the earliest
+// match that prefers earlier parts of the pattern over later parts.
+</span><span class="kw">let </span>dfa = DFA::new(<span class="string">"abc|a"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"abc"</span>))<span class="question-mark">?</span>,
+);
+</code></pre></div>
+<h5 id="example-specific-pattern-search"><a class="doc-anchor" href="#example-specific-pattern-search">§</a>Example: specific pattern search</h5>
+<p>This example shows how to build a lazy multi-DFA that permits searching
+for specific patterns.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    Anchored, HalfMatch, PatternID, Input,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().starts_for_each_pattern(<span class="bool-val">true</span>))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">"[a-z0-9]{6}"</span>, <span class="string">"[a-z][a-z0-9]{5}"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"foo123"</span>;
+
+<span class="comment">// Since we are using the default leftmost-first match and both
+// patterns match at the same starting position, only the first pattern
+// will be returned in this case when doing a search for any of the
+// patterns.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">6</span>));
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="comment">// But if we want to check whether some other pattern matches, then we
+// can provide its pattern ID.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">1</span>, <span class="number">6</span>));
+<span class="kw">let </span>input = Input::new(haystack)
+    .anchored(Anchored::Pattern(PatternID::must(<span class="number">1</span>)));
+<span class="kw">let </span>got = dfa.try_search_fwd(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+<h5 id="example-specifying-the-bounds-of-a-search"><a class="doc-anchor" href="#example-specifying-the-bounds-of-a-search">§</a>Example: specifying the bounds of a search</h5>
+<p>This example shows how providing the bounds of a search can produce
+different results than simply sub-slicing the haystack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, HalfMatch, Input};
+
+<span class="comment">// N.B. We disable Unicode here so that we use a simple ASCII word
+// boundary. Alternatively, we could enable heuristic support for
+// Unicode word boundaries since our haystack is pure ASCII.
+</span><span class="kw">let </span>dfa = DFA::new(<span class="string">r"(?-u)\b[0-9]{3}\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"foo123bar"</span>;
+
+<span class="comment">// Since we sub-slice the haystack, the search doesn't know about the
+// larger context and assumes that `123` is surrounded by word
+// boundaries. And of course, the match position is reported relative
+// to the sub-slice as well, which means we get `3` instead of `6`.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>));
+<span class="kw">let </span>got = dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache,
+    <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack[<span class="number">3</span>..<span class="number">6</span>]),
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+
+<span class="comment">// But if we provide the bounds of the search within the context of the
+// entire haystack, then the search can take the surrounding context
+// into account. (And if we did find a match, it would be reported
+// as a valid offset into `haystack` instead of its sub-slice.)
+</span><span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+<span class="kw">let </span>got = dfa.try_search_fwd(
+    <span class="kw-2">&amp;mut </span>cache,
+    <span class="kw-2">&amp;</span>Input::new(haystack).range(<span class="number">3</span>..<span class="number">6</span>),
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_search_rev" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#790-805">source</a><h4 class="code-header">pub fn <a href="#method.try_search_rev" class="fn">try_search_rev</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.HalfMatch.html" title="struct regex_automata::HalfMatch">HalfMatch</a>&gt;, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a reverse search and returns the start of the position of the
+leftmost match that is found. If no match exists, then <code>None</code> is
+returned.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in a number of circumstances:</p>
+<ul>
+<li>The configuration of the lazy DFA may permit it to “quit” the search.
+For example, setting quit bytes or enabling heuristic support for
+Unicode word boundaries. The default configuration does not enable any
+option that could result in the lazy DFA quitting.</li>
+<li>The configuration of the lazy DFA may also permit it to “give up”
+on a search if it makes ineffective use of its transition table
+cache. The default configuration does not enable this by default,
+although it is typically a good idea to.</li>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<p>This routine is principally useful when used in
+conjunction with the
+<a href="../../nfa/thompson/struct.Config.html#method.reverse" title="method regex_automata::nfa::thompson::Config::reverse"><code>nfa::thompson::Config::reverse</code></a>
+configuration. In general, it’s unlikely to be correct to use both
+<code>try_search_fwd</code> and <code>try_search_rev</code> with the same DFA since any
+particular DFA will only support searching in one direction with
+respect to the pattern.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson,
+    hybrid::dfa::DFA,
+    HalfMatch, Input,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .thompson(thompson::Config::new().reverse(<span class="bool-val">true</span>))
+    .build(<span class="string">"foo[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(expected),
+    dfa.try_search_rev(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"foo12345"</span>))<span class="question-mark">?</span>,
+);
+
+<span class="comment">// Even though a match is found after reading the last byte (`c`),
+// the leftmost first match semantics demand that we find the earliest
+// match that prefers earlier parts of the pattern over latter parts.
+</span><span class="kw">let </span>dfa = DFA::builder()
+    .thompson(thompson::Config::new().reverse(<span class="bool-val">true</span>))
+    .build(<span class="string">"abc|c"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>expected = HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), dfa.try_search_rev(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="string">"abc"</span>))<span class="question-mark">?</span>,
+);
+</code></pre></div>
+<h5 id="example-utf-8-mode"><a class="doc-anchor" href="#example-utf-8-mode">§</a>Example: UTF-8 mode</h5>
+<p>This examples demonstrates that UTF-8 mode applies to reverse
+DFAs. When UTF-8 mode is enabled in the underlying NFA, then all
+matches reported must correspond to valid UTF-8 spans. This includes
+prohibiting zero-width matches that split a codepoint.</p>
+<p>UTF-8 mode is enabled by default. Notice below how the only zero-width
+matches reported are those at UTF-8 boundaries:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    nfa::thompson,
+    HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .thompson(thompson::Config::new().reverse(<span class="bool-val">true</span>))
+    .build(<span class="string">r""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="comment">// Run the reverse DFA to collect all matches.
+</span><span class="kw">let </span><span class="kw-2">mut </span>input = Input::new(<span class="string">"☃"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">loop </span>{
+    <span class="kw">match </span>dfa.try_search_rev(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">? </span>{
+        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Some</span>(hm) =&gt; {
+            matches.push(hm);
+            <span class="kw">if </span>hm.offset() == <span class="number">0 </span>|| input.end() == <span class="number">0 </span>{
+                <span class="kw">break</span>;
+            } <span class="kw">else if </span>hm.offset() &lt; input.end() {
+                input.set_end(hm.offset());
+            } <span class="kw">else </span>{
+                <span class="comment">// This is only necessary to handle zero-width
+                // matches, which of course occur in this example.
+                // Without this, the search would never advance
+                // backwards beyond the initial match.
+                </span>input.set_end(input.end() - <span class="number">1</span>);
+            }
+        }
+    }
+}
+
+<span class="comment">// No matches split a codepoint.
+</span><span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>),
+];
+<span class="macro">assert_eq!</span>(expected, matches);
+</code></pre></div>
+<p>Now let’s look at the same example, but with UTF-8 mode on the
+underlying NFA disabled:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    nfa::thompson,
+    HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .thompson(thompson::Config::new().reverse(<span class="bool-val">true</span>).utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">r""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="comment">// Run the reverse DFA to collect all matches.
+</span><span class="kw">let </span><span class="kw-2">mut </span>input = Input::new(<span class="string">"☃"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">loop </span>{
+    <span class="kw">match </span>dfa.try_search_rev(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input)<span class="question-mark">? </span>{
+        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Some</span>(hm) =&gt; {
+            matches.push(hm);
+            <span class="kw">if </span>hm.offset() == <span class="number">0 </span>|| input.end() == <span class="number">0 </span>{
+                <span class="kw">break</span>;
+            } <span class="kw">else if </span>hm.offset() &lt; input.end() {
+                input.set_end(hm.offset());
+            } <span class="kw">else </span>{
+                <span class="comment">// This is only necessary to handle zero-width
+                // matches, which of course occur in this example.
+                // Without this, the search would never advance
+                // backwards beyond the initial match.
+                </span>input.set_end(input.end() - <span class="number">1</span>);
+            }
+        }
+    }
+}
+
+<span class="comment">// No matches split a codepoint.
+</span><span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">2</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">1</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>),
+];
+<span class="macro">assert_eq!</span>(expected, matches);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_search_overlapping_fwd" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#896-915">source</a><h4 class="code-header">pub fn <a href="#method.try_search_overlapping_fwd" class="fn">try_search_overlapping_fwd</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    state: &amp;mut <a class="struct" href="struct.OverlappingState.html" title="struct regex_automata::hybrid::dfa::OverlappingState">OverlappingState</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes an overlapping forward search and returns the end position of
+matches as they are found. If no match exists, then <code>None</code> is returned.</p>
+<p>This routine is principally only useful when searching for multiple
+patterns on inputs where multiple patterns may match the same regions
+of text. In particular, callers must preserve the automaton’s search
+state from prior calls so that the implementation knows where the last
+match occurred.</p>
+<p>When using this routine to implement an iterator of overlapping
+matches, the <code>start</code> of the search should remain invariant throughout
+iteration. The <code>OverlappingState</code> given to the search will keep track
+of the current position of the search. (This is because multiple
+matches may be reported at the same position, so only the search
+implementation itself knows when to advance the position.)</p>
+<p>If for some reason you want the search to forget about its previous
+state and restart the search at a particular position, then setting the
+state to <a href="struct.OverlappingState.html#method.start" title="associated function regex_automata::hybrid::dfa::OverlappingState::start"><code>OverlappingState::start</code></a> will accomplish that.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in a number of circumstances:</p>
+<ul>
+<li>The configuration of the lazy DFA may permit it to “quit” the search.
+For example, setting quit bytes or enabling heuristic support for
+Unicode word boundaries. The default configuration does not enable any
+option that could result in the lazy DFA quitting.</li>
+<li>The configuration of the lazy DFA may also permit it to “give up”
+on a search if it makes ineffective use of its transition table
+cache. The default configuration does not enable this by default,
+although it is typically a good idea to.</li>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<p>This example shows how to run a basic overlapping search. Notice
+that we build the automaton with a <code>MatchKind::All</code> configuration.
+Overlapping searches are unlikely to work as one would expect when
+using the default <code>MatchKind::LeftmostFirst</code> match semantics, since
+leftmost-first matching is fundamentally incompatible with overlapping
+searches. Namely, overlapping searches need to report matches as they
+are seen, where as leftmost-first searches will continue searching even
+after a match has been observed in order to find the conventional end
+position of the match. More concretely, leftmost-first searches use
+dead states to terminate a search after a specific match can no longer
+be extended. Overlapping searches instead do the opposite by continuing
+the search to find totally new matches (potentially of other patterns).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::{DFA, OverlappingState},
+    HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">r"\w+$"</span>, <span class="string">r"\S+$"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"@foo"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">1</span>, <span class="number">4</span>));
+dfa.try_search_overlapping_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack), <span class="kw-2">&amp;mut </span>state,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, state.get_match());
+
+<span class="comment">// The first pattern also matches at the same position, so re-running
+// the search will yield another match. Notice also that the first
+// pattern is returned after the second. This is because the second
+// pattern begins its match before the first, is therefore an earlier
+// match and is thus reported first.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(HalfMatch::must(<span class="number">0</span>, <span class="number">4</span>));
+dfa.try_search_overlapping_fwd(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack), <span class="kw-2">&amp;mut </span>state,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, state.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_search_overlapping_rev" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1040-1059">source</a><h4 class="code-header">pub fn <a href="#method.try_search_overlapping_rev" class="fn">try_search_overlapping_rev</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    state: &amp;mut <a class="struct" href="struct.OverlappingState.html" title="struct regex_automata::hybrid::dfa::OverlappingState">OverlappingState</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a reverse overlapping search and returns the start of the
+position of the leftmost match that is found. If no match exists, then
+<code>None</code> is returned.</p>
+<p>When using this routine to implement an iterator of overlapping
+matches, the <code>start</code> of the search should remain invariant throughout
+iteration. The <code>OverlappingState</code> given to the search will keep track
+of the current position of the search. (This is because multiple
+matches may be reported at the same position, so only the search
+implementation itself knows when to advance the position.)</p>
+<p>If for some reason you want the search to forget about its previous
+state and restart the search at a particular position, then setting the
+state to <a href="struct.OverlappingState.html#method.start" title="associated function regex_automata::hybrid::dfa::OverlappingState::start"><code>OverlappingState::start</code></a> will accomplish that.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in a number of circumstances:</p>
+<ul>
+<li>The configuration of the lazy DFA may permit it to “quit” the search.
+For example, setting quit bytes or enabling heuristic support for
+Unicode word boundaries. The default configuration does not enable any
+option that could result in the lazy DFA quitting.</li>
+<li>The configuration of the lazy DFA may also permit it to “give up”
+on a search if it makes ineffective use of its transition table
+cache. The default configuration does not enable this by default,
+although it is typically a good idea to.</li>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-utf-8-mode-1"><a class="doc-anchor" href="#example-utf-8-mode-1">§</a>Example: UTF-8 mode</h5>
+<p>This examples demonstrates that UTF-8 mode applies to reverse
+DFAs. When UTF-8 mode is enabled in the underlying NFA, then all
+matches reported must correspond to valid UTF-8 spans. This includes
+prohibiting zero-width matches that split a codepoint.</p>
+<p>UTF-8 mode is enabled by default. Notice below how the only zero-width
+matches reported are those at UTF-8 boundaries:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::{DFA, OverlappingState},
+    nfa::thompson,
+    HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .thompson(thompson::Config::new().reverse(<span class="bool-val">true</span>))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">r""</span>, <span class="string">r"☃"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="comment">// Run the reverse DFA to collect all matches.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"☃"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">loop </span>{
+    dfa.try_search_overlapping_rev(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+    <span class="kw">match </span>state.get_match() {
+        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Some</span>(hm) =&gt; matches.push(hm),
+    }
+}
+
+<span class="comment">// No matches split a codepoint.
+</span><span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>),
+    HalfMatch::must(<span class="number">1</span>, <span class="number">0</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>),
+];
+<span class="macro">assert_eq!</span>(expected, matches);
+</code></pre></div>
+<p>Now let’s look at the same example, but with UTF-8 mode on the
+underlying NFA disabled:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::{DFA, OverlappingState},
+    nfa::thompson,
+    HalfMatch, Input, MatchKind,
+};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .thompson(thompson::Config::new().reverse(<span class="bool-val">true</span>).utf8(<span class="bool-val">false</span>))
+    .build_many(<span class="kw-2">&amp;</span>[<span class="string">r""</span>, <span class="string">r"☃"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="comment">// Run the reverse DFA to collect all matches.
+</span><span class="kw">let </span>input = Input::new(<span class="string">"☃"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>state = OverlappingState::start();
+<span class="kw">let </span><span class="kw-2">mut </span>matches = <span class="macro">vec!</span>[];
+<span class="kw">loop </span>{
+    dfa.try_search_overlapping_rev(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>state)<span class="question-mark">?</span>;
+    <span class="kw">match </span>state.get_match() {
+        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+        <span class="prelude-val">Some</span>(hm) =&gt; matches.push(hm),
+    }
+}
+
+<span class="comment">// Now *all* positions match, even within a codepoint,
+// because we lifted the requirement that matches
+// correspond to valid UTF-8 spans.
+</span><span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    HalfMatch::must(<span class="number">0</span>, <span class="number">3</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">2</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">1</span>),
+    HalfMatch::must(<span class="number">1</span>, <span class="number">0</span>),
+    HalfMatch::must(<span class="number">0</span>, <span class="number">0</span>),
+];
+<span class="macro">assert_eq!</span>(expected, matches);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_which_overlapping_matches" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1128-1147">source</a><h4 class="code-header">pub fn <a href="#method.try_which_overlapping_matches" class="fn">try_which_overlapping_matches</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    patset: &amp;mut <a class="struct" href="../../struct.PatternSet.html" title="struct regex_automata::PatternSet">PatternSet</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Writes the set of patterns that match anywhere in the given search
+configuration to <code>patset</code>. If multiple patterns match at the same
+position and the underlying DFA supports overlapping matches, then all
+matching patterns are written to the given set.</p>
+<p>Unless all of the patterns in this DFA are anchored, then generally
+speaking, this will visit every byte in the haystack.</p>
+<p>This search routine <em>does not</em> clear the pattern set. This gives some
+flexibility to the caller (e.g., running multiple searches with the
+same pattern set), but does make the API bug-prone if you’re reusing
+the same pattern set for multiple searches but intended them to be
+independent.</p>
+<p>If a pattern ID matched but the given <code>PatternSet</code> does not have
+sufficient capacity to store it, then it is not inserted and silently
+dropped.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>This routine errors if the search could not complete. This can occur
+in a number of circumstances:</p>
+<ul>
+<li>The configuration of the lazy DFA may permit it to “quit” the search.
+For example, setting quit bytes or enabling heuristic support for
+Unicode word boundaries. The default configuration does not enable any
+option that could result in the lazy DFA quitting.</li>
+<li>The configuration of the lazy DFA may also permit it to “give up”
+on a search if it makes ineffective use of its transition table
+cache. The default configuration does not enable this by default,
+although it is typically a good idea to.</li>
+<li>When the provided <code>Input</code> configuration is not supported. For
+example, by providing an unsupported anchor mode.</li>
+</ul>
+<p>When a search returns an error, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<p>This example shows how to find all matching patterns in a haystack,
+even when some patterns match at the same position as other patterns.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    hybrid::dfa::DFA,
+    Input, MatchKind, PatternSet,
+};
+
+<span class="kw">let </span>patterns = <span class="kw-2">&amp;</span>[
+    <span class="string">r"\w+"</span>, <span class="string">r"\d+"</span>, <span class="string">r"\pL+"</span>, <span class="string">r"foo"</span>, <span class="string">r"bar"</span>, <span class="string">r"barfoo"</span>, <span class="string">r"foobar"</span>,
+];
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .build_many(patterns)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+
+<span class="kw">let </span>input = Input::new(<span class="string">"foobar"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>patset = PatternSet::new(dfa.pattern_len());
+dfa.try_which_overlapping_matches(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>patset)<span class="question-mark">?</span>;
+<span class="kw">let </span>expected = <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">6</span>];
+<span class="kw">let </span>got: Vec&lt;usize&gt; = patset.iter().map(|p| p.as_usize()).collect();
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-DFA-2" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1150-1759">source</a><a href="#impl-DFA-2" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.next_state" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1215-1229">source</a><h4 class="code-header">pub fn <a href="#method.next_state" class="fn">next_state</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    current: <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>,
+    input: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>, <a class="struct" href="../struct.CacheError.html" title="struct regex_automata::hybrid::CacheError">CacheError</a>&gt;</h4></section></summary><div class="docblock"><p>Transitions from the current state to the next state, given the next
+byte of input.</p>
+<p>The given cache is used to either reuse pre-computed state
+transitions, or to store this newly computed transition for future
+reuse. Thus, this routine guarantees that it will never return a state
+ID that has an “unknown” tag.</p>
+<h5 id="state-identifier-validity"><a class="doc-anchor" href="#state-identifier-validity">§</a>State identifier validity</h5>
+<p>The only valid value for <code>current</code> is the lazy state ID returned
+by the most recent call to <code>next_state</code>, <code>next_state_untagged</code>,
+<code>next_state_untagged_unchecked</code>, <code>start_state_forward</code> or
+<code>state_state_reverse</code> for the given <code>cache</code>. Any state ID returned from
+prior calls to these routines (with the same <code>cache</code>) is considered
+invalid (even if it gives an appearance of working). State IDs returned
+from <em>any</em> prior call for different <code>cache</code> values are also always
+invalid.</p>
+<p>The returned ID is always a valid ID when <code>current</code> refers to a valid
+ID. Moreover, this routine is defined for all possible values of
+<code>input</code>.</p>
+<p>These validity rules are not checked, even in debug mode. Callers are
+required to uphold these rules themselves.</p>
+<p>Violating these state ID validity rules will not sacrifice memory
+safety, but <em>may</em> produce an incorrect result or a panic.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>If the given ID does not refer to a valid state, then this routine
+may panic but it also may not panic and instead return an invalid or
+incorrect ID.</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<p>This shows a simplistic example for walking a lazy DFA for a given
+haystack by using the <code>next_state</code> method.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">r"[a-z]+r"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"bar"</span>.as_bytes();
+
+<span class="comment">// The start state is determined by inspecting the position and the
+// initial bytes of the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>sid = dfa.start_state_forward(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack),
+)<span class="question-mark">?</span>;
+<span class="comment">// Walk all the bytes in the haystack.
+</span><span class="kw">for </span><span class="kw-2">&amp;</span>b <span class="kw">in </span>haystack {
+    sid = dfa.next_state(<span class="kw-2">&amp;mut </span>cache, sid, b)<span class="question-mark">?</span>;
+}
+<span class="comment">// Matches are always delayed by 1 byte, so we must explicitly walk the
+// special "EOI" transition at the end of the search.
+</span>sid = dfa.next_eoi_state(<span class="kw-2">&amp;mut </span>cache, sid)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(sid.is_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.next_state_untagged" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1343-1353">source</a><h4 class="code-header">pub fn <a href="#method.next_state_untagged" class="fn">next_state_untagged</a>(
+    &amp;self,
+    cache: &amp;<a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    current: <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>,
+    input: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+) -&gt; <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a></h4></section></summary><div class="docblock"><p>Transitions from the current state to the next state, given the next
+byte of input and a state ID that is not tagged.</p>
+<p>The only reason to use this routine is performance. In particular, the
+<code>next_state</code> method needs to do some additional checks, among them is
+to account for identifiers to states that are not yet computed. In
+such a case, the transition is computed on the fly. However, if it is
+known that the <code>current</code> state ID is untagged, then these checks can be
+omitted.</p>
+<p>Since this routine does not compute states on the fly, it does not
+modify the cache and thus cannot return an error. Consequently, <code>cache</code>
+does not need to be mutable and it is possible for this routine to
+return a state ID corresponding to the special “unknown” state. In
+this case, it is the caller’s responsibility to use the prior state
+ID and <code>input</code> with <code>next_state</code> in order to force the computation of
+the unknown transition. Otherwise, trying to use the “unknown” state
+ID will just result in transitioning back to itself, and thus never
+terminating. (This is technically a special exemption to the state ID
+validity rules, but is permissible since this routine is guarateed to
+never mutate the given <code>cache</code>, and thus the identifier is guaranteed
+to remain valid.)</p>
+<p>See <a href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID"><code>LazyStateID</code></a> for more details on what it means for a state ID
+to be tagged. Also, see
+<a href="struct.DFA.html#method.next_state_untagged_unchecked" title="method regex_automata::hybrid::dfa::DFA::next_state_untagged_unchecked"><code>next_state_untagged_unchecked</code></a>
+for this same idea, but with bounds checks forcefully elided.</p>
+<h5 id="state-identifier-validity-1"><a class="doc-anchor" href="#state-identifier-validity-1">§</a>State identifier validity</h5>
+<p>The only valid value for <code>current</code> is an <strong>untagged</strong> lazy
+state ID returned by the most recent call to <code>next_state</code>,
+<code>next_state_untagged</code>, <code>next_state_untagged_unchecked</code>,
+<code>start_state_forward</code> or <code>state_state_reverse</code> for the given <code>cache</code>.
+Any state ID returned from prior calls to these routines (with the
+same <code>cache</code>) is considered invalid (even if it gives an appearance
+of working). State IDs returned from <em>any</em> prior call for different
+<code>cache</code> values are also always invalid.</p>
+<p>The returned ID is always a valid ID when <code>current</code> refers to a valid
+ID, although it may be tagged. Moreover, this routine is defined for
+all possible values of <code>input</code>.</p>
+<p>Not all validity rules are checked, even in debug mode. Callers are
+required to uphold these rules themselves.</p>
+<p>Violating these state ID validity rules will not sacrifice memory
+safety, but <em>may</em> produce an incorrect result or a panic.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>If the given ID does not refer to a valid state, then this routine
+may panic but it also may not panic and instead return an invalid or
+incorrect ID.</p>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<p>This shows a simplistic example for walking a lazy DFA for a given
+haystack by using the <code>next_state_untagged</code> method where possible.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">r"[a-z]+r"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"bar"</span>.as_bytes();
+
+<span class="comment">// The start state is determined by inspecting the position and the
+// initial bytes of the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>sid = dfa.start_state_forward(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack),
+)<span class="question-mark">?</span>;
+<span class="comment">// Walk all the bytes in the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>at = <span class="number">0</span>;
+<span class="kw">while </span>at &lt; haystack.len() {
+    <span class="kw">if </span>sid.is_tagged() {
+        sid = dfa.next_state(<span class="kw-2">&amp;mut </span>cache, sid, haystack[at])<span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>prev_sid = sid;
+        <span class="comment">// We attempt to chew through as much as we can while moving
+        // through untagged state IDs. Thus, the transition function
+        // does less work on average per byte. (Unrolling this loop
+        // may help even more.)
+        </span><span class="kw">while </span>at &lt; haystack.len() {
+            prev_sid = sid;
+            sid = dfa.next_state_untagged(
+                <span class="kw-2">&amp;mut </span>cache, sid, haystack[at],
+            );
+            at += <span class="number">1</span>;
+            <span class="kw">if </span>sid.is_tagged() {
+                <span class="kw">break</span>;
+            }
+        }
+        <span class="comment">// We must ensure that we never proceed to the next iteration
+        // with an unknown state ID. If we don't account for this
+        // case, then search isn't guaranteed to terminate since all
+        // transitions on unknown states loop back to itself.
+        </span><span class="kw">if </span>sid.is_unknown() {
+            sid = dfa.next_state(
+                <span class="kw-2">&amp;mut </span>cache, prev_sid, haystack[at - <span class="number">1</span>],
+            )<span class="question-mark">?</span>;
+        }
+    }
+}
+<span class="comment">// Matches are always delayed by 1 byte, so we must explicitly walk the
+// special "EOI" transition at the end of the search.
+</span>sid = dfa.next_eoi_state(<span class="kw-2">&amp;mut </span>cache, sid)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(sid.is_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.next_state_untagged_unchecked" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1415-1425">source</a><h4 class="code-header">pub unsafe fn <a href="#method.next_state_untagged_unchecked" class="fn">next_state_untagged_unchecked</a>(
+    &amp;self,
+    cache: &amp;<a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    current: <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>,
+    input: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>,
+) -&gt; <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a></h4></section></summary><div class="docblock"><p>Transitions from the current state to the next state, eliding bounds
+checks, given the next byte of input and a state ID that is not tagged.</p>
+<p>The only reason to use this routine is performance. In particular, the
+<code>next_state</code> method needs to do some additional checks, among them is
+to account for identifiers to states that are not yet computed. In
+such a case, the transition is computed on the fly. However, if it is
+known that the <code>current</code> state ID is untagged, then these checks can be
+omitted.</p>
+<p>Since this routine does not compute states on the fly, it does not
+modify the cache and thus cannot return an error. Consequently, <code>cache</code>
+does not need to be mutable and it is possible for this routine to
+return a state ID corresponding to the special “unknown” state. In
+this case, it is the caller’s responsibility to use the prior state
+ID and <code>input</code> with <code>next_state</code> in order to force the computation of
+the unknown transition. Otherwise, trying to use the “unknown” state
+ID will just result in transitioning back to itself, and thus never
+terminating. (This is technically a special exemption to the state ID
+validity rules, but is permissible since this routine is guarateed to
+never mutate the given <code>cache</code>, and thus the identifier is guaranteed
+to remain valid.)</p>
+<p>See <a href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID"><code>LazyStateID</code></a> for more details on what it means for a state ID
+to be tagged. Also, see
+<a href="struct.DFA.html#method.next_state_untagged" title="method regex_automata::hybrid::dfa::DFA::next_state_untagged"><code>next_state_untagged</code></a>
+for this same idea, but with memory safety guaranteed by retaining
+bounds checks.</p>
+<h5 id="state-identifier-validity-2"><a class="doc-anchor" href="#state-identifier-validity-2">§</a>State identifier validity</h5>
+<p>The only valid value for <code>current</code> is an <strong>untagged</strong> lazy
+state ID returned by the most recent call to <code>next_state</code>,
+<code>next_state_untagged</code>, <code>next_state_untagged_unchecked</code>,
+<code>start_state_forward</code> or <code>state_state_reverse</code> for the given <code>cache</code>.
+Any state ID returned from prior calls to these routines (with the
+same <code>cache</code>) is considered invalid (even if it gives an appearance
+of working). State IDs returned from <em>any</em> prior call for different
+<code>cache</code> values are also always invalid.</p>
+<p>The returned ID is always a valid ID when <code>current</code> refers to a valid
+ID, although it may be tagged. Moreover, this routine is defined for
+all possible values of <code>input</code>.</p>
+<p>Not all validity rules are checked, even in debug mode. Callers are
+required to uphold these rules themselves.</p>
+<p>Violating these state ID validity rules will not sacrifice memory
+safety, but <em>may</em> produce an incorrect result or a panic.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>Callers of this method must guarantee that <code>current</code> refers to a valid
+state ID according to the rules described above. If <code>current</code> is not a
+valid state ID for this automaton, then calling this routine may result
+in undefined behavior.</p>
+<p>If <code>current</code> is valid, then the ID returned is valid for all possible
+values of <code>input</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.next_eoi_state" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1506-1519">source</a><h4 class="code-header">pub fn <a href="#method.next_eoi_state" class="fn">next_eoi_state</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    current: <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>, <a class="struct" href="../struct.CacheError.html" title="struct regex_automata::hybrid::CacheError">CacheError</a>&gt;</h4></section></summary><div class="docblock"><p>Transitions from the current state to the next state for the special
+EOI symbol.</p>
+<p>The given cache is used to either reuse pre-computed state
+transitions, or to store this newly computed transition for future
+reuse. Thus, this routine guarantees that it will never return a state
+ID that has an “unknown” tag.</p>
+<p>This routine must be called at the end of every search in a correct
+implementation of search. Namely, lazy DFAs in this crate delay matches
+by one byte in order to support look-around operators. Thus, after
+reaching the end of a haystack, a search implementation must follow one
+last EOI transition.</p>
+<p>It is best to think of EOI as an additional symbol in the alphabet of a
+DFA that is distinct from every other symbol. That is, the alphabet of
+lazy DFAs in this crate has a logical size of 257 instead of 256, where
+256 corresponds to every possible inhabitant of <code>u8</code>. (In practice, the
+physical alphabet size may be smaller because of alphabet compression
+via equivalence classes, but EOI is always represented somehow in the
+alphabet.)</p>
+<h5 id="state-identifier-validity-3"><a class="doc-anchor" href="#state-identifier-validity-3">§</a>State identifier validity</h5>
+<p>The only valid value for <code>current</code> is the lazy state ID returned
+by the most recent call to <code>next_state</code>, <code>next_state_untagged</code>,
+<code>next_state_untagged_unchecked</code>, <code>start_state_forward</code> or
+<code>state_state_reverse</code> for the given <code>cache</code>. Any state ID returned from
+prior calls to these routines (with the same <code>cache</code>) is considered
+invalid (even if it gives an appearance of working). State IDs returned
+from <em>any</em> prior call for different <code>cache</code> values are also always
+invalid.</p>
+<p>The returned ID is always a valid ID when <code>current</code> refers to a valid
+ID.</p>
+<p>These validity rules are not checked, even in debug mode. Callers are
+required to uphold these rules themselves.</p>
+<p>Violating these state ID validity rules will not sacrifice memory
+safety, but <em>may</em> produce an incorrect result or a panic.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>If the given ID does not refer to a valid state, then this routine
+may panic but it also may not panic and instead return an invalid or
+incorrect ID.</p>
+<h5 id="example-15"><a class="doc-anchor" href="#example-15">§</a>Example</h5>
+<p>This shows a simplistic example for walking a DFA for a given haystack,
+and then finishing the search with the final EOI transition.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input};
+
+<span class="kw">let </span>dfa = DFA::new(<span class="string">r"[a-z]+r"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"bar"</span>.as_bytes();
+
+<span class="comment">// The start state is determined by inspecting the position and the
+// initial bytes of the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>sid = dfa.start_state_forward(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack),
+)<span class="question-mark">?</span>;
+<span class="comment">// Walk all the bytes in the haystack.
+</span><span class="kw">for </span><span class="kw-2">&amp;</span>b <span class="kw">in </span>haystack {
+    sid = dfa.next_state(<span class="kw-2">&amp;mut </span>cache, sid, b)<span class="question-mark">?</span>;
+}
+<span class="comment">// Matches are always delayed by 1 byte, so we must explicitly walk
+// the special "EOI" transition at the end of the search. Without this
+// final transition, the assert below will fail since the DFA will not
+// have entered a match state yet!
+</span>sid = dfa.next_eoi_state(<span class="kw-2">&amp;mut </span>cache, sid)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(sid.is_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.start_state" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1554-1575">source</a><h4 class="code-header">pub fn <a href="#method.start_state" class="fn">start_state</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    config: &amp;<a class="struct" href="../../util/start/struct.Config.html" title="struct regex_automata::util::start::Config">Config</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>, <a class="enum" href="../enum.StartError.html" title="enum regex_automata::hybrid::StartError">StartError</a>&gt;</h4></section></summary><div class="docblock"><p>Return the ID of the start state for this lazy DFA for the given
+starting configuration.</p>
+<p>Unlike typical DFA implementations, the start state for DFAs in this
+crate is dependent on a few different factors:</p>
+<ul>
+<li>The <a href="../../enum.Anchored.html" title="enum regex_automata::Anchored"><code>Anchored</code></a> mode of the search. Unanchored, anchored and
+anchored searches for a specific <a href="../../struct.PatternID.html" title="struct regex_automata::PatternID"><code>PatternID</code></a> all use different start
+states.</li>
+<li>Whether a “look-behind” byte exists. For example, the <code>^</code> anchor
+matches if and only if there is no look-behind byte.</li>
+<li>The specific value of that look-behind byte. For example, a <code>(?m:^)</code>
+assertion only matches when there is either no look-behind byte, or
+when the look-behind byte is a line terminator.</li>
+</ul>
+<p>The <a href="../../util/start/struct.Config.html" title="struct regex_automata::util::start::Config">starting configuration</a> provides the above
+information.</p>
+<p>This routine can be used for either forward or reverse searches.
+Although, as a convenience, if you have an <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a>, then it
+may be more succinct to use <a href="struct.DFA.html#method.start_state_forward" title="method regex_automata::hybrid::dfa::DFA::start_state_forward"><code>DFA::start_state_forward</code></a> or
+<a href="struct.DFA.html#method.start_state_reverse" title="method regex_automata::hybrid::dfa::DFA::start_state_reverse"><code>DFA::start_state_reverse</code></a>. Note, for example, that the convenience
+routines return a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> on failure where as this routine
+returns a <a href="../enum.StartError.html" title="enum regex_automata::hybrid::StartError"><code>StartError</code></a>.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>This may return a <a href="../enum.StartError.html" title="enum regex_automata::hybrid::StartError"><code>StartError</code></a> if the search needs to give up when
+determining the start state (for example, if it sees a “quit” byte
+or if the cache has become inefficient). This can also return an
+error if the given configuration contains an unsupported <a href="../../enum.Anchored.html" title="enum regex_automata::Anchored"><code>Anchored</code></a>
+configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.start_state_forward" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1593-1612">source</a><h4 class="code-header">pub fn <a href="#method.start_state_forward" class="fn">start_state_forward</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Return the ID of the start state for this lazy DFA when executing a
+forward search.</p>
+<p>This is a convenience routine for calling <a href="struct.DFA.html#method.start_state" title="method regex_automata::hybrid::dfa::DFA::start_state"><code>DFA::start_state</code></a> that
+converts the given <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a> to a <a href="../../util/start/struct.Config.html" title="struct regex_automata::util::start::Config">start configuration</a>.
+Additionally, if an error occurs, it is converted from a <a href="../enum.StartError.html" title="enum regex_automata::hybrid::StartError"><code>StartError</code></a>
+to a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> using the offset information in the given
+<a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a>.</p>
+<h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
+<p>This may return a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> if the search needs to give up when
+determining the start state (for example, if it sees a “quit” byte or
+if the cache has become inefficient). This can also return an error if
+the given <code>Input</code> contains an unsupported <a href="../../enum.Anchored.html" title="enum regex_automata::Anchored"><code>Anchored</code></a> configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.start_state_reverse" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1630-1646">source</a><h4 class="code-header">pub fn <a href="#method.start_state_reverse" class="fn">start_state_reverse</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>, <a class="struct" href="../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Return the ID of the start state for this lazy DFA when executing a
+reverse search.</p>
+<p>This is a convenience routine for calling <a href="struct.DFA.html#method.start_state" title="method regex_automata::hybrid::dfa::DFA::start_state"><code>DFA::start_state</code></a> that
+converts the given <a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a> to a <a href="../../util/start/struct.Config.html" title="struct regex_automata::util::start::Config">start configuration</a>.
+Additionally, if an error occurs, it is converted from a <a href="../enum.StartError.html" title="enum regex_automata::hybrid::StartError"><code>StartError</code></a>
+to a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> using the offset information in the given
+<a href="../../struct.Input.html" title="struct regex_automata::Input"><code>Input</code></a>.</p>
+<h5 id="errors-7"><a class="doc-anchor" href="#errors-7">§</a>Errors</h5>
+<p>This may return a <a href="../../struct.MatchError.html" title="struct regex_automata::MatchError"><code>MatchError</code></a> if the search needs to give up when
+determining the start state (for example, if it sees a “quit” byte or
+if the cache has become inefficient). This can also return an error if
+the given <code>Input</code> contains an unsupported <a href="../../enum.Anchored.html" title="enum regex_automata::Anchored"><code>Anchored</code></a> configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.match_len" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1716-1719">source</a><h4 class="code-header">pub fn <a href="#method.match_len" class="fn">match_len</a>(&amp;self, cache: &amp;<a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>, id: <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of patterns that match in this state.</p>
+<p>If the lazy DFA was compiled with one pattern, then this must
+necessarily always return <code>1</code> for all match states.</p>
+<p>A lazy DFA guarantees that <a href="struct.DFA.html#method.match_pattern" title="method regex_automata::hybrid::dfa::DFA::match_pattern"><code>DFA::match_pattern</code></a> can be called with
+indices up to (but not including) the length returned by this routine
+without panicking.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>If the given state is not a match state, then this may either panic
+or return an incorrect result.</p>
+<h5 id="example-16"><a class="doc-anchor" href="#example-16">§</a>Example</h5>
+<p>This example shows a simple instance of implementing overlapping
+matches. In particular, it shows not only how to determine how many
+patterns have matched in a particular state, but also how to access
+which specific patterns have matched.</p>
+<p>Notice that we must use <a href="../../enum.MatchKind.html#variant.All" title="variant regex_automata::MatchKind::All"><code>MatchKind::All</code></a> when building the DFA. If we
+used <a href="../../enum.MatchKind.html#variant.LeftmostFirst" title="variant regex_automata::MatchKind::LeftmostFirst"><code>MatchKind::LeftmostFirst</code></a> instead, then the DFA would not be
+constructed in a way that supports overlapping matches. (It would only
+report a single pattern that matches at any particular point in time.)</p>
+<p>Another thing to take note of is the patterns used and the order in
+which the pattern IDs are reported. In the example below, pattern <code>3</code>
+is yielded first. Why? Because it corresponds to the match that
+appears first. Namely, the <code>@</code> symbol is part of <code>\S+</code> but not part
+of any of the other patterns. Since the <code>\S+</code> pattern has a match that
+starts to the left of any other pattern, its ID is returned before any
+other.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{hybrid::dfa::DFA, Input, MatchKind};
+
+<span class="kw">let </span>dfa = DFA::builder()
+    .configure(DFA::config().match_kind(MatchKind::All))
+    .build_many(<span class="kw-2">&amp;</span>[
+        <span class="string">r"\w+"</span>, <span class="string">r"[a-z]+"</span>, <span class="string">r"[A-Z]+"</span>, <span class="string">r"\S+"</span>,
+    ])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = dfa.create_cache();
+<span class="kw">let </span>haystack = <span class="string">"@bar"</span>.as_bytes();
+
+<span class="comment">// The start state is determined by inspecting the position and the
+// initial bytes of the haystack.
+</span><span class="kw">let </span><span class="kw-2">mut </span>sid = dfa.start_state_forward(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack),
+)<span class="question-mark">?</span>;
+<span class="comment">// Walk all the bytes in the haystack.
+</span><span class="kw">for </span><span class="kw-2">&amp;</span>b <span class="kw">in </span>haystack {
+    sid = dfa.next_state(<span class="kw-2">&amp;mut </span>cache, sid, b)<span class="question-mark">?</span>;
+}
+sid = dfa.next_eoi_state(<span class="kw-2">&amp;mut </span>cache, sid)<span class="question-mark">?</span>;
+
+<span class="macro">assert!</span>(sid.is_match());
+<span class="macro">assert_eq!</span>(dfa.match_len(<span class="kw-2">&amp;mut </span>cache, sid), <span class="number">3</span>);
+<span class="comment">// The following calls are guaranteed to not panic since `match_len`
+// returned `3` above.
+</span><span class="macro">assert_eq!</span>(dfa.match_pattern(<span class="kw-2">&amp;mut </span>cache, sid, <span class="number">0</span>).as_usize(), <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(dfa.match_pattern(<span class="kw-2">&amp;mut </span>cache, sid, <span class="number">1</span>).as_usize(), <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(dfa.match_pattern(<span class="kw-2">&amp;mut </span>cache, sid, <span class="number">2</span>).as_usize(), <span class="number">1</span>);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.match_pattern" class="method"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#1741-1758">source</a><h4 class="code-header">pub fn <a href="#method.match_pattern" class="fn">match_pattern</a>(
+    &amp;self,
+    cache: &amp;<a class="struct" href="struct.Cache.html" title="struct regex_automata::hybrid::dfa::Cache">Cache</a>,
+    id: <a class="struct" href="../struct.LazyStateID.html" title="struct regex_automata::hybrid::LazyStateID">LazyStateID</a>,
+    match_index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+) -&gt; <a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a></h4></section></summary><div class="docblock"><p>Returns the pattern ID corresponding to the given match index in the
+given state.</p>
+<p>See <a href="struct.DFA.html#method.match_len" title="method regex_automata::hybrid::dfa::DFA::match_len"><code>DFA::match_len</code></a> for an example of how to use this method
+correctly. Note that if you know your lazy DFA is configured with a
+single pattern, then this routine is never necessary since it will
+always return a pattern ID of <code>0</code> for an index of <code>0</code> when <code>id</code>
+corresponds to a match state.</p>
+<p>Typically, this routine is used when implementing an overlapping
+search, as the example for <code>DFA::match_len</code> does.</p>
+<h5 id="panics-4"><a class="doc-anchor" href="#panics-4">§</a>Panics</h5>
+<p>If the state ID is not a match state or if the match index is out
+of bounds for the given state, then this routine may either panic
+or produce an incorrect result. If the state ID is correct and the
+match index is correct, then this routine always produces a valid
+<code>PatternID</code>.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-DFA" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#117">source</a><a href="#impl-Clone-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#117">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-DFA" class="impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#117">source</a><a href="#impl-Debug-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/hybrid/dfa.rs.html#117">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-DFA" class="impl"><a href="#impl-Freeze-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section><section id="impl-RefUnwindSafe-for-DFA" class="impl"><a href="#impl-RefUnwindSafe-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section><section id="impl-Send-for-DFA" class="impl"><a href="#impl-Send-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section><section id="impl-Sync-for-DFA" class="impl"><a href="#impl-Sync-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section><section id="impl-Unpin-for-DFA" class="impl"><a href="#impl-Unpin-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section><section id="impl-UnwindSafe-for-DFA" class="impl"><a href="#impl-UnwindSafe-for-DFA" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.DFA.html" title="struct regex_automata::hybrid::dfa::DFA">DFA</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

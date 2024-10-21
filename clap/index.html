@@ -1,0 +1,119 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Command Line Argument Parser for Rust"><title>clap - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="clap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../clap/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../clap/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt="logo"></a><h2><a href="../clap/index.html">clap</a><span class="version">4.5.18</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Aliases</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">clap</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/clap/lib.rs.html#6-102">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><blockquote>
+<p><strong>Command Line Argument Parser for Rust</strong></p>
+</blockquote>
+<p>Quick Links:</p>
+<ul>
+<li>Derive [tutorial][_derive::_tutorial::chapter_0] and [reference][_derive]</li>
+<li>Builder [tutorial][_tutorial::chapter_0] and <a href="index.html">reference</a></li>
+<li>[Cookbook][_cookbook]</li>
+<li>[FAQ][_faq]</li>
+<li><a href="https://github.com/clap-rs/clap/discussions">Discussions</a></li>
+<li><a href="https://github.com/clap-rs/clap/blob/v4.5.18/CHANGELOG.md">CHANGELOG</a> (includes major version migration
+guides)</li>
+</ul>
+<h3 id="aspirations"><a class="doc-anchor" href="#aspirations">§</a>Aspirations</h3>
+<ul>
+<li>Out of the box, users get a polished CLI experience
+<ul>
+<li>Including common argument behavior, help generation, suggested fixes for users, colored output, <a href="https://github.com/clap-rs/clap/tree/master/clap_complete">shell completions</a>, etc</li>
+</ul>
+</li>
+<li>Flexible enough to port your existing CLI interface
+<ul>
+<li>However, we won’t necessarily streamline support for each use case</li>
+</ul>
+</li>
+<li>Reasonable parse performance</li>
+<li>Resilient maintainership, including
+<ul>
+<li>Willing to break compatibility rather than batching up breaking changes in large releases</li>
+<li>Leverage feature flags to keep to one active branch</li>
+<li>Being under <a href="https://github.com/rust-cli/team/">WG-CLI</a> to increase the bus factor</li>
+</ul>
+</li>
+<li>We follow semver and will wait about 6-9 months between major breaking changes</li>
+<li>We will support the last two minor Rust releases (MSRV, currently 1.74)</li>
+</ul>
+<p>While these aspirations can be at odds with fast build times and low binary
+size, we will still strive to keep these reasonable for the flexibility you
+get.  Check out the
+<a href="https://github.com/rust-cli/argparse-benchmarks-rs">argparse-benchmarks</a> for
+CLI parsers optimized for other use cases.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>Run</p>
+<div class="example-wrap"><pre class="language-console"><code>$ cargo add clap --features derive
+</code></pre></div>
+<p><em>(See also [feature flag reference][_features])</em></p>
+<p>Then define your CLI in <code>main.rs</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>clap::Parser;
+
+<span class="doccomment">/// Simple program to greet a person
+</span><span class="attr">#[derive(Parser, Debug)]
+#[command(version, about, long_about = <span class="prelude-val">None</span>)]
+</span><span class="kw">struct </span>Args {
+    <span class="doccomment">/// Name of the person to greet
+    </span><span class="attr">#[arg(short, long)]
+    </span>name: String,
+
+    <span class="doccomment">/// Number of times to greet
+    </span><span class="attr">#[arg(short, long, default_value_t = <span class="number">1</span>)]
+    </span>count: u8,
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>args = Args::parse();
+
+    <span class="kw">for _ in </span><span class="number">0</span>..args.count {
+        <span class="macro">println!</span>(<span class="string">"Hello {}!"</span>, args.name);
+    }
+}</code></pre></div>
+<p>And try it out:</p>
+<div class="example-wrap"><pre class="language-console"><code>$ demo --help
+A simple to use, efficient, and full-featured Command Line Argument Parser
+
+Usage: demo[EXE] [OPTIONS] --name &lt;NAME&gt;
+
+Options:
+  -n, --name &lt;NAME&gt;    Name of the person to greet
+  -c, --count &lt;COUNT&gt;  Number of times to greet [default: 1]
+  -h, --help           Print help
+  -V, --version        Print version
+
+$ demo --name Me
+Hello Me!
+
+</code></pre></div>
+<p><em>(version number and <code>.exe</code> extension on windows replaced by placeholders)</em></p>
+<p>See also the derive [tutorial][_derive::_tutorial] and [reference][_derive]</p>
+<h4 id="related-projects"><a class="doc-anchor" href="#related-projects">§</a>Related Projects</h4>
+<p>Augment clap:</p>
+<ul>
+<li><a href="https://crates.io/crates/wild">wild</a> for supporting wildcards (<code>*</code>) on Windows like you do Linux</li>
+<li><a href="https://crates.io/crates/argfile">argfile</a> for loading additional arguments from a file (aka response files)</li>
+<li><a href="https://crates.io/crates/shadow-rs">shadow-rs</a> for generating <code>Command::long_version</code></li>
+<li><a href="https://crates.io/crates/clap_mangen">clap_mangen</a> for generating man page source (roff)</li>
+<li><a href="https://crates.io/crates/clap_complete">clap_complete</a> for shell completion support</li>
+</ul>
+<p>CLI Helpers</p>
+<ul>
+<li><a href="https://crates.io/crates/clio">clio</a> for reading/writing to files specified as arguments</li>
+<li><a href="https://crates.io/crates/clap-verbosity-flag">clap-verbosity-flag</a></li>
+<li><a href="https://crates.io/crates/clap-cargo">clap-cargo</a></li>
+<li><a href="https://crates.io/crates/concolor-clap">concolor-clap</a></li>
+</ul>
+<p>Testing</p>
+<ul>
+<li><a href="https://crates.io/crates/trycmd"><code>trycmd</code></a>:  Bulk snapshot testing</li>
+<li><a href="https://crates.io/crates/snapbox"><code>snapbox</code></a>:  Specialized snapshot testing</li>
+<li><a href="https://crates.io/crates/assert_cmd"><code>assert_cmd</code></a> and <a href="https://crates.io/crates/assert_fs"><code>assert_fs</code></a>: Customized testing</li>
+</ul>
+<p>Documentation:</p>
+<ul>
+<li><a href="https://rust-cli.github.io/book/index.html">Command-line Apps for Rust</a> book</li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="builder/index.html" title="mod clap::builder">builder</a></div><div class="desc docblock-short">Define <a href="struct.Command.html" title="struct clap::Command"><code>Command</code></a> line <a href="struct.Arg.html" title="struct clap::Arg">arguments</a></div></li><li><div class="item-name"><a class="mod" href="error/index.html" title="mod clap::error">error</a></div><div class="desc docblock-short">Error reporting</div></li><li><div class="item-name"><a class="mod" href="parser/index.html" title="mod clap::parser">parser</a></div><div class="desc docblock-short"><a href="struct.Command.html" title="struct clap::Command"><code>Command</code></a> line argument parser</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.arg.html" title="macro clap::arg">arg</a></div><div class="desc docblock-short">Create an <a href="struct.Arg.html" title="struct clap::Arg"><code>Arg</code></a> from a usage string.</div></li><li><div class="item-name"><a class="macro" href="macro.command.html" title="macro clap::command">command</a></div><div class="desc docblock-short">Allows you to build the <code>Command</code> instance from your Cargo.toml at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.crate_authors.html" title="macro clap::crate_authors">crate_authors</a></div><div class="desc docblock-short">Allows you to pull the authors for the command from your Cargo.toml at
+compile time in the form:
+<code>"author1 lastname &lt;author1@example.com&gt;:author2 lastname &lt;author2@example.com&gt;"</code></div></li><li><div class="item-name"><a class="macro" href="macro.crate_description.html" title="macro clap::crate_description">crate_description</a></div><div class="desc docblock-short">Allows you to pull the description from your Cargo.toml at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.crate_name.html" title="macro clap::crate_name">crate_name</a></div><div class="desc docblock-short">Allows you to pull the name from your Cargo.toml at compile time.</div></li><li><div class="item-name"><a class="macro" href="macro.crate_version.html" title="macro clap::crate_version">crate_version</a></div><div class="desc docblock-short">Allows you to pull the version from your Cargo.toml at compile time as
+<code>MAJOR.MINOR.PATCH_PKGVERSION_PRE</code></div></li><li><div class="item-name"><a class="macro" href="macro.value_parser.html" title="macro clap::value_parser">value_parser</a></div><div class="desc docblock-short">Select a <a href="builder/struct.ValueParser.html" title="struct clap::builder::ValueParser"><code>ValueParser</code></a> implementation from the intended type</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Arg.html" title="struct clap::Arg">Arg</a></div><div class="desc docblock-short">The abstract representation of a command line argument. Used to set all the options and
+relationships that define a valid argument for the program.</div></li><li><div class="item-name"><a class="struct" href="struct.ArgGroup.html" title="struct clap::ArgGroup">ArgGroup</a></div><div class="desc docblock-short">Family of related <a href="struct.Arg.html" title="struct clap::Arg">arguments</a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ArgMatches.html" title="struct clap::ArgMatches">ArgMatches</a></div><div class="desc docblock-short">Container for parse results.</div></li><li><div class="item-name"><a class="struct" href="struct.Command.html" title="struct clap::Command">Command</a></div><div class="desc docblock-short">Build a command-line interface.</div></li><li><div class="item-name"><a class="struct" href="struct.Id.html" title="struct clap::Id">Id</a></div><div class="desc docblock-short"><a href="struct.Arg.html" title="struct clap::Arg"><code>Arg</code></a> or <a href="struct.ArgGroup.html" title="struct clap::ArgGroup"><code>ArgGroup</code></a> identifier</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.ArgAction.html" title="enum clap::ArgAction">ArgAction</a></div><div class="desc docblock-short">Behavior of arguments when they are encountered while parsing</div></li><li><div class="item-name"><a class="enum" href="enum.ColorChoice.html" title="enum clap::ColorChoice">ColorChoice</a></div><div class="desc docblock-short">Represents the color preferences for program output</div></li><li><div class="item-name"><a class="enum" href="enum.ValueHint.html" title="enum clap::ValueHint">ValueHint</a></div><div class="desc docblock-short">Provide shell with hint on how to complete an argument.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Args.html" title="trait clap::Args">Args</a></div><div class="desc docblock-short">Parse a set of arguments into a user-defined container.</div></li><li><div class="item-name"><a class="trait" href="trait.CommandFactory.html" title="trait clap::CommandFactory">CommandFactory</a></div><div class="desc docblock-short">Create a <a href="struct.Command.html" title="struct clap::Command"><code>Command</code></a> relevant for a user-defined container.</div></li><li><div class="item-name"><a class="trait" href="trait.FromArgMatches.html" title="trait clap::FromArgMatches">FromArgMatches</a></div><div class="desc docblock-short">Converts an instance of <a href="struct.ArgMatches.html" title="struct clap::ArgMatches"><code>ArgMatches</code></a> to a user-defined container.</div></li><li><div class="item-name"><a class="trait" href="trait.Parser.html" title="trait clap::Parser">Parser</a></div><div class="desc docblock-short">Parse command-line arguments into <code>Self</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.Subcommand.html" title="trait clap::Subcommand">Subcommand</a></div><div class="desc docblock-short">Parse a sub-command into a user-defined enum.</div></li><li><div class="item-name"><a class="trait" href="trait.ValueEnum.html" title="trait clap::ValueEnum">ValueEnum</a></div><div class="desc docblock-short">Parse arguments into enums.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.Error.html" title="type clap::Error">Error</a></div><div class="desc docblock-short">Command Line Argument Parser Error</div></li></ul></section></div></main></body></html>

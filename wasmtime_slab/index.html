@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A very simple, uniformly-typed slab arena that supports deallocation and reusing deallocated entries’ space."><title>wasmtime_slab - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime_slab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime_slab/index.html">wasmtime_slab</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">wasmtime_slab</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime_slab/lib.rs.html#1-498">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A very simple, uniformly-typed slab arena that supports deallocation and
+reusing deallocated entries’ space.</p>
+<p>The free list of vacant entries in the slab are stored inline in the slab’s
+existing storage.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>wasmtime_slab::{Id, Slab};
+
+<span class="kw">let </span><span class="kw-2">mut </span>slab = Slab::new();
+
+<span class="comment">// Insert some values into the slab.
+</span><span class="kw">let </span>rza = slab.alloc(<span class="string">"Robert Fitzgerald Diggs"</span>);
+<span class="kw">let </span>gza = slab.alloc(<span class="string">"Gary Grice"</span>);
+<span class="kw">let </span>bill = slab.alloc(<span class="string">"Bill Gates"</span>);
+
+<span class="comment">// Allocated elements can be accessed infallibly via indexing (and missing and
+// deallocated entries will panic).
+</span><span class="macro">assert_eq!</span>(slab[rza], <span class="string">"Robert Fitzgerald Diggs"</span>);
+
+<span class="comment">// Alternatively, the `get` and `get_mut` methods provide fallible lookup.
+</span><span class="kw">if let </span><span class="prelude-val">Some</span>(genius) = slab.get(gza) {
+    <span class="macro">println!</span>(<span class="string">"The gza gza genius: {}"</span>, genius);
+}
+<span class="kw">if let </span><span class="prelude-val">Some</span>(val) = slab.get_mut(bill) {
+    <span class="kw-2">*</span>val = <span class="string">"Bill Gates doesn't belong in this set..."</span>;
+}
+
+<span class="comment">// We can remove values from the slab.
+</span>slab.dealloc(bill);
+
+<span class="comment">// Allocate a new entry.
+</span><span class="kw">let </span>bill = slab.alloc(<span class="string">"Bill Murray"</span>);</code></pre></div>
+<h2 id="using-ids-with-the-wrong-slab"><a class="doc-anchor" href="#using-ids-with-the-wrong-slab">§</a>Using <code>Id</code>s with the Wrong <code>Slab</code></h2>
+<p><code>Slab</code> does NOT check that <code>Id</code>s used to access previously-allocated values
+came from the current <code>Slab</code> instance (as opposed to a different <code>Slab</code>
+instance). Using <code>Id</code>s from a different <code>Slab</code> is safe, but will yield an
+unrelated value, if any at all.</p>
+<p>If you desire checking that an <code>Id</code> came from the correct <code>Slab</code> instance,
+it should be easy to layer that functionality on top of this crate by
+wrapping <code>Slab</code> and <code>Id</code> in types that additionally maintain a slab instance
+identifier.</p>
+<h2 id="the-aba-problem"><a class="doc-anchor" href="#the-aba-problem">§</a>The ABA Problem</h2>
+<p>This <code>Slab</code> type does NOT protect against ABA bugs, such as the following
+sequence:</p>
+<ul>
+<li>
+<p>Value <code>A</code> is allocated into the slab, yielding id <code>i</code>.</p>
+</li>
+<li>
+<p><code>A</code> is deallocated, and so <code>i</code>’s associated entry is added to the slab’s
+free list.</p>
+</li>
+<li>
+<p>Value <code>B</code> is allocated into the slab, reusing <code>i</code>’s associated entry,
+yielding id <code>i</code>.</p>
+</li>
+<li>
+<p>The “original” id <code>i</code> is used to access the arena, expecting the
+deallocated value <code>A</code>, but getting the new value <code>B</code>.</p>
+</li>
+</ul>
+<p>That is, it does not detect and prevent against the memory-safe version of
+use-after-free bugs.</p>
+<p>If you need to protect against ABA bugs, it should be easy to layer that
+functionality on top of this crate by wrapping <code>Slab</code> with something like
+the following:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">pub struct </span>GenerationalId {
+    id: wasmtime_slab::Id,
+    generation: u32,
+}
+
+<span class="kw">struct </span>GenerationalEntry&lt;T&gt; {
+    value: T,
+    generation: u32,
+}
+
+<span class="kw">pub struct </span>GenerationalSlab&lt;T&gt; {
+    slab: wasmtime_slab::Slab&lt;GenerationalEntry&lt;T&gt;&gt;,
+    generation: u32,
+}
+
+<span class="kw">impl</span>&lt;T&gt; GenerationalSlab&lt;T&gt; {
+    <span class="kw">pub fn </span>alloc(<span class="kw-2">&amp;mut </span><span class="self">self</span>, value: T) -&gt; GenerationalId {
+        <span class="kw">let </span>generation = <span class="self">self</span>.generation;
+        <span class="kw">let </span>id = <span class="self">self</span>.slab.alloc(GenerationalEntry { value, generation });
+        GenerationalId { id, generation }
+    }
+
+    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, id: GenerationalId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>T&gt; {
+        <span class="kw">let </span>entry = <span class="self">self</span>.slab.get(id.id)<span class="question-mark">?</span>;
+
+        <span class="comment">// Check that the entry's generation matches the id's generation,
+        // else we have an ABA bug. (Alternatively, return `None` instead
+        // of panicking.)
+        </span><span class="macro">assert_eq!</span>(id.generation, entry.generation);
+
+        <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>entry.value)
+    }
+
+    <span class="kw">pub fn </span>dealloc(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: GenerationalId) {
+        <span class="comment">// Check that the entry's generation matches the id's generation,
+        // else we have an ABA bug. (Alternatively, silently return on
+        // double-free instead of panicking.)
+        </span><span class="macro">assert_eq!</span>(id.generation, <span class="self">self</span>.slab[id.id].generation);
+
+        <span class="self">self</span>.slab.dealloc(id.id);
+
+        <span class="comment">// Increment our generation whenever we deallocate so that any new
+        // value placed in this same entry will have a different generation
+        // and we can detect ABA bugs.
+        </span><span class="self">self</span>.generation += <span class="number">1</span>;
+    }
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Id.html" title="struct wasmtime_slab::Id">Id</a></div><div class="desc docblock-short">An identifier for an allocated value inside a <code>slab</code>.</div></li><li><div class="item-name"><a class="struct" href="struct.Slab.html" title="struct wasmtime_slab::Slab">Slab</a></div><div class="desc docblock-short">A simple, uni-typed slab arena.</div></li></ul></section></div></main></body></html>

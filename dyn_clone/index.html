@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>dyn_clone - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="dyn_clone" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../dyn_clone/index.html">dyn_clone</a><span class="version">1.0.17</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">dyn_clone</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/dyn_clone/lib.rs.html#1-215">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/dyn-clone"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/dyn-clone"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/dyn-clone"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<br>
+<p>This crate provides a <a href="trait.DynClone.html" title="trait dyn_clone::DynClone"><code>DynClone</code></a> trait that can be used in trait objects,
+and a <a href="fn.clone_box.html" title="fn dyn_clone::clone_box"><code>clone_box</code></a> function that can clone any sized or dynamically sized
+implementation of <code>DynClone</code>. Types that implement the standard library’s
+<a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>std::clone::Clone</code></a> trait are automatically usable by a <code>DynClone</code> trait
+object.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>dyn_clone::DynClone;
+
+<span class="kw">trait </span>MyTrait: DynClone {
+    <span class="kw">fn </span>recite(<span class="kw-2">&amp;</span><span class="self">self</span>);
+}
+
+<span class="kw">impl </span>MyTrait <span class="kw">for </span>String {
+    <span class="kw">fn </span>recite(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">println!</span>(<span class="string">"{} ♫"</span>, <span class="self">self</span>);
+    }
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>line = <span class="string">"The slithy structs did gyre and gimble the namespace"</span>;
+
+    <span class="comment">// Build a trait object holding a String.
+    // This requires String to implement MyTrait and std::clone::Clone.
+    </span><span class="kw">let </span>x: Box&lt;<span class="kw">dyn </span>MyTrait&gt; = Box::new(String::from(line));
+
+    x.recite();
+
+    <span class="comment">// The type of x2 is a Box&lt;dyn MyTrait&gt; cloned from x.
+    </span><span class="kw">let </span>x2 = dyn_clone::clone_box(<span class="kw-2">&amp;*</span>x);
+
+    x2.recite();
+}</code></pre></div>
+<p>This crate includes a macro for concisely implementing <code>impl std::clone::Clone for Box&lt;dyn MyTrait&gt;</code> in terms of <code>dyn_clone::clone_box</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// As before.
+</span><span class="kw">trait </span>MyTrait: DynClone {
+    <span class="comment">/* ... */
+</span>}
+
+<span class="macro">dyn_clone::clone_trait_object!</span>(MyTrait);
+
+<span class="comment">// Now data structures containing Box&lt;dyn MyTrait&gt; can derive Clone:
+</span><span class="attr">#[derive(Clone)]
+</span><span class="kw">struct </span>Container {
+    trait_object: Box&lt;<span class="kw">dyn </span>MyTrait&gt;,
+}</code></pre></div>
+<p>The <code>clone_trait_object!</code> macro expands to just the following, which you can
+handwrite instead if you prefer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">impl </span>Clone <span class="kw">for </span>Box&lt;<span class="kw">dyn </span>MyTrait&gt; {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        dyn_clone::clone_box(<span class="kw-2">&amp;**</span><span class="self">self</span>)
+    }
+}
+
+<span class="comment">// and similar for Box&lt;dyn MyTrait + Send&gt;, Box&lt;dyn MyTrait + Sync&gt;, Box&lt;dyn MyTrait + Send + Sync&gt;</span></code></pre></div>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.clone_trait_object.html" title="macro dyn_clone::clone_trait_object">clone_trait_object</a></div><div class="desc docblock-short">Implement the standard library <code>Clone</code> for a trait object that has
+<code>DynClone</code> as a supertrait.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.DynClone.html" title="trait dyn_clone::DynClone">DynClone</a></div><div class="desc docblock-short">This trait is implemented by any type that implements <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>std::clone::Clone</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.arc_make_mut.html" title="fn dyn_clone::arc_make_mut">arc_make_mut</a></div><div class="desc docblock-short"><code>&amp;mut Arc&lt;T&gt;</code> —▸ <code>&amp;mut T</code></div></li><li><div class="item-name"><a class="fn" href="fn.clone.html" title="fn dyn_clone::clone">clone</a></div><div class="desc docblock-short"><code>&amp;T</code> —▸ <code>T</code></div></li><li><div class="item-name"><a class="fn" href="fn.clone_box.html" title="fn dyn_clone::clone_box">clone_box</a></div><div class="desc docblock-short"><code>&amp;T</code> —▸ <code>Box&lt;T&gt;</code></div></li><li><div class="item-name"><a class="fn" href="fn.rc_make_mut.html" title="fn dyn_clone::rc_make_mut">rc_make_mut</a></div><div class="desc docblock-short"><code>&amp;mut Rc&lt;T&gt;</code> —▸ <code>&amp;mut T</code></div></li></ul></section></div></main></body></html>

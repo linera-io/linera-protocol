@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Notify async tasks or threads."><title>event_listener - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="event_listener" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../event_listener/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../event_listener/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt="logo"></a><h2><a href="../event_listener/index.html">event_listener</a><span class="version">5.3.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">event_listener</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/event_listener/lib.rs.html#1-1544">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Notify async tasks or threads.</p>
+<p>This is a synchronization primitive similar to <a href="https://www.1024cores.net/home/lock-free-algorithms/eventcounts">eventcounts</a> invented by Dmitry Vyukov.</p>
+<p>You can use this crate to turn non-blocking data structures into async or blocking data
+structures. See a <a href="https://github.com/smol-rs/event-listener/blob/master/examples/mutex.rs">simple mutex</a> implementation that exposes an async and a blocking interface
+for acquiring locks.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Wait until another thread sets a boolean flag:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::atomic::{AtomicBool, Ordering};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::usize;
+<span class="kw">use </span>event_listener::{Event, Listener};
+
+<span class="kw">let </span>flag = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<span class="kw">let </span>event = Arc::new(Event::new());
+
+<span class="comment">// Spawn a thread that will set the flag after 1 second.
+</span>thread::spawn({
+    <span class="kw">let </span>flag = flag.clone();
+    <span class="kw">let </span>event = event.clone();
+    <span class="kw">move </span>|| {
+        <span class="comment">// Wait for a second.
+        </span>thread::sleep(Duration::from_secs(<span class="number">1</span>));
+
+        <span class="comment">// Set the flag.
+        </span>flag.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+
+        <span class="comment">// Notify all listeners that the flag has been set.
+        </span>event.notify(usize::MAX);
+    }
+});
+
+<span class="comment">// Wait until the flag is set.
+</span><span class="kw">loop </span>{
+    <span class="comment">// Check the flag.
+    </span><span class="kw">if </span>flag.load(Ordering::SeqCst) {
+        <span class="kw">break</span>;
+    }
+
+    <span class="comment">// Start listening for events.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>listener = event.listen();
+
+    <span class="comment">// Check the flag again after creating the listener.
+    </span><span class="kw">if </span>flag.load(Ordering::SeqCst) {
+        <span class="kw">break</span>;
+    }
+
+    <span class="comment">// Wait for a notification and continue the loop.
+    </span>listener.wait();
+}</code></pre></div>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2>
+<ul>
+<li>
+<p>The <code>std</code> feature (enabled by default) enables the use of the Rust standard library. Disable it for <code>no_std</code>
+support</p>
+</li>
+<li>
+<p>The <code>portable-atomic</code> feature enables the use of the <a href="https://crates.io/crates/portable-atomic"><code>portable-atomic</code></a> crate to provide
+atomic operations on platforms that don’t support them.</p>
+</li>
+</ul>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.listener.html" title="macro event_listener::listener">listener</a></div><div class="desc docblock-short">Create a stack-based event listener for an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Event.html" title="struct event_listener::Event">Event</a></div><div class="desc docblock-short">A synchronization primitive for notifying async tasks and threads.</div></li><li><div class="item-name"><a class="struct" href="struct.EventListener.html" title="struct event_listener::EventListener">EventListener</a></div><div class="desc docblock-short">A guard waiting for a notification from an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.IntoNotification.html" title="trait event_listener::IntoNotification">IntoNotification</a></div><div class="desc docblock-short">A value that can be converted into a <a href="trait.Notification.html" title="trait event_listener::Notification"><code>Notification</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.Listener.html" title="trait event_listener::Listener">Listener</a></div><div class="desc docblock-short">A handle that is listening to an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.Notification.html" title="trait event_listener::Notification">Notification</a></div><div class="desc docblock-short">A notification that can be used to notify an <a href="struct.Event.html" title="struct event_listener::Event"><code>Event</code></a>.</div></li></ul></section></div></main></body></html>

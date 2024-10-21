@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Thread parking and unparking."><title>parking - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="parking" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../parking/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../parking/index.html"><img src="https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png" alt="logo"></a><h2><a href="../parking/index.html">parking</a><span class="version">2.2.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">parking</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/parking/lib.rs.html#1-449">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Thread parking and unparking.</p>
+<p>A <a href="struct.Parker.html" title="struct parking::Parker"><code>Parker</code></a> is in either the notified or unnotified state. The <a href="struct.Parker.html#method.park" title="method parking::Parker::park"><code>park()</code></a> method blocks
+the current thread until the <a href="struct.Parker.html" title="struct parking::Parker"><code>Parker</code></a> becomes notified and then puts it back into the unnotified
+state. The <a href="struct.Unparker.html#method.unpark" title="method parking::Unparker::unpark"><code>unpark()</code></a> method puts it into the notified state.</p>
+<p>This API is similar to <a href="https://doc.rust-lang.org/std/thread/fn.park.html"><code>thread::park()</code></a> and <a href="https://doc.rust-lang.org/std/thread/struct.Thread.html#method.unpark"><code>Thread::unpark()</code></a> from the standard library.
+The difference is that the state “token” managed by those functions is shared across an entire
+thread, and anyone can call <a href="https://doc.rust-lang.org/std/thread/fn.current.html"><code>thread::current()</code></a> to access it. If you use <code>park</code> and <code>unpark</code>,
+but you also call a function that uses <code>park</code> and <code>unpark</code> internally, that function could
+cause a deadlock by consuming a wakeup that was intended for you. The <a href="struct.Parker.html" title="struct parking::Parker"><code>Parker</code></a> object in this
+crate avoids that problem by managing its own state, which isn’t shared with unrelated callers.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>parking::Parker;
+
+<span class="kw">let </span>p = Parker::new();
+<span class="kw">let </span>u = p.unparker();
+
+<span class="comment">// Notify the parker.
+</span>u.unpark();
+
+<span class="comment">// Wakes up immediately because the parker is notified.
+</span>p.park();
+
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_millis(<span class="number">500</span>));
+    u.unpark();
+});
+
+<span class="comment">// Wakes up when `u.unpark()` notifies and then goes back into unnotified state.
+</span>p.park();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Parker.html" title="struct parking::Parker">Parker</a></div><div class="desc docblock-short">Waits for a notification.</div></li><li><div class="item-name"><a class="struct" href="struct.Unparker.html" title="struct parking::Unparker">Unparker</a></div><div class="desc docblock-short">Notifies a parker.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.pair.html" title="fn parking::pair">pair</a></div><div class="desc docblock-short">Creates a parker and an associated unparker.</div></li></ul></section></div></main></body></html>

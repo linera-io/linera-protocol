@@ -1,0 +1,536 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Associates an IO object backed by a Unix file descriptor with the tokio reactor, allowing for readiness to be polled. The file descriptor must be of a type that can be used with the OS polling facilities (ie, `poll`, `epoll`, `kqueue`, etc), such as a network socket or pipe, and the file descriptor must have the nonblocking mode set to true."><title>AsyncFd in tokio::io::unix - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">AsyncFd</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.async_io">async_io</a></li><li><a href="#method.async_io_mut">async_io_mut</a></li><li><a href="#method.get_mut">get_mut</a></li><li><a href="#method.get_ref">get_ref</a></li><li><a href="#method.into_inner">into_inner</a></li><li><a href="#method.new">new</a></li><li><a href="#method.poll_read_ready">poll_read_ready</a></li><li><a href="#method.poll_read_ready_mut">poll_read_ready_mut</a></li><li><a href="#method.poll_write_ready">poll_write_ready</a></li><li><a href="#method.poll_write_ready_mut">poll_write_ready_mut</a></li><li><a href="#method.readable">readable</a></li><li><a href="#method.readable_mut">readable_mut</a></li><li><a href="#method.ready">ready</a></li><li><a href="#method.ready_mut">ready_mut</a></li><li><a href="#method.try_new">try_new</a></li><li><a href="#method.try_with_interest">try_with_interest</a></li><li><a href="#method.with_interest">with_interest</a></li><li><a href="#method.writable">writable</a></li><li><a href="#method.writable_mut">writable_mut</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-AsFd-for-AsyncFd%3CT%3E">AsFd</a></li><li><a href="#impl-AsRawFd-for-AsyncFd%3CT%3E">AsRawFd</a></li><li><a href="#impl-Debug-for-AsyncFd%3CT%3E">Debug</a></li><li><a href="#impl-Drop-for-AsyncFd%3CT%3E">Drop</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-RefUnwindSafe-for-AsyncFd%3CT%3E">!RefUnwindSafe</a></li><li><a href="#impl-UnwindSafe-for-AsyncFd%3CT%3E">!UnwindSafe</a></li><li><a href="#impl-Freeze-for-AsyncFd%3CT%3E">Freeze</a></li><li><a href="#impl-Send-for-AsyncFd%3CT%3E">Send</a></li><li><a href="#impl-Sync-for-AsyncFd%3CT%3E">Sync</a></li><li><a href="#impl-Unpin-for-AsyncFd%3CT%3E">Unpin</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In tokio::io::unix</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">io</a>::<wbr><a href="index.html">unix</a>::<wbr><a class="struct" href="#">AsyncFd</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/io/async_fd.rs.html#178-183">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct AsyncFd&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>&gt; { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Associates an IO object backed by a Unix file descriptor with the tokio
+reactor, allowing for readiness to be polled. The file descriptor must be of
+a type that can be used with the OS polling facilities (ie, <code>poll</code>, <code>epoll</code>,
+<code>kqueue</code>, etc), such as a network socket or pipe, and the file descriptor
+must have the nonblocking mode set to true.</p>
+<p>Creating an <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> registers the file descriptor with the current tokio
+Reactor, allowing you to directly await the file descriptor being readable
+or writable. Once registered, the file descriptor remains registered until
+the <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> is dropped.</p>
+<p>The <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> takes ownership of an arbitrary object to represent the IO
+object. It is intended that this object will handle closing the file
+descriptor when it is dropped, avoiding resource leaks and ensuring that the
+<a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> can clean up the registration before closing the file descriptor.
+The <a href="struct.AsyncFd.html#method.into_inner" title="method tokio::io::unix::AsyncFd::into_inner"><code>AsyncFd::into_inner</code></a> function can be used to extract the inner object
+to retake control from the tokio IO reactor.</p>
+<p>The inner object is required to implement <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd"><code>AsRawFd</code></a>. This file descriptor
+must not change while <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> owns the inner object, i.e. the
+<a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html#tymethod.as_raw_fd" title="method std::os::fd::raw::AsRawFd::as_raw_fd"><code>AsRawFd::as_raw_fd</code></a> method on the inner type must always return the same
+file descriptor when called multiple times. Failure to uphold this results
+in unspecified behavior in the IO driver, which may include breaking
+notifications for other sockets/etc.</p>
+<p>Polling for readiness is done by calling the async functions <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>readable</code></a>
+and <a href="struct.AsyncFd.html#method.writable" title="method tokio::io::unix::AsyncFd::writable"><code>writable</code></a>. These functions complete when the associated readiness
+condition is observed. Any number of tasks can query the same <code>AsyncFd</code> in
+parallel, on the same or different conditions.</p>
+<p>On some platforms, the readiness detecting mechanism relies on
+edge-triggered notifications. This means that the OS will only notify Tokio
+when the file descriptor transitions from not-ready to ready. For this to
+work you should first try to read or write and only poll for readiness
+if that fails with an error of <a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.WouldBlock" title="variant std::io::error::ErrorKind::WouldBlock"><code>std::io::ErrorKind::WouldBlock</code></a>.</p>
+<p>Tokio internally tracks when it has received a ready notification, and when
+readiness checking functions like <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>readable</code></a> and <a href="struct.AsyncFd.html#method.writable" title="method tokio::io::unix::AsyncFd::writable"><code>writable</code></a> are called,
+if the readiness flag is set, these async functions will complete
+immediately. This however does mean that it is critical to ensure that this
+ready flag is cleared when (and only when) the file descriptor ceases to be
+ready. The <a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a> returned from readiness checking functions
+serves this function; after calling a readiness-checking async function,
+you must use this <a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a> to signal to tokio whether the file
+descriptor is no longer in a ready state.</p>
+<h3 id="use-with-to-a-poll-based-api"><a class="doc-anchor" href="#use-with-to-a-poll-based-api">§</a>Use with to a poll-based API</h3>
+<p>In some cases it may be desirable to use <code>AsyncFd</code> from APIs similar to
+<a href="../../net/struct.TcpStream.html" title="struct tokio::net::TcpStream"><code>TcpStream::poll_read_ready</code></a>. The <a href="struct.AsyncFd.html#method.poll_read_ready" title="method tokio::io::unix::AsyncFd::poll_read_ready"><code>AsyncFd::poll_read_ready</code></a> and
+<a href="struct.AsyncFd.html#method.poll_write_ready" title="method tokio::io::unix::AsyncFd::poll_write_ready"><code>AsyncFd::poll_write_ready</code></a> functions are provided for this purpose.
+Because these functions don’t create a future to hold their state, they have
+the limitation that only one task can wait on each direction (read or write)
+at a time.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example shows how to turn <a href="https://doc.rust-lang.org/1.81.0/std/net/tcp/struct.TcpStream.html" title="struct std::net::tcp::TcpStream"><code>std::net::TcpStream</code></a> asynchronous using
+<code>AsyncFd</code>.  It implements the read/write operations both as an <code>async fn</code>
+and using the IO traits <a href="../trait.AsyncRead.html" title="trait tokio::io::AsyncRead"><code>AsyncRead</code></a> and <a href="../trait.AsyncWrite.html" title="trait tokio::io::AsyncWrite"><code>AsyncWrite</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::{<span class="self">self</span>, Read, Write};
+<span class="kw">use </span>std::net::TcpStream;
+<span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::task::{ready, Context, Poll};
+<span class="kw">use </span>tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+<span class="kw">use </span>tokio::io::unix::AsyncFd;
+
+<span class="kw">pub struct </span>AsyncTcpStream {
+    inner: AsyncFd&lt;TcpStream&gt;,
+}
+
+<span class="kw">impl </span>AsyncTcpStream {
+    <span class="kw">pub fn </span>new(tcp: TcpStream) -&gt; io::Result&lt;<span class="self">Self</span>&gt; {
+        tcp.set_nonblocking(<span class="bool-val">true</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            inner: AsyncFd::new(tcp)<span class="question-mark">?</span>,
+        })
+    }
+
+    <span class="kw">pub async fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, out: <span class="kw-2">&amp;mut </span>[u8]) -&gt; io::Result&lt;usize&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.inner.readable().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">match </span>guard.try_io(|inner| inner.get_ref().read(out)) {
+                <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span>result,
+                <span class="prelude-val">Err</span>(_would_block) =&gt; <span class="kw">continue</span>,
+            }
+        }
+    }
+
+    <span class="kw">pub async fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; io::Result&lt;usize&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.inner.writable().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">match </span>guard.try_io(|inner| inner.get_ref().write(buf)) {
+                <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span>result,
+                <span class="prelude-val">Err</span>(_would_block) =&gt; <span class="kw">continue</span>,
+            }
+        }
+    }
+}
+
+<span class="kw">impl </span>AsyncRead <span class="kw">for </span>AsyncTcpStream {
+    <span class="kw">fn </span>poll_read(
+        <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;,
+        buf: <span class="kw-2">&amp;mut </span>ReadBuf&lt;<span class="lifetime">'_</span>&gt;
+    ) -&gt; Poll&lt;io::Result&lt;()&gt;&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="macro">ready!</span>(<span class="self">self</span>.inner.poll_read_ready(cx))<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>unfilled = buf.initialize_unfilled();
+            <span class="kw">match </span>guard.try_io(|inner| inner.get_ref().read(unfilled)) {
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(len)) =&gt; {
+                    buf.advance(len);
+                    <span class="kw">return </span>Poll::Ready(<span class="prelude-val">Ok</span>(()));
+                },
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; <span class="kw">return </span>Poll::Ready(<span class="prelude-val">Err</span>(err)),
+                <span class="prelude-val">Err</span>(_would_block) =&gt; <span class="kw">continue</span>,
+            }
+        }
+    }
+}
+
+<span class="kw">impl </span>AsyncWrite <span class="kw">for </span>AsyncTcpStream {
+    <span class="kw">fn </span>poll_write(
+        <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;,
+        buf: <span class="kw-2">&amp;</span>[u8]
+    ) -&gt; Poll&lt;io::Result&lt;usize&gt;&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="macro">ready!</span>(<span class="self">self</span>.inner.poll_write_ready(cx))<span class="question-mark">?</span>;
+
+            <span class="kw">match </span>guard.try_io(|inner| inner.get_ref().write(buf)) {
+                <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span>Poll::Ready(result),
+                <span class="prelude-val">Err</span>(_would_block) =&gt; <span class="kw">continue</span>,
+            }
+        }
+    }
+
+    <span class="kw">fn </span>poll_flush(
+        <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; Poll&lt;io::Result&lt;()&gt;&gt; {
+        <span class="comment">// tcp flush is a no-op
+        </span>Poll::Ready(<span class="prelude-val">Ok</span>(()))
+    }
+
+    <span class="kw">fn </span>poll_shutdown(
+        <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; Poll&lt;io::Result&lt;()&gt;&gt; {
+        <span class="self">self</span>.inner.get_ref().shutdown(std::net::Shutdown::Write)<span class="question-mark">?</span>;
+        Poll::Ready(<span class="prelude-val">Ok</span>(()))
+    }
+}</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-AsyncFd%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#207-844">source</a><a href="#impl-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>&gt; <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#223-228">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(inner: T) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;Self&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>,</div></h4></section></summary><div class="docblock"><p>Creates an <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> backed by (and taking ownership of) an object
+implementing <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd"><code>AsRawFd</code></a>. The backing file descriptor is cached at the
+time of creation.</p>
+<p>Only configures the <a href="../struct.Interest.html#associatedconstant.READABLE" title="associated constant tokio::io::Interest::READABLE"><code>Interest::READABLE</code></a> and <a href="../struct.Interest.html#associatedconstant.WRITABLE" title="associated constant tokio::io::Interest::WRITABLE"><code>Interest::WRITABLE</code></a> interests. For more
+control, use <a href="struct.AsyncFd.html#method.with_interest" title="associated function tokio::io::unix::AsyncFd::with_interest"><code>AsyncFd::with_interest</code></a>.</p>
+<p>This method must be called in the context of a tokio runtime.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This function panics if there is no current reactor set, or if the <code>rt</code>
+feature flag is not enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_interest" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#240-245">source</a><h4 class="code-header">pub fn <a href="#method.with_interest" class="fn">with_interest</a>(inner: T, interest: <a class="struct" href="../struct.Interest.html" title="struct tokio::io::Interest">Interest</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;Self&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>,</div></h4></section></summary><div class="docblock"><p>Creates an <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> backed by (and taking ownership of) an object
+implementing <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd"><code>AsRawFd</code></a>, with a specific <a href="../struct.Interest.html" title="struct tokio::io::Interest"><code>Interest</code></a>. The backing
+file descriptor is cached at the time of creation.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This function panics if there is no current reactor set, or if the <code>rt</code>
+feature flag is not enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_new" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#274-279">source</a><h4 class="code-header">pub fn <a href="#method.try_new" class="fn">try_new</a>(inner: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self, <a class="struct" href="struct.AsyncFdTryNewError.html" title="struct tokio::io::unix::AsyncFdTryNewError">AsyncFdTryNewError</a>&lt;T&gt;&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>,</div></h4></section></summary><div class="docblock"><p>Creates an <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> backed by (and taking ownership of) an object
+implementing <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd"><code>AsRawFd</code></a>. The backing file descriptor is cached at the
+time of creation.</p>
+<p>Only configures the <a href="../struct.Interest.html#associatedconstant.READABLE" title="associated constant tokio::io::Interest::READABLE"><code>Interest::READABLE</code></a> and <a href="../struct.Interest.html#associatedconstant.WRITABLE" title="associated constant tokio::io::Interest::WRITABLE"><code>Interest::WRITABLE</code></a> interests. For more
+control, use <a href="struct.AsyncFd.html#method.try_with_interest" title="associated function tokio::io::unix::AsyncFd::try_with_interest"><code>AsyncFd::try_with_interest</code></a>.</p>
+<p>This method must be called in the context of a tokio runtime.</p>
+<p>In the case of failure, it returns <a href="struct.AsyncFdTryNewError.html" title="struct tokio::io::unix::AsyncFdTryNewError"><code>AsyncFdTryNewError</code></a> that contains the original object
+passed to this function.</p>
+<h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
+<p>This function panics if there is no current reactor set, or if the <code>rt</code>
+feature flag is not enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_with_interest" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#294-299">source</a><h4 class="code-header">pub fn <a href="#method.try_with_interest" class="fn">try_with_interest</a>(
+    inner: T,
+    interest: <a class="struct" href="../struct.Interest.html" title="struct tokio::io::Interest">Interest</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self, <a class="struct" href="struct.AsyncFdTryNewError.html" title="struct tokio::io::unix::AsyncFdTryNewError">AsyncFdTryNewError</a>&lt;T&gt;&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>,</div></h4></section></summary><div class="docblock"><p>Creates an <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> backed by (and taking ownership of) an object
+implementing <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd"><code>AsRawFd</code></a>, with a specific <a href="../struct.Interest.html" title="struct tokio::io::Interest"><code>Interest</code></a>. The backing
+file descriptor is cached at the time of creation.</p>
+<p>In the case of failure, it returns <a href="struct.AsyncFdTryNewError.html" title="struct tokio::io::unix::AsyncFdTryNewError"><code>AsyncFdTryNewError</code></a> that contains the original object
+passed to this function.</p>
+<h5 id="panics-3"><a class="doc-anchor" href="#panics-3">§</a>Panics</h5>
+<p>This function panics if there is no current reactor set, or if the <code>rt</code>
+feature flag is not enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_ref" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#320-322">source</a><h4 class="code-header">pub fn <a href="#method.get_ref" class="fn">get_ref</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class="docblock"><p>Returns a shared reference to the backing object of this <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#326-328">source</a><h4 class="code-header">pub fn <a href="#method.get_mut" class="fn">get_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class="docblock"><p>Returns a mutable reference to the backing object of this <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.into_inner" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#341-343">source</a><h4 class="code-header">pub fn <a href="#method.into_inner" class="fn">into_inner</a>(self) -&gt; T</h4></section></summary><div class="docblock"><p>Deregisters this file descriptor and returns ownership of the backing
+object.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.poll_read_ready" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#372-382">source</a><h4 class="code-header">pub fn <a href="#method.poll_read_ready" class="fn">poll_read_ready</a>&lt;'a&gt;(
+    &amp;'a self,
+    cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard">AsyncFdReadyGuard</a>&lt;'a, T&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Polls for read readiness.</p>
+<p>If the file descriptor is not currently ready for reading, this method
+will store a clone of the <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html" title="struct core::task::wake::Waker"><code>Waker</code></a> from the provided <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context"><code>Context</code></a>. When the
+file descriptor becomes ready for reading, <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html#method.wake" title="method core::task::wake::Waker::wake"><code>Waker::wake</code></a> will be called.</p>
+<p>Note that on multiple calls to <a href="struct.AsyncFd.html#method.poll_read_ready" title="method tokio::io::unix::AsyncFd::poll_read_ready"><code>poll_read_ready</code></a> or
+<a href="struct.AsyncFd.html#method.poll_read_ready_mut" title="method tokio::io::unix::AsyncFd::poll_read_ready_mut"><code>poll_read_ready_mut</code></a>, only the <code>Waker</code> from the <code>Context</code> passed to the
+most recent call is scheduled to receive a wakeup. (However,
+<a href="struct.AsyncFd.html#method.poll_write_ready" title="method tokio::io::unix::AsyncFd::poll_write_ready"><code>poll_write_ready</code></a> retains a second, independent waker).</p>
+<p>This method is intended for cases where creating and pinning a future
+via <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>readable</code></a> is not feasible. Where possible, using <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>readable</code></a> is
+preferred, as this supports polling from multiple tasks at once.</p>
+<p>This method takes <code>&amp;self</code>, so it is possible to call this method
+concurrently with other methods on this struct. This method only
+provides shared access to the inner IO resource when handling the
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.poll_read_ready_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#409-419">source</a><h4 class="code-header">pub fn <a href="#method.poll_read_ready_mut" class="fn">poll_read_ready_mut</a>&lt;'a&gt;(
+    &amp;'a mut self,
+    cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard">AsyncFdReadyMutGuard</a>&lt;'a, T&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Polls for read readiness.</p>
+<p>If the file descriptor is not currently ready for reading, this method
+will store a clone of the <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html" title="struct core::task::wake::Waker"><code>Waker</code></a> from the provided <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context"><code>Context</code></a>. When the
+file descriptor becomes ready for reading, <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html#method.wake" title="method core::task::wake::Waker::wake"><code>Waker::wake</code></a> will be called.</p>
+<p>Note that on multiple calls to <a href="struct.AsyncFd.html#method.poll_read_ready" title="method tokio::io::unix::AsyncFd::poll_read_ready"><code>poll_read_ready</code></a> or
+<a href="struct.AsyncFd.html#method.poll_read_ready_mut" title="method tokio::io::unix::AsyncFd::poll_read_ready_mut"><code>poll_read_ready_mut</code></a>, only the <code>Waker</code> from the <code>Context</code> passed to the
+most recent call is scheduled to receive a wakeup. (However,
+<a href="struct.AsyncFd.html#method.poll_write_ready" title="method tokio::io::unix::AsyncFd::poll_write_ready"><code>poll_write_ready</code></a> retains a second, independent waker).</p>
+<p>This method is intended for cases where creating and pinning a future
+via <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>readable</code></a> is not feasible. Where possible, using <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>readable</code></a> is
+preferred, as this supports polling from multiple tasks at once.</p>
+<p>This method takes <code>&amp;mut self</code>, so it is possible to access the inner IO
+resource mutably when handling the <a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.poll_write_ready" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#448-458">source</a><h4 class="code-header">pub fn <a href="#method.poll_write_ready" class="fn">poll_write_ready</a>&lt;'a&gt;(
+    &amp;'a self,
+    cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard">AsyncFdReadyGuard</a>&lt;'a, T&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Polls for write readiness.</p>
+<p>If the file descriptor is not currently ready for writing, this method
+will store a clone of the <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html" title="struct core::task::wake::Waker"><code>Waker</code></a> from the provided <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context"><code>Context</code></a>. When the
+file descriptor becomes ready for writing, <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html#method.wake" title="method core::task::wake::Waker::wake"><code>Waker::wake</code></a> will be called.</p>
+<p>Note that on multiple calls to <a href="struct.AsyncFd.html#method.poll_write_ready" title="method tokio::io::unix::AsyncFd::poll_write_ready"><code>poll_write_ready</code></a> or
+<a href="struct.AsyncFd.html#method.poll_write_ready_mut" title="method tokio::io::unix::AsyncFd::poll_write_ready_mut"><code>poll_write_ready_mut</code></a>, only the <code>Waker</code> from the <code>Context</code> passed to the
+most recent call is scheduled to receive a wakeup. (However,
+<a href="struct.AsyncFd.html#method.poll_read_ready" title="method tokio::io::unix::AsyncFd::poll_read_ready"><code>poll_read_ready</code></a> retains a second, independent waker).</p>
+<p>This method is intended for cases where creating and pinning a future
+via <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>writable</code></a> is not feasible. Where possible, using <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>writable</code></a> is
+preferred, as this supports polling from multiple tasks at once.</p>
+<p>This method takes <code>&amp;self</code>, so it is possible to call this method
+concurrently with other methods on this struct. This method only
+provides shared access to the inner IO resource when handling the
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.poll_write_ready_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#485-495">source</a><h4 class="code-header">pub fn <a href="#method.poll_write_ready_mut" class="fn">poll_write_ready_mut</a>&lt;'a&gt;(
+    &amp;'a mut self,
+    cx: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context">Context</a>&lt;'_&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/task/poll/enum.Poll.html" title="enum core::task::poll::Poll">Poll</a>&lt;<a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard">AsyncFdReadyMutGuard</a>&lt;'a, T&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>Polls for write readiness.</p>
+<p>If the file descriptor is not currently ready for writing, this method
+will store a clone of the <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html" title="struct core::task::wake::Waker"><code>Waker</code></a> from the provided <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Context.html" title="struct core::task::wake::Context"><code>Context</code></a>. When the
+file descriptor becomes ready for writing, <a href="https://doc.rust-lang.org/1.81.0/core/task/wake/struct.Waker.html#method.wake" title="method core::task::wake::Waker::wake"><code>Waker::wake</code></a> will be called.</p>
+<p>Note that on multiple calls to <a href="struct.AsyncFd.html#method.poll_write_ready" title="method tokio::io::unix::AsyncFd::poll_write_ready"><code>poll_write_ready</code></a> or
+<a href="struct.AsyncFd.html#method.poll_write_ready_mut" title="method tokio::io::unix::AsyncFd::poll_write_ready_mut"><code>poll_write_ready_mut</code></a>, only the <code>Waker</code> from the <code>Context</code> passed to the
+most recent call is scheduled to receive a wakeup. (However,
+<a href="struct.AsyncFd.html#method.poll_read_ready" title="method tokio::io::unix::AsyncFd::poll_read_ready"><code>poll_read_ready</code></a> retains a second, independent waker).</p>
+<p>This method is intended for cases where creating and pinning a future
+via <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>writable</code></a> is not feasible. Where possible, using <a href="struct.AsyncFd.html#method.readable" title="method tokio::io::unix::AsyncFd::readable"><code>writable</code></a> is
+preferred, as this supports polling from multiple tasks at once.</p>
+<p>This method takes <code>&amp;mut self</code>, so it is possible to access the inner IO
+resource mutably when handling the <a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ready" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#586-593">source</a><h4 class="code-header">pub async fn <a href="#method.ready" class="fn">ready</a>(
+    &amp;self,
+    interest: <a class="struct" href="../struct.Interest.html" title="struct tokio::io::Interest">Interest</a>,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard">AsyncFdReadyGuard</a>&lt;'_, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Waits for any of the requested ready states, returning a
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a> that must be dropped to resume
+polling for the requested ready states.</p>
+<p>The function may complete without the file descriptor being ready. This is a
+false-positive and attempting an operation will return with
+<code>io::ErrorKind::WouldBlock</code>. The function can also return with an empty
+<a href="../struct.Ready.html" title="struct tokio::io::Ready"><code>Ready</code></a> set, so you should always check the returned value and possibly
+wait again if the requested states are not set.</p>
+<p>When an IO operation does return <code>io::ErrorKind::WouldBlock</code>, the readiness must be cleared.
+When a combined interest is used, it is important to clear only the readiness
+that is actually observed to block. For instance when the combined
+interest <code>Interest::READABLE | Interest::WRITABLE</code> is used, and a read blocks, only
+read readiness should be cleared using the <a href="struct.AsyncFdReadyGuard.html#method.clear_ready_matching" title="method tokio::io::unix::AsyncFdReadyGuard::clear_ready_matching"><code>AsyncFdReadyGuard::clear_ready_matching</code></a> method:
+<code>guard.clear_ready_matching(Ready::READABLE)</code>.
+Also clearing the write readiness in this case would be incorrect. The <a href="struct.AsyncFdReadyGuard.html#method.clear_ready" title="method tokio::io::unix::AsyncFdReadyGuard::clear_ready"><code>AsyncFdReadyGuard::clear_ready</code></a>
+method clears all readiness flags.</p>
+<p>This method takes <code>&amp;self</code>, so it is possible to call this method
+concurrently with other methods on this struct. This method only
+provides shared access to the inner IO resource when handling the
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>Concurrently read and write to a <a href="https://doc.rust-lang.org/1.81.0/std/net/tcp/struct.TcpStream.html" title="struct std::net::tcp::TcpStream"><code>std::net::TcpStream</code></a> on the same task without
+splitting.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::{Read, Write};
+<span class="kw">use </span>std::net::TcpStream;
+<span class="kw">use </span>tokio::io::unix::AsyncFd;
+<span class="kw">use </span>tokio::io::{Interest, Ready};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="kw">let </span>stream = TcpStream::connect(<span class="string">"127.0.0.1:8080"</span>)<span class="question-mark">?</span>;
+    stream.set_nonblocking(<span class="bool-val">true</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>stream = AsyncFd::new(stream)<span class="question-mark">?</span>;
+
+    <span class="kw">loop </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>guard = stream
+            .ready(Interest::READABLE | Interest::WRITABLE)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if </span>guard.ready().is_readable() {
+            <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[<span class="number">0</span>; <span class="number">1024</span>];
+            <span class="comment">// Try to read data, this may still fail with `WouldBlock`
+            // if the readiness event is a false positive.
+            </span><span class="kw">match </span>stream.get_ref().read(<span class="kw-2">&amp;mut </span>data) {
+                <span class="prelude-val">Ok</span>(n) =&gt; {
+                    <span class="macro">println!</span>(<span class="string">"read {} bytes"</span>, n);
+                }
+                <span class="prelude-val">Err</span>(<span class="kw-2">ref </span>e) <span class="kw">if </span>e.kind() == io::ErrorKind::WouldBlock =&gt; {
+                    <span class="comment">// a read has blocked, but a write might still succeed.
+                    // clear only the read readiness.
+                    </span>guard.clear_ready_matching(Ready::READABLE);
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
+                }
+            }
+        }
+
+        <span class="kw">if </span>guard.ready().is_writable() {
+            <span class="comment">// Try to write data, this may still fail with `WouldBlock`
+            // if the readiness event is a false positive.
+            </span><span class="kw">match </span>stream.get_ref().write(<span class="string">b"hello world"</span>) {
+                <span class="prelude-val">Ok</span>(n) =&gt; {
+                    <span class="macro">println!</span>(<span class="string">"write {} bytes"</span>, n);
+                }
+                <span class="prelude-val">Err</span>(<span class="kw-2">ref </span>e) <span class="kw">if </span>e.kind() == io::ErrorKind::WouldBlock =&gt; {
+                    <span class="comment">// a write has blocked, but a read might still succeed.
+                    // clear only the write readiness.
+                    </span>guard.clear_ready_matching(Ready::WRITABLE);
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
+                }
+            }
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.ready_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#682-692">source</a><h4 class="code-header">pub async fn <a href="#method.ready_mut" class="fn">ready_mut</a>(
+    &amp;mut self,
+    interest: <a class="struct" href="../struct.Interest.html" title="struct tokio::io::Interest">Interest</a>,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard">AsyncFdReadyMutGuard</a>&lt;'_, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Waits for any of the requested ready states, returning a
+<a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a> that must be dropped to resume
+polling for the requested ready states.</p>
+<p>The function may complete without the file descriptor being ready. This is a
+false-positive and attempting an operation will return with
+<code>io::ErrorKind::WouldBlock</code>. The function can also return with an empty
+<a href="../struct.Ready.html" title="struct tokio::io::Ready"><code>Ready</code></a> set, so you should always check the returned value and possibly
+wait again if the requested states are not set.</p>
+<p>When an IO operation does return <code>io::ErrorKind::WouldBlock</code>, the readiness must be cleared.
+When a combined interest is used, it is important to clear only the readiness
+that is actually observed to block. For instance when the combined
+interest <code>Interest::READABLE | Interest::WRITABLE</code> is used, and a read blocks, only
+read readiness should be cleared using the <a href="struct.AsyncFdReadyMutGuard.html#method.clear_ready_matching" title="method tokio::io::unix::AsyncFdReadyMutGuard::clear_ready_matching"><code>AsyncFdReadyMutGuard::clear_ready_matching</code></a> method:
+<code>guard.clear_ready_matching(Ready::READABLE)</code>.
+Also clearing the write readiness in this case would be incorrect.
+The <a href="struct.AsyncFdReadyMutGuard.html#method.clear_ready" title="method tokio::io::unix::AsyncFdReadyMutGuard::clear_ready"><code>AsyncFdReadyMutGuard::clear_ready</code></a> method clears all readiness flags.</p>
+<p>This method takes <code>&amp;mut self</code>, so it is possible to access the inner IO
+resource mutably when handling the <a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Concurrently read and write to a <a href="https://doc.rust-lang.org/1.81.0/std/net/tcp/struct.TcpStream.html" title="struct std::net::tcp::TcpStream"><code>std::net::TcpStream</code></a> on the same task without
+splitting.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::io::{Read, Write};
+<span class="kw">use </span>std::net::TcpStream;
+<span class="kw">use </span>tokio::io::unix::AsyncFd;
+<span class="kw">use </span>tokio::io::{Interest, Ready};
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="kw">let </span>stream = TcpStream::connect(<span class="string">"127.0.0.1:8080"</span>)<span class="question-mark">?</span>;
+    stream.set_nonblocking(<span class="bool-val">true</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>stream = AsyncFd::new(stream)<span class="question-mark">?</span>;
+
+    <span class="kw">loop </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>guard = stream
+            .ready_mut(Interest::READABLE | Interest::WRITABLE)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if </span>guard.ready().is_readable() {
+            <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[<span class="number">0</span>; <span class="number">1024</span>];
+            <span class="comment">// Try to read data, this may still fail with `WouldBlock`
+            // if the readiness event is a false positive.
+            </span><span class="kw">match </span>guard.get_inner_mut().read(<span class="kw-2">&amp;mut </span>data) {
+                <span class="prelude-val">Ok</span>(n) =&gt; {
+                    <span class="macro">println!</span>(<span class="string">"read {} bytes"</span>, n);
+                }
+                <span class="prelude-val">Err</span>(<span class="kw-2">ref </span>e) <span class="kw">if </span>e.kind() == io::ErrorKind::WouldBlock =&gt; {
+                    <span class="comment">// a read has blocked, but a write might still succeed.
+                    // clear only the read readiness.
+                    </span>guard.clear_ready_matching(Ready::READABLE);
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
+                }
+            }
+        }
+
+        <span class="kw">if </span>guard.ready().is_writable() {
+            <span class="comment">// Try to write data, this may still fail with `WouldBlock`
+            // if the readiness event is a false positive.
+            </span><span class="kw">match </span>guard.get_inner_mut().write(<span class="string">b"hello world"</span>) {
+                <span class="prelude-val">Ok</span>(n) =&gt; {
+                    <span class="macro">println!</span>(<span class="string">"write {} bytes"</span>, n);
+                }
+                <span class="prelude-val">Err</span>(<span class="kw-2">ref </span>e) <span class="kw">if </span>e.kind() == io::ErrorKind::WouldBlock =&gt; {
+                    <span class="comment">// a write has blocked, but a read might still succeed.
+                    // clear only the write readiness.
+                    </span>guard.clear_ready_matching(Ready::WRITABLE);
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
+                }
+            }
+        }
+    }
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.readable" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#703-705">source</a><h4 class="code-header">pub async fn <a href="#method.readable" class="fn">readable</a>&lt;'a&gt;(&amp;'a self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard">AsyncFdReadyGuard</a>&lt;'a, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Waits for the file descriptor to become readable, returning a
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a> that must be dropped to resume read-readiness
+polling.</p>
+<p>This method takes <code>&amp;self</code>, so it is possible to call this method
+concurrently with other methods on this struct. This method only
+provides shared access to the inner IO resource when handling the
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.readable_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#714-716">source</a><h4 class="code-header">pub async fn <a href="#method.readable_mut" class="fn">readable_mut</a>&lt;'a&gt;(
+    &amp;'a mut self,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard">AsyncFdReadyMutGuard</a>&lt;'a, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Waits for the file descriptor to become readable, returning a
+<a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a> that must be dropped to resume read-readiness
+polling.</p>
+<p>This method takes <code>&amp;mut self</code>, so it is possible to access the inner IO
+resource mutably when handling the <a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.writable" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#727-729">source</a><h4 class="code-header">pub async fn <a href="#method.writable" class="fn">writable</a>&lt;'a&gt;(&amp;'a self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard">AsyncFdReadyGuard</a>&lt;'a, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Waits for the file descriptor to become writable, returning a
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a> that must be dropped to resume write-readiness
+polling.</p>
+<p>This method takes <code>&amp;self</code>, so it is possible to call this method
+concurrently with other methods on this struct. This method only
+provides shared access to the inner IO resource when handling the
+<a href="struct.AsyncFdReadyGuard.html" title="struct tokio::io::unix::AsyncFdReadyGuard"><code>AsyncFdReadyGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.writable_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#738-740">source</a><h4 class="code-header">pub async fn <a href="#method.writable_mut" class="fn">writable_mut</a>&lt;'a&gt;(
+    &amp;'a mut self,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard">AsyncFdReadyMutGuard</a>&lt;'a, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Waits for the file descriptor to become writable, returning a
+<a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a> that must be dropped to resume write-readiness
+polling.</p>
+<p>This method takes <code>&amp;mut self</code>, so it is possible to access the inner IO
+resource mutably when handling the <a href="struct.AsyncFdReadyMutGuard.html" title="struct tokio::io::unix::AsyncFdReadyMutGuard"><code>AsyncFdReadyMutGuard</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.async_io" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#819-827">source</a><h4 class="code-header">pub async fn <a href="#method.async_io" class="fn">async_io</a>&lt;R&gt;(
+    &amp;self,
+    interest: <a class="struct" href="../struct.Interest.html" title="struct tokio::io::Interest">Interest</a>,
+    f: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;R&gt;,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;R&gt;</h4></section></summary><div class="docblock"><p>Reads or writes from the file descriptor using a user-provided IO operation.</p>
+<p>The <code>async_io</code> method is a convenience utility that waits for the file
+descriptor to become ready, and then executes the provided IO operation.
+Since file descriptors may be marked ready spuriously, the closure will
+be called repeatedly until it returns something other than a
+<a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.WouldBlock" title="variant std::io::error::ErrorKind::WouldBlock"><code>WouldBlock</code></a> error. This is done using the following loop:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">async fn </span>async_io&lt;R&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>f: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>T) -&gt; io::Result&lt;R&gt;) -&gt; io::Result&lt;R&gt; {
+    <span class="kw">loop </span>{
+        <span class="comment">// or `readable` if called with the read interest.
+        </span><span class="kw">let </span>guard = <span class="self">self</span>.writable().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">match </span>guard.try_io(<span class="kw-2">&amp;mut </span>f) {
+            <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span>result,
+            <span class="prelude-val">Err</span>(_would_block) =&gt; <span class="kw">continue</span>,
+        }
+    }
+}</code></pre></div>
+<p>The closure should only return a <a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.WouldBlock" title="variant std::io::error::ErrorKind::WouldBlock"><code>WouldBlock</code></a> error if it has performed
+an IO operation on the file descriptor that failed due to the file descriptor not being
+ready. Returning a <a href="https://doc.rust-lang.org/1.81.0/std/io/error/enum.ErrorKind.html#variant.WouldBlock" title="variant std::io::error::ErrorKind::WouldBlock"><code>WouldBlock</code></a> error in any other situation will
+incorrectly clear the readiness flag, which can cause the file descriptor to
+behave incorrectly.</p>
+<p>The closure should not perform the IO operation using any of the methods
+defined on the Tokio <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a> type, as this will mess with the
+readiness flag and can cause the file descriptor to behave incorrectly.</p>
+<p>This method is not intended to be used with combined interests.
+The closure should perform only one type of IO operation, so it should not
+require more than one ready state. This method may panic or sleep forever
+if it is called with a combined interest.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>This example sends some bytes on the inner <a href="https://doc.rust-lang.org/1.81.0/std/net/udp/struct.UdpSocket.html" title="struct std::net::udp::UdpSocket"><code>std::net::UdpSocket</code></a>. The <code>async_io</code>
+method waits for readiness, and retries if the send operation does block. This example
+is equivalent to the one given for <a href="struct.AsyncFdReadyGuard.html#method.try_io" title="method tokio::io::unix::AsyncFdReadyGuard::try_io"><code>try_io</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::io::{Interest, unix::AsyncFd};
+
+<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::net::UdpSocket;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
+    <span class="kw">let </span>socket = UdpSocket::bind(<span class="string">"0.0.0.0:8080"</span>)<span class="question-mark">?</span>;
+    socket.set_nonblocking(<span class="bool-val">true</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>async_fd = AsyncFd::new(socket)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>written = async_fd
+        .async_io(Interest::WRITABLE, |inner| inner.send(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>]))
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">println!</span>(<span class="string">"wrote {written} bytes"</span>);
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.async_io_mut" class="method"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#835-843">source</a><h4 class="code-header">pub async fn <a href="#method.async_io_mut" class="fn">async_io_mut</a>&lt;R&gt;(
+    &amp;mut self,
+    interest: <a class="struct" href="../struct.Interest.html" title="struct tokio::io::Interest">Interest</a>,
+    f: impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;R&gt;,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;R&gt;</h4></section></summary><div class="docblock"><p>Reads or writes from the file descriptor using a user-provided IO operation.</p>
+<p>The behavior is the same as <a href="struct.AsyncFd.html#method.async_io" title="method tokio::io::unix::AsyncFd::async_io"><code>async_io</code></a>, except that the closure can mutate the inner
+value of the <a href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd"><code>AsyncFd</code></a>.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-AsFd-for-AsyncFd%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#852-856">source</a><a href="#impl-AsFd-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/owned/trait.AsFd.html" title="trait std::os::fd::owned::AsFd">AsFd</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.as_fd" class="method trait-impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#853-855">source</a><a href="#method.as_fd" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/owned/trait.AsFd.html#tymethod.as_fd" class="fn">as_fd</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/std/os/fd/owned/struct.BorrowedFd.html" title="struct std::os::fd::owned::BorrowedFd">BorrowedFd</a>&lt;'_&gt;</h4></section></summary><div class='docblock'>Borrows the file descriptor. <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/owned/trait.AsFd.html#tymethod.as_fd">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-AsRawFd-for-AsyncFd%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#846-850">source</a><a href="#impl-AsRawFd-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.as_raw_fd" class="method trait-impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#847-849">source</a><a href="#method.as_raw_fd" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html#tymethod.as_raw_fd" class="fn">as_raw_fd</a>(&amp;self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/type.RawFd.html" title="type std::os::fd::raw::RawFd">RawFd</a></h4></section></summary><div class='docblock'>Extracts the raw file descriptor. <a href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html#tymethod.as_raw_fd">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-AsyncFd%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#858-864">source</a><a href="#impl-Debug-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#859-863">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Drop-for-AsyncFd%3CT%3E" class="impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#866-870">source</a><a href="#impl-Drop-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/os/fd/raw/trait.AsRawFd.html" title="trait std::os::fd::raw::AsRawFd">AsRawFd</a>&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop">Drop</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.drop" class="method trait-impl"><a class="src rightside" href="../../../src/tokio/io/async_fd.rs.html#867-869">source</a><a href="#method.drop" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop" class="fn">drop</a>(&amp;mut self)</h4></section></summary><div class='docblock'>Executes the destructor for this type. <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html#tymethod.drop">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-AsyncFd%3CT%3E" class="impl"><a href="#impl-Freeze-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a>,</div></h3></section><section id="impl-RefUnwindSafe-for-AsyncFd%3CT%3E" class="impl"><a href="#impl-RefUnwindSafe-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section><section id="impl-Send-for-AsyncFd%3CT%3E" class="impl"><a href="#impl-Send-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>,</div></h3></section><section id="impl-Sync-for-AsyncFd%3CT%3E" class="impl"><a href="#impl-Sync-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>,</div></h3></section><section id="impl-Unpin-for-AsyncFd%3CT%3E" class="impl"><a href="#impl-Unpin-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a>,</div></h3></section><section id="impl-UnwindSafe-for-AsyncFd%3CT%3E" class="impl"><a href="#impl-UnwindSafe-for-AsyncFd%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.AsyncFd.html" title="struct tokio::io::unix::AsyncFd">AsyncFd</a>&lt;T&gt;</h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

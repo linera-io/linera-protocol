@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro for the `SerializeRow` trait which serializes given Rust structure into bind markers for a CQL statement."><title>SerializeRow in scylla - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="scylla" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../scylla/index.html">scylla</a><span class="version">0.12.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">scylla</a>::<wbr><a class="derive" href="#">SerializeRow</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/scylla_macros/lib.rs.html#27">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(SerializeRow)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[scylla]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derive macro for the <a href="serialize/row/trait.SerializeRow.html" title="trait scylla::serialize::row::SerializeRow"><code>SerializeRow</code></a> trait
+which serializes given Rust structure into bind markers for a CQL statement.</p>
+<p>At the moment, only structs with named fields are supported.</p>
+<p>Serialization will fail if there are some bind markers/columns in the statement
+that don’t match to any of the Rust struct fields, <em>or vice versa</em>.</p>
+<p>In case of failure, either <a href="serialize/row/struct.BuiltinTypeCheckError.html" title="struct scylla::serialize::row::BuiltinTypeCheckError"><code>BuiltinTypeCheckError</code></a>
+or <a href="serialize/row/struct.BuiltinSerializationError.html" title="struct scylla::serialize::row::BuiltinSerializationError"><code>BuiltinSerializationError</code></a>
+will be returned.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>A UDT defined like this:
+Given a table and a query:</p>
+<div class="example-wrap"><pre class="language-notrust"><code>CREATE TABLE ks.my_t (a int PRIMARY KEY, b text, c blob);
+INSERT INTO ks.my_t (a, b, c) VALUES (?, ?, ?);
+</code></pre></div>
+<p>…the values for the query can be serialized using the following struct:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(SerializeRow)]
+</span><span class="kw">struct </span>MyValues {
+    a: i32,
+    b: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    c: Vec&lt;u8&gt;,
+}</code></pre></div>
+<h2 id="struct-attributes"><a class="doc-anchor" href="#struct-attributes">§</a>Struct attributes</h2>
+<p><code>#[scylla(flavor = "flavor_name")]</code></p>
+<p>Allows to choose one of the possible “flavors”, i.e. the way how the
+generated code will approach serialization. Possible flavors are:</p>
+<ul>
+<li><code>"match_by_name"</code> (default) - the generated implementation <em>does not
+require</em> the fields in the Rust struct to be in the same order as the
+columns/bind markers. During serialization, the implementation will take
+care to serialize the fields in the order which the database expects.</li>
+<li><code>"enforce_order"</code> - the generated implementation <em>requires</em> the fields
+in the Rust struct to be in the same order as the columns/bind markers.
+If the order is incorrect, type checking/serialization will fail.
+This is a less robust flavor than <code>"match_by_name"</code>, but should be
+slightly more performant as it doesn’t need to perform lookups by name.</li>
+</ul>
+<p><code>#[scylla(crate = crate_name)]</code></p>
+<p>By default, the code generated by the derive macro will refer to the items
+defined by the driver (types, traits, etc.) via the <code>::scylla</code> path.
+For example, it will refer to the <a href="serialize/row/trait.SerializeRow.html" title="trait scylla::serialize::row::SerializeRow"><code>SerializeRow</code></a> trait
+using the following path:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>::scylla::_macro_internal::SerializeRow;</code></pre></div>
+<p>Most users will simply add <code>scylla</code> to their dependencies, then use
+the derive macro and the path above will work. However, there are some
+niche cases where this path will <em>not</em> work:</p>
+<ul>
+<li>The <code>scylla</code> crate is imported under a different name,</li>
+<li>The <code>scylla</code> crate is <em>not imported at all</em> - the macro actually
+is defined in the <code>scylla-macros</code> crate and the generated code depends
+on items defined in <code>scylla-cql</code>.</li>
+</ul>
+<p>It’s not possible to automatically resolve those issues in the procedural
+macro itself, so in those cases the user must provide an alternative path
+to either the <code>scylla</code> or <code>scylla-cql</code> crate.</p>
+<p>`#[scylla(skip_name_checks)]</p>
+<p><em>Specific only to the <code>enforce_order</code> flavor.</em></p>
+<p>Skips checking Rust field names against names of the columns / bind markers.
+With this annotation, the generated implementation will allow mismatch
+between Rust struct field names and the column / bind markers, i.e. it’s
+OK if i-th Rust struct field has a different name than the column / bind
+marker. The values are still being type-checked.</p>
+<h2 id="field-attributes"><a class="doc-anchor" href="#field-attributes">§</a>Field attributes</h2>
+<p><code>#[scylla(rename = "column_or_bind_marker_name")]</code></p>
+<p>Serializes the field to the column / bind marker with given name instead of
+its Rust name.</p>
+<p><code>#[scylla(skip)]</code></p>
+<p>Don’t use the field during serialization.</p>
+<hr />
+<p>Documentation for this macro can only be found
+in <code>scylla</code> crate - not in scylla-macros nor in scylla-cql.
+This is because of rustdocs limitations that are hard to explain here.</p>
+</div></details></section></div></main></body></html>

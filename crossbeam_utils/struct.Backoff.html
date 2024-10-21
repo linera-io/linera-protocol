@@ -1,0 +1,171 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Performs exponential backoff in spin loops."><title>Backoff in crossbeam_utils - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="crossbeam_utils" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../crossbeam_utils/index.html">crossbeam_utils</a><span class="version">0.8.20</span></h2></div><h2 class="location"><a href="#">Backoff</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.is_completed">is_completed</a></li><li><a href="#method.new">new</a></li><li><a href="#method.reset">reset</a></li><li><a href="#method.snooze">snooze</a></li><li><a href="#method.spin">spin</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Debug-for-Backoff">Debug</a></li><li><a href="#impl-Default-for-Backoff">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Backoff">!Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Backoff">!RefUnwindSafe</a></li><li><a href="#impl-Sync-for-Backoff">!Sync</a></li><li><a href="#impl-Send-for-Backoff">Send</a></li><li><a href="#impl-Unpin-for-Backoff">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Backoff">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate crossbeam_utils</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">crossbeam_utils</a>::<wbr><a class="struct" href="#">Backoff</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/crossbeam_utils/backoff.rs.html#80-82">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Backoff { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Performs exponential backoff in spin loops.</p>
+<p>Backing off in spin loops reduces contention and improves overall performance.</p>
+<p>This primitive can execute <em>YIELD</em> and <em>PAUSE</em> instructions, yield the current thread to the OS
+scheduler, and tell when is a good time to block the thread using a different synchronization
+mechanism. Each step of the back off procedure takes roughly twice as long as the previous
+step.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Backing off in a lock-free loop:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+<span class="kw">use </span>std::sync::atomic::AtomicUsize;
+<span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
+
+<span class="kw">fn </span>fetch_mul(a: <span class="kw-2">&amp;</span>AtomicUsize, b: usize) -&gt; usize {
+    <span class="kw">let </span>backoff = Backoff::new();
+    <span class="kw">loop </span>{
+        <span class="kw">let </span>val = a.load(SeqCst);
+        <span class="kw">if </span>a.compare_exchange(val, val.wrapping_mul(b), SeqCst, SeqCst).is_ok() {
+            <span class="kw">return </span>val;
+        }
+        backoff.spin();
+    }
+}</code></pre></div>
+<p>Waiting for an <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/struct.AtomicBool.html" title="struct core::sync::atomic::AtomicBool"><code>AtomicBool</code></a> to become <code>true</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+<span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
+
+<span class="kw">fn </span>spin_wait(ready: <span class="kw-2">&amp;</span>AtomicBool) {
+    <span class="kw">let </span>backoff = Backoff::new();
+    <span class="kw">while </span>!ready.load(SeqCst) {
+        backoff.snooze();
+    }
+}</code></pre></div>
+<p>Waiting for an <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/struct.AtomicBool.html" title="struct core::sync::atomic::AtomicBool"><code>AtomicBool</code></a> to become <code>true</code> and parking the thread after a long wait.
+Note that whoever sets the atomic variable to <code>true</code> must notify the parked thread by calling
+<a href="https://doc.rust-lang.org/1.81.0/std/thread/struct.Thread.html#method.unpark" title="method std::thread::Thread::unpark"><code>unpark()</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+<span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
+<span class="kw">use </span>std::thread;
+
+<span class="kw">fn </span>blocking_wait(ready: <span class="kw-2">&amp;</span>AtomicBool) {
+    <span class="kw">let </span>backoff = Backoff::new();
+    <span class="kw">while </span>!ready.load(SeqCst) {
+        <span class="kw">if </span>backoff.is_completed() {
+            thread::park();
+        } <span class="kw">else </span>{
+            backoff.snooze();
+        }
+    }
+}</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Backoff" class="impl"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#84-272">source</a><a href="#impl-Backoff" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#95-97">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; Self</h4></section></summary><div class="docblock"><p>Creates a new <code>Backoff</code>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+
+<span class="kw">let </span>backoff = Backoff::new();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.reset" class="method"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#110-112">source</a><h4 class="code-header">pub fn <a href="#method.reset" class="fn">reset</a>(&amp;self)</h4></section></summary><div class="docblock"><p>Resets the <code>Backoff</code>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+
+<span class="kw">let </span>backoff = Backoff::new();
+backoff.reset();</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.spin" class="method"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#146-154">source</a><h4 class="code-header">pub fn <a href="#method.spin" class="fn">spin</a>(&amp;self)</h4></section></summary><div class="docblock"><p>Backs off in a lock-free loop.</p>
+<p>This method should be used when we need to retry an operation because another thread made
+progress.</p>
+<p>The processor may yield using the <em>YIELD</em> or <em>PAUSE</em> instruction.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>Backing off in a lock-free loop:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+<span class="kw">use </span>std::sync::atomic::AtomicUsize;
+<span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
+
+<span class="kw">fn </span>fetch_mul(a: <span class="kw-2">&amp;</span>AtomicUsize, b: usize) -&gt; usize {
+    <span class="kw">let </span>backoff = Backoff::new();
+    <span class="kw">loop </span>{
+        <span class="kw">let </span>val = a.load(SeqCst);
+        <span class="kw">if </span>a.compare_exchange(val, val.wrapping_mul(b), SeqCst, SeqCst).is_ok() {
+            <span class="kw">return </span>val;
+        }
+        backoff.spin();
+    }
+}
+
+<span class="kw">let </span>a = AtomicUsize::new(<span class="number">7</span>);
+<span class="macro">assert_eq!</span>(fetch_mul(<span class="kw-2">&amp;</span>a, <span class="number">8</span>), <span class="number">7</span>);
+<span class="macro">assert_eq!</span>(a.load(SeqCst), <span class="number">56</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.snooze" class="method"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#206-224">source</a><h4 class="code-header">pub fn <a href="#method.snooze" class="fn">snooze</a>(&amp;self)</h4></section></summary><div class="docblock"><p>Backs off in a blocking loop.</p>
+<p>This method should be used when we need to wait for another thread to make progress.</p>
+<p>The processor may yield using the <em>YIELD</em> or <em>PAUSE</em> instruction and the current thread
+may yield by giving up a timeslice to the OS scheduler.</p>
+<p>In <code>#[no_std]</code> environments, this method is equivalent to <a href="struct.Backoff.html#method.spin" title="method crossbeam_utils::Backoff::spin"><code>spin</code></a>.</p>
+<p>If possible, use <a href="struct.Backoff.html#method.is_completed" title="method crossbeam_utils::Backoff::is_completed"><code>is_completed</code></a> to check when it is advised to stop using backoff and
+block the current thread using a different synchronization mechanism instead.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Waiting for an <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/struct.AtomicBool.html" title="struct core::sync::atomic::AtomicBool"><code>AtomicBool</code></a> to become <code>true</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">fn </span>spin_wait(ready: <span class="kw-2">&amp;</span>AtomicBool) {
+    <span class="kw">let </span>backoff = Backoff::new();
+    <span class="kw">while </span>!ready.load(SeqCst) {
+        backoff.snooze();
+    }
+}
+
+<span class="kw">let </span>ready = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<span class="kw">let </span>ready2 = ready.clone();
+
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_millis(<span class="number">100</span>));
+    ready2.store(<span class="bool-val">true</span>, SeqCst);
+});
+
+<span class="macro">assert_eq!</span>(ready.load(SeqCst), <span class="bool-val">false</span>);
+spin_wait(<span class="kw-2">&amp;</span>ready);
+<span class="macro">assert_eq!</span>(ready.load(SeqCst), <span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_completed" class="method"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#269-271">source</a><h4 class="code-header">pub fn <a href="#method.is_completed" class="fn">is_completed</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if exponential backoff has completed and blocking the thread is advised.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Waiting for an <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/struct.AtomicBool.html" title="struct core::sync::atomic::AtomicBool"><code>AtomicBool</code></a> to become <code>true</code> and parking the thread after a long wait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>crossbeam_utils::Backoff;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
+<span class="kw">use </span>std::thread;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">fn </span>blocking_wait(ready: <span class="kw-2">&amp;</span>AtomicBool) {
+    <span class="kw">let </span>backoff = Backoff::new();
+    <span class="kw">while </span>!ready.load(SeqCst) {
+        <span class="kw">if </span>backoff.is_completed() {
+            thread::park();
+        } <span class="kw">else </span>{
+            backoff.snooze();
+        }
+    }
+}
+
+<span class="kw">let </span>ready = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<span class="kw">let </span>ready2 = ready.clone();
+<span class="kw">let </span>waiter = thread::current();
+
+thread::spawn(<span class="kw">move </span>|| {
+    thread::sleep(Duration::from_millis(<span class="number">100</span>));
+    ready2.store(<span class="bool-val">true</span>, SeqCst);
+    waiter.unpark();
+});
+
+<span class="macro">assert_eq!</span>(ready.load(SeqCst), <span class="bool-val">false</span>);
+blocking_wait(<span class="kw-2">&amp;</span>ready);
+<span class="macro">assert_eq!</span>(ready.load(SeqCst), <span class="bool-val">true</span>);</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Backoff" class="impl"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#274-281">source</a><a href="#impl-Debug-for-Backoff" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#275-280">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Backoff" class="impl"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#283-287">source</a><a href="#impl-Default-for-Backoff" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../src/crossbeam_utils/backoff.rs.html#284-286">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Backoff" class="impl"><a href="#impl-Freeze-for-Backoff" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section><section id="impl-RefUnwindSafe-for-Backoff" class="impl"><a href="#impl-RefUnwindSafe-for-Backoff" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section><section id="impl-Send-for-Backoff" class="impl"><a href="#impl-Send-for-Backoff" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section><section id="impl-Sync-for-Backoff" class="impl"><a href="#impl-Sync-for-Backoff" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section><section id="impl-Unpin-for-Backoff" class="impl"><a href="#impl-Unpin-for-Backoff" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section><section id="impl-UnwindSafe-for-Backoff" class="impl"><a href="#impl-UnwindSafe-for-Backoff" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Backoff.html" title="struct crossbeam_utils::Backoff">Backoff</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

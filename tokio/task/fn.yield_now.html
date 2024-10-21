@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Yields execution back to the Tokio runtime."><title>yield_now in tokio::task - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tokio::task</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">tokio</a>::<wbr><a href="index.html">task</a>::<wbr><a class="fn" href="#">yield_now</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/tokio/task/yield_now.rs.html#39-64">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub async fn yield_now()</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Yields execution back to the Tokio runtime.</p>
+<p>A task yields by awaiting on <code>yield_now()</code>, and may resume when that future
+completes (with no output.) The current task will be re-added as a pending
+task at the <em>back</em> of the pending queue. Any other pending tasks will be
+scheduled. No other waking is required for the task to continue.</p>
+<p>See also the usage example in the <a href="index.html#yield_now">task module</a>.</p>
+<h3 id="non-guarantees"><a class="doc-anchor" href="#non-guarantees">§</a>Non-guarantees</h3>
+<p>This function may not yield all the way up to the executor if there are any
+special combinators above it in the call stack. For example, if a
+<a href="../macro.select.html" title="macro tokio::select"><code>tokio::select!</code></a> has another branch complete during the same poll as the
+<code>yield_now()</code>, then the yield is not propagated all the way up to the
+runtime.</p>
+<p>It is generally not guaranteed that the runtime behaves like you expect it
+to when deciding which task to schedule next after a call to <code>yield_now()</code>.
+In particular, the runtime may choose to poll the task that just ran
+<code>yield_now()</code> again immediately without polling any other tasks first. For
+example, the runtime will not drive the IO driver between every poll of a
+task, and this could result in the runtime polling the current task again
+immediately even if there is another task that could make progress if that
+other task is waiting for a notification from the IO driver.</p>
+<p>In general, changes to the order in which the runtime polls tasks is not
+considered a breaking change, and your program should be correct no matter
+which order the runtime polls your tasks in.</p>
+</div></details></section></div></main></body></html>

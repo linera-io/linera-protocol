@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Default App Name Provider chain"><title>default_provider in aws_config::default_provider::app_name - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="aws_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../aws_config/index.html">aws_config</a><span class="version">1.5.6</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In aws_config::default_provider::app_name</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">aws_config</a>::<wbr><a href="../index.html">default_provider</a>::<wbr><a href="index.html">app_name</a>::<wbr><a class="fn" href="#">default_provider</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/aws_config/default_provider/app_name.rs.html#33-35">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn default_provider() -&gt; <a class="struct" href="struct.Builder.html" title="struct aws_config::default_provider::app_name::Builder">Builder</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Default App Name Provider chain</p>
+<p>This provider will check the following sources in order:</p>
+<ol>
+<li>Environment variables: <code>AWS_SDK_UA_APP_ID</code></li>
+<li>Profile files from the key <code>sdk_ua_app_id</code></li>
+</ol>
+<h3 id="location-of-profile-files"><a class="doc-anchor" href="#location-of-profile-files">§</a>Location of Profile Files</h3>
+<ul>
+<li>The location of the config file will be loaded from the <code>AWS_CONFIG_FILE</code> environment variable
+with a fallback to <code>~/.aws/config</code></li>
+<li>The location of the credentials file will be loaded from the <code>AWS_SHARED_CREDENTIALS_FILE</code>
+environment variable with a fallback to <code>~/.aws/credentials</code></li>
+</ul>
+<p>The location of these files can also be customized programmatically using <a href="../../profile/profile_file/type.ProfileFiles.html" title="type aws_config::profile::profile_file::ProfileFiles"><code>ProfileFiles</code></a>.</p>
+<h3 id="home-directory-resolution"><a class="doc-anchor" href="#home-directory-resolution">§</a>Home directory resolution</h3>
+<p>Home directory resolution is implemented to match the behavior of the CLI &amp; Python. <code>~</code> is only
+used for home directory resolution when it:</p>
+<ul>
+<li>Starts the path</li>
+<li>Is followed immediately by <code>/</code> or a platform specific separator. (On windows, <code>~/</code> and <code>~\</code> both
+resolve to the home directory.</li>
+</ul>
+<p>When determining the home directory, the following environment variables are checked:</p>
+<ul>
+<li><code>HOME</code> on all platforms</li>
+<li><code>USERPROFILE</code> on Windows</li>
+<li>The concatenation of <code>HOMEDRIVE</code> and <code>HOMEPATH</code> on Windows (<code>$HOMEDRIVE$HOMEPATH</code>)</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p><strong>Loads “my-app” as the app name</strong></p>
+<div class="example-wrap"><pre class="language-ini"><code>[default]
+sdk_ua_app_id = my-app
+</code></pre></div>
+<p><strong>Loads “my-app” as the app name <em>if and only if</em> the <code>AWS_PROFILE</code> environment variable
+is set to <code>other</code>.</strong></p>
+<div class="example-wrap"><pre class="language-ini"><code>[profile other]
+sdk_ua_app_id = my-app
+</code></pre></div></div></details></section></div></main></body></html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Efficient and customizable data-encoding functions like base64, base32, and hex"><title>data_encoding - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="data_encoding" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../data_encoding/index.html">data_encoding</a><span class="version">2.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">data_encoding</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/data_encoding/lib.rs.html#1-2561">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Efficient and customizable data-encoding functions like base64, base32, and hex</p>
+<p>This <a href="https://crates.io/crates/data-encoding">crate</a> provides little-endian ASCII base-conversion encodings for
+bases of size 2, 4, 8, 16, 32, and 64. It supports:</p>
+<ul>
+<li><a href="struct.Specification.html#structfield.padding">padding</a> for streaming</li>
+<li>canonical encodings (e.g. <a href="struct.Specification.html#structfield.check_trailing_bits">trailing bits</a> are checked)</li>
+<li>in-place <a href="struct.Encoding.html#method.encode_mut">encoding</a> and <a href="struct.Encoding.html#method.decode_mut">decoding</a> functions</li>
+<li>partial <a href="struct.Encoding.html#method.decode_mut">decoding</a> functions (e.g. for error recovery)</li>
+<li>character <a href="struct.Specification.html#structfield.translate">translation</a> (e.g. for case-insensitivity)</li>
+<li>most and least significant <a href="struct.Specification.html#structfield.bit_order">bit-order</a></li>
+<li><a href="struct.Specification.html#structfield.ignore">ignoring</a> characters when decoding (e.g. for skipping newlines)</li>
+<li><a href="struct.Specification.html#structfield.wrap">wrapping</a> the output when encoding</li>
+<li>no-std environments with <code>default-features = false, features = ["alloc"]</code></li>
+<li>no-alloc environments with <code>default-features = false</code></li>
+</ul>
+<p>You may use the <a href="https://crates.io/crates/data-encoding-bin">binary</a> or the <a href="https://data-encoding.rs">website</a> to play around.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This crate provides predefined encodings as <a href="index.html#constants">constants</a>. These constants are of type
+<a href="struct.Encoding.html"><code>Encoding</code></a>. This type provides encoding and decoding functions with in-place or allocating
+variants. Here is an example using the allocating encoding function of <a href="constant.BASE64.html"><code>BASE64</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>data_encoding::BASE64;
+<span class="macro">assert_eq!</span>(BASE64.encode(<span class="string">b"Hello world"</span>), <span class="string">"SGVsbG8gd29ybGQ="</span>);</code></pre></div>
+<p>Here is an example using the in-place decoding function of <a href="constant.BASE32.html"><code>BASE32</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>data_encoding::BASE32;
+<span class="kw">let </span>input = <span class="string">b"JBSWY3DPEB3W64TMMQ======"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>output = <span class="macro">vec!</span>[<span class="number">0</span>; BASE32.decode_len(input.len()).unwrap()];
+<span class="kw">let </span>len = BASE32.decode_mut(input, <span class="kw-2">&amp;mut </span>output).unwrap();
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>output[<span class="number">0 </span>.. len], <span class="string">b"Hello world"</span>);</code></pre></div>
+<p>You are not limited to the predefined encodings. You may define your own encodings (with the
+same correctness and performance properties as the predefined ones) using the <a href="struct.Specification.html"><code>Specification</code></a>
+type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>data_encoding::Specification;
+<span class="kw">let </span>hex = {
+    <span class="kw">let </span><span class="kw-2">mut </span>spec = Specification::new();
+    spec.symbols.push_str(<span class="string">"0123456789abcdef"</span>);
+    spec.encoding().unwrap()
+};
+<span class="macro">assert_eq!</span>(hex.encode(<span class="string">b"hello"</span>), <span class="string">"68656c6c6f"</span>);</code></pre></div>
+<p>You may use the <a href="https://crates.io/crates/data-encoding-macro">macro</a> library to define a compile-time custom encoding:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>data_encoding::Encoding;
+<span class="kw">use </span>data_encoding_macro::new_encoding;
+<span class="kw">const </span>HEX: Encoding = <span class="macro">new_encoding!</span>{
+    symbols: <span class="string">"0123456789abcdef"</span>,
+    translate_from: <span class="string">"ABCDEF"</span>,
+    translate_to: <span class="string">"abcdef"</span>,
+};
+<span class="kw">const </span>BASE64: Encoding = <span class="macro">new_encoding!</span>{
+    symbols: <span class="string">"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"</span>,
+    padding: <span class="string">'='</span>,
+};</code></pre></div>
+<h2 id="properties"><a class="doc-anchor" href="#properties">§</a>Properties</h2>
+<p>The <a href="constant.HEXUPPER.html"><code>HEXUPPER</code></a>, <a href="constant.BASE32.html"><code>BASE32</code></a>, <a href="constant.BASE32HEX.html"><code>BASE32HEX</code></a>, <a href="constant.BASE64.html"><code>BASE64</code></a>, and <a href="constant.BASE64URL.html"><code>BASE64URL</code></a> predefined encodings
+conform to <a href="https://tools.ietf.org/html/rfc4648">RFC4648</a>.</p>
+<p>In general, the encoding and decoding functions satisfy the following properties:</p>
+<ul>
+<li>They are deterministic: their output only depends on their input</li>
+<li>They have no side-effects: they do not modify any hidden mutable state</li>
+<li>They are correct: encoding followed by decoding gives the initial data</li>
+<li>They are canonical (unless <a href="struct.Encoding.html#method.is_canonical"><code>is_canonical</code></a> returns false): decoding followed by encoding
+gives the initial data</li>
+</ul>
+<p>This last property is usually not satisfied by base64 implementations. This is a matter of
+choice and this crate has made the choice to let the user choose. Support for canonical encoding
+as described by the <a href="https://tools.ietf.org/html/rfc4648#section-3.5">RFC</a> is provided. But it is also possible to disable checking
+trailing bits, to add characters translation, to decode concatenated padded inputs, and to
+ignore some characters. Note that non-canonical encodings may be an attack vector as described
+in <a href="https://eprint.iacr.org/2022/361.pdf">Base64 Malleability in Practice</a>.</p>
+<p>Since the RFC specifies the encoding function on all inputs and the decoding function on all
+possible encoded outputs, the differences between implementations come from the decoding
+function which may be more or less permissive. In this crate, the decoding function of canonical
+encodings rejects all inputs that are not a possible output of the encoding function. Here are
+some concrete examples of decoding differences between this crate, the <code>base64</code> crate, and the
+<code>base64</code> GNU program:</p>
+<div><table><thead><tr><th>Input</th><th><code>data-encoding</code></th><th><code>base64</code></th><th>GNU <code>base64</code></th></tr></thead><tbody>
+<tr><td><code>AAB=</code></td><td><code>Trailing(2)</code></td><td><code>Last(2)</code></td><td><code>\x00\x00</code></td></tr>
+<tr><td><code>AA\nB=</code></td><td><code>Length(4)</code></td><td><code>Byte(2)</code></td><td><code>\x00\x00</code></td></tr>
+<tr><td><code>AAB</code></td><td><code>Length(0)</code></td><td><code>Padding</code></td><td>Invalid input</td></tr>
+<tr><td><code>AAA</code></td><td><code>Length(0)</code></td><td><code>Padding</code></td><td>Invalid input</td></tr>
+<tr><td><code>A\rA\nB=</code></td><td><code>Length(4)</code></td><td><code>Byte(1)</code></td><td>Invalid input</td></tr>
+<tr><td><code>-_\r\n</code></td><td><code>Symbol(0)</code></td><td><code>Byte(0)</code></td><td>Invalid input</td></tr>
+<tr><td><code>AA==AA==</code></td><td><code>[0, 0]</code></td><td><code>Byte(2)</code></td><td><code>\x00\x00</code></td></tr>
+</tbody></table>
+</div>
+<p>We can summarize these discrepancies as follows:</p>
+<div><table><thead><tr><th>Discrepancy</th><th><code>data-encoding</code></th><th><code>base64</code></th><th>GNU <code>base64</code></th></tr></thead><tbody>
+<tr><td>Check trailing bits</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+<tr><td>Ignored characters</td><td>None</td><td>None</td><td><code>\n</code></td></tr>
+<tr><td>Translated characters</td><td>None</td><td>None</td><td>None</td></tr>
+<tr><td>Check padding</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+<tr><td>Support concatenated input</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+</tbody></table>
+</div>
+<p>This crate permits to disable checking trailing bits. It permits to ignore some characters. It
+permits to translate characters. It permits to use unpadded encodings. However, for padded
+encodings, support for concatenated inputs cannot be disabled. This is simply because it doesn’t
+make sense to use padding if it is not to support concatenated inputs.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DecodeError.html" title="struct data_encoding::DecodeError">DecodeError</a></div><div class="desc docblock-short">Decoding error</div></li><li><div class="item-name"><a class="struct" href="struct.DecodePartial.html" title="struct data_encoding::DecodePartial">DecodePartial</a></div><div class="desc docblock-short">Decoding error with partial result</div></li><li><div class="item-name"><a class="struct" href="struct.Encoder.html" title="struct data_encoding::Encoder">Encoder</a></div><div class="desc docblock-short">Encodes fragmented input to an output</div></li><li><div class="item-name"><a class="struct" href="struct.Encoding.html" title="struct data_encoding::Encoding">Encoding</a></div><div class="desc docblock-short">Base-conversion encoding</div></li><li><div class="item-name"><a class="struct" href="struct.Specification.html" title="struct data_encoding::Specification">Specification</a></div><div class="desc docblock-short">Base-conversion specification</div></li><li><div class="item-name"><a class="struct" href="struct.SpecificationError.html" title="struct data_encoding::SpecificationError">SpecificationError</a></div><div class="desc docblock-short">Specification error</div></li><li><div class="item-name"><a class="struct" href="struct.Translate.html" title="struct data_encoding::Translate">Translate</a></div><div class="desc docblock-short">How to translate characters when decoding</div></li><li><div class="item-name"><a class="struct" href="struct.Wrap.html" title="struct data_encoding::Wrap">Wrap</a></div><div class="desc docblock-short">How to wrap the output when encoding</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.BitOrder.html" title="enum data_encoding::BitOrder">BitOrder</a></div><div class="desc docblock-short">Order in which bits are read from a byte</div></li><li><div class="item-name"><a class="enum" href="enum.DecodeKind.html" title="enum data_encoding::DecodeKind">DecodeKind</a></div><div class="desc docblock-short">Decoding error kind</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.BASE32.html" title="constant data_encoding::BASE32">BASE32</a></div><div class="desc docblock-short">Padded base32 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE64.html" title="constant data_encoding::BASE64">BASE64</a></div><div class="desc docblock-short">Padded base64 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE32HEX.html" title="constant data_encoding::BASE32HEX">BASE32HEX</a></div><div class="desc docblock-short">Padded base32hex encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE32HEX_NOPAD.html" title="constant data_encoding::BASE32HEX_NOPAD">BASE32HEX_NOPAD</a></div><div class="desc docblock-short">Unpadded base32hex encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE32_DNSCURVE.html" title="constant data_encoding::BASE32_DNSCURVE">BASE32_DNSCURVE</a></div><div class="desc docblock-short">DNSCurve base32 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE32_DNSSEC.html" title="constant data_encoding::BASE32_DNSSEC">BASE32_DNSSEC</a></div><div class="desc docblock-short">DNSSEC base32 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE32_NOPAD.html" title="constant data_encoding::BASE32_NOPAD">BASE32_NOPAD</a></div><div class="desc docblock-short">Unpadded base32 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE64URL.html" title="constant data_encoding::BASE64URL">BASE64URL</a></div><div class="desc docblock-short">Padded base64url encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE64URL_NOPAD.html" title="constant data_encoding::BASE64URL_NOPAD">BASE64URL_NOPAD</a></div><div class="desc docblock-short">Unpadded base64url encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE64_MIME.html" title="constant data_encoding::BASE64_MIME">BASE64_MIME</a></div><div class="desc docblock-short">MIME base64 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.BASE64_MIME_PERMISSIVE.html" title="constant data_encoding::BASE64_MIME_PERMISSIVE">BASE64_MIME_PERMISSIVE</a></div><div class="desc docblock-short">MIME base64 encoding without trailing bits check</div></li><li><div class="item-name"><a class="constant" href="constant.BASE64_NOPAD.html" title="constant data_encoding::BASE64_NOPAD">BASE64_NOPAD</a></div><div class="desc docblock-short">Unpadded base64 encoding</div></li><li><div class="item-name"><a class="constant" href="constant.HEXLOWER.html" title="constant data_encoding::HEXLOWER">HEXLOWER</a></div><div class="desc docblock-short">Lowercase hexadecimal encoding</div></li><li><div class="item-name"><a class="constant" href="constant.HEXLOWER_PERMISSIVE.html" title="constant data_encoding::HEXLOWER_PERMISSIVE">HEXLOWER_PERMISSIVE</a></div><div class="desc docblock-short">Lowercase hexadecimal encoding with case-insensitive decoding</div></li><li><div class="item-name"><a class="constant" href="constant.HEXUPPER.html" title="constant data_encoding::HEXUPPER">HEXUPPER</a></div><div class="desc docblock-short">Uppercase hexadecimal encoding</div></li><li><div class="item-name"><a class="constant" href="constant.HEXUPPER_PERMISSIVE.html" title="constant data_encoding::HEXUPPER_PERMISSIVE">HEXUPPER_PERMISSIVE</a></div><div class="desc docblock-short">Uppercase hexadecimal encoding with case-insensitive decoding</div></li></ul></section></div></main></body></html>

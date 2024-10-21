@@ -1,0 +1,119 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Used by hosts to limit resource consumption of instances."><title>ResourceLimiter in wasmtime - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime/index.html">wasmtime</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">ResourceLimiter</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.memory_growing">memory_growing</a></li><li><a href="#tymethod.table_growing">table_growing</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.instances">instances</a></li><li><a href="#method.memories">memories</a></li><li><a href="#method.memory_grow_failed">memory_grow_failed</a></li><li><a href="#method.table_grow_failed">table_grow_failed</a></li><li><a href="#method.tables">tables</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate wasmtime</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">wasmtime</a>::<wbr><a class="trait" href="#">ResourceLimiter</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime/runtime/limits.rs.html#32-149">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ResourceLimiter {
+    // Required methods
+    fn <a href="#tymethod.memory_growing" class="fn">memory_growing</a>(
+        &amp;mut self,
+        current: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        desired: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+        maximum: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+    ) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.table_growing" class="fn">table_growing</a>(
+        &amp;mut self,
+        current: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        desired: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+        maximum: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>&gt;,
+    ) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;;
+
+    // Provided methods
+    fn <a href="#method.memory_grow_failed" class="fn">memory_grow_failed</a>(&amp;mut self, error: <a class="struct" href="../anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.table_grow_failed" class="fn">table_grow_failed</a>(&amp;mut self, error: <a class="struct" href="../anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.instances" class="fn">instances</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.tables" class="fn">tables</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.memories" class="fn">memories</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Used by hosts to limit resource consumption of instances.</p>
+<p>This trait is used in conjunction with the
+<a href="struct.Store.html#method.limiter" title="method wasmtime::Store::limiter"><code>Store::limiter</code></a> to synchronously limit the
+allocation of resources within a store. As a store-level limit this means
+that all creation of instances, memories, and tables are limited within the
+store. Resources limited via this trait are primarily related to memory and
+limiting CPU resources needs to be done with something such as
+<a href="struct.Config.html#method.consume_fuel" title="method wasmtime::Config::consume_fuel"><code>Config::consume_fuel</code></a> or
+<a href="struct.Config.html#method.epoch_interruption" title="method wasmtime::Config::epoch_interruption"><code>Config::epoch_interruption</code></a>.</p>
+<p>Note that this trait does not limit 100% of memory allocated via a
+<a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a>. Wasmtime will still allocate memory to track data
+structures and additionally embedder-specific memory allocations are not
+tracked via this trait. This trait only limits resources allocated by a
+WebAssembly instance itself.</p>
+<p>This trait is intended for synchronously limiting the resources of a module.
+If your use case requires blocking to answer whether a request is permitted
+or not and you’re otherwise working in an asynchronous context the
+[<code>ResourceLimiterAsync</code>] trait is also provided to avoid blocking an OS
+thread while a limit is determined.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.memory_growing" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#69-74">source</a><h4 class="code-header">fn <a href="#tymethod.memory_growing" class="fn">memory_growing</a>(
+    &amp;mut self,
+    current: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    desired: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>,
+    maximum: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;,
+) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;</h4></section></summary><div class="docblock"><p>Notifies the resource limiter that an instance’s linear memory has been
+requested to grow.</p>
+<ul>
+<li><code>current</code> is the current size of the linear memory in bytes.</li>
+<li><code>desired</code> is the desired size of the linear memory in bytes.</li>
+<li><code>maximum</code> is either the linear memory’s maximum or a maximum from an
+instance allocator, also in bytes. A value of <code>None</code>
+indicates that the linear memory is unbounded.</li>
+</ul>
+<p>The <code>current</code> and <code>desired</code> amounts are guaranteed to always be
+multiples of the WebAssembly page size, 64KiB.</p>
+<p>This function is not invoked when the requested size doesn’t fit in
+<code>usize</code>. Additionally this function is not invoked for shared memories
+at this time. Otherwise even when <code>desired</code> exceeds <code>maximum</code> this
+function will still be called.</p>
+<h6 id="return-value"><a class="doc-anchor" href="#return-value">§</a>Return Value</h6>
+<p>If <code>Ok(true)</code> is returned from this function then the growth operation
+is allowed. This means that the wasm <code>memory.grow</code> instruction will
+return with the <code>desired</code> size, in wasm pages. Note that even if
+<code>Ok(true)</code> is returned, though, if <code>desired</code> exceeds <code>maximum</code> then the
+growth operation will still fail.</p>
+<p>If <code>Ok(false)</code> is returned then this will cause the <code>memory.grow</code>
+instruction in a module to return -1 (failure), or in the case of an
+embedder API calling <a href="struct.Memory.html#method.new" title="associated function wasmtime::Memory::new"><code>Memory::new</code></a> or
+<a href="struct.Memory.html#method.grow" title="method wasmtime::Memory::grow"><code>Memory::grow</code></a> an error will be returned from
+those methods.</p>
+<p>If <code>Err(e)</code> is returned then the <code>memory.grow</code> function will behave
+as if a trap has been raised. Note that this is not necessarily
+compliant with the WebAssembly specification but it can be a handy and
+useful tool to get a precise backtrace at “what requested so much memory
+to cause a growth failure?”.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.table_growing" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#106">source</a><h4 class="code-header">fn <a href="#tymethod.table_growing" class="fn">table_growing</a>(
+    &amp;mut self,
+    current: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    desired: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>,
+    maximum: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>&gt;,
+) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;</h4></section></summary><div class="docblock"><p>Notifies the resource limiter that an instance’s table has been
+requested to grow.</p>
+<ul>
+<li><code>current</code> is the current number of elements in the table.</li>
+<li><code>desired</code> is the desired number of elements in the table.</li>
+<li><code>maximum</code> is either the table’s maximum or a maximum from an instance
+allocator.  A value of <code>None</code> indicates that the table is unbounded.</li>
+</ul>
+<p>Currently in Wasmtime each table element requires a pointer’s worth of
+space (e.g. <code>mem::size_of::&lt;usize&gt;()</code>).</p>
+<p>See the details on the return values for <code>memory_growing</code> for what the
+return value of this function indicates.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.memory_grow_failed" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#88-91">source</a><h4 class="code-header">fn <a href="#method.memory_grow_failed" class="fn">memory_grow_failed</a>(&amp;mut self, error: <a class="struct" href="../anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Notifies the resource limiter that growing a linear memory, permitted by
+the <code>memory_growing</code> method, has failed.</p>
+<p>Note that this method is not called if <code>memory_growing</code> returns an
+error.</p>
+<p>Reasons for failure include: the growth exceeds the <code>maximum</code> passed to
+<code>memory_growing</code>, or the operating system failed to allocate additional
+memory. In that case, <code>error</code> might be downcastable to a <code>std::io::Error</code>.</p>
+<p>See the details on the return values for <code>memory_growing</code> for what the
+return value of this function indicates.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.table_grow_failed" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#118-121">source</a><h4 class="code-header">fn <a href="#method.table_grow_failed" class="fn">table_grow_failed</a>(&amp;mut self, error: <a class="struct" href="../anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Notifies the resource limiter that growing a linear memory, permitted by
+the <code>table_growing</code> method, has failed.</p>
+<p>Note that this method is not called if <code>table_growing</code> returns an error.</p>
+<p>Reasons for failure include: the growth exceeds the <code>maximum</code> passed to
+<code>table_growing</code>. This could expand in the future.</p>
+<p>See the details on the return values for <code>memory_growing</code> for what the
+return value of this function indicates.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.instances" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#128-130">source</a><h4 class="code-header">fn <a href="#method.instances" class="fn">instances</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>The maximum number of instances that can be created for a <code>Store</code>.</p>
+<p>Module instantiation will fail if this limit is exceeded.</p>
+<p>This value defaults to 10,000.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.tables" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#137-139">source</a><h4 class="code-header">fn <a href="#method.tables" class="fn">tables</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>The maximum number of tables that can be created for a <code>Store</code>.</p>
+<p>Creation of tables will fail if this limit is exceeded.</p>
+<p>This value defaults to 10,000.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memories" class="method"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#146-148">source</a><h4 class="code-header">fn <a href="#method.memories" class="fn">memories</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>The maximum number of linear memories that can be created for a <code>Store</code></p>
+<p>Creation of memories will fail with an error if this limit is exceeded.</p>
+<p>This value defaults to 10,000.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-ResourceLimiter-for-StoreLimits" class="impl"><a class="src rightside" href="../src/wasmtime/runtime/limits.rs.html#333-398">source</a><a href="#impl-ResourceLimiter-for-StoreLimits" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.ResourceLimiter.html" title="trait wasmtime::ResourceLimiter">ResourceLimiter</a> for <a class="struct" href="struct.StoreLimits.html" title="struct wasmtime::StoreLimits">StoreLimits</a></h3></section></div><script src="../trait.impl/wasmtime/runtime/limits/trait.ResourceLimiter.js" async></script></section></div></main></body></html>

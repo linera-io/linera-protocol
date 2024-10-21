@@ -1,0 +1,140 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Opt-in access to the experimental raw entry API."><title>RawEntryApiV1 in indexmap::map - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="indexmap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../indexmap/index.html">indexmap</a><span class="version">2.5.0</span></h2></div><h2 class="location"><a href="#">RawEntryApiV1</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.raw_entry_mut_v1">raw_entry_mut_v1</a></li><li><a href="#tymethod.raw_entry_v1">raw_entry_v1</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In indexmap::map</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">indexmap</a>::<wbr><a href="index.html">map</a>::<wbr><a class="trait" href="#">RawEntryApiV1</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/indexmap/map/core/raw_entry_v1.rs.html#23-173">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait RawEntryApiV1&lt;K, V, S&gt;: Sealed {
+    // Required methods
+    fn <a href="#tymethod.raw_entry_v1" class="fn">raw_entry_v1</a>(&amp;self) -&gt; <a class="struct" href="raw_entry_v1/struct.RawEntryBuilder.html" title="struct indexmap::map::raw_entry_v1::RawEntryBuilder">RawEntryBuilder</a>&lt;'_, K, V, S&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.raw_entry_mut_v1" class="fn">raw_entry_mut_v1</a>(&amp;mut self) -&gt; <a class="struct" href="raw_entry_v1/struct.RawEntryBuilderMut.html" title="struct indexmap::map::raw_entry_v1::RawEntryBuilderMut">RawEntryBuilderMut</a>&lt;'_, K, V, S&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Opt-in access to the experimental raw entry API.</p>
+<p>See the <a href="raw_entry_v1/index.html" title="mod indexmap::map::raw_entry_v1"><code>raw_entry_v1</code></a> module documentation for more information.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.raw_entry_v1" class="method"><a class="src rightside" href="../../src/indexmap/map/core/raw_entry_v1.rs.html#73">source</a><h4 class="code-header">fn <a href="#tymethod.raw_entry_v1" class="fn">raw_entry_v1</a>(&amp;self) -&gt; <a class="struct" href="raw_entry_v1/struct.RawEntryBuilder.html" title="struct indexmap::map::raw_entry_v1::RawEntryBuilder">RawEntryBuilder</a>&lt;'_, K, V, S&gt;</h4></section></summary><div class="docblock"><p>Creates a raw immutable entry builder for the <a href="struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a>.</p>
+<p>Raw entries provide the lowest level of control for searching and
+manipulating a map. They must be manually initialized with a hash and
+then manually searched.</p>
+<p>This is useful for</p>
+<ul>
+<li>Hash memoization</li>
+<li>Using a search key that doesn’t work with the <a href="../trait.Equivalent.html" title="trait indexmap::Equivalent"><code>Equivalent</code></a> trait</li>
+<li>Using custom comparison logic without newtype wrappers</li>
+</ul>
+<p>Unless you are in such a situation, higher-level and more foolproof APIs like
+<a href="struct.IndexMap.html#method.get" title="method indexmap::map::IndexMap::get"><code>get</code></a> should be preferred.</p>
+<p>Immutable raw entries have very limited use; you might instead want
+<a href="raw_entry_v1/trait.RawEntryApiV1.html#tymethod.raw_entry_mut_v1"><code>raw_entry_mut_v1</code></a>.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::hash::{BuildHasher, Hash};
+<span class="kw">use </span>indexmap::map::{IndexMap, RawEntryApiV1};
+
+<span class="kw">let </span><span class="kw-2">mut </span>map = IndexMap::new();
+map.extend([(<span class="string">"a"</span>, <span class="number">100</span>), (<span class="string">"b"</span>, <span class="number">200</span>), (<span class="string">"c"</span>, <span class="number">300</span>)]);
+
+<span class="kw">fn </span>compute_hash&lt;K: Hash + <span class="question-mark">?</span>Sized, S: BuildHasher&gt;(hash_builder: <span class="kw-2">&amp;</span>S, key: <span class="kw-2">&amp;</span>K) -&gt; u64 {
+    <span class="kw">use </span>core::hash::Hasher;
+    <span class="kw">let </span><span class="kw-2">mut </span>state = hash_builder.build_hasher();
+    key.hash(<span class="kw-2">&amp;mut </span>state);
+    state.finish()
+}
+
+<span class="kw">for </span>k <span class="kw">in </span>[<span class="string">"a"</span>, <span class="string">"b"</span>, <span class="string">"c"</span>, <span class="string">"d"</span>, <span class="string">"e"</span>, <span class="string">"f"</span>] {
+    <span class="kw">let </span>hash = compute_hash(map.hasher(), k);
+    <span class="kw">let </span>i = map.get_index_of(k);
+    <span class="kw">let </span>v = map.get(k);
+    <span class="kw">let </span>kv = map.get_key_value(k);
+    <span class="kw">let </span>ikv = map.get_full(k);
+
+    <span class="macro">println!</span>(<span class="string">"Key: {} and value: {:?}"</span>, k, v);
+
+    <span class="macro">assert_eq!</span>(map.raw_entry_v1().from_key(k), kv);
+    <span class="macro">assert_eq!</span>(map.raw_entry_v1().from_hash(hash, |q| <span class="kw-2">*</span>q == k), kv);
+    <span class="macro">assert_eq!</span>(map.raw_entry_v1().from_key_hashed_nocheck(hash, k), kv);
+    <span class="macro">assert_eq!</span>(map.raw_entry_v1().from_hash_full(hash, |q| <span class="kw-2">*</span>q == k), ikv);
+    <span class="macro">assert_eq!</span>(map.raw_entry_v1().index_from_hash(hash, |q| <span class="kw-2">*</span>q == k), i);
+}</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.raw_entry_mut_v1" class="method"><a class="src rightside" href="../../src/indexmap/map/core/raw_entry_v1.rs.html#172">source</a><h4 class="code-header">fn <a href="#tymethod.raw_entry_mut_v1" class="fn">raw_entry_mut_v1</a>(&amp;mut self) -&gt; <a class="struct" href="raw_entry_v1/struct.RawEntryBuilderMut.html" title="struct indexmap::map::raw_entry_v1::RawEntryBuilderMut">RawEntryBuilderMut</a>&lt;'_, K, V, S&gt;</h4></section></summary><div class="docblock"><p>Creates a raw entry builder for the <a href="struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a>.</p>
+<p>Raw entries provide the lowest level of control for searching and
+manipulating a map. They must be manually initialized with a hash and
+then manually searched. After this, insertions into a vacant entry
+still require an owned key to be provided.</p>
+<p>Raw entries are useful for such exotic situations as:</p>
+<ul>
+<li>Hash memoization</li>
+<li>Deferring the creation of an owned key until it is known to be required</li>
+<li>Using a search key that doesn’t work with the <a href="../trait.Equivalent.html" title="trait indexmap::Equivalent"><code>Equivalent</code></a> trait</li>
+<li>Using custom comparison logic without newtype wrappers</li>
+</ul>
+<p>Because raw entries provide much more low-level control, it’s much easier
+to put the <code>IndexMap</code> into an inconsistent state which, while memory-safe,
+will cause the map to produce seemingly random results. Higher-level and more
+foolproof APIs like <a href="struct.IndexMap.html#method.entry" title="method indexmap::map::IndexMap::entry"><code>entry</code></a> should be preferred when possible.</p>
+<p>Raw entries give mutable access to the keys. This must not be used
+to modify how the key would compare or hash, as the map will not re-evaluate
+where the key should go, meaning the keys may become “lost” if their
+location does not reflect their state. For instance, if you change a key
+so that the map now contains keys which compare equal, search may start
+acting erratically, with two keys randomly masking each other. Implementations
+are free to assume this doesn’t happen (within the limits of memory-safety).</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::hash::{BuildHasher, Hash};
+<span class="kw">use </span>indexmap::map::{IndexMap, RawEntryApiV1};
+<span class="kw">use </span>indexmap::map::raw_entry_v1::RawEntryMut;
+
+<span class="kw">let </span><span class="kw-2">mut </span>map = IndexMap::new();
+map.extend([(<span class="string">"a"</span>, <span class="number">100</span>), (<span class="string">"b"</span>, <span class="number">200</span>), (<span class="string">"c"</span>, <span class="number">300</span>)]);
+
+<span class="kw">fn </span>compute_hash&lt;K: Hash + <span class="question-mark">?</span>Sized, S: BuildHasher&gt;(hash_builder: <span class="kw-2">&amp;</span>S, key: <span class="kw-2">&amp;</span>K) -&gt; u64 {
+    <span class="kw">use </span>core::hash::Hasher;
+    <span class="kw">let </span><span class="kw-2">mut </span>state = hash_builder.build_hasher();
+    key.hash(<span class="kw-2">&amp;mut </span>state);
+    state.finish()
+}
+
+<span class="comment">// Existing key (insert and update)
+</span><span class="kw">match </span>map.raw_entry_mut_v1().from_key(<span class="string">"a"</span>) {
+    RawEntryMut::Vacant(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(),
+    RawEntryMut::Occupied(<span class="kw-2">mut </span>view) =&gt; {
+        <span class="macro">assert_eq!</span>(view.index(), <span class="number">0</span>);
+        <span class="macro">assert_eq!</span>(view.get(), <span class="kw-2">&amp;</span><span class="number">100</span>);
+        <span class="kw">let </span>v = view.get_mut();
+        <span class="kw">let </span>new_v = (<span class="kw-2">*</span>v) * <span class="number">10</span>;
+        <span class="kw-2">*</span>v = new_v;
+        <span class="macro">assert_eq!</span>(view.insert(<span class="number">1111</span>), <span class="number">1000</span>);
+    }
+}
+
+<span class="macro">assert_eq!</span>(map[<span class="string">"a"</span>], <span class="number">1111</span>);
+<span class="macro">assert_eq!</span>(map.len(), <span class="number">3</span>);
+
+<span class="comment">// Existing key (take)
+</span><span class="kw">let </span>hash = compute_hash(map.hasher(), <span class="string">"c"</span>);
+<span class="kw">match </span>map.raw_entry_mut_v1().from_key_hashed_nocheck(hash, <span class="string">"c"</span>) {
+    RawEntryMut::Vacant(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(),
+    RawEntryMut::Occupied(view) =&gt; {
+        <span class="macro">assert_eq!</span>(view.index(), <span class="number">2</span>);
+        <span class="macro">assert_eq!</span>(view.shift_remove_entry(), (<span class="string">"c"</span>, <span class="number">300</span>));
+    }
+}
+<span class="macro">assert_eq!</span>(map.raw_entry_v1().from_key(<span class="string">"c"</span>), <span class="prelude-val">None</span>);
+<span class="macro">assert_eq!</span>(map.len(), <span class="number">2</span>);
+
+<span class="comment">// Nonexistent key (insert and update)
+</span><span class="kw">let </span>key = <span class="string">"d"</span>;
+<span class="kw">let </span>hash = compute_hash(map.hasher(), key);
+<span class="kw">match </span>map.raw_entry_mut_v1().from_hash(hash, |q| <span class="kw-2">*</span>q == key) {
+    RawEntryMut::Occupied(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(),
+    RawEntryMut::Vacant(view) =&gt; {
+        <span class="macro">assert_eq!</span>(view.index(), <span class="number">2</span>);
+        <span class="kw">let </span>(k, value) = view.insert(<span class="string">"d"</span>, <span class="number">4000</span>);
+        <span class="macro">assert_eq!</span>((<span class="kw-2">*</span>k, <span class="kw-2">*</span>value), (<span class="string">"d"</span>, <span class="number">4000</span>));
+        <span class="kw-2">*</span>value = <span class="number">40000</span>;
+    }
+}
+<span class="macro">assert_eq!</span>(map[<span class="string">"d"</span>], <span class="number">40000</span>);
+<span class="macro">assert_eq!</span>(map.len(), <span class="number">3</span>);
+
+<span class="kw">match </span>map.raw_entry_mut_v1().from_hash(hash, |q| <span class="kw-2">*</span>q == key) {
+    RawEntryMut::Vacant(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(),
+    RawEntryMut::Occupied(view) =&gt; {
+        <span class="macro">assert_eq!</span>(view.index(), <span class="number">2</span>);
+        <span class="macro">assert_eq!</span>(view.swap_remove_entry(), (<span class="string">"d"</span>, <span class="number">40000</span>));
+    }
+}
+<span class="macro">assert_eq!</span>(map.get(<span class="string">"d"</span>), <span class="prelude-val">None</span>);
+<span class="macro">assert_eq!</span>(map.len(), <span class="number">2</span>);</code></pre></div>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-RawEntryApiV1%3CK,+V,+S%3E-for-IndexMap%3CK,+V,+S%3E" class="impl"><a class="src rightside" href="../../src/indexmap/map/core/raw_entry_v1.rs.html#175-183">source</a><a href="#impl-RawEntryApiV1%3CK,+V,+S%3E-for-IndexMap%3CK,+V,+S%3E" class="anchor">§</a><h3 class="code-header">impl&lt;K, V, S&gt; <a class="trait" href="raw_entry_v1/trait.RawEntryApiV1.html" title="trait indexmap::map::raw_entry_v1::RawEntryApiV1">RawEntryApiV1</a>&lt;K, V, S&gt; for <a class="struct" href="struct.IndexMap.html" title="struct indexmap::map::IndexMap">IndexMap</a>&lt;K, V, S&gt;</h3></section></div><script src="../../trait.impl/indexmap/map/core/raw_entry_v1/trait.RawEntryApiV1.js" async></script></section></div></main></body></html>

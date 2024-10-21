@@ -1,0 +1,146 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A type that can format a tracing `Event` to a `Writer`."><title>FormatEvent in tracing_subscriber::fmt::format - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tracing_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../../../tracing_subscriber/index.html">tracing_subscriber</a><span class="version">0.3.18</span></h2></div><h2 class="location"><a href="#">FormatEvent</a></h2><div class="sidebar-elems"><section><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.format_event">format_event</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-FormatEvent%3CS,+N%3E-for-fn(%26FmtContext%3C'b,+S,+N%3E,+Writer%3C'c%3E,+%26Event%3C'e%3E)+-%3E+Result%3C(),+Error%3E">fn(ctx: &amp;FmtContext&lt;&#x27;_, S, N&gt;, _: Writer&lt;&#x27;_&gt;, _: &amp;Event&lt;&#x27;_&gt;) -&gt; Result</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In tracing_subscriber::fmt::format</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../../index.html">tracing_subscriber</a>::<wbr><a href="../index.html">fmt</a>::<wbr><a href="index.html">format</a>::<wbr><a class="trait" href="#">FormatEvent</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tracing_subscriber/fmt/format/mod.rs.html#195-207">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait FormatEvent&lt;S, N&gt;<div class="where">where
+    S: <a class="trait" href="../../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber">Subscriber</a> + for&lt;'a&gt; <a class="trait" href="../../registry/trait.LookupSpan.html" title="trait tracing_subscriber::registry::LookupSpan">LookupSpan</a>&lt;'a&gt;,
+    N: for&lt;'a&gt; <a class="trait" href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields">FormatFields</a>&lt;'a&gt; + 'static,</div>{
+    // Required method
+    fn <a href="#tymethod.format_event" class="fn">format_event</a>(
+        &amp;self,
+        ctx: &amp;<a class="struct" href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext">FmtContext</a>&lt;'_, S, N&gt;,
+        writer: <a class="struct" href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer">Writer</a>&lt;'_&gt;,
+        event: &amp;<a class="struct" href="../../../tracing_core/event/struct.Event.html" title="struct tracing_core::event::Event">Event</a>&lt;'_&gt;,
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A type that can format a tracing <a href="../../../tracing_core/event/struct.Event.html" title="struct tracing_core::event::Event"><code>Event</code></a> to a <a href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer"><code>Writer</code></a>.</p>
+<p><code>FormatEvent</code> is primarily used in the context of <a href="../struct.Subscriber.html" title="struct tracing_subscriber::fmt::Subscriber"><code>fmt::Subscriber</code></a> or
+<a href="../struct.Layer.html" title="struct tracing_subscriber::fmt::Layer"><code>fmt::Layer</code></a>. Each time an event is dispatched to <a href="../struct.Subscriber.html" title="struct tracing_subscriber::fmt::Subscriber"><code>fmt::Subscriber</code></a> or
+<a href="../struct.Layer.html" title="struct tracing_subscriber::fmt::Layer"><code>fmt::Layer</code></a>, the subscriber or layer
+forwards it to its associated <code>FormatEvent</code> to emit a log message.</p>
+<p>This trait is already implemented for function pointers with the same
+signature as <code>format_event</code>.</p>
+<h2 id="arguments"><a class="doc-anchor" href="#arguments">§</a>Arguments</h2>
+<p>The following arguments are passed to <code>FormatEvent::format_event</code>:</p>
+<ul>
+<li>
+<p>A <a href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext"><code>FmtContext</code></a>. This is an extension of the <a href="../../layer/struct.Context.html" title="struct tracing_subscriber::layer::Context"><code>layer::Context</code></a> type,
+which can be used for accessing stored information such as the current
+span context an event occurred in.</p>
+<p>In addition, <a href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext"><code>FmtContext</code></a> exposes access to the <a href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields"><code>FormatFields</code></a>
+implementation that the subscriber was configured to use via the
+<a href="../struct.FmtContext.html#method.field_format" title="method tracing_subscriber::fmt::FmtContext::field_format"><code>FmtContext::field_format</code></a> method. This can be used when the
+<a href="../trait.FormatEvent.html" title="trait tracing_subscriber::fmt::FormatEvent"><code>FormatEvent</code></a> implementation needs to format the event’s fields.</p>
+<p>For convenience, <a href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext"><code>FmtContext</code></a> also <a href="../struct.FmtContext.html#impl-FormatFields%3C&#x27;writer%3E" title="struct tracing_subscriber::fmt::FmtContext">implements <code>FormatFields</code></a>,
+forwarding to the configured <a href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields"><code>FormatFields</code></a> type.</p>
+</li>
+<li>
+<p>A <a href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer"><code>Writer</code></a> to which the formatted representation of the event is
+written. This type implements the <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Write.html" title="trait core::fmt::Write"><code>std::fmt::Write</code></a> trait, and therefore
+can be used with the <a href="https://doc.rust-lang.org/1.81.0/core/macro.write.html" title="macro core::write"><code>std::write!</code></a> and <a href="https://doc.rust-lang.org/1.81.0/core/macro.writeln.html" title="macro core::writeln"><code>std::writeln!</code></a> macros, as well
+as calling <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Write.html" title="trait core::fmt::Write"><code>std::fmt::Write</code></a> methods directly.</p>
+<p>The <a href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer"><code>Writer</code></a> type also implements additional methods that provide
+information about how the event should be formatted. The
+<a href="struct.Writer.html#method.has_ansi_escapes" title="method tracing_subscriber::fmt::format::Writer::has_ansi_escapes"><code>Writer::has_ansi_escapes</code></a> method indicates whether <a href="https://en.wikipedia.org/wiki/ANSI_escape_code">ANSI terminal
+escape codes</a> are supported by the underlying I/O writer that the event
+will be written to. If this returns <code>true</code>, the formatter is permitted to
+use ANSI escape codes to add colors and other text formatting to its
+output. If it returns <code>false</code>, the event will be written to an output that
+does not support ANSI escape codes (such as a log file), and they should
+not be emitted.</p>
+<p>Crates like <a href="https://crates.io/crates/nu_ansi_term"><code>nu_ansi_term</code></a> and <a href="https://crates.io/crates/owo-colors"><code>owo-colors</code></a> can be used to add ANSI
+escape codes to formatted output.</p>
+</li>
+<li>
+<p>The actual <a href="../../../tracing_core/event/struct.Event.html" title="struct tracing_core::event::Event"><code>Event</code></a> to be formatted.</p>
+</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>This example re-implements a simiplified version of this crate’s <a href="struct.Full.html" title="struct tracing_subscriber::fmt::format::Full">default
+formatter</a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt;
+<span class="kw">use </span>tracing_core::{Subscriber, Event};
+<span class="kw">use </span>tracing_subscriber::fmt::{
+    format::{<span class="self">self</span>, FormatEvent, FormatFields},
+    FmtContext,
+    FormattedFields,
+};
+<span class="kw">use </span>tracing_subscriber::registry::LookupSpan;
+
+<span class="kw">struct </span>MyFormatter;
+
+<span class="kw">impl</span>&lt;S, N&gt; FormatEvent&lt;S, N&gt; <span class="kw">for </span>MyFormatter
+<span class="kw">where
+    </span>S: Subscriber + <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; LookupSpan&lt;<span class="lifetime">'a</span>&gt;,
+    N: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; FormatFields&lt;<span class="lifetime">'a</span>&gt; + <span class="lifetime">'static</span>,
+{
+    <span class="kw">fn </span>format_event(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;</span>FmtContext&lt;<span class="lifetime">'_</span>, S, N&gt;,
+        <span class="kw-2">mut </span>writer: format::Writer&lt;<span class="lifetime">'_</span>&gt;,
+        event: <span class="kw-2">&amp;</span>Event&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; fmt::Result {
+        <span class="comment">// Format values from the event's's metadata:
+        </span><span class="kw">let </span>metadata = event.metadata();
+        <span class="macro">write!</span>(<span class="kw-2">&amp;mut </span>writer, <span class="string">"{} {}: "</span>, metadata.level(), metadata.target())<span class="question-mark">?</span>;
+
+        <span class="comment">// Format all the spans in the event's span context.
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(scope) = ctx.event_scope() {
+            <span class="kw">for </span>span <span class="kw">in </span>scope.from_root() {
+                <span class="macro">write!</span>(writer, <span class="string">"{}"</span>, span.name())<span class="question-mark">?</span>;
+
+                <span class="comment">// `FormattedFields` is a formatted representation of the span's
+                // fields, which is stored in its extensions by the `fmt` layer's
+                // `new_span` method. The fields will have been formatted
+                // by the same field formatter that's provided to the event
+                // formatter in the `FmtContext`.
+                </span><span class="kw">let </span>ext = span.extensions();
+                <span class="kw">let </span>fields = <span class="kw-2">&amp;</span>ext
+                    .get::&lt;FormattedFields&lt;N&gt;&gt;()
+                    .expect(<span class="string">"will never be `None`"</span>);
+
+                <span class="comment">// Skip formatting the fields if the span had no fields.
+                </span><span class="kw">if </span>!fields.is_empty() {
+                    <span class="macro">write!</span>(writer, <span class="string">"{{{}}}"</span>, fields)<span class="question-mark">?</span>;
+                }
+                <span class="macro">write!</span>(writer, <span class="string">": "</span>)<span class="question-mark">?</span>;
+            }
+        }
+
+        <span class="comment">// Write fields on the event
+        </span>ctx.field_format().format_fields(writer.by_ref(), event)<span class="question-mark">?</span>;
+
+        <span class="macro">writeln!</span>(writer)
+    }
+}
+
+<span class="kw">let </span>_subscriber = tracing_subscriber::fmt()
+    .event_format(MyFormatter)
+    .init();
+
+<span class="kw">let </span>_span = <span class="macro">tracing::info_span!</span>(<span class="string">"my_span"</span>, answer = <span class="number">42</span>).entered();
+<span class="macro">tracing::info!</span>(question = <span class="string">"life, the universe, and everything"</span>, <span class="string">"hello world"</span>);</code></pre></div>
+<p>This formatter will print events like this:</p>
+<div class="example-wrap"><pre class="language-text"><code>DEBUG yak_shaving::shaver: some-span{field-on-span=foo}: started shaving yak
+</code></pre></div></div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.format_event" class="method"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/mod.rs.html#201-206">source</a><h4 class="code-header">fn <a href="#tymethod.format_event" class="fn">format_event</a>(
+    &amp;self,
+    ctx: &amp;<a class="struct" href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext">FmtContext</a>&lt;'_, S, N&gt;,
+    writer: <a class="struct" href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer">Writer</a>&lt;'_&gt;,
+    event: &amp;<a class="struct" href="../../../tracing_core/event/struct.Event.html" title="struct tracing_core::event::Event">Event</a>&lt;'_&gt;,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class="docblock"><p>Write a log message for <code>Event</code> in <code>Context</code> to the given <a href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer"><code>Writer</code></a>.</p>
+</div></details></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-FormatEvent%3CS,+N%3E-for-fn(%26FmtContext%3C'b,+S,+N%3E,+Writer%3C'c%3E,+%26Event%3C'e%3E)+-%3E+Result%3C(),+Error%3E" class="impl"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/mod.rs.html#209-223">source</a><a href="#impl-FormatEvent%3CS,+N%3E-for-fn(%26FmtContext%3C'b,+S,+N%3E,+Writer%3C'c%3E,+%26Event%3C'e%3E)+-%3E+Result%3C(),+Error%3E" class="anchor">§</a><h3 class="code-header">impl&lt;S, N&gt; <a class="trait" href="../trait.FormatEvent.html" title="trait tracing_subscriber::fmt::FormatEvent">FormatEvent</a>&lt;S, N&gt; for <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.fn.html">fn</a>(ctx: &amp;<a class="struct" href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext">FmtContext</a>&lt;'_, S, N&gt;, _: <a class="struct" href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer">Writer</a>&lt;'_&gt;, _: &amp;<a class="struct" href="../../../tracing_core/event/struct.Event.html" title="struct tracing_core::event::Event">Event</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a><div class="where">where
+    S: <a class="trait" href="../../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber">Subscriber</a> + for&lt;'a&gt; <a class="trait" href="../../registry/trait.LookupSpan.html" title="trait tracing_subscriber::registry::LookupSpan">LookupSpan</a>&lt;'a&gt;,
+    N: for&lt;'a&gt; <a class="trait" href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields">FormatFields</a>&lt;'a&gt; + 'static,</div></h3></section></summary><div class="impl-items"><section id="method.format_event" class="method trait-impl"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/mod.rs.html#215-222">source</a><a href="#method.format_event" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.format_event" class="fn">format_event</a>(
+    &amp;self,
+    ctx: &amp;<a class="struct" href="../struct.FmtContext.html" title="struct tracing_subscriber::fmt::FmtContext">FmtContext</a>&lt;'_, S, N&gt;,
+    writer: <a class="struct" href="struct.Writer.html" title="struct tracing_subscriber::fmt::format::Writer">Writer</a>&lt;'_&gt;,
+    event: &amp;<a class="struct" href="../../../tracing_core/event/struct.Event.html" title="struct tracing_core::event::Event">Event</a>&lt;'_&gt;,
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-FormatEvent%3CC,+N%3E-for-Format%3CPretty,+T%3E" class="impl"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/pretty.rs.html#169-335">source</a><a href="#impl-FormatEvent%3CC,+N%3E-for-Format%3CPretty,+T%3E" class="anchor">§</a><h3 class="code-header">impl&lt;C, N, T&gt; <a class="trait" href="../trait.FormatEvent.html" title="trait tracing_subscriber::fmt::FormatEvent">FormatEvent</a>&lt;C, N&gt; for <a class="struct" href="struct.Format.html" title="struct tracing_subscriber::fmt::format::Format">Format</a>&lt;<a class="struct" href="struct.Pretty.html" title="struct tracing_subscriber::fmt::format::Pretty">Pretty</a>, T&gt;<div class="where">where
+    C: <a class="trait" href="../../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber">Subscriber</a> + for&lt;'a&gt; <a class="trait" href="../../registry/trait.LookupSpan.html" title="trait tracing_subscriber::registry::LookupSpan">LookupSpan</a>&lt;'a&gt;,
+    N: for&lt;'a&gt; <a class="trait" href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields">FormatFields</a>&lt;'a&gt; + 'static,
+    T: <a class="trait" href="../time/trait.FormatTime.html" title="trait tracing_subscriber::fmt::time::FormatTime">FormatTime</a>,</div></h3></section><section id="impl-FormatEvent%3CS,+N%3E-for-Format%3CCompact,+T%3E" class="impl"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/mod.rs.html#1026-1156">source</a><a href="#impl-FormatEvent%3CS,+N%3E-for-Format%3CCompact,+T%3E" class="anchor">§</a><h3 class="code-header">impl&lt;S, N, T&gt; <a class="trait" href="../trait.FormatEvent.html" title="trait tracing_subscriber::fmt::FormatEvent">FormatEvent</a>&lt;S, N&gt; for <a class="struct" href="struct.Format.html" title="struct tracing_subscriber::fmt::format::Format">Format</a>&lt;<a class="struct" href="struct.Compact.html" title="struct tracing_subscriber::fmt::format::Compact">Compact</a>, T&gt;<div class="where">where
+    S: <a class="trait" href="../../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber">Subscriber</a> + for&lt;'a&gt; <a class="trait" href="../../registry/trait.LookupSpan.html" title="trait tracing_subscriber::registry::LookupSpan">LookupSpan</a>&lt;'a&gt;,
+    N: for&lt;'a&gt; <a class="trait" href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields">FormatFields</a>&lt;'a&gt; + 'static,
+    T: <a class="trait" href="../time/trait.FormatTime.html" title="trait tracing_subscriber::fmt::time::FormatTime">FormatTime</a>,</div></h3></section><section id="impl-FormatEvent%3CS,+N%3E-for-Format%3CFull,+T%3E" class="impl"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/mod.rs.html#898-1024">source</a><a href="#impl-FormatEvent%3CS,+N%3E-for-Format%3CFull,+T%3E" class="anchor">§</a><h3 class="code-header">impl&lt;S, N, T&gt; <a class="trait" href="../trait.FormatEvent.html" title="trait tracing_subscriber::fmt::FormatEvent">FormatEvent</a>&lt;S, N&gt; for <a class="struct" href="struct.Format.html" title="struct tracing_subscriber::fmt::format::Format">Format</a>&lt;<a class="struct" href="struct.Full.html" title="struct tracing_subscriber::fmt::format::Full">Full</a>, T&gt;<div class="where">where
+    S: <a class="trait" href="../../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber">Subscriber</a> + for&lt;'a&gt; <a class="trait" href="../../registry/trait.LookupSpan.html" title="trait tracing_subscriber::registry::LookupSpan">LookupSpan</a>&lt;'a&gt;,
+    N: for&lt;'a&gt; <a class="trait" href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields">FormatFields</a>&lt;'a&gt; + 'static,
+    T: <a class="trait" href="../time/trait.FormatTime.html" title="trait tracing_subscriber::fmt::time::FormatTime">FormatTime</a>,</div></h3></section><section id="impl-FormatEvent%3CS,+N%3E-for-Format%3CJson,+T%3E" class="impl"><a class="src rightside" href="../../../src/tracing_subscriber/fmt/format/json.rs.html#213-330">source</a><a href="#impl-FormatEvent%3CS,+N%3E-for-Format%3CJson,+T%3E" class="anchor">§</a><h3 class="code-header">impl&lt;S, N, T&gt; <a class="trait" href="../trait.FormatEvent.html" title="trait tracing_subscriber::fmt::FormatEvent">FormatEvent</a>&lt;S, N&gt; for <a class="struct" href="struct.Format.html" title="struct tracing_subscriber::fmt::format::Format">Format</a>&lt;<a class="struct" href="struct.Json.html" title="struct tracing_subscriber::fmt::format::Json">Json</a>, T&gt;<div class="where">where
+    S: <a class="trait" href="../../../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber">Subscriber</a> + for&lt;'lookup&gt; <a class="trait" href="../../registry/trait.LookupSpan.html" title="trait tracing_subscriber::registry::LookupSpan">LookupSpan</a>&lt;'lookup&gt;,
+    N: for&lt;'writer&gt; <a class="trait" href="../trait.FormatFields.html" title="trait tracing_subscriber::fmt::FormatFields">FormatFields</a>&lt;'writer&gt; + 'static,
+    T: <a class="trait" href="../time/trait.FormatTime.html" title="trait tracing_subscriber::fmt::time::FormatTime">FormatTime</a>,</div></h3></section></div><script src="../../../trait.impl/tracing_subscriber/fmt/format/trait.FormatEvent.js" data-ignore-extern-crates="std" async></script></section></div></main></body></html>

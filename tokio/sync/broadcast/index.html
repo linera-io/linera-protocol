@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A multi-producer, multi-consumer broadcast queue. Each sent value is seen by all consumers."><title>tokio::sync::broadcast - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><h2 class="location"><a href="#">Module broadcast</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In tokio::sync</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">sync</a>::<wbr><a class="mod" href="#">broadcast</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/sync/broadcast.rs.html#1-1541">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A multi-producer, multi-consumer broadcast queue. Each sent value is seen by
+all consumers.</p>
+<p>A <a href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender"><code>Sender</code></a> is used to broadcast values to <strong>all</strong> connected <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a>
+values. <a href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender"><code>Sender</code></a> handles are clone-able, allowing concurrent send and
+receive actions. <a href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender"><code>Sender</code></a> and <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> are both <code>Send</code> and <code>Sync</code> as
+long as <code>T</code> is <code>Send</code>.</p>
+<p>When a value is sent, <strong>all</strong> <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> handles are notified and will
+receive the value. The value is stored once inside the channel and cloned on
+demand for each receiver. Once all receivers have received a clone of the
+value, the value is released from the channel.</p>
+<p>A channel is created by calling <a href="fn.channel.html" title="fn tokio::sync::broadcast::channel"><code>channel</code></a>, specifying the maximum number
+of messages the channel can retain at any given time.</p>
+<p>New <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> handles are created by calling <a href="struct.Sender.html#method.subscribe" title="method tokio::sync::broadcast::Sender::subscribe"><code>Sender::subscribe</code></a>. The
+returned <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> will receive values sent <strong>after</strong> the call to
+<code>subscribe</code>.</p>
+<p>This channel is also suitable for the single-producer multi-consumer
+use-case, where a single sender broadcasts values to many receivers.</p>
+<h3 id="lagging"><a class="doc-anchor" href="#lagging">§</a>Lagging</h3>
+<p>As sent messages must be retained until <strong>all</strong> <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> handles receive
+a clone, broadcast channels are susceptible to the “slow receiver” problem.
+In this case, all but one receiver are able to receive values at the rate
+they are sent. Because one receiver is stalled, the channel starts to fill
+up.</p>
+<p>This broadcast channel implementation handles this case by setting a hard
+upper bound on the number of values the channel may retain at any given
+time. This upper bound is passed to the <a href="fn.channel.html" title="fn tokio::sync::broadcast::channel"><code>channel</code></a> function as an argument.</p>
+<p>If a value is sent when the channel is at capacity, the oldest value
+currently held by the channel is released. This frees up space for the new
+value. Any receiver that has not yet seen the released value will return
+<a href="error/enum.RecvError.html#variant.Lagged" title="variant tokio::sync::broadcast::error::RecvError::Lagged"><code>RecvError::Lagged</code></a> the next time <a href="struct.Receiver.html#method.recv" title="method tokio::sync::broadcast::Receiver::recv"><code>recv</code></a> is called.</p>
+<p>Once <a href="error/enum.RecvError.html#variant.Lagged" title="variant tokio::sync::broadcast::error::RecvError::Lagged"><code>RecvError::Lagged</code></a> is returned, the lagging receiver’s position is
+updated to the oldest value contained by the channel. The next call to
+<a href="struct.Receiver.html#method.recv" title="method tokio::sync::broadcast::Receiver::recv"><code>recv</code></a> will return this value.</p>
+<p>This behavior enables a receiver to detect when it has lagged so far behind
+that data has been dropped. The caller may decide how to respond to this:
+either by aborting its task or by tolerating lost messages and resuming
+consumption of the channel.</p>
+<h3 id="closing"><a class="doc-anchor" href="#closing">§</a>Closing</h3>
+<p>When <strong>all</strong> <a href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender"><code>Sender</code></a> handles have been dropped, no new values may be
+sent. At this point, the channel is “closed”. Once a receiver has received
+all values retained by the channel, the next call to <a href="struct.Receiver.html#method.recv" title="method tokio::sync::broadcast::Receiver::recv"><code>recv</code></a> will return
+with <a href="error/enum.RecvError.html#variant.Closed" title="variant tokio::sync::broadcast::error::RecvError::Closed"><code>RecvError::Closed</code></a>.</p>
+<p>When a <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> handle is dropped, any messages not read by the receiver
+will be marked as read. If this receiver was the only one not to have read
+that message, the message will be dropped at this point.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Basic usage</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::broadcast;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx1) = broadcast::channel(<span class="number">16</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>rx2 = tx.subscribe();
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">assert_eq!</span>(rx1.recv().<span class="kw">await</span>.unwrap(), <span class="number">10</span>);
+        <span class="macro">assert_eq!</span>(rx1.recv().<span class="kw">await</span>.unwrap(), <span class="number">20</span>);
+    });
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">assert_eq!</span>(rx2.recv().<span class="kw">await</span>.unwrap(), <span class="number">10</span>);
+        <span class="macro">assert_eq!</span>(rx2.recv().<span class="kw">await</span>.unwrap(), <span class="number">20</span>);
+    });
+
+    tx.send(<span class="number">10</span>).unwrap();
+    tx.send(<span class="number">20</span>).unwrap();
+}</code></pre></div>
+<p>Handling lag</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::broadcast;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = broadcast::channel(<span class="number">2</span>);
+
+    tx.send(<span class="number">10</span>).unwrap();
+    tx.send(<span class="number">20</span>).unwrap();
+    tx.send(<span class="number">30</span>).unwrap();
+
+    <span class="comment">// The receiver lagged behind
+    </span><span class="macro">assert!</span>(rx.recv().<span class="kw">await</span>.is_err());
+
+    <span class="comment">// At this point, we can abort or continue with lost messages
+
+    </span><span class="macro">assert_eq!</span>(<span class="number">20</span>, rx.recv().<span class="kw">await</span>.unwrap());
+    <span class="macro">assert_eq!</span>(<span class="number">30</span>, rx.recv().<span class="kw">await</span>.unwrap());
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod tokio::sync::broadcast::error">error</a></div><div class="desc docblock-short">Broadcast error types</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver">Receiver</a></div><div class="desc docblock-short">Receiving-half of the <a href="index.html" title="mod tokio::sync::broadcast"><code>broadcast</code></a> channel.</div></li><li><div class="item-name"><a class="struct" href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender">Sender</a></div><div class="desc docblock-short">Sending-half of the <a href="index.html" title="mod tokio::sync::broadcast"><code>broadcast</code></a> channel.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.channel.html" title="fn tokio::sync::broadcast::channel">channel</a></div><div class="desc docblock-short">Create a bounded, multi-producer, multi-consumer channel where each sent
+value is broadcasted to all active receivers.</div></li></ul></section></div></main></body></html>
