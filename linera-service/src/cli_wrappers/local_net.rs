@@ -24,7 +24,7 @@ use linera_execution::ResourceControlPolicy;
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
 #[cfg(all(feature = "rocksdb", feature = "scylladb", with_testing))]
-use linera_views::rocks_db::create_rocks_db_test_path;
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(all(feature = "scylladb", with_testing))]
 use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
@@ -93,12 +93,12 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
         Database::DualRocksDbScyllaDb => {
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             {
-                let path_with_guard = create_rocks_db_test_path();
-                let uri = create_scylla_db_test_uri();
-                StorageConfig::DualRocksDbScyllaDb {
-                    path_with_guard,
-                    uri,
-                }
+                let rocksdb_config = RocksDbStore::new_test_config().await?;
+                let scylla_config = ScyllaDbStore::new_test_config().await?;
+                Ok(StorageConfig::DualRocksDbScyllaDb {
+                    path_with_guard: rocksdb_config.path_with_guard,
+                    uri: scylla_config.uri,
+                })
             }
             #[cfg(not(all(feature = "rocksdb", feature = "scylladb")))]
             panic!("Database::DualRocksDbScyllaDb is selected without the features rocksdb and scylladb");
