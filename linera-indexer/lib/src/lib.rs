@@ -13,6 +13,8 @@ pub mod plugin;
 pub mod runner;
 pub mod service;
 
+#[cfg(feature = "storage-service")]
+pub mod storage_service;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
 #[cfg(feature = "scylladb")]

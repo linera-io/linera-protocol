@@ -49,6 +49,10 @@ pub enum IndexerError {
     #[error("Clone with root key error")]
     CloneWithRootKeyError,
 
+
+    #[cfg(feature = "storage-service")]
+    #[error(transparent)]
+    StorageServiceError(#[from] linera_storage_service::common::ServiceContextError),
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
     RocksDbError(#[from] linera_views::rocks_db::RocksDbStoreError),

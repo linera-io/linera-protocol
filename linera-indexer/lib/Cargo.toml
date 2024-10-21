@@ -12,7 +12,6 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-default = ["rocksdb"]
 benchmark = ["linera-base/test"]
 rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
@@ -35,6 +34,7 @@ linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-service-graphql-client.workspace = true
+linera-storage-service.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
 reqwest.workspace = true

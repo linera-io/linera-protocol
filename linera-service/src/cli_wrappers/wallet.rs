@@ -69,11 +69,8 @@ impl ClientWrapper {
         testing_prng_seed: Option<u64>,
         id: usize,
     ) -> Self {
-        let storage = format!(
-            "rocksdb:{}/client_{}.db",
-            path_provider.path().display(),
-            id
-        );
+        let endpoint = std::env::var("LINERA_STORAGE_SERVICE").expect("missing LINERA_STORAGE_SERVICE environment variable");
+        let storage = format!("service:tcp:{}:client_{}.db", endpoint, id);
         let wallet = format!("wallet_{}.json", id);
         Self {
             testing_prng_seed,
