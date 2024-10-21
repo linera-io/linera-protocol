@@ -16,7 +16,25 @@ Grpc = "ClearText"
 Grpc = "ClearText"
 
 [[shards]]
-host = "shard"
+host = "docker-shard-1"
 port = 19100
-metrics_host = "shard"
+metrics_host = "docker-shard-1"
+metrics_port = 21100
+
+[[shards]]
+host = "docker-shard-2"
+port = 19100
+metrics_host = "docker-shard-2"
+metrics_port = 21100
+
+[[shards]]
+host = "docker-shard-3"
+port = 19100
+metrics_host = "docker-shard-3"
+metrics_port = 21100
+
+[[shards]]
+host = "docker-shard-4"
+port = 19100
+metrics_host = "docker-shard-4"
 metrics_port = 21100
