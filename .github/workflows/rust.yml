@@ -148,7 +148,7 @@ jobs:
     - name: Run the browser tests
       run: |
         cd linera-views
-        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless --features web,indexeddb
+        WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
   lint:
     runs-on: ubuntu-latest
