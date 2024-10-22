@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use futures::Future;
@@ -14,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{ChainClient, Client, MessagePolicy},
+    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
     join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
@@ -43,10 +46,7 @@ use {
         simple::SimpleMassClient, RpcMessage,
     },
     linera_sdk::abis::fungible,
-    std::{
-        collections::{HashMap, HashSet},
-        iter,
-    },
+    std::{collections::HashMap, iter},
     tracing::{error, trace},
 };
 #[cfg(feature = "fs")]
@@ -82,8 +82,9 @@ where
     pub recv_timeout: Duration,
     pub retry_delay: Duration,
     pub max_retries: u32,
-    pub options: ClientOptions,
     pub chain_listeners: JoinSet,
+    pub blanket_message_policy: BlanketMessagePolicy,
+    pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -177,8 +178,9 @@ where
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
-            options,
             chain_listeners: JoinSet::default(),
+            blanket_message_policy: options.blanket_message_policy,
+            restrict_chain_ids_to: options.restrict_chain_ids_to,
         }
     }
 
@@ -217,8 +219,8 @@ where
             chain.pending_blobs.clone(),
         );
         chain_client.options_mut().message_policy = MessagePolicy::new(
-            self.options.blanket_message_policy,
-            self.options.restrict_chain_ids_to.clone(),
+            self.blanket_message_policy,
+            self.restrict_chain_ids_to.clone(),
         );
         Ok(chain_client)
     }
