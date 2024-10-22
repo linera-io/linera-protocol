@@ -20,8 +20,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
-        Origin, Target,
+        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, Medium,
+        MessageBundle, Origin, Target,
     },
     ChainError, ChainStateView,
 };
@@ -416,6 +416,14 @@ where
                 .or_default()
                 .insert(target.medium, heights);
         }
+        self.create_cross_chain_requests(heights_by_recipient).await
+    }
+
+    async fn create_cross_chain_requests(
+        &self,
+        heights_by_recipient: BTreeMap<ChainId, BTreeMap<Medium, Vec<BlockHeight>>>,
+    ) -> Result<NetworkActions, WorkerError> {
+        // Load all the certificates we will need, regardless of the medium.
         let heights = BTreeSet::from_iter(
             heights_by_recipient
                 .iter()
