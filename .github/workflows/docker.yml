@@ -29,6 +29,7 @@ env:
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: warn
+  DOCKER_COMPOSE_WAIT: "true"
 
 permissions:
   contents: read
@@ -53,7 +54,9 @@ jobs:
       - name: Build Docker image
         run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
-        run: cd docker && ./compose.sh &
+        run: |
+          cd docker
+          ./compose.sh
       - name: Sync
         uses: nick-fields/retry@v2
         with:
