@@ -51,8 +51,6 @@ jobs:
       - name: Build client binary
         run: |
           cargo install --path linera-service --bin linera --bin linera-server --debug
-      - name: Build Docker image
-        run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
         run: |
           cd docker
@@ -61,6 +59,7 @@ jobs:
         uses: nick-fields/retry@v2
         with:
           # Docker compose can take some time to start
-          max_attempts: 5
+          max_attempts: 10
           timeout_minutes: 2
-          command: sleep 60 && linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
+          retry_wait_seconds: 10
+          command: linera --wallet docker/wallet.json --storage rocksdb:docker/linera.db sync-balance
