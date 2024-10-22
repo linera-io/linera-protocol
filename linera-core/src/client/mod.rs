@@ -1939,15 +1939,15 @@ where
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
     ) -> Result<HashedCertificateValue, ChainClientError> {
-        let timestamp = self.next_timestamp(&incoming_bundles).await;
         let identity = self.identity().await?;
-        let previous_block_hash;
-        let height;
-        {
+        let (previous_block_hash, height, timestamp) = {
             let state = self.state();
-            previous_block_hash = state.block_hash();
-            height = state.next_block_height();
-        }
+            (
+                state.block_hash(),
+                state.next_block_height(),
+                self.next_timestamp(&incoming_bundles, state.timestamp()),
+            )
+        };
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -1973,14 +1973,18 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     #[tracing::instrument(level = "trace", skip(incoming_bundles))]
-    async fn next_timestamp(&self, incoming_bundles: &[IncomingBundle]) -> Timestamp {
+    fn next_timestamp(
+        &self,
+        incoming_bundles: &[IncomingBundle],
+        block_time: Timestamp,
+    ) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
         incoming_bundles
             .iter()
             .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
-            .max(self.timestamp())
+            .max(block_time)
     }
 
     /// Queries an application.
@@ -2073,14 +2077,21 @@ where
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
-        let timestamp = self.next_timestamp(&incoming_bundles).await;
+        let (previous_block_hash, height, timestamp) = {
+            let state = self.state();
+            (
+                state.block_hash(),
+                state.next_block_height(),
+                self.next_timestamp(&incoming_bundles, state.timestamp()),
+            )
+        };
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
             operations: Vec::new(),
-            previous_block_hash: self.block_hash(),
-            height: self.next_block_height(),
+            previous_block_hash,
+            height,
             authenticated_signer: owner,
             timestamp,
         };
