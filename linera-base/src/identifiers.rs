@@ -13,7 +13,7 @@ use std::{
 use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
 use linera_witty::{WitLoad, WitStore, WitType};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     bcs_scalar,
@@ -201,21 +201,7 @@ impl From<&BlobContent> for BlobType {
 }
 
 /// A content-addressed blob ID i.e. the hash of the `BlobContent`.
-#[derive(
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Clone,
-    Copy,
-    Hash,
-    Debug,
-    Serialize,
-    Deserialize,
-    WitType,
-    WitStore,
-    WitLoad,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash, Debug, WitType, WitStore, WitLoad)]
 #[cfg_attr(with_testing, derive(test_strategy::Arbitrary, Default))]
 pub struct BlobId {
     /// The hash of the blob.
@@ -259,6 +245,45 @@ impl FromStr for BlobId {
             })
         } else {
             Err(anyhow!("Invalid blob ID: {}", s))
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "BlobId")]
+struct BlobIdHelper {
+    hash: CryptoHash,
+    blob_type: BlobType,
+}
+
+impl Serialize for BlobId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            let helper = BlobIdHelper {
+                hash: self.hash,
+                blob_type: self.blob_type,
+            };
+            helper.serialize(serializer)
+        }
+    }
+}
+
+impl<'a> Deserialize<'a> for BlobId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Self::from_str(&s).map_err(serde::de::Error::custom)
+        } else {
+            let helper = BlobIdHelper::deserialize(deserializer)?;
+            Ok(BlobId::new(helper.hash, helper.blob_type))
         }
     }
 }
