@@ -10,7 +10,8 @@ use std::{
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Blob, BlockHeight, Timestamp},
-    identifiers::{BlobId, ChainId, Owner},
+    identifiers::{BlobId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_chain::data_types::Block;
 use linera_execution::committee::ValidatorName;
@@ -34,8 +35,6 @@ pub struct ChainState {
     pending_block: Option<Block>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
-    /// The ID of the admin chain.
-    admin_id: ChainId,
 
     /// For each validator, up to which index we have synchronized their
     /// [`ChainStateView::received_log`].
@@ -52,7 +51,6 @@ pub struct ChainState {
 impl ChainState {
     pub fn new(
         known_key_pairs: Vec<KeyPair>,
-        admin_id: ChainId,
         block_hash: Option<CryptoHash>,
         timestamp: Timestamp,
         next_block_height: BlockHeight,
@@ -65,7 +63,6 @@ impl ChainState {
             .collect();
         let mut state = ChainState {
             known_key_pairs,
-            admin_id,
             block_hash,
             timestamp,
             next_block_height,
@@ -90,10 +87,6 @@ impl ChainState {
 
     pub fn next_block_height(&self) -> BlockHeight {
         self.next_block_height
-    }
-
-    pub fn admin_id(&self) -> ChainId {
-        self.admin_id
     }
 
     pub fn pending_block(&self) -> &Option<Block> {
@@ -122,6 +115,13 @@ impl ChainState {
 
     pub fn known_key_pairs(&self) -> &BTreeMap<Owner, KeyPair> {
         &self.known_key_pairs
+    }
+
+    /// Returns whether the given ownership includes anyone whose secret key we don't have.
+    pub fn has_other_owners(&self, ownership: &ChainOwnership) -> bool {
+        ownership
+            .all_owners()
+            .any(|owner| !self.known_key_pairs.contains_key(owner))
     }
 
     pub(super) fn insert_known_key_pair(&mut self, key_pair: KeyPair) -> PublicKey {
