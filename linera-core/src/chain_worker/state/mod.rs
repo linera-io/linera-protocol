@@ -20,8 +20,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, Medium,
-        MessageBundle, Origin, Target,
+        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
+        Origin, Target,
     },
     ChainError, ChainStateView,
 };
@@ -416,11 +416,53 @@ where
                 .or_default()
                 .insert(target.medium, heights);
         }
+        let heights = BTreeSet::from_iter(
+            heights_by_recipient
+                .iter()
+                .flat_map(|(_, height_map)| height_map.iter().flat_map(|(_, vec)| vec).copied()),
+        );
+        let heights_usize = heights
+            .iter()
+            .copied()
+            .map(usize::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let hashes = self
+            .chain
+            .confirmed_log
+            .multi_get(heights_usize.clone())
+            .await?
+            .into_iter()
+            .zip(heights_usize)
+            .map(|(maybe_hash, height)| {
+                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let certificates = self.storage.read_certificates(hashes).await?;
+        let certificates = heights
+            .into_iter()
+            .zip(certificates)
+            .collect::<HashMap<_, _>>();
+        // For each medium, select the relevant messages.
         let mut actions = NetworkActions::default();
         for (recipient, height_map) in heights_by_recipient {
-            let request = self
-                .create_cross_chain_request(height_map.into_iter().collect(), recipient)
-                .await?;
+            let mut bundle_vecs = Vec::new();
+            for (medium, heights) in height_map {
+                let mut bundles = Vec::new();
+                for height in heights {
+                    let cert = certificates.get(&height).ok_or_else(|| {
+                        ChainError::InternalError("missing certificates".to_string())
+                    })?;
+                    bundles.extend(cert.message_bundles_for(&medium, recipient));
+                }
+                if !bundles.is_empty() {
+                    bundle_vecs.push((medium, bundles));
+                }
+            }
+            let request = CrossChainRequest::UpdateRecipient {
+                sender: self.chain.chain_id(),
+                recipient,
+                bundle_vecs,
+            };
             actions.cross_chain_requests.push(request);
         }
         Ok(actions)
@@ -452,58 +494,6 @@ where
             }
         }
         Ok(true)
-    }
-
-    /// Creates an `UpdateRecipient` request that informs the `recipient` about new
-    /// cross-chain messages from this chain.
-    async fn create_cross_chain_request(
-        &self,
-        height_map: Vec<(Medium, Vec<BlockHeight>)>,
-        recipient: ChainId,
-    ) -> Result<CrossChainRequest, WorkerError> {
-        // Load all the certificates we will need, regardless of the medium.
-        let heights =
-            BTreeSet::from_iter(height_map.iter().flat_map(|(_, heights)| heights).copied());
-        let heights_usize = heights
-            .iter()
-            .copied()
-            .map(usize::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let hashes = self
-            .chain
-            .confirmed_log
-            .multi_get(heights_usize.clone())
-            .await?
-            .into_iter()
-            .zip(heights_usize)
-            .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| ViewError::not_found("confirmed log entry", height))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let certificates = self.storage.read_certificates(hashes).await?;
-        let certificates = heights
-            .into_iter()
-            .zip(certificates)
-            .collect::<HashMap<_, _>>();
-        // For each medium, select the relevant messages.
-        let mut bundle_vecs = Vec::new();
-        for (medium, heights) in height_map {
-            let mut bundles = Vec::new();
-            for height in heights {
-                let cert = certificates
-                    .get(&height)
-                    .ok_or_else(|| ChainError::InternalError("missing certificates".to_string()))?;
-                bundles.extend(cert.message_bundles_for(&medium, recipient));
-            }
-            if !bundles.is_empty() {
-                bundle_vecs.push((medium, bundles));
-            }
-        }
-        Ok(CrossChainRequest::UpdateRecipient {
-            sender: self.chain.chain_id(),
-            recipient,
-            bundle_vecs,
-        })
     }
 }
 
