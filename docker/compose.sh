@@ -25,7 +25,9 @@ cleanup() {
     docker volume rm $SHARED_VOLUME
 }
 
-trap cleanup EXIT INT
+if [ "${DOCKER_COMPOSE_WAIT:-false}" = "false" ]; then
+    trap cleanup EXIT INT
+fi
 
 cd "$ROOT_DIR"
 
