@@ -7,13 +7,16 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   LINERA_STORAGE_SERVICE: 127.0.0.1:1235
+  RUST_LOG: warn
+  RUST_LOG_FORMAT: plain
 
 jobs:
   long-faucet-chain-test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 180
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v3
