@@ -57,7 +57,8 @@ enum KeyTag {
 struct StoredIndices {
     /// The stored buckets with the first index being the size (at most N) and the
     /// second one is the index in the storage. If the index is 0 then it corresponds
-    /// to the Front, otherwise to the Index.
+    /// with the first value (entry `KeyTag::Front`), otherwise to the keys with
+    /// prefix `KeyTag::Index`.
     indices: Vec<(usize, usize)>,
     /// The position of the front in the first index.
     position: usize,
