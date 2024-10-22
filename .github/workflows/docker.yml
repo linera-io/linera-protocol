@@ -52,7 +52,9 @@ jobs:
       - name: Build Docker image
         run: docker build . -f docker/Dockerfile -t linera
       - name: Run Compose
-        run: cd docker && ./compose.sh &
+        run: |
+          cd docker
+          ./compose.sh
       - name: Sync
         uses: nick-fields/retry@v2
         with:
