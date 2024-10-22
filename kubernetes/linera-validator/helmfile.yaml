@@ -33,6 +33,7 @@ releases:
       - name: validatorDomainName
         value: {{ env "LINERA_HELMFILE_VALIDATOR_DOMAIN_NAME" | default "" }}
   - name: scylla
+    version: v1.13.0
     namespace: scylla
     chart: scylla/scylla
     timeout: 900
@@ -42,12 +43,14 @@ releases:
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA" | default "scylla.values.yaml" }}
   - name: scylla-manager
+    version: v1.13.0
     namespace: scylla-manager
     chart: scylla/scylla-manager
     timeout: 900
     needs:
       - scylla-operator/scylla-operator
   - name: scylla-operator
+    version: v1.13.0
     namespace: scylla-operator
     chart: scylla/scylla-operator
     timeout: 900
@@ -56,6 +59,7 @@ releases:
     values:
       - {{ env "LINERA_HELMFILE_VALUES_SCYLLA_OPERATOR" | default "scylla-operator.values.yaml" }}
   - name: cert-manager
+    version: v1.15.3
     namespace: cert-manager
     chart: jetstack/cert-manager
     timeout: 900
