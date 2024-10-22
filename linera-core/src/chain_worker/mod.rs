@@ -5,8 +5,10 @@
 
 mod actor;
 mod config;
+mod delivery_notifier;
 mod state;
 
+pub(super) use self::delivery_notifier::DeliveryNotifier;
 #[cfg(test)]
 pub(crate) use self::state::CrossChainUpdateHelper;
 pub use self::{
