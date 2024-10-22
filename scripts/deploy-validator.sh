@@ -42,6 +42,7 @@ HOST="$1"
 # Get the current branch name and replace underscores with dashes
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
 FORMATTED_BRANCH_NAME="${BRANCH_NAME//_/-}"
+GIT_COMMIT=$(git rev-parse --short HEAD)
 
 # Variables
 PORT="19100"
@@ -57,7 +58,7 @@ cargo install --locked --path linera-service
 
 # Build Docker image
 echo "Building Linera docker image"
-docker build -f docker/Dockerfile . -t linera
+docker build --build-arg git_commit="$GIT_COMMIT" -f  docker/Dockerfile . -t linera
 
 # Create validator configuration file
 echo "Creating validator configuration..."
