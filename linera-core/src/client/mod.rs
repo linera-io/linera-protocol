@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{btree_map, hash_map, BTreeMap, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -427,37 +427,42 @@ where
 struct MultichainTracker {
     // Starting tracker index.
     tracker: u64,
-    // Log of received certificates by the remote node.
-    remote_node_received_log: Vec<ChainAndHeight>,
-    // Track which certificates have been successfully processed.
-    // We will use that information later to update the tracker.
-    successfuly_processed: BTreeMap<ChainId, BTreeSet<BlockHeight>>,
+    // Tracks the highest block height processed for each chain.
+    highest_processed: BTreeMap<ChainId, BlockHeight>,
 }
 
 impl MultichainTracker {
-    fn new(init: u64, log: Vec<ChainAndHeight>) -> Self {
+    fn new(init: u64) -> Self {
         Self {
             tracker: init,
-            remote_node_received_log: log,
-            successfuly_processed: BTreeMap::new(),
+            highest_processed: BTreeMap::new(),
         }
     }
 
     fn push(&mut self, chain_id: ChainId, height: BlockHeight) {
-        self.successfuly_processed
-            .entry(chain_id)
-            .or_default()
-            .insert(height);
+        match self.highest_processed.entry(chain_id) {
+            btree_map::Entry::Occupied(mut entry) => {
+                if *entry.get() < height {
+                    entry.insert(height);
+                }
+            }
+            btree_map::Entry::Vacant(vacant) => {
+                vacant.insert(height);
+            }
+        }
     }
 
     // Returns an index of the last processed certificate in the original remote_node_received_log.
     //
     // Goes through the original `remote_node_received_log` and checks which of the certificates have been received.
     // Upon finding the first entry that has not been processed, it stops and returns the index of the last processed certificate.
-    fn finalize(&mut self) -> u64 {
-        for r in &self.remote_node_received_log {
-            if let Some(processed) = self.successfuly_processed.get(&r.chain_id) {
-                if processed.contains(&r.height) {
+    fn finalize<'a>(
+        &mut self,
+        remote_node_received_log: impl IntoIterator<Item = &'a ChainAndHeight>,
+    ) -> u64 {
+        for ChainAndHeight { chain_id, height } in remote_node_received_log {
+            if let Some(highest_processed) = self.highest_processed.get(chain_id) {
+                if height <= highest_processed {
                     self.tracker += 1;
                 } else {
                     break;
@@ -1180,7 +1185,8 @@ where
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
-        let mut tracker = MultichainTracker::new(tracker, info.requested_received_log.clone());
+        let mut tracker = MultichainTracker::new(tracker);
+        let remote_log = info.requested_received_log.clone();
         let remote_node_chains_view = info.requested_received_log.into_iter().fold(
             BTreeMap::<ChainId, Vec<BlockHeight>>::new(),
             |mut chain_to_info, entry| {
@@ -1261,7 +1267,7 @@ where
                 }
             }
         }
-        let new_tracker = tracker.finalize();
+        let new_tracker = tracker.finalize(&remote_log);
         Ok((remote_node.name, new_tracker, certificates))
     }
 
