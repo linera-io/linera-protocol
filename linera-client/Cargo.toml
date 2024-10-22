@@ -120,6 +120,7 @@ non-fungible.workspace = true
 proptest.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 social.workspace = true
+tempfile.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 test-strategy.workspace = true

@@ -18,18 +18,14 @@ use linera_core::{
     node::CrossChainMessageDelivery,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder as _, TestBuilder},
 };
-use linera_execution::{system::Recipient, ResourceControlPolicy};
-use linera_rpc::{
-    config::{NetworkProtocol, ValidatorPublicNetworkPreConfig},
-    simple::TransportProtocol,
-};
+use linera_execution::system::Recipient;
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
 use rand::SeedableRng as _;
 
+use super::util::make_genesis_config;
 use crate::{
     chain_listener::{self, ChainListener, ChainListenerConfig, ClientContext as _},
-    config::{CommitteeConfig, GenesisConfig, ValidatorConfig},
     wallet::{UserChain, Wallet},
     Error,
 };
@@ -106,30 +102,6 @@ impl chain_listener::ClientContext for ClientContext {
         self.wallet.update_from_state(client).await;
         Ok(())
     }
-}
-
-fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> GenesisConfig {
-    let network = ValidatorPublicNetworkPreConfig {
-        protocol: NetworkProtocol::Simple(TransportProtocol::Tcp),
-        host: "localhost".to_string(),
-        port: 8080,
-    };
-    let validator_names = builder.initial_committee.validators().keys();
-    let validators = validator_names
-        .map(|name| ValidatorConfig {
-            name: *name,
-            network: network.clone(),
-        })
-        .collect();
-    let mut genesis_config = GenesisConfig::new(
-        CommitteeConfig { validators },
-        builder.admin_id(),
-        Timestamp::from(0),
-        ResourceControlPolicy::default(),
-        "test network".to_string(),
-    );
-    genesis_config.chains.extend(builder.genesis_chains());
-    genesis_config
 }
 
 /// Tests that the chain listener, if there is a message in the inbox, will continue requesting
