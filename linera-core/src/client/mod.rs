@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{btree_map, hash_map, BTreeMap, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -423,45 +423,41 @@ where
     }
 }
 
-// Tracks which chain_id<>block_height pairs have been successfully processed.
+// Tracks which chain_id<>block_height pairs have been successfully downloaded.
 struct MultichainTracker {
     // Starting tracker index.
     tracker: u64,
     // Tracks the highest block height processed for each chain.
-    highest_processed: BTreeMap<ChainId, BlockHeight>,
+    highest_seen: BTreeMap<ChainId, BlockHeight>,
 }
 
 impl MultichainTracker {
     fn new(init: u64) -> Self {
         Self {
             tracker: init,
-            highest_processed: BTreeMap::new(),
+            highest_seen: BTreeMap::new(),
         }
     }
 
+    /// Pushes a new chain_id<>block_height pair to the tracker.
+    /// Replaces previous entry if the new height is higher.
     fn push(&mut self, chain_id: ChainId, height: BlockHeight) {
-        match self.highest_processed.entry(chain_id) {
-            btree_map::Entry::Occupied(mut entry) => {
-                if *entry.get() < height {
-                    entry.insert(height);
-                }
-            }
-            btree_map::Entry::Vacant(vacant) => {
-                vacant.insert(height);
-            }
-        }
+        self.highest_seen
+            .entry(chain_id)
+            .and_modify(|h| *h = std::cmp::max(*h, height))
+            .or_insert(height);
     }
 
-    // Returns an index of the last processed certificate in the original remote_node_received_log.
-    //
-    // Goes through the original `remote_node_received_log` and checks which of the certificates have been received.
-    // Upon finding the first entry that has not been processed, it stops and returns the index of the last processed certificate.
+    /// Returns an index of the last processed certificate in the original remote_node_received_log.
+    ///
+    /// Goes through the original `remote_node_received_log` and checks which of the certificates have been received.
+    /// Upon finding the first entry that has not been processed, it stops and returns the index of the last processed certificate.
     fn finalize<'a>(
         &mut self,
         remote_node_received_log: impl IntoIterator<Item = &'a ChainAndHeight>,
     ) -> u64 {
         for ChainAndHeight { chain_id, height } in remote_node_received_log {
-            if let Some(highest_processed) = self.highest_processed.get(chain_id) {
+            if let Some(highest_processed) = self.highest_seen.get(chain_id) {
                 if height <= highest_processed {
                     self.tracker += 1;
                 } else {
@@ -1281,7 +1277,12 @@ where
         let local_response = self.local_query(ChainInfoQuery::new(chain_id)).await?;
         let local_next = local_response.info.next_block_height;
 
-        tracker.push(chain_id, local_next.saturating_sub(1.into()));
+        // Record highest block height known locally for this chain.
+        if let Ok(highest_seen) = local_next.try_sub_one() {
+            tracker.push(chain_id, highest_seen);
+        }
+
+        // Find the first block in the batch that is higher than the highest block known locally.
         match block_batch.iter().position(|b| b >= &local_next) {
             None => {
                 // Our highest, locally-known block is higher than any block height from the current batch.
