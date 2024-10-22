@@ -427,7 +427,7 @@ async fn bucket_queue_view_mutability_check() -> Result<()> {
             let count = view.queue.count();
             if choice == 0 {
                 // inserting random stuff
-                let n_ins = rng.gen_range(0..10);
+                let n_ins = rng.gen_range(0..100);
                 for _ in 0..n_ins {
                     let val = rng.gen::<u8>();
                     view.queue.push_back(val);
