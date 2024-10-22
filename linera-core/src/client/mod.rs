@@ -21,7 +21,7 @@ use futures::{
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(not(target_arch = "wasm32"))]
-use linera_base::data_types::{Bytecode, CompressedContractService};
+use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -611,6 +611,22 @@ enum HandleCertificateResult {
     OldEpoch,
     New,
     FutureEpoch,
+}
+
+/// Creates a compressed Contract, Service and bytecode.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn create_compressed_bytecodes(
+    contract: Bytecode,
+    service: Bytecode,
+) -> (Blob, Blob, BytecodeId) {
+    let (compressed_contract, compressed_service) =
+        tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
+            .await
+            .expect("Compression should not panic");
+    let contract_blob = Blob::new_contract_bytecode(compressed_contract);
+    let service_blob = Blob::new_service_bytecode(compressed_service);
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    (contract_blob, service_blob, bytecode_id)
 }
 
 impl<P, S> ChainClient<P, S>
@@ -2533,24 +2549,22 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
-        let compressed_contract_service = CompressedContractService::new(contract, service).await;
-        self.publish_compressed_bytecode(compressed_contract_service)
+        let (contract_blob, service_blob, bytecode_id) =
+            create_compressed_bytecodes(contract, service).await;
+        self.publish_compressed_bytecode(contract_blob, service_blob, bytecode_id)
             .await
     }
 
     /// Publishes some bytecode.
     #[cfg(not(target_arch = "wasm32"))]
-    #[tracing::instrument(level = "trace", skip(compressed_contract_service))]
+    #[tracing::instrument(level = "trace", skip(contract_blob, service_blob, bytecode_id))]
     pub async fn publish_compressed_bytecode(
         &self,
-        compressed_contract_service: CompressedContractService,
+        contract_blob: Blob,
+        service_blob: Blob,
+        bytecode_id: BytecodeId,
     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
-        let bytecode_id = compressed_contract_service.bytecode_id;
-        self.add_pending_blobs([
-            compressed_contract_service.contract_blob,
-            compressed_contract_service.service_blob,
-        ])
-        .await;
+        self.add_pending_blobs([contract_blob, service_blob]).await;
         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
             bytecode_id,
         }))

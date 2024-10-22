@@ -948,38 +948,6 @@ pub enum BlobContent {
     ServiceBytecode(CompressedBytecode),
 }
 
-/// Compressed contract, service and bytecode_id.
-#[cfg(not(target_arch = "wasm32"))]
-#[derive(Clone)]
-pub struct CompressedContractService {
-    /// The contract blob
-    pub contract_blob: Blob,
-    /// The service blob.
-    pub service_blob: Blob,
-    /// The bytecode_id.
-    pub bytecode_id: BytecodeId,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl CompressedContractService {
-    /// Creates a compressed Contract, Service and bytecode.
-    pub async fn new(contract: Bytecode, service: Bytecode) -> Self {
-        let (compressed_contract, compressed_service) =
-            tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
-                .await
-                .expect("Compression should not panic");
-        let contract_blob = Blob::new_contract_bytecode(compressed_contract);
-        let service_blob = Blob::new_service_bytecode(compressed_service);
-
-        let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
-        Self {
-            contract_blob,
-            service_blob,
-            bytecode_id,
-        }
-    }
-}
-
 impl fmt::Debug for BlobContent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

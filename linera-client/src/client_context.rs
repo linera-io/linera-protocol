@@ -53,9 +53,10 @@ use {
 use {
     linera_base::{
         crypto::CryptoHash,
-        data_types::{BlobBytes, Bytecode, CompressedContractService},
+        data_types::{BlobBytes, Bytecode},
         identifiers::BytecodeId,
     },
+    linera_core::client::create_compressed_bytecodes,
     std::{fs, path::PathBuf},
 };
 
@@ -419,15 +420,16 @@ where
             .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing bytecode");
-        let compressed_contract_service =
-            CompressedContractService::new(contract_bytecode, service_bytecode).await;
+        let (contract_blob, service_blob, bytecode_id) =
+            create_compressed_bytecodes(contract_bytecode, service_bytecode).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
-                let compressed_contract_service = compressed_contract_service.clone();
+                let contract_blob = contract_blob.clone();
+                let service_blob = service_blob.clone();
                 let chain_client = chain_client.clone();
                 async move {
                     chain_client
-                        .publish_compressed_bytecode(compressed_contract_service)
+                        .publish_compressed_bytecode(contract_blob, service_blob, bytecode_id)
                         .await
                         .context("Failed to publish bytecode")
                 }
