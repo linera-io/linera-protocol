@@ -40,6 +40,20 @@ impl BlockHeightRange {
         let limit = Some(1);
         BlockHeightRange { start, limit }
     }
+
+    /// Creates a range starting at the specified block height and containing up to `limit` elements.
+    pub fn multi(start: BlockHeight, limit: u64) -> BlockHeightRange {
+        BlockHeightRange {
+            start,
+            limit: Some(limit),
+        }
+    }
+
+    /// Returns the highest block height in the range.
+    pub fn highest(&self) -> BlockHeight {
+        self.limit
+            .map_or(self.start, |limit| BlockHeight(self.start.0 + limit - 1))
+    }
 }
 
 /// Request information about a chain.
