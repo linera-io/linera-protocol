@@ -423,7 +423,7 @@ where
     }
 }
 
-// Tracks which chain_id<>block_height pairs have been successfully downloaded.
+/// Tracks which `(ChainId, BlockHeight)` pairs have been successfully downloaded.
 struct MultichainTracker {
     // Starting tracker index.
     tracker: u64,
@@ -439,7 +439,7 @@ impl MultichainTracker {
         }
     }
 
-    /// Pushes a new chain_id<>block_height pair to the tracker.
+    /// Pushes a new `(ChainId, BlockHeight)` pair to the tracker.
     /// Replaces previous entry if the new height is higher.
     fn push(&mut self, chain_id: ChainId, height: BlockHeight) {
         self.highest_seen
@@ -1267,7 +1267,7 @@ where
         Ok((remote_node.name, new_tracker, certificates))
     }
 
-    // Uses local information (about already-processed blocks) to advance the `block_batch` to a place where only new blocks are left.
+    /// Uses local information (about already-processed blocks) to advance the `block_batch` to a place where only new blocks are left.
     async fn advance_with_local(
         &self,
         chain_id: ChainId,
