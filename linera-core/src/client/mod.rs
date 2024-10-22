@@ -261,7 +261,6 @@ impl<P, S: Storage + Clone> Client<P, S> {
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
             e.insert(ChainState::new(
                 known_key_pairs,
-                admin_id,
                 block_hash,
                 timestamp,
                 next_block_height,
@@ -273,6 +272,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         ChainClient {
             client: self.clone(),
             chain_id,
+            admin_id,
             options: ChainClientOptions {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
@@ -405,6 +405,8 @@ where
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
+    /// The ID of the admin chain.
+    admin_id: ChainId,
     /// The client options.
     options: ChainClientOptions,
 }
@@ -417,6 +419,7 @@ where
         Self {
             client: self.client.clone(),
             chain_id: self.chain_id,
+            admin_id: self.admin_id,
             options: self.options.clone(),
         }
     }
@@ -669,10 +672,6 @@ where
     /// local chain.
     #[tracing::instrument(level = "trace")]
     async fn pending_message_bundles(&self) -> Result<Vec<IncomingBundle>, ChainClientError> {
-        if self.next_block_height() != BlockHeight::ZERO && self.options.message_policy.is_ignore()
-        {
-            return Ok(Vec::new()); // OpenChain is already received, other are ignored.
-        }
         let query = ChainInfoQuery::new(self.chain_id).with_pending_message_bundles();
         let info = self
             .client
@@ -680,10 +679,17 @@ where
             .handle_chain_info_query(query)
             .await?
             .info;
-        ensure!(
-            info.next_block_height == self.next_block_height(),
-            ChainClientError::WalletSynchronizationError
-        );
+        {
+            let state = self.state();
+            ensure!(
+                state.has_other_owners(&info.manager.ownership)
+                    || info.next_block_height == state.next_block_height(),
+                ChainClientError::WalletSynchronizationError
+            );
+        }
+        if info.next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore() {
+            return Ok(Vec::new()); // OpenChain is already received, others are ignored.
+        }
         let mut requested_pending_message_bundles = info.requested_pending_message_bundles;
         let mut pending_message_bundles = vec![];
         // The first incoming message of any child chain must be `OpenChain`. We must have it in
@@ -777,8 +783,7 @@ where
         &self,
     ) -> Result<(BTreeMap<Epoch, Committee>, Epoch), LocalNodeError> {
         let (epoch, mut committees) = self.epoch_and_committees(self.chain_id).await?;
-        let admin_id = self.state().admin_id();
-        let (admin_epoch, admin_committees) = self.epoch_and_committees(admin_id).await?;
+        let (admin_epoch, admin_committees) = self.epoch_and_committees(self.admin_id).await?;
         committees.extend(admin_committees);
         let epoch = std::cmp::max(epoch.unwrap_or_default(), admin_epoch.unwrap_or_default());
         Ok((committees, epoch))
@@ -827,11 +832,12 @@ where
             manager.ownership.is_active(),
             LocalNodeError::InactiveChain(self.chain_id)
         );
+        let state = self.state();
         let mut identities = manager
             .ownership
             .all_owners()
             .chain(&manager.leader)
-            .filter(|owner| self.state().known_key_pairs().contains_key(owner));
+            .filter(|owner| state.known_key_pairs().contains_key(owner));
         let Some(identity) = identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
@@ -883,9 +889,7 @@ where
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
-        let ownership = &info.manager.ownership;
-        let keys: HashSet<_> = self.state().known_key_pairs().keys().cloned().collect();
-        if ownership.all_owners().any(|owner| !keys.contains(owner)) {
+        if self.state().has_other_owners(&info.manager.ownership) {
             let mutex = self.state().client_mutex();
             let _guard = mutex.lock_owned().await;
 
@@ -1275,8 +1279,7 @@ where
         let local_committee = self.local_committee().await?;
         let nodes = self.make_nodes(&local_committee)?;
         // Synchronize the state of the admin chain from the network.
-        let admin_id = self.state().admin_id();
-        self.synchronize_chain_state(&nodes, admin_id).await?;
+        self.synchronize_chain_state(&nodes, self.admin_id).await?;
         let client = self.clone();
         // Proceed to downloading received certificates.
         let result = communicate_with_quorum(
@@ -1936,15 +1939,15 @@ where
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
     ) -> Result<HashedCertificateValue, ChainClientError> {
-        let timestamp = self.next_timestamp(&incoming_bundles).await;
         let identity = self.identity().await?;
-        let previous_block_hash;
-        let height;
-        {
+        let (previous_block_hash, height, timestamp) = {
             let state = self.state();
-            previous_block_hash = state.block_hash();
-            height = state.next_block_height();
-        }
+            (
+                state.block_hash(),
+                state.next_block_height(),
+                self.next_timestamp(&incoming_bundles, state.timestamp()),
+            )
+        };
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
@@ -1970,14 +1973,18 @@ where
     /// This will usually be the current time according to the local clock, but may be slightly
     /// ahead to make sure it's not earlier than the incoming messages or the previous block.
     #[tracing::instrument(level = "trace", skip(incoming_bundles))]
-    async fn next_timestamp(&self, incoming_bundles: &[IncomingBundle]) -> Timestamp {
+    fn next_timestamp(
+        &self,
+        incoming_bundles: &[IncomingBundle],
+        block_time: Timestamp,
+    ) -> Timestamp {
         let local_time = self.storage_client().clock().current_time();
         incoming_bundles
             .iter()
             .map(|msg| msg.bundle.timestamp)
             .max()
             .map_or(local_time, |timestamp| timestamp.max(local_time))
-            .max(self.timestamp())
+            .max(block_time)
     }
 
     /// Queries an application.
@@ -2070,14 +2077,21 @@ where
         owner: Option<Owner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
-        let timestamp = self.next_timestamp(&incoming_bundles).await;
+        let (previous_block_hash, height, timestamp) = {
+            let state = self.state();
+            (
+                state.block_hash(),
+                state.next_block_height(),
+                self.next_timestamp(&incoming_bundles, state.timestamp()),
+            )
+        };
         let block = Block {
             epoch: self.epoch().await?,
             chain_id: self.chain_id,
             incoming_bundles,
             operations: Vec::new(),
-            previous_block_hash: self.block_hash(),
-            height: self.next_block_height(),
+            previous_block_hash,
+            height,
             authenticated_signer: owner,
             timestamp,
         };
@@ -2243,7 +2257,7 @@ where
                 info = self.chain_info_with_manager_values().await?;
             }
         }
-        self.state_mut().update_from_info(&info);
+        self.update_from_info(&info);
         let manager = *info.manager;
 
         // If there is a validated block in the current round, finalize it.
@@ -2473,7 +2487,7 @@ where
             let config = OpenChainConfig {
                 ownership: ownership.clone(),
                 committees,
-                admin_id: self.state().admin_id(),
+                admin_id: self.admin_id,
                 epoch,
                 balance,
                 application_permissions: application_permissions.clone(),
@@ -2720,7 +2734,7 @@ where
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let operation = SystemOperation::Subscribe {
-            chain_id: self.state().admin_id(),
+            chain_id: self.admin_id,
             channel: SystemChannel::Admin,
         };
         self.execute_operation(Operation::System(operation)).await
@@ -2733,7 +2747,7 @@ where
         &self,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         let operation = SystemOperation::Unsubscribe {
-            chain_id: self.state().admin_id(),
+            chain_id: self.admin_id,
             channel: SystemChannel::Admin,
         };
         self.execute_operation(Operation::System(operation)).await
