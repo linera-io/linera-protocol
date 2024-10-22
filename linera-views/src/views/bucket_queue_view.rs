@@ -55,9 +55,10 @@ enum KeyTag {
 /// The `StoredIndices` contains the description of the stored buckets.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct StoredIndices {
-    /// The stored buckets with the first index being the size at most N and the
-    /// second one is the index. If the index is 0 then it correspond to the Front,
-    /// otherwise to the Index.
+    /// The stored buckets with the first index being the size (at most N) and the
+    /// second one is the index in the storage. If the index is 0 then it corresponds
+    /// with the first value (entry `KeyTag::Front`), otherwise to the keys with
+    /// prefix `KeyTag::Index`.
     indices: Vec<(usize, usize)>,
     /// The position of the front in the first index.
     position: usize,
@@ -231,15 +232,16 @@ where
             self.stored_data.clear();
             self.stored_position = 0;
         } else if let Some((i_block, position)) = self.cursor.position {
-            for block in 0..i_block {
-                let index = self.stored_data[block].0;
+            for _ in 0..i_block {
+                let block = self.stored_data.pop_front().unwrap();
+                let index = block.0;
                 let key = self.get_index_key(index)?;
                 batch.delete_key(key);
-                self.stored_data.pop_front();
             }
             self.cursor = Cursor {
                 position: Some((0, position)),
             };
+            self.stored_position = position;
             // We need to ensure that the first index is in the front.
             let first_index = self.stored_data[0].0;
             if first_index != 0 {
