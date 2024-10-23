@@ -515,10 +515,8 @@ impl LocalNet {
         let mut client = HealthClient::new(connection);
         linera_base::time::timer::sleep(Duration::from_millis(100)).await;
         for i in 0..10 {
-            warn!("Iteration, i={}", i);
             linera_base::time::timer::sleep(Duration::from_millis(i * 500)).await;
             let result = client.check(HealthCheckRequest::default()).await;
-            warn!("result={:?}", result);
             if result.is_ok() && result.unwrap().get_ref().status() == ServingStatus::Serving {
                 info!("Successfully started {nickname}");
                 return Ok(());
