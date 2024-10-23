@@ -955,9 +955,6 @@ where
             );
         }
         if self.state().has_other_owners(&info.manager.ownership) {
-            let mutex = self.state().client_mutex();
-            let _guard = mutex.lock_owned().await;
-
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -1403,7 +1400,7 @@ where
                 .retry_pending_cross_chain_requests(chain_id)
                 .await
             {
-                error!("Failed trying to wait for outgoing messages from {chain_id}: {error}");
+                error!("Failed to retry outgoing messages from {chain_id}: {error}");
             }
         }
         // Update tracker.
@@ -3233,16 +3230,11 @@ where
         &self,
         remote_node: RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
-        let mutex = self.state().client_mutex();
-        let _guard = mutex.lock_owned().await;
-
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
         let received_certificates = self
             .synchronize_received_certificates_from_validator(chain_id, &remote_node)
             .await?;
-
-        drop(_guard);
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
         self.receive_certificates_from_validator(received_certificates)
