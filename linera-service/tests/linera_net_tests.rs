@@ -34,11 +34,7 @@ use linera_base::{
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
 use linera_sdk::{base::BlockHeight, DataBlobHash};
-#[cfg(any(
-    with_test_dynamodb,
-    with_test_scylladb,
-    with_test_storage_service,
-))]
+#[cfg(any(with_test_dynamodb, with_test_scylladb, with_test_storage_service,))]
 use linera_service::cli_wrappers::local_net::{Database, LocalNetConfig};
 #[cfg(with_test_remote_net)]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;

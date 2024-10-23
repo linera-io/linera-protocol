@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(feature = "test-storage-service", feature = "test-dynamodb", feature = "test-scylladb"))]
+#![cfg(any(
+    feature = "test-storage-service",
+    feature = "test-dynamodb",
+    feature = "test-scylladb"
+))]
 
 use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 

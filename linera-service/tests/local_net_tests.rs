@@ -2,11 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(
-    with_test_dynamodb,
-    with_test_scylladb,
-    with_test_storage_service,
-))]
+#![cfg(any(with_test_dynamodb, with_test_scylladb, with_test_storage_service,))]
 
 mod common;
 

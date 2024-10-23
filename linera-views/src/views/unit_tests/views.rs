@@ -13,12 +13,6 @@ use crate::dynamo_db::DynamoDbStore;
 use crate::rocks_db::RocksDbStore;
 #[cfg(with_test_scylladb)]
 use crate::scylla_db::ScyllaDbStore;
-#[cfg(any(with_test_scylladb, with_test_dynamodb, with_test_rocksdb))]
-use crate::{
-    context::ViewContext,
-    random::generate_test_namespace,
-    store::{AdminKeyValueStore, TestKeyValueStore},
-};
 use crate::{
     batch::Batch,
     context::{create_test_memory_context, Context, MemoryContext},
@@ -29,6 +23,12 @@ use crate::{
         TestCollectionView, TestLogView, TestMapView, TestRegisterView, TestView,
     },
     views::{HashableView, View, ViewError},
+};
+#[cfg(any(with_test_scylladb, with_test_dynamodb, with_test_rocksdb))]
+use crate::{
+    context::ViewContext,
+    random::generate_test_namespace,
+    store::{AdminKeyValueStore, TestKeyValueStore},
 };
 
 #[tokio::test]

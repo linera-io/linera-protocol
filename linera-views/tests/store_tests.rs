@@ -14,10 +14,10 @@ use linera_views::{
     },
     value_splitting::create_value_splitting_memory_store,
 };
-#[cfg(web)]
+#[cfg(with_test_indexeddb)]
 use wasm_bindgen_test::wasm_bindgen_test;
 
-#[cfg(web)]
+#[cfg(with_test_indexeddb)]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[tokio::test]
