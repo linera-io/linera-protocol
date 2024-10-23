@@ -62,8 +62,8 @@ jobs:
         run: |
           cd docker
           ./compose.sh
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
+      # - name: Setup upterm session
+        # uses: lhotari/action-upterm@v1
       - name: Sync
         uses: nick-fields/retry@v2
         with:
