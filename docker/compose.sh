@@ -25,7 +25,9 @@ cleanup() {
     docker volume rm $SHARED_VOLUME
 }
 
-if [ "${DOCKER_COMPOSE_WAIT:-false}" = "false" ]; then
+if [ "${DOCKER_COMPOSE_WAIT:-false}" = "true" ]; then
+    trap cleanup INT
+else
     trap cleanup EXIT INT
 fi
 
