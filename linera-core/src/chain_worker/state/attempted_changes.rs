@@ -439,7 +439,7 @@ where
     pub(super) async fn confirm_updated_recipient(
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
-    ) -> Result<BlockHeight, WorkerError> {
+    ) -> Result<(), WorkerError> {
         let mut height_with_fully_delivered_messages = BlockHeight::ZERO;
 
         for (target, height) in latest_heights {
@@ -460,7 +460,11 @@ where
 
         self.save().await?;
 
-        Ok(height_with_fully_delivered_messages)
+        self.state
+            .delivery_notifier
+            .notify(height_with_fully_delivered_messages);
+
+        Ok(())
     }
 
     /// Attempts to vote for a leader timeout, if possible.

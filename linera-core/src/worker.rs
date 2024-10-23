@@ -4,7 +4,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{hash_map, HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
@@ -957,26 +957,13 @@ where
                     .into_iter()
                     .map(|(medium, height)| (Target { recipient, medium }, height))
                     .collect();
-                let height_with_fully_delivered_messages = self
-                    .query_chain_worker(sender, move |callback| {
-                        ChainWorkerRequest::ConfirmUpdatedRecipient {
-                            latest_heights,
-                            callback,
-                        }
-                    })
-                    .await?;
-                // Handle delivery notifiers for this chain, if any.
-                if let hash_map::Entry::Occupied(mut notifier) =
-                    self.delivery_notifiers.lock().unwrap().entry(sender)
-                {
-                    notifier
-                        .get_mut()
-                        .notify(height_with_fully_delivered_messages);
-
-                    if notifier.get().is_empty() {
-                        notifier.remove();
+                self.query_chain_worker(sender, move |callback| {
+                    ChainWorkerRequest::ConfirmUpdatedRecipient {
+                        latest_heights,
+                        callback,
                     }
-                }
+                })
+                .await?;
                 Ok(NetworkActions::default())
             }
         }

@@ -117,7 +117,7 @@ where
     /// Handle cross-chain request to confirm that the recipient was updated.
     ConfirmUpdatedRecipient {
         latest_heights: Vec<(Target, BlockHeight)>,
-        callback: oneshot::Sender<Result<BlockHeight, WorkerError>>,
+        callback: oneshot::Sender<Result<(), WorkerError>>,
     },
 
     /// Handle a [`ChainInfoQuery`].

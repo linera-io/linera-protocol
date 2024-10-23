@@ -265,7 +265,7 @@ where
     pub(super) async fn confirm_updated_recipient(
         &mut self,
         latest_heights: Vec<(Target, BlockHeight)>,
-    ) -> Result<BlockHeight, WorkerError> {
+    ) -> Result<(), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
             .confirm_updated_recipient(latest_heights)
