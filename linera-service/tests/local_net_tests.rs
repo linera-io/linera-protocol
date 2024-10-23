@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service",
+    with_test_dynamodb,
+    with_test_scylladb,
+    with_test_storage_service,
 ))]
 
 mod common;
@@ -59,14 +59,14 @@ impl Drop for RestoreVarOnDrop {
 }
 
 // TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
+//#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+//#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     use linera_base::{crypto::KeyPair, identifiers::Owner};
@@ -232,9 +232,9 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -293,9 +293,9 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -334,9 +334,9 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(with_test_scylladb, test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(with_test_dynamodb, test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -377,9 +377,9 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     Ok(())
 }
 
-#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(with_test_scylladb, test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
+#[cfg_attr(with_test_dynamodb, test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -444,7 +444,7 @@ async fn test_project_test() -> Result<()> {
 }
 
 /// Test if the wallet file is correctly locked when used.
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 #[test_log::test(tokio::test)]
 async fn test_storage_service_wallet_lock() -> Result<()> {
     use std::mem::drop;
@@ -469,7 +469,7 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
 }
 
 #[test_log::test(tokio::test)]
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     use std::{
         io::{BufRead, BufReader},
@@ -517,12 +517,12 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
 }
 
 #[cfg(feature = "benchmark")]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
+#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
+#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Tcp) ; "scylladb_tcp"))]
+#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;

@@ -21,9 +21,9 @@ use linera_base::{
 };
 use linera_client::storage::{StorageConfig, StorageConfigNamespace};
 use linera_execution::ResourceControlPolicy;
-#[cfg(all(feature = "storage-service", with_testing))]
+#[cfg(all(with_test_storage_service, with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
-#[cfg(all(feature = "scylladb", with_testing))]
+#[cfg(all(with_test_scylladb, with_testing))]
 use linera_views::{scylla_db::ScyllaDbStore, store::TestKeyValueStore as _};
 use tempfile::{tempdir, TempDir};
 use tokio::process::{Child, Command};
@@ -61,31 +61,31 @@ pub async fn get_node_port() -> u16 {
 async fn make_testing_config(database: Database) -> Result<StorageConfig> {
     match database {
         Database::Service => {
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_test_storage_service)]
             {
                 let endpoint = storage_service_test_endpoint()
                     .expect("Reading LINERA_STORAGE_SERVICE environment variable");
                 Ok(StorageConfig::Service { endpoint })
             }
-            #[cfg(not(feature = "storage-service"))]
+            #[cfg(not(with_test_storage_service))]
             panic!("Database::Service is selected without the feature storage_service");
         }
         Database::DynamoDb => {
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_test_dynamodb)]
             {
                 let use_localstack = true;
                 Ok(StorageConfig::DynamoDb { use_localstack })
             }
-            #[cfg(not(feature = "dynamodb"))]
+            #[cfg(not(with_test_dynamodb))]
             panic!("Database::DynamoDb is selected without the feature aws");
         }
         Database::ScyllaDb => {
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_test_scylladb)]
             {
                 let config = ScyllaDbStore::new_test_config().await?;
                 Ok(StorageConfig::ScyllaDb { uri: config.uri })
             }
-            #[cfg(not(feature = "scylladb"))]
+            #[cfg(not(with_test_scylladb))]
             panic!("Database::ScyllaDb is selected without the feature sctlladb");
         }
     }
