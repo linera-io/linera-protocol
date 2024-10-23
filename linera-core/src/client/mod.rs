@@ -1394,6 +1394,9 @@ where
             }
         }
         for chain_id in other_sender_chains {
+            // Certificates for this chain were omitted from `certificates` because they were
+            // already processed locally. If they were processed in a concurrent task, it is not
+            // guaranteed that their cross-chain messages were already handled.
             if let Err(error) = self
                 .client
                 .local_node
