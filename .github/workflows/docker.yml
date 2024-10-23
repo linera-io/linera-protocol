@@ -49,8 +49,8 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Update aio-max-nr
-        run: echo 1048576 > /proc/sys/fs/aio-max-nr
+      # - name: Update aio-max-nr
+        # run: echo 1048576 > /proc/sys/fs/aio-max-nr
       - name: Build client binary
         run: |
           cargo install --path linera-service --bin linera --bin linera-server --debug
