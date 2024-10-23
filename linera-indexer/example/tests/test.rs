@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(with_test_storage_service, with_test_dynamodb, with_test_scylladb))]
+#![cfg(any(feature = "test-storage-service", feature = "test-dynamodb", feature = "test-scylladb"))]
 
 use std::{str::FromStr, sync::LazyLock, time::Duration};
 
@@ -82,9 +82,9 @@ const TRANSFER_DELAY_MILLIS: u64 = 1000;
 #[cfg(not(debug_assertions))]
 const TRANSFER_DELAY_MILLIS: u64 = 100;
 
-#[cfg_attr(with_test_storage_service, test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
-#[cfg_attr(with_test_scylladb, test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(with_test_dynamodb, test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "test-storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
+#[cfg_attr(feature = "test-scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "test-dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     // launching network, service and indexer
