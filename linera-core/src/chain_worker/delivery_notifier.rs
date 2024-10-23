@@ -40,7 +40,7 @@ impl DeliveryNotifier {
     }
 
     /// Registers a delivery `notifier` for a desired [`BlockHeight`].
-    pub fn register(&mut self, height: BlockHeight, notifier: oneshot::Sender<()>) {
+    pub(super) fn register(&mut self, height: BlockHeight, notifier: oneshot::Sender<()>) {
         let mut notifiers = self
             .notifiers
             .lock()
@@ -50,7 +50,7 @@ impl DeliveryNotifier {
     }
 
     /// Notifies that all messages up to `height` have been delivered.
-    pub fn notify(&mut self, height: BlockHeight) {
+    pub(super) fn notify(&mut self, height: BlockHeight) {
         let relevant_notifiers = {
             let mut notifiers = self
                 .notifiers
