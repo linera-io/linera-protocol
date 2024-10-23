@@ -66,38 +66,3 @@ macro_rules! impl_from_infallible {
 
 pub(crate) use impl_from_dynamic;
 pub(crate) use impl_from_infallible;
-
-pub mod serde_btreemap_keys_as_strings {
-    use std::{collections::BTreeMap, fmt::Display, str::FromStr};
-
-    use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
-
-    pub fn serialize<K, V, S>(map: &BTreeMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        K: Display,
-        V: Serialize,
-        S: Serializer,
-    {
-        let string_map: BTreeMap<String, &V> =
-            map.iter().map(|(k, v)| (k.to_string(), v)).collect();
-        string_map.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
-    where
-        K: FromStr + Ord,
-        <K as FromStr>::Err: Display,
-        V: Deserialize<'de>,
-        D: Deserializer<'de>,
-    {
-        let string_map: BTreeMap<String, V> = BTreeMap::deserialize(deserializer)?;
-        string_map
-            .into_iter()
-            .map(|(k, v)| {
-                k.parse()
-                    .map(|key| (key, v))
-                    .map_err(serde::de::Error::custom)
-            })
-            .collect()
-    }
-}

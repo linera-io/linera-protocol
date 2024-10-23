@@ -18,7 +18,7 @@ use linera_storage::Storage;
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
-use crate::{config::GenesisConfig, error, util::serde_btreemap_keys_as_strings, Error};
+use crate::{config::GenesisConfig, error, Error};
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
@@ -210,7 +210,6 @@ pub struct UserChain {
     pub timestamp: Timestamp,
     pub next_block_height: BlockHeight,
     pub pending_block: Option<Block>,
-    #[serde(with = "serde_btreemap_keys_as_strings")]
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
