@@ -662,6 +662,22 @@ enum HandleCertificateResult {
     FutureEpoch,
 }
 
+/// Creates a compressed Contract, Service and bytecode.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn create_bytecode_blobs(
+    contract: Bytecode,
+    service: Bytecode,
+) -> (Blob, Blob, BytecodeId) {
+    let (compressed_contract, compressed_service) =
+        tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
+            .await
+            .expect("Compression should not panic");
+    let contract_blob = Blob::new_contract_bytecode(compressed_contract);
+    let service_blob = Blob::new_service_bytecode(compressed_service);
+    let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    (contract_blob, service_blob, bytecode_id)
+}
+
 impl<P, S> ChainClient<P, S>
 where
     P: ValidatorNodeProvider + Sync + 'static,
@@ -2636,14 +2652,21 @@ where
         contract: Bytecode,
         service: Bytecode,
     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
-        let (compressed_contract, compressed_service) =
-            tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
-                .await
-                .expect("Compression should not panic");
-        let contract_blob = Blob::new_contract_bytecode(compressed_contract);
-        let service_blob = Blob::new_service_bytecode(compressed_service);
+        let (contract_blob, service_blob, bytecode_id) =
+            create_bytecode_blobs(contract, service).await;
+        self.publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
+            .await
+    }
 
-        let bytecode_id = BytecodeId::new(contract_blob.id().hash, service_blob.id().hash);
+    /// Publishes some bytecode.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tracing::instrument(level = "trace", skip(contract_blob, service_blob, bytecode_id))]
+    pub async fn publish_bytecode_blobs(
+        &self,
+        contract_blob: Blob,
+        service_blob: Blob,
+        bytecode_id: BytecodeId,
+    ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
         self.add_pending_blobs([contract_blob, service_blob]).await;
         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
             bytecode_id,

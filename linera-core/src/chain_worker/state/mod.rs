@@ -341,7 +341,7 @@ where
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
             .collect::<Vec<_>>();
-        Ok(self.storage.missing_blobs(blob_ids.clone()).await?)
+        Ok(self.storage.missing_blobs(blob_ids).await?)
     }
 
     /// Returns the blobs requested by their `blob_ids` that are either in pending in the
@@ -399,7 +399,7 @@ where
 
     /// Loads pending cross-chain requests.
     async fn create_network_actions(&self) -> Result<NetworkActions, WorkerError> {
-        let mut heights_by_recipient: BTreeMap<_, BTreeMap<_, _>> = Default::default();
+        let mut heights_by_recipient = BTreeMap::<_, BTreeMap<_, _>>::new();
         let mut targets = self.chain.outboxes.indices().await?;
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
             let tracked_chains = tracked_chains
@@ -494,7 +494,7 @@ where
             targets.retain(|target| tracked_chains.contains(&target.recipient));
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
-        for (_, outbox) in targets.into_iter().zip(outboxes) {
+        for outbox in outboxes {
             let outbox = outbox.expect("Only existing outboxes should be referenced by `indices`");
             let front = outbox.queue.front().await?;
             if front.is_some_and(|key| key <= height) {

@@ -404,7 +404,7 @@ where
         notifier: &impl Notifier,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
         // Sequentially try each validator in random order.
-        let mut validators: Vec<_> = validators.iter().collect();
+        let mut validators = validators.iter().collect::<Vec<_>>();
         validators.shuffle(&mut thread_rng());
         for remote_node in validators {
             let info = self.local_chain_info(chain_id).await?;
@@ -494,7 +494,7 @@ where
         blob_id: BlobId,
     ) -> Option<Blob> {
         // Sequentially try each validator in random order.
-        let mut validators: Vec<_> = validators.iter().collect();
+        let mut validators = validators.iter().collect::<Vec<_>>();
         validators.shuffle(&mut thread_rng());
         for remote_node in validators {
             if let Some(blob) = remote_node.try_download_blob(blob_id).await {
@@ -511,7 +511,7 @@ where
     ) -> FuturesUnordered<impl Future<Output = Option<Certificate>> + '_> {
         let futures = FuturesUnordered::new();
 
-        let mut validators: Vec<_> = validators.iter().collect();
+        let mut validators = validators.iter().collect::<Vec<_>>();
         validators.shuffle(&mut thread_rng());
         for remote_node in validators {
             futures.push(async move {
