@@ -1374,13 +1374,17 @@ where
 
     /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
     /// the tracker for this validator.
-    #[tracing::instrument(level = "trace", skip(received_certificates))]
+    #[tracing::instrument(level = "trace", skip(tracker, certificates, other_sender_chains))]
     async fn receive_certificates_from_validator(
         &self,
-        received_certificates: ReceivedCertificatesFromValidator,
+        ReceivedCertificatesFromValidator {
+            name,
+            tracker,
+            certificates,
+            other_sender_chains,
+        }: ReceivedCertificatesFromValidator,
     ) {
-        let name = received_certificates.name;
-        for certificate in received_certificates.certificates {
+        for certificate in certificates {
             let hash = certificate.hash();
             if let Err(e) = self
                 .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
@@ -1392,14 +1396,14 @@ where
                 return;
             }
         }
-        for (chain_id, height) in received_certificates.other_sender_chains {
+        for (chain_id, height) in other_sender_chains {
             if let Err(error) = self
                 .client
                 .local_node
                 .wait_for_outgoing_messages(chain_id, height)
                 .await
             {
-                warn!(
+                error!(
                     "Failed trying to wait for outgoing messages from {chain_id} \
                     up to {height}: {error}"
                 );
@@ -1407,7 +1411,7 @@ where
         }
         // Update tracker.
         self.state_mut()
-            .update_received_certificate_tracker(name, received_certificates.tracker);
+            .update_received_certificate_tracker(name, tracker);
     }
 
     /// Attempts to download new received certificates.
