@@ -27,6 +27,7 @@ use linera_views::{
     context::Context,
     views::{RootView, View},
 };
+use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
 use super::{check_block_epoch, ChainWorkerConfig, ChainWorkerState};
@@ -231,19 +232,21 @@ where
         &mut self,
         certificate: Certificate,
         blobs: &[Blob],
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
             panic!("Expecting a confirmation certificate");
         };
         let block = &executed_block.block;
+        let block_height = block.height;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
-        if tip.next_block_height < block.height {
+        if tip.next_block_height < block_height {
             return Err(WorkerError::MissingEarlierBlocks {
                 current_block_height: tip.next_block_height,
             });
         }
-        if tip.next_block_height > block.height {
+        if tip.next_block_height > block_height {
             // Block was already confirmed.
             let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
             let actions = self.state.create_network_actions().await?;
@@ -348,24 +351,54 @@ where
         let mut actions = self.state.create_network_actions().await?;
         tracing::trace!(
             "Processed confirmed block {} on chain {:.8}",
-            block.height,
+            block_height,
             block.chain_id
         );
         actions.notifications.push(Notification {
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
-                height: block.height,
+                height: block_height,
                 hash: certificate.value.hash(),
             },
         });
         // Persist chain.
         self.save().await?;
+
         self.state
             .recent_hashed_certificate_values
             .insert(Cow::Owned(certificate.value))
             .await;
 
+        self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)
+            .await;
+
         Ok((info, actions))
+    }
+
+    /// Schedules a notification for when cross-chain messages are delivered up to the given
+    /// `height`.
+    #[tracing::instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
+    async fn register_delivery_notifier(
+        &mut self,
+        height: BlockHeight,
+        actions: &NetworkActions,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) {
+        if let Some(notifier) = notify_when_messages_are_delivered {
+            if actions
+                .cross_chain_requests
+                .iter()
+                .any(|request| request.has_messages_lower_or_equal_than(height))
+            {
+                self.state.delivery_notifier.register(height, notifier);
+            } else {
+                // No need to wait. Also, cross-chain requests may not trigger the
+                // notifier later, even if we register it.
+                if let Err(()) = notifier.send(()) {
+                    warn!("Failed to notify message delivery to caller");
+                }
+            }
+        }
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.

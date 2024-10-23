@@ -30,7 +30,7 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
-use tokio::sync::{OwnedRwLockReadGuard, RwLock};
+use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock};
 
 #[cfg(test)]
 pub(crate) use self::attempted_changes::CrossChainUpdateHelper;
@@ -242,10 +242,11 @@ where
         &mut self,
         certificate: Certificate,
         blobs: &[Blob],
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
-            .process_confirmed_block(certificate, blobs)
+            .process_confirmed_block(certificate, blobs, notify_when_messages_are_delivered)
             .await
     }
 

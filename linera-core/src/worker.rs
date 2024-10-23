@@ -447,40 +447,6 @@ where
         .await
     }
 
-    // Schedule a notification when cross-chain messages are delivered up to the given height.
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, chain_id, height, actions, notify_when_messages_are_delivered)
-    )]
-    async fn register_delivery_notifier(
-        &self,
-        chain_id: ChainId,
-        height: BlockHeight,
-        actions: &NetworkActions,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) {
-        if let Some(notifier) = notify_when_messages_are_delivered {
-            if actions
-                .cross_chain_requests
-                .iter()
-                .any(|request| request.has_messages_lower_or_equal_than(height))
-            {
-                self.delivery_notifiers
-                    .lock()
-                    .unwrap()
-                    .entry(chain_id)
-                    .or_default()
-                    .register(height, notifier);
-            } else {
-                // No need to wait. Also, cross-chain requests may not trigger the
-                // notifier later, even if we register it.
-                if let Err(()) = notifier.send(()) {
-                    warn!("Failed to notify message delivery to caller");
-                }
-            }
-        }
-    }
-
     /// Executes a [`Query`] for an application's state on a specific chain.
     #[tracing::instrument(level = "trace", skip(self, chain_id, query))]
     pub async fn query_application(
@@ -524,25 +490,17 @@ where
             panic!("Expecting a confirmation certificate");
         };
         let chain_id = executed_block.block.chain_id;
-        let height = executed_block.block.height;
 
         let (response, actions) = self
             .query_chain_worker(chain_id, move |callback| {
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
                     blobs: blobs.to_owned(),
+                    notify_when_messages_are_delivered,
                     callback,
                 }
             })
             .await?;
-
-        self.register_delivery_notifier(
-            chain_id,
-            height,
-            &actions,
-            notify_when_messages_are_delivered,
-        )
-        .await;
 
         #[cfg(with_metrics)]
         NUM_BLOCKS.with_label_values(&[]).inc();

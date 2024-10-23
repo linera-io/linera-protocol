@@ -104,6 +104,7 @@ where
     ProcessConfirmedBlock {
         certificate: Certificate,
         blobs: Vec<Blob>,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
@@ -281,11 +282,16 @@ where
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
                     blobs,
+                    notify_when_messages_are_delivered,
                     callback,
                 } => callback
                     .send(
                         self.worker
-                            .process_confirmed_block(certificate, &blobs)
+                            .process_confirmed_block(
+                                certificate,
+                                &blobs,
+                                notify_when_messages_are_delivered,
+                            )
                             .await,
                     )
                     .is_ok(),
@@ -407,11 +413,16 @@ where
             ChainWorkerRequest::ProcessConfirmedBlock {
                 certificate,
                 blobs,
+                notify_when_messages_are_delivered,
                 callback: _callback,
             } => formatter
                 .debug_struct("ChainWorkerRequest::ProcessConfirmedBlock")
                 .field("certificate", &certificate)
                 .field("blobs", &blobs)
+                .field(
+                    "notify_when_messages_are_delivered",
+                    &notify_when_messages_are_delivered.as_ref().map(|_| "..."),
+                )
                 .finish_non_exhaustive(),
             ChainWorkerRequest::ProcessCrossChainUpdate {
                 origin,
