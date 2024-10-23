@@ -51,7 +51,7 @@ use tonic::{
     Request, Response, Status,
 };
 use tower::{builder::ServiceBuilder, Layer, Service};
-use tracing::{debug, info, instrument, Instrument as _};
+use tracing::{debug, info, instrument, Instrument as _, Level};
 #[cfg(with_metrics)]
 use {
     linera_base::prometheus_util,
@@ -512,7 +512,7 @@ where
         )?))
     }
 
-    #[instrument(skip_all, err(Display))]
+    #[instrument(skip_all, err(level = Level::WARN))]
     async fn blob_last_used_by(
         &self,
         request: Request<BlobId>,
