@@ -4,7 +4,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{hash_map, BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
@@ -41,7 +41,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
@@ -252,8 +252,7 @@ where
 type ChainActorEndpoint<StorageClient> =
     mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
 
-pub(crate) type DeliveryNotifiers =
-    HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
+pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
 impl<StorageClient> WorkerState<StorageClient>
 where
@@ -448,42 +447,6 @@ where
         .await
     }
 
-    // Schedule a notification when cross-chain messages are delivered up to the given height.
-    #[tracing::instrument(
-        level = "trace",
-        skip(self, chain_id, height, actions, notify_when_messages_are_delivered)
-    )]
-    async fn register_delivery_notifier(
-        &self,
-        chain_id: ChainId,
-        height: BlockHeight,
-        actions: &NetworkActions,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) {
-        if let Some(notifier) = notify_when_messages_are_delivered {
-            if actions
-                .cross_chain_requests
-                .iter()
-                .any(|request| request.has_messages_lower_or_equal_than(height))
-            {
-                self.delivery_notifiers
-                    .lock()
-                    .unwrap()
-                    .entry(chain_id)
-                    .or_default()
-                    .entry(height)
-                    .or_default()
-                    .push(notifier);
-            } else {
-                // No need to wait. Also, cross-chain requests may not trigger the
-                // notifier later, even if we register it.
-                if let Err(()) = notifier.send(()) {
-                    warn!("Failed to notify message delivery to caller");
-                }
-            }
-        }
-    }
-
     /// Executes a [`Query`] for an application's state on a specific chain.
     #[tracing::instrument(level = "trace", skip(self, chain_id, query))]
     pub async fn query_application(
@@ -527,25 +490,17 @@ where
             panic!("Expecting a confirmation certificate");
         };
         let chain_id = executed_block.block.chain_id;
-        let height = executed_block.block.height;
 
         let (response, actions) = self
             .query_chain_worker(chain_id, move |callback| {
                 ChainWorkerRequest::ProcessConfirmedBlock {
                     certificate,
                     blobs: blobs.to_owned(),
+                    notify_when_messages_are_delivered,
                     callback,
                 }
             })
             .await?;
-
-        self.register_delivery_notifier(
-            chain_id,
-            height,
-            &actions,
-            notify_when_messages_are_delivered,
-        )
-        .await;
 
         #[cfg(with_metrics)]
         NUM_BLOCKS.with_label_values(&[]).inc();
@@ -697,15 +652,25 @@ where
         .map_err(|_| WorkerError::FullChainWorkerCache)?;
 
         if let Some(receiver) = new_receiver {
+            let delivery_notifier = self
+                .delivery_notifiers
+                .lock()
+                .unwrap()
+                .entry(chain_id)
+                .or_default()
+                .clone();
+
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.recent_hashed_certificate_values.clone(),
                 self.recent_blobs.clone(),
                 self.tracked_chains.clone(),
+                delivery_notifier,
                 chain_id,
             )
             .await?;
+
             self.chain_worker_tasks
                 .lock()
                 .unwrap()
@@ -741,10 +706,7 @@ where
                 let chain_to_evict = *chain_to_evict;
 
                 chain_workers.pop(&chain_to_evict);
-                self.chain_worker_tasks
-                    .lock()
-                    .unwrap()
-                    .reap_finished_tasks();
+                self.clean_up_finished_chain_workers(&chain_workers);
             }
 
             let (sender, receiver) = mpsc::unbounded_channel();
@@ -752,6 +714,24 @@ where
 
             Some((sender, Some(receiver)))
         }
+    }
+
+    /// Cleans up any finished chain workers and their delivery notifiers.
+    fn clean_up_finished_chain_workers(
+        &self,
+        active_chain_workers: &LruCache<ChainId, ChainActorEndpoint<StorageClient>>,
+    ) {
+        self.chain_worker_tasks
+            .lock()
+            .unwrap()
+            .reap_finished_tasks();
+
+        self.delivery_notifiers
+            .lock()
+            .unwrap()
+            .retain(|chain_id, notifier| {
+                !notifier.is_empty() || active_chain_workers.contains(chain_id)
+            });
     }
 
     #[instrument(skip_all, fields(
@@ -935,34 +915,13 @@ where
                     .into_iter()
                     .map(|(medium, height)| (Target { recipient, medium }, height))
                     .collect();
-                let height_with_fully_delivered_messages = self
-                    .query_chain_worker(sender, move |callback| {
-                        ChainWorkerRequest::ConfirmUpdatedRecipient {
-                            latest_heights,
-                            callback,
-                        }
-                    })
-                    .await?;
-                // Handle delivery notifiers for this chain, if any.
-                if let hash_map::Entry::Occupied(mut map) =
-                    self.delivery_notifiers.lock().unwrap().entry(sender)
-                {
-                    while let Some(entry) = map.get_mut().first_entry() {
-                        if entry.key() > &height_with_fully_delivered_messages {
-                            break;
-                        }
-                        let notifiers = entry.remove();
-                        trace!("Notifying {} callers", notifiers.len());
-                        for notifier in notifiers {
-                            if let Err(()) = notifier.send(()) {
-                                warn!("Failed to notify message delivery to caller");
-                            }
-                        }
+                self.query_chain_worker(sender, move |callback| {
+                    ChainWorkerRequest::ConfirmUpdatedRecipient {
+                        latest_heights,
+                        callback,
                     }
-                    if map.get().is_empty() {
-                        map.remove();
-                    }
-                }
+                })
+                .await?;
                 Ok(NetworkActions::default())
             }
         }
