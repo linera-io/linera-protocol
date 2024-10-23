@@ -77,7 +77,7 @@ serde-reflection.workspace = true
 test-strategy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tonic = { workspace = true, features = ["prost", "codegen", "transport"] }
+tonic = { workspace = true, features = ["tls", "tls-webpki-roots", "prost", "codegen", "transport"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tonic = { workspace = true, features = ["codegen", "prost"] }

@@ -33,7 +33,9 @@ cfg_if::cfg_if! {
             address: String,
             options: &Options,
         ) -> Result<Channel, Error> {
-            let mut endpoint = tonic::transport::Endpoint::from_shared(address)?;
+            let mut endpoint = tonic::transport::Endpoint::from_shared(address)?
+                .tls_config(tonic::transport::channel::ClientTlsConfig::default().with_webpki_roots())?;
+
             if let Some(timeout) = options.connect_timeout {
                 endpoint = endpoint.connect_timeout(timeout);
             }
