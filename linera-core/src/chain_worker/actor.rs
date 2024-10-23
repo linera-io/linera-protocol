@@ -28,7 +28,7 @@ use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{instrument, trace, warn};
 
-use super::{config::ChainWorkerConfig, state::ChainWorkerState};
+use super::{config::ChainWorkerConfig, state::ChainWorkerState, DeliveryNotifier};
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     value_cache::ValueCache,
@@ -148,6 +148,7 @@ where
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, Blob>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
+        delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
     ) -> Result<Self, WorkerError> {
         let (service_runtime_thread, service_runtime_endpoint) = {
@@ -165,6 +166,7 @@ where
             certificate_value_cache,
             blob_cache,
             tracked_chains,
+            delivery_notifier,
             chain_id,
             service_runtime_endpoint,
         )

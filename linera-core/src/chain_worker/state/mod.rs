@@ -38,7 +38,7 @@ use self::{
     attempted_changes::ChainWorkerStateWithAttemptedChanges,
     temporary_changes::ChainWorkerStateWithTemporaryChanges,
 };
-use super::ChainWorkerConfig;
+use super::{ChainWorkerConfig, DeliveryNotifier};
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     value_cache::ValueCache,
@@ -58,6 +58,7 @@ where
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
     recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
+    delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
 }
 
@@ -66,12 +67,14 @@ where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
     /// Creates a new [`ChainWorkerState`] using the provided `storage` client.
+    #[allow(clippy::too_many_arguments)]
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
         blob_cache: Arc<ValueCache<BlobId, Blob>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
+        delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     ) -> Result<Self, WorkerError> {
@@ -86,6 +89,7 @@ where
             recent_hashed_certificate_values: certificate_value_cache,
             recent_blobs: blob_cache,
             tracked_chains,
+            delivery_notifier,
             knows_chain_is_active: false,
         })
     }

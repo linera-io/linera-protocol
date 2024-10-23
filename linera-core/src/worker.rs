@@ -694,15 +694,25 @@ where
         .map_err(|_| WorkerError::FullChainWorkerCache)?;
 
         if let Some(receiver) = new_receiver {
+            let delivery_notifier = self
+                .delivery_notifiers
+                .lock()
+                .unwrap()
+                .entry(chain_id)
+                .or_default()
+                .clone();
+
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.recent_hashed_certificate_values.clone(),
                 self.recent_blobs.clone(),
                 self.tracked_chains.clone(),
+                delivery_notifier,
                 chain_id,
             )
             .await?;
+
             self.chain_worker_tasks
                 .lock()
                 .unwrap()
