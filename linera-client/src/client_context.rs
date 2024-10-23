@@ -56,6 +56,7 @@ use {
         data_types::{BlobBytes, Bytecode},
         identifiers::BytecodeId,
     },
+    linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
 };
 
@@ -413,23 +414,24 @@ where
         service: PathBuf,
     ) -> Result<BytecodeId, Error> {
         info!("Loading bytecode files");
-        let contract_bytecode: Bytecode = Bytecode::load_from_file(&contract)
+        let contract_bytecode = Bytecode::load_from_file(&contract)
             .await
             .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
-        let service_bytecode = Bytecode::load_from_file(&service).await.context(format!(
-            "failed to load service bytecode from {:?}",
-            &service
-        ))?;
+        let service_bytecode = Bytecode::load_from_file(&service)
+            .await
+            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
 
         info!("Publishing bytecode");
+        let (contract_blob, service_blob, bytecode_id) =
+            create_bytecode_blobs(contract_bytecode, service_bytecode).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
-                let contract_bytecode = contract_bytecode.clone();
-                let service_bytecode = service_bytecode.clone();
+                let contract_blob = contract_blob.clone();
+                let service_blob = service_blob.clone();
                 let chain_client = chain_client.clone();
                 async move {
                     chain_client
-                        .publish_bytecode(contract_bytecode, service_bytecode)
+                        .publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
                         .await
                         .context("Failed to publish bytecode")
                 }
