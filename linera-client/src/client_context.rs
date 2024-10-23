@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use futures::Future;
 use linera_base::{
     crypto::KeyPair,
-    data_types::{BlockHeight, Timestamp},
-    identifiers::{Account, ChainId},
+    data_types::{Blob, BlockHeight, Timestamp},
+    identifiers::{Account, BlobId, ChainId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -185,6 +185,41 @@ where
         }
     }
 
+    #[cfg(with_testing)]
+    pub fn new_test_client_context(storage: S, wallet: W) -> Self {
+        let send_recv_timeout = Duration::from_millis(4000);
+        let retry_delay = Duration::from_millis(1000);
+        let max_retries = 10;
+
+        let node_options = NodeOptions {
+            send_timeout: send_recv_timeout,
+            recv_timeout: send_recv_timeout,
+            retry_delay,
+            max_retries,
+        };
+        let node_provider = NodeProvider::new(node_options);
+        let delivery = CrossChainMessageDelivery::new(true);
+        let chain_ids = wallet.chain_ids();
+        let name = match chain_ids.len() {
+            0 => "Client node".to_string(),
+            1 => format!("Client node for {:.8}", chain_ids[0]),
+            n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
+        };
+        let client = Client::new(node_provider, storage, 10, delivery, false, chain_ids, name);
+
+        ClientContext {
+            client: Arc::new(client),
+            wallet: WalletState::new(wallet),
+            send_timeout: send_recv_timeout,
+            recv_timeout: send_recv_timeout,
+            retry_delay,
+            max_retries,
+            chain_listeners: JoinSet::default(),
+            blanket_message_policy: BlanketMessagePolicy::Accept,
+            restrict_chain_ids_to: None,
+        }
+    }
+
     /// Retrieve the default account. Current this is the common account of the default
     /// chain.
     pub fn default_account(&self) -> Account {
@@ -270,6 +305,29 @@ where
         key_pair: Option<KeyPair>,
         timestamp: Timestamp,
     ) -> Result<(), Error> {
+        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, BTreeMap::new())
+            .await
+    }
+
+    #[cfg(test)]
+    pub async fn update_wallet_for_new_chain_with_pending_blobs(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+        pending_blobs: BTreeMap<BlobId, Blob>,
+    ) -> Result<(), Error> {
+        self.update_wallet_for_new_chain_internal(chain_id, key_pair, timestamp, pending_blobs)
+            .await
+    }
+
+    async fn update_wallet_for_new_chain_internal(
+        &mut self,
+        chain_id: ChainId,
+        key_pair: Option<KeyPair>,
+        timestamp: Timestamp,
+        pending_blobs: BTreeMap<BlobId, Blob>,
+    ) -> Result<(), Error> {
         if self.wallet.get(chain_id).is_none() {
             self.mutate_wallet(|w| {
                 w.insert(UserChain {
@@ -279,7 +337,7 @@ where
                     timestamp,
                     next_block_height: BlockHeight::ZERO,
                     pending_block: None,
-                    pending_blobs: BTreeMap::new(),
+                    pending_blobs,
                 })
             })
             .await?;

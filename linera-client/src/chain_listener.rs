@@ -26,10 +26,6 @@ use tracing::{debug, error, info, warn, Instrument as _};
 
 use crate::{wallet::Wallet, Error};
 
-#[cfg(test)]
-#[path = "unit_tests/chain_listener.rs"]
-mod tests;
-
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for
