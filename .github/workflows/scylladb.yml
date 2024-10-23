@@ -2,7 +2,7 @@ name: ScyllaDB tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   pull_request:
     branches:
       - "**"

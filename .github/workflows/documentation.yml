@@ -2,7 +2,7 @@ name: Documentation
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'devnet_*', 'testnet_*' ]
     paths-ignore:
       - '*.md'
       - 'docker/**'
@@ -34,6 +34,7 @@ jobs:
   publish-docs:
     runs-on: ubuntu-latest
 
+    # We only publish docs for the main branch.
     if: github.ref == 'refs/heads/main'
 
     steps:
