@@ -748,10 +748,7 @@ where
                 let chain_to_evict = *chain_to_evict;
 
                 chain_workers.pop(&chain_to_evict);
-                self.chain_worker_tasks
-                    .lock()
-                    .unwrap()
-                    .reap_finished_tasks();
+                self.clean_up_finished_chain_workers(&chain_workers);
             }
 
             let (sender, receiver) = mpsc::unbounded_channel();
@@ -759,6 +756,24 @@ where
 
             Some((sender, Some(receiver)))
         }
+    }
+
+    /// Cleans up any finished chain workers and their delivery notifiers.
+    fn clean_up_finished_chain_workers(
+        &self,
+        active_chain_workers: &LruCache<ChainId, ChainActorEndpoint<StorageClient>>,
+    ) {
+        self.chain_worker_tasks
+            .lock()
+            .unwrap()
+            .reap_finished_tasks();
+
+        self.delivery_notifiers
+            .lock()
+            .unwrap()
+            .retain(|chain_id, notifier| {
+                !notifier.is_empty() || active_chain_workers.contains(chain_id)
+            });
     }
 
     #[instrument(skip_all, fields(
