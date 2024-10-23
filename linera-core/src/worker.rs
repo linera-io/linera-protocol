@@ -4,7 +4,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{hash_map, BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{hash_map, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
@@ -41,7 +41,7 @@ use {
 };
 
 use crate::{
-    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest},
+    chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
     notifier::Notifier,
@@ -252,8 +252,7 @@ where
 type ChainActorEndpoint<StorageClient> =
     mpsc::UnboundedSender<ChainWorkerRequest<<StorageClient as Storage>::Context>>;
 
-pub(crate) type DeliveryNotifiers =
-    HashMap<ChainId, BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>;
+pub(crate) type DeliveryNotifiers = HashMap<ChainId, DeliveryNotifier>;
 
 impl<StorageClient> WorkerState<StorageClient>
 where
@@ -471,9 +470,7 @@ where
                     .unwrap()
                     .entry(chain_id)
                     .or_default()
-                    .entry(height)
-                    .or_default()
-                    .push(notifier);
+                    .register(height, notifier);
             } else {
                 // No need to wait. Also, cross-chain requests may not trigger the
                 // notifier later, even if we register it.
@@ -944,23 +941,15 @@ where
                     })
                     .await?;
                 // Handle delivery notifiers for this chain, if any.
-                if let hash_map::Entry::Occupied(mut map) =
+                if let hash_map::Entry::Occupied(mut notifier) =
                     self.delivery_notifiers.lock().unwrap().entry(sender)
                 {
-                    while let Some(entry) = map.get_mut().first_entry() {
-                        if entry.key() > &height_with_fully_delivered_messages {
-                            break;
-                        }
-                        let notifiers = entry.remove();
-                        trace!("Notifying {} callers", notifiers.len());
-                        for notifier in notifiers {
-                            if let Err(()) = notifier.send(()) {
-                                warn!("Failed to notify message delivery to caller");
-                            }
-                        }
-                    }
-                    if map.get().is_empty() {
-                        map.remove();
+                    notifier
+                        .get_mut()
+                        .notify(height_with_fully_delivered_messages);
+
+                    if notifier.get().is_empty() {
+                        notifier.remove();
                     }
                 }
                 Ok(NetworkActions::default())
