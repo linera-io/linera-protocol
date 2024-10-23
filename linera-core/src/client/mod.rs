@@ -1188,7 +1188,7 @@ where
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<P::Node>,
-    ) -> Result<(ValidatorName, u64, Vec<Certificate>), NodeError> {
+    ) -> Result<ReceivedCertificatesFromValidator, NodeError> {
         let tracker = self
             .state()
             .received_certificate_trackers()
@@ -1290,8 +1290,11 @@ where
                 }
             }
         }
-        let new_tracker = tracker.finalize(&remote_log);
-        Ok((remote_node.name, new_tracker, certificates))
+        Ok(ReceivedCertificatesFromValidator {
+            name: remote_node.name,
+            tracker: tracker.finalize(&remote_log),
+            certificates,
+        })
     }
 
     /// Uses local information (about already-processed blocks) to advance the `block_batch` to a
@@ -1364,14 +1367,13 @@ where
 
     /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
     /// the tracker for this validator.
-    #[tracing::instrument(level = "trace", skip(tracker, certificates))]
+    #[tracing::instrument(level = "trace", skip(received_certificates))]
     async fn receive_certificates_from_validator(
         &self,
-        name: ValidatorName,
-        tracker: u64,
-        certificates: Vec<Certificate>,
+        received_certificates: ReceivedCertificatesFromValidator,
     ) {
-        for certificate in certificates {
+        let name = received_certificates.name;
+        for certificate in received_certificates.certificates {
             let hash = certificate.hash();
             if let Err(e) = self
                 .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
@@ -1385,7 +1387,7 @@ where
         }
         // Update tracker.
         self.state_mut()
-            .update_received_certificate_tracker(name, tracker);
+            .update_received_certificate_tracker(name, received_certificates.tracker);
     }
 
     /// Attempts to download new received certificates.
@@ -1434,9 +1436,9 @@ where
                 return Err(error.into());
             }
         };
-        for (name, tracker, certificates) in responses {
+        for received_certificates in responses {
             // Process received certificates.
-            self.receive_certificates_from_validator(name, tracker, certificates)
+            self.receive_certificates_from_validator(received_certificates)
                 .await;
         }
         Ok(())
@@ -3215,14 +3217,14 @@ where
 
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
-        let (name, tracker, certificates) = self
+        let received_certificates = self
             .synchronize_received_certificates_from_validator(chain_id, &remote_node)
             .await?;
 
         drop(_guard);
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
-        self.receive_certificates_from_validator(name, tracker, certificates)
+        self.receive_certificates_from_validator(received_certificates)
             .await;
         Ok(())
     }
@@ -3250,4 +3252,15 @@ impl Drop for AbortOnDrop {
     fn drop(&mut self) {
         self.0.abort();
     }
+}
+
+/// The result of `synchronize_received_certificates_from_validator`.
+struct ReceivedCertificatesFromValidator {
+    /// The name of the validator we downloaded from.
+    name: ValidatorName,
+    /// The new tracker value for that validator.
+    tracker: u64,
+    /// The downloaded certificates. The signatures were already checked and they are ready
+    /// to be processed.
+    certificates: Vec<Certificate>,
 }
