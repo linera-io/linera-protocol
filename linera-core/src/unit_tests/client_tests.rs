@@ -30,13 +30,13 @@ use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
 use test_case::test_case;
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 use crate::test_utils::DynamoDbStorageBuilder;
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 use crate::test_utils::RocksDbStorageBuilder;
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 use crate::test_utils::ScyllaDbStorageBuilder;
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
@@ -77,10 +77,10 @@ fn test_listener_is_send() {
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_initiating_valid_transfer_with_notifications<B>(
     storage_builder: B,
@@ -134,10 +134,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -262,10 +262,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -309,10 +309,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -365,10 +365,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -490,10 +490,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -536,10 +536,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -634,10 +634,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_must_be_first<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -722,10 +722,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -789,10 +789,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -890,10 +890,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -927,10 +927,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1023,10 +1023,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1073,10 +1073,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
     storage_builder: B,
@@ -1167,10 +1167,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_change_voting_rights<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1298,7 +1298,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[test_log::test(tokio::test)]
 async fn test_insufficient_balance<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1348,10 +1348,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1539,10 +1539,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_existing_proposal_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1679,10 +1679,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -1966,10 +1966,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -2091,10 +2091,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -2195,10 +2195,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -2234,10 +2234,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -2347,7 +2347,7 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
 #[test_log::test(tokio::test)]
 async fn test_message_policy<B>(storage_builder: B) -> anyhow::Result<()>
 where
@@ -2404,10 +2404,10 @@ where
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new().await; "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[cfg_attr(with_test_storage_service, test_case(ServiceStorageBuilder::new().await; "storage_service"))]
+#[cfg_attr(with_test_rocksdb, test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(with_test_dynamodb, test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(with_test_scylladb, test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_propose_block_with_messages_and_blobs<B>(storage_builder: B) -> anyhow::Result<()>
 where

@@ -34,11 +34,11 @@ use linera_execution::{
     WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 use linera_views::rocks_db::RocksDbStore;
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{memory::MemoryStore, views::CryptoHashView};
 use test_case::test_case;
@@ -55,7 +55,7 @@ async fn test_memory_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -66,7 +66,7 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -77,7 +77,7 @@ async fn test_dynamo_db_handle_certificates_to_create_application(
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
