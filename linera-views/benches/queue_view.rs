@@ -7,11 +7,11 @@ use std::{
 };
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 use linera_views::rocks_db::RocksDbStore;
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     backends::memory::MemoryStore,
@@ -106,7 +106,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("rocksdb_queue_view", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -116,7 +116,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("dynamodb_queue_view", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -126,7 +126,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("scylladb_queue_view", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -191,7 +191,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("rocksdb_bucket_queue_view", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -201,7 +201,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("dynamodb_bucket_queue_view", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -211,7 +211,7 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("scylladb_bucket_queue_view", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))

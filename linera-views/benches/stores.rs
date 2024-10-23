@@ -7,11 +7,11 @@ use std::{
 };
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 use linera_views::rocks_db::RocksDbStore;
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     batch::Batch,
@@ -86,7 +86,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_contains_key", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -96,7 +96,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_contains_key", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -106,7 +106,7 @@ fn bench_contains_key(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_contains_key", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -157,7 +157,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_contains_keys", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -167,7 +167,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_contains_keys", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -177,7 +177,7 @@ fn bench_contains_keys(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_contains_keys", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -227,7 +227,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_find_keys_by_prefix", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -237,7 +237,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_find_keys_by_prefix", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -247,7 +247,7 @@ fn bench_find_keys_by_prefix(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_find_keys_by_prefix", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -302,7 +302,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_find_key_values_by_prefix", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -312,7 +312,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_find_key_values_by_prefix", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -322,7 +322,7 @@ fn bench_find_key_values_by_prefix(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_find_key_values_by_prefix", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -374,7 +374,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_read_value_bytes", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -384,7 +384,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_read_value_bytes", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -394,7 +394,7 @@ fn bench_read_value_bytes(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_read_value_bytes", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -448,7 +448,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_read_multi_values_bytes", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -458,7 +458,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_read_multi_values_bytes", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -468,7 +468,7 @@ fn bench_read_multi_values_bytes(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_read_multi_values_bytes", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -514,7 +514,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_rocksdb)]
+    #[cfg(with_test_rocksdb)]
     criterion.bench_function("store_rocksdb_write_batch", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -524,7 +524,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
+    #[cfg(with_test_dynamodb)]
     criterion.bench_function("store_dynamodb_write_batch", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
@@ -534,7 +534,7 @@ fn bench_write_batch(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_scylladb)]
+    #[cfg(with_test_scylladb)]
     criterion.bench_function("store_scylladb_write_batch", |bencher| {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))

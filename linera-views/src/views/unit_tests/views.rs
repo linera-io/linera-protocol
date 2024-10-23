@@ -7,14 +7,18 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 use crate::dynamo_db::DynamoDbStore;
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 use crate::rocks_db::RocksDbStore;
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 use crate::scylla_db::ScyllaDbStore;
-#[cfg(any(with_scylladb, with_dynamodb, with_rocksdb))]
-use crate::store::TestKeyValueStore;
+#[cfg(any(with_test_scylladb, with_test_dynamodb, with_test_rocksdb))]
+use crate::{
+    context::ViewContext,
+    random::generate_test_namespace,
+    store::{AdminKeyValueStore, TestKeyValueStore},
+};
 use crate::{
     batch::Batch,
     context::{create_test_memory_context, Context, MemoryContext},
@@ -26,27 +30,25 @@ use crate::{
     },
     views::{HashableView, View, ViewError},
 };
-#[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
-use crate::{context::ViewContext, random::generate_test_namespace, store::AdminKeyValueStore};
 
 #[tokio::test]
 async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(MemoryContextFactory).await
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[tokio::test]
 async fn test_queue_operations_with_rocks_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(RocksDbContextFactory).await
 }
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 #[tokio::test]
 async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(DynamoDbContextFactory).await
 }
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 #[tokio::test]
 async fn test_queue_operations_with_scylla_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(ScyllaDbContextFactory).await
@@ -204,10 +206,10 @@ impl TestContextFactory for MemoryContextFactory {
     }
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 struct RocksDbContextFactory;
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[async_trait]
 impl TestContextFactory for RocksDbContextFactory {
     type Context = ViewContext<(), RocksDbStore>;
@@ -223,10 +225,10 @@ impl TestContextFactory for RocksDbContextFactory {
     }
 }
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 struct DynamoDbContextFactory;
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 #[async_trait]
 impl TestContextFactory for DynamoDbContextFactory {
     type Context = ViewContext<(), DynamoDbStore>;
@@ -240,10 +242,10 @@ impl TestContextFactory for DynamoDbContextFactory {
     }
 }
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 struct ScyllaDbContextFactory;
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 #[async_trait]
 impl TestContextFactory for ScyllaDbContextFactory {
     type Context = ViewContext<(), ScyllaDbStore>;
