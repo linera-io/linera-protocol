@@ -615,7 +615,7 @@ enum HandleCertificateResult {
 
 /// Creates a compressed Contract, Service and bytecode.
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn create_compressed_bytecodes(
+pub async fn create_bytecode_blobs(
     contract: Bytecode,
     service: Bytecode,
 ) -> (Blob, Blob, BytecodeId) {
@@ -2550,15 +2550,15 @@ where
         service: Bytecode,
     ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
         let (contract_blob, service_blob, bytecode_id) =
-            create_compressed_bytecodes(contract, service).await;
-        self.publish_compressed_bytecode(contract_blob, service_blob, bytecode_id)
+            create_bytecode_blobs(contract, service).await;
+        self.publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
             .await
     }
 
     /// Publishes some bytecode.
     #[cfg(not(target_arch = "wasm32"))]
     #[tracing::instrument(level = "trace", skip(contract_blob, service_blob, bytecode_id))]
-    pub async fn publish_compressed_bytecode(
+    pub async fn publish_bytecode_blobs(
         &self,
         contract_blob: Blob,
         service_blob: Blob,

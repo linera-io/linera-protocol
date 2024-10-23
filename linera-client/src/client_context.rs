@@ -56,7 +56,7 @@ use {
         data_types::{BlobBytes, Bytecode},
         identifiers::BytecodeId,
     },
-    linera_core::client::create_compressed_bytecodes,
+    linera_core::client::create_bytecode_blobs,
     std::{fs, path::PathBuf},
 };
 
@@ -421,7 +421,7 @@ where
 
         info!("Publishing bytecode");
         let (contract_blob, service_blob, bytecode_id) =
-            create_compressed_bytecodes(contract_bytecode, service_bytecode).await;
+            create_bytecode_blobs(contract_bytecode, service_bytecode).await;
         let (bytecode_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let contract_blob = contract_blob.clone();
@@ -429,7 +429,7 @@ where
                 let chain_client = chain_client.clone();
                 async move {
                     chain_client
-                        .publish_compressed_bytecode(contract_blob, service_blob, bytecode_id)
+                        .publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
                         .await
                         .context("Failed to publish bytecode")
                 }
