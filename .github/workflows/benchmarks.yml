@@ -2,7 +2,7 @@ name: Benchmarks
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   workflow_dispatch:
 
 env:
