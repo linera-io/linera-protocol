@@ -2,7 +2,7 @@ name: Long Faucet chain test
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   workflow_dispatch:
 
 env:
