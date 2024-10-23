@@ -1233,7 +1233,7 @@ where
                 // `advance_with_local` might have drained the whole `block_batch`.
                 // In that case, move to the next chain batch, but remember to wait for
                 // the messages to be delivered to the inboxes.
-                other_sender_chains.push((chain_id, last_height));
+                other_sender_chains.push(chain_id);
                 continue;
             };
             let batch_size = last_height.saturating_sub(first_height).0 + 1;
@@ -1396,17 +1396,14 @@ where
                 return;
             }
         }
-        for (chain_id, height) in other_sender_chains {
+        for chain_id in other_sender_chains {
             if let Err(error) = self
                 .client
                 .local_node
-                .wait_for_outgoing_messages(chain_id, height)
+                .retry_pending_cross_chain_requests(chain_id)
                 .await
             {
-                error!(
-                    "Failed trying to wait for outgoing messages from {chain_id} \
-                    up to {height}: {error}"
-                );
+                error!("Failed trying to wait for outgoing messages from {chain_id}: {error}");
             }
         }
         // Update tracker.
@@ -3287,7 +3284,7 @@ struct ReceivedCertificatesFromValidator {
     /// The downloaded certificates. The signatures were already checked and they are ready
     /// to be processed.
     certificates: Vec<Certificate>,
-    /// Sender chains that were already up to date locally. We need to wait for their messages
-    /// to be delivered, at least up to the given block height.
-    other_sender_chains: Vec<(ChainId, BlockHeight)>,
+    /// Sender chains that were already up to date locally. We need to ensure their messages
+    /// are delivered.
+    other_sender_chains: Vec<ChainId>,
 }
