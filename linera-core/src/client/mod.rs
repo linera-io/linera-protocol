@@ -1203,6 +1203,7 @@ where
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
         let mut tracker = MultichainTracker::new(tracker);
+        let mut other_sender_chains = Vec::new();
         let remote_log = info.requested_received_log.clone();
         let remote_node_chains_view = info.requested_received_log.into_iter().fold(
             BTreeMap::<ChainId, Vec<BlockHeight>>::new(),
@@ -1221,17 +1222,22 @@ where
         for (chain_id, mut block_batch) in remote_node_chains_view {
             block_batch.sort();
 
+            let Some(last_height) = block_batch.last().copied() else {
+                continue;
+            };
+
             self.advance_with_local(chain_id, &mut block_batch, &mut tracker)
                 .await?;
 
-            let Some(first_block) = block_batch.first() else {
+            let Some(first_height) = block_batch.first().copied() else {
                 // `advance_with_local` might have drained the whole `block_batch`.
-                // In that case, move to the next chain batch.
+                // In that case, move to the next chain batch, but remember to wait for
+                // the messages to be delivered to the inboxes.
+                other_sender_chains.push((chain_id, last_height));
                 continue;
             };
-            // Safe to unwrap because we checked that the vec is not empty:
-            let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1;
-            let block_batch_range = BlockHeightRange::multi(*first_block, batch_size);
+            let batch_size = last_height.saturating_sub(first_height).0 + 1;
+            let block_batch_range = BlockHeightRange::multi(first_height, batch_size);
             let query = ChainInfoQuery::new(chain_id)
                 .with_sent_certificate_hashes_in_range(block_batch_range.clone());
 
@@ -1294,6 +1300,7 @@ where
             name: remote_node.name,
             tracker: tracker.finalize(&remote_log),
             certificates,
+            other_sender_chains,
         })
     }
 
@@ -1383,6 +1390,19 @@ where
                 // Do not update the validator's tracker in case of error.
                 // Move on to the next validator.
                 return;
+            }
+        }
+        for (chain_id, height) in received_certificates.other_sender_chains {
+            if let Err(error) = self
+                .client
+                .local_node
+                .wait_for_outgoing_messages(chain_id, height)
+                .await
+            {
+                warn!(
+                    "Failed trying to wait for outgoing messages from {chain_id} \
+                    up to {height}: {error}"
+                );
             }
         }
         // Update tracker.
@@ -3263,4 +3283,7 @@ struct ReceivedCertificatesFromValidator {
     /// The downloaded certificates. The signatures were already checked and they are ready
     /// to be processed.
     certificates: Vec<Certificate>,
+    /// Sender chains that were already up to date locally. We need to wait for their messages
+    /// to be delivered, at least up to the given block height.
+    other_sender_chains: Vec<(ChainId, BlockHeight)>,
 }
