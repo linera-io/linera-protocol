@@ -1160,7 +1160,8 @@ where
         self.client
             .download_certificates(&nodes, block.chain_id, block.height)
             .await?;
-        // Process the received operations. Download required hashed certificate values if necessary.
+        // Process the received operations. Download required hashed certificate values if
+        // necessary.
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
@@ -1228,7 +1229,8 @@ where
                 // In that case, move to the next chain batch.
                 continue;
             };
-            let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1; // safe to unwrap because we checked that the vec is not empty.
+            // Safe to unwrap because we checked that the vec is not empty:
+            let batch_size = block_batch.last().unwrap().saturating_sub(*first_block).0 + 1;
             let block_batch_range = BlockHeightRange::multi(*first_block, batch_size);
             let query = ChainInfoQuery::new(chain_id)
                 .with_sent_certificate_hashes_in_range(block_batch_range.clone());
@@ -1259,8 +1261,13 @@ where
                     .await?
                 {
                     HandleCertificateResult::FutureEpoch => {
-                        warn!("Postponing received certificate from {:.8} at height {} from future epoch {}",
-                              chain_id, certificate.value().height(), certificate.value().epoch());
+                        warn!(
+                            "Postponing received certificate from {:.8} at height {} \
+                            from future epoch {}",
+                            chain_id,
+                            certificate.value().height(),
+                            certificate.value().epoch()
+                        );
                         // Stop the synchronization here. Do not increment the tracker further so
                         // that this certificate can still be downloaded later, once our committee
                         // is updated.
@@ -1287,7 +1294,8 @@ where
         Ok((remote_node.name, new_tracker, certificates))
     }
 
-    /// Uses local information (about already-processed blocks) to advance the `block_batch` to a place where only new blocks are left.
+    /// Uses local information (about already-processed blocks) to advance the `block_batch` to a
+    /// place where only new blocks are left.
     async fn advance_with_local(
         &self,
         chain_id: ChainId,
@@ -1305,8 +1313,8 @@ where
         // Find the first block in the batch that is higher than the highest block known locally.
         match block_batch.iter().position(|b| b >= &local_next) {
             None => {
-                // Our highest, locally-known block is higher than any block height from the current batch.
-                // Move to the next chain batch.
+                // Our highest, locally-known block is higher than any block height from the
+                // current batch. Move to the next chain batch.
                 block_batch.clear();
             }
             Some(index) => {
