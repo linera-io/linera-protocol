@@ -22,14 +22,14 @@ use tracing::warn;
 ///
 /// The notifier instance can be cheaply `clone`d and works as a shared reference.
 /// However, its methods still require `&mut self` to hint that it should only changed by
-/// [`ChainWorkerStateWithAttemptedChanges`][`super::ChainWorkerStateWithAttemptedChanges`].
+/// [`ChainWorkerStateWithAttemptedChanges`](super::ChainWorkerStateWithAttemptedChanges).
 #[derive(Clone, Default)]
 pub struct DeliveryNotifier {
     notifiers: Arc<Mutex<BTreeMap<BlockHeight, Vec<oneshot::Sender<()>>>>>,
 }
 
 impl DeliveryNotifier {
-    /// Returns [`true`] if there are no pending listeners.
+    /// Returns `true` if there are no pending listeners.
     pub fn is_empty(&self) -> bool {
         let notifiers = self
             .notifiers
