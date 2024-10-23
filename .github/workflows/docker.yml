@@ -54,6 +54,10 @@ jobs:
       - name: Build client binary
         run: |
           cargo install --path linera-service --bin linera --bin linera-server --debug
+      - name: Patch Docker compose file to run ScyllaDB in developer mode
+        run: |
+          sed -i -e '/SCYLLA_AUTO_CONF/{N;s/command:/  SCYLLA_ENABLE_EXPERIMENTAL: 1/p;N;N;N;N;d}' \
+            docker/docker-compose.yml
       - name: Run Compose
         run: |
           cd docker
