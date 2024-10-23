@@ -6,9 +6,9 @@ use std::{fmt, str::FromStr};
 use async_trait::async_trait;
 use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage};
-#[cfg(feature = "storage-service")]
+#[cfg(with_storage_service)]
 use linera_storage_service::{client::ServiceStoreClient, common::ServiceStoreConfig};
-#[cfg(feature = "dynamodb")]
+#[cfg(with_dynamodb)]
 use linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig};
 #[cfg(with_storage)]
 use linera_views::store::LocalAdminKeyValueStore as _;
@@ -18,12 +18,12 @@ use linera_views::{
     views::ViewError,
 };
 use tracing::error;
-#[cfg(feature = "rocksdb")]
+#[cfg(with_rocksdb)]
 use {
     linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
-#[cfg(feature = "scylladb")]
+#[cfg(with_scylladb)]
 use {
     linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
@@ -47,30 +47,30 @@ pub enum Error {
 }
 
 util::impl_from_dynamic!(Error:Backend, linera_views::memory::MemoryStoreError);
-#[cfg(feature = "storage-service")]
+#[cfg(with_storage_service)]
 util::impl_from_dynamic!(Error:Backend, linera_storage_service::common::ServiceStoreError);
-#[cfg(feature = "rocksdb")]
+#[cfg(with_rocksdb)]
 util::impl_from_dynamic!(Error:Backend, linera_views::rocks_db::RocksDbStoreError);
-#[cfg(feature = "dynamodb")]
+#[cfg(with_dynamodb)]
 util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreError);
-#[cfg(feature = "scylladb")]
+#[cfg(with_scylladb)]
 util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
 
 /// The configuration of the key value store in use.
 pub enum StoreConfig {
     /// The storage service key-value store
-    #[cfg(feature = "storage-service")]
+    #[cfg(with_storage_service)]
     Service(ServiceStoreConfig, String),
     /// The memory key value store
     Memory(MemoryStoreConfig, String),
     /// The RocksDB key value store
-    #[cfg(feature = "rocksdb")]
+    #[cfg(with_rocksdb)]
     RocksDb(RocksDbStoreConfig, String),
     /// The DynamoDb key value store
-    #[cfg(feature = "dynamodb")]
+    #[cfg(with_dynamodb)]
     DynamoDb(DynamoDbStoreConfig, String),
     /// The ScyllaDb key value store
-    #[cfg(feature = "scylladb")]
+    #[cfg(with_scylladb)]
     ScyllaDb(ScyllaDbStoreConfig, String),
 }
 
@@ -79,7 +79,7 @@ pub enum StoreConfig {
 #[cfg_attr(any(test), derive(Eq, PartialEq))]
 pub enum StorageConfig {
     /// The storage service description
-    #[cfg(feature = "storage-service")]
+    #[cfg(with_storage_service)]
     Service {
         /// The endpoint used
         endpoint: String,
@@ -87,7 +87,7 @@ pub enum StorageConfig {
     /// The memory description
     Memory,
     /// The RocksDB description
-    #[cfg(feature = "rocksdb")]
+    #[cfg(with_rocksdb)]
     RocksDb {
         /// The path used
         path: PathBuf,
@@ -95,13 +95,13 @@ pub enum StorageConfig {
         spawn_mode: RocksDbSpawnMode,
     },
     /// The DynamoDB description
-    #[cfg(feature = "dynamodb")]
+    #[cfg(with_dynamodb)]
     DynamoDb {
         /// Whether to use the localstack system
         use_localstack: bool,
     },
     /// The ScyllaDb description
-    #[cfg(feature = "scylladb")]
+    #[cfg(with_scylladb)]
     ScyllaDb {
         /// The URI for accessing the database
         uri: String,
@@ -112,7 +112,7 @@ pub enum StorageConfig {
 const ROOT_KEY: &[u8] = &[0];
 
 impl StorageConfig {
-    #[cfg(feature = "rocksdb")]
+    #[cfg(with_rocksdb)]
     pub fn is_rocks_db(&self) -> bool {
         matches!(self, StorageConfig::RocksDb { .. })
     }
@@ -130,13 +130,13 @@ pub struct StorageConfigNamespace {
 
 const MEMORY: &str = "memory";
 const MEMORY_EXT: &str = "memory:";
-#[cfg(feature = "storage-service")]
+#[cfg(with_storage_service)]
 const STORAGE_SERVICE: &str = "service:";
-#[cfg(feature = "rocksdb")]
+#[cfg(with_rocksdb)]
 const ROCKS_DB: &str = "rocksdb:";
-#[cfg(feature = "dynamodb")]
+#[cfg(with_dynamodb)]
 const DYNAMO_DB: &str = "dynamodb:";
-#[cfg(feature = "scylladb")]
+#[cfg(with_scylladb)]
 const SCYLLA_DB: &str = "scylladb:";
 
 impl FromStr for StorageConfigNamespace {
@@ -159,7 +159,7 @@ impl FromStr for StorageConfigNamespace {
                 namespace,
             });
         }
-        #[cfg(feature = "storage-service")]
+        #[cfg(with_storage_service)]
         if let Some(s) = input.strip_prefix(STORAGE_SERVICE) {
             if s.is_empty() {
                 return Err(Error::Format(
@@ -191,7 +191,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 namespace,
             });
         }
-        #[cfg(feature = "rocksdb")]
+        #[cfg(with_rocksdb)]
         if let Some(s) = input.strip_prefix(ROCKS_DB) {
             if s.is_empty() {
                 return Err(Error::Format(
@@ -229,7 +229,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             }
             return Err(Error::Format("We should have one or three parts".into()));
         }
-        #[cfg(feature = "dynamodb")]
+        #[cfg(with_dynamodb)]
         if let Some(s) = input.strip_prefix(DYNAMO_DB) {
             let mut parts = s.splitn(2, ':');
             let namespace = parts
@@ -256,7 +256,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 namespace,
             });
         }
-        #[cfg(feature = "scylladb")]
+        #[cfg(with_scylladb)]
         if let Some(s) = input.strip_prefix(SCYLLA_DB) {
             let mut uri: Option<String> = None;
             let mut namespace: Option<String> = None;
@@ -312,13 +312,13 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             });
         }
         error!("available storage: memory");
-        #[cfg(feature = "storage-service")]
+        #[cfg(with_storage_service)]
         error!("Also available is linera-storage-service");
-        #[cfg(feature = "rocksdb")]
+        #[cfg(with_rocksdb)]
         error!("Also available is RocksDB");
-        #[cfg(feature = "dynamodb")]
+        #[cfg(with_dynamodb)]
         error!("Also available is DynamoDB");
-        #[cfg(feature = "scylladb")]
+        #[cfg(with_scylladb)]
         error!("Also available is ScyllaDB");
         Err(Error::Format(format!("The input has not matched: {input}")))
     }
@@ -332,7 +332,7 @@ impl StorageConfigNamespace {
     ) -> Result<StoreConfig, Error> {
         let namespace = self.namespace.clone();
         match &self.storage_config {
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StorageConfig::Service { endpoint } => {
                 let endpoint = endpoint.clone();
                 let config = ServiceStoreConfig {
@@ -345,7 +345,7 @@ impl StorageConfigNamespace {
                 let config = MemoryStoreConfig { common_config };
                 Ok(StoreConfig::Memory(config, namespace))
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StorageConfig::RocksDb { path, spawn_mode } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
@@ -356,7 +356,7 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StorageConfig::DynamoDb { use_localstack } => {
                 let aws_config = get_config(*use_localstack).await?;
                 let config = DynamoDbStoreConfig {
@@ -365,7 +365,7 @@ impl StorageConfigNamespace {
                 };
                 Ok(StoreConfig::DynamoDb(config, namespace))
             }
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StorageConfig::ScyllaDb { uri } => {
                 let config = ScyllaDbStoreConfig {
                     uri: uri.to_string(),
@@ -381,14 +381,14 @@ impl fmt::Display for StorageConfigNamespace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let namespace = &self.namespace;
         match &self.storage_config {
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StorageConfig::Service { endpoint } => {
                 write!(f, "service:tcp:{}:{}", endpoint, namespace)
             }
             StorageConfig::Memory => {
                 write!(f, "memory:{}", namespace)
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StorageConfig::RocksDb { path, spawn_mode } => {
                 let spawn_mode = match spawn_mode {
                     RocksDbSpawnMode::SpawnBlocking => "spawn_blocking".to_string(),
@@ -396,12 +396,12 @@ impl fmt::Display for StorageConfigNamespace {
                 };
                 write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StorageConfig::DynamoDb { use_localstack } => match use_localstack {
                 true => write!(f, "dynamodb:{}:localstack", namespace),
                 false => write!(f, "dynamodb:{}:env", namespace),
             },
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StorageConfig::ScyllaDb { uri } => {
                 write!(f, "scylladb:tcp:{}:{}", uri, namespace)
             }
@@ -417,22 +417,22 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "delete_all does not make sense for memory storage".to_string(),
             }),
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StoreConfig::Service(config, _namespace) => {
                 ServiceStoreClient::delete_all(&config).await?;
                 Ok(())
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StoreConfig::RocksDb(config, _namespace) => {
                 RocksDbStore::delete_all(&config).await?;
                 Ok(())
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StoreConfig::DynamoDb(config, _namespace) => {
                 DynamoDbStore::delete_all(&config).await?;
                 Ok(())
             }
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StoreConfig::ScyllaDb(config, _namespace) => {
                 ScyllaDbStore::delete_all(&config).await?;
                 Ok(())
@@ -447,22 +447,22 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "delete_namespace does not make sense for memory storage".to_string(),
             }),
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StoreConfig::Service(config, namespace) => {
                 ServiceStoreClient::delete(&config, &namespace).await?;
                 Ok(())
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StoreConfig::RocksDb(config, namespace) => {
                 RocksDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StoreConfig::DynamoDb(config, namespace) => {
                 DynamoDbStore::delete(&config, &namespace).await?;
                 Ok(())
             }
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StoreConfig::ScyllaDb(config, namespace) => {
                 ScyllaDbStore::delete(&config, &namespace).await?;
                 Ok(())
@@ -477,19 +477,19 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "test_existence does not make sense for memory storage".to_string(),
             }),
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StoreConfig::Service(config, namespace) => {
                 Ok(ServiceStoreClient::exists(&config, &namespace).await?)
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StoreConfig::RocksDb(config, namespace) => {
                 Ok(RocksDbStore::exists(&config, &namespace).await?)
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StoreConfig::DynamoDb(config, namespace) => {
                 Ok(DynamoDbStore::exists(&config, &namespace).await?)
             }
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StoreConfig::ScyllaDb(config, namespace) => {
                 Ok(ScyllaDbStore::exists(&config, &namespace).await?)
             }
@@ -503,22 +503,22 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "initialize does not make sense for memory storage".to_string(),
             }),
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StoreConfig::Service(config, namespace) => {
                 ServiceStoreClient::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 Ok(())
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StoreConfig::RocksDb(config, namespace) => {
                 RocksDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 Ok(())
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StoreConfig::DynamoDb(config, namespace) => {
                 DynamoDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 Ok(())
             }
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StoreConfig::ScyllaDb(config, namespace) => {
                 ScyllaDbStore::maybe_create_and_connect(&config, &namespace, ROOT_KEY).await?;
                 Ok(())
@@ -533,22 +533,22 @@ impl StoreConfig {
                 backend: "memory".to_string(),
                 error: "list_all is not supported for the memory storage".to_string(),
             }),
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StoreConfig::Service(config, _namespace) => {
                 let tables = ServiceStoreClient::list_all(&config).await?;
                 Ok(tables)
             }
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StoreConfig::RocksDb(config, _namespace) => {
                 let tables = RocksDbStore::list_all(&config).await?;
                 Ok(tables)
             }
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StoreConfig::DynamoDb(config, _namespace) => {
                 let tables = DynamoDbStore::list_all(&config).await?;
                 Ok(tables)
             }
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StoreConfig::ScyllaDb(config, _namespace) => {
                 let tables = ScyllaDbStore::list_all(&config).await?;
                 Ok(tables)
@@ -589,28 +589,28 @@ where
             genesis_config.initialize_storage(&mut storage).await?;
             Ok(job.run(storage).await)
         }
-        #[cfg(feature = "storage-service")]
+        #[cfg(with_storage_service)]
         StoreConfig::Service(config, namespace) => {
             let storage =
                 DbStorage::<ServiceStoreClient, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
                     .await?;
             Ok(job.run(storage).await)
         }
-        #[cfg(feature = "rocksdb")]
+        #[cfg(with_rocksdb)]
         StoreConfig::RocksDb(config, namespace) => {
             let storage =
                 DbStorage::<RocksDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
                     .await?;
             Ok(job.run(storage).await)
         }
-        #[cfg(feature = "dynamodb")]
+        #[cfg(with_dynamodb)]
         StoreConfig::DynamoDb(config, namespace) => {
             let storage =
                 DbStorage::<DynamoDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
                     .await?;
             Ok(job.run(storage).await)
         }
-        #[cfg(feature = "scylladb")]
+        #[cfg(with_scylladb)]
         StoreConfig::ScyllaDb(config, namespace) => {
             let storage =
                 DbStorage::<ScyllaDbStore, _>::new(config, &namespace, ROOT_KEY, wasm_runtime)
@@ -629,7 +629,7 @@ pub async fn full_initialize_storage(
         StoreConfig::Memory(_, _) => Err(Error::InvalidOperation(
             "The initialization should not be called for memory".into(),
         )),
-        #[cfg(feature = "storage-service")]
+        #[cfg(with_storage_service)]
         StoreConfig::Service(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = DbStorage::<ServiceStoreClient, _>::initialize(
@@ -641,7 +641,7 @@ pub async fn full_initialize_storage(
             .await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
-        #[cfg(feature = "rocksdb")]
+        #[cfg(with_rocksdb)]
         StoreConfig::RocksDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = DbStorage::<RocksDbStore, _>::initialize(
@@ -653,7 +653,7 @@ pub async fn full_initialize_storage(
             .await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
-        #[cfg(feature = "dynamodb")]
+        #[cfg(with_dynamodb)]
         StoreConfig::DynamoDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = DbStorage::<DynamoDbStore, _>::initialize(
@@ -665,7 +665,7 @@ pub async fn full_initialize_storage(
             .await?;
             Ok(genesis_config.initialize_storage(&mut storage).await?)
         }
-        #[cfg(feature = "scylladb")]
+        #[cfg(with_scylladb)]
         StoreConfig::ScyllaDb(config, namespace) => {
             let wasm_runtime = None;
             let mut storage = DbStorage::<ScyllaDbStore, _>::initialize(
@@ -705,7 +705,7 @@ fn test_memory_storage_config_from_str() {
     );
 }
 
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 #[test]
 fn test_shared_store_config_from_str() {
     assert_eq!(
@@ -721,7 +721,7 @@ fn test_shared_store_config_from_str() {
     assert!(StorageConfigNamespace::from_str("service:tcp:127.0.0.1:linera").is_err());
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 #[test]
 fn test_rocks_db_storage_config_from_str() {
     assert_eq!(
@@ -747,7 +747,7 @@ fn test_rocks_db_storage_config_from_str() {
     );
 }
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[test]
 fn test_aws_storage_config_from_str() {
     assert_eq!(
@@ -783,7 +783,7 @@ fn test_aws_storage_config_from_str() {
     assert!(StorageConfigNamespace::from_str("dynamodb:wrong:endpoint").is_err());
 }
 
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[test]
 fn test_scylla_db_storage_config_from_str() {
     assert_eq!(

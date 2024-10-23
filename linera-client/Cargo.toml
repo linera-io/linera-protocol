@@ -22,9 +22,13 @@ wasmer = [
 ]
 wasmtime = ["linera-execution/wasmtime", "linera-storage/wasmtime"]
 rocksdb = ["linera-views/rocksdb"]
+test-rocksdb = ["rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
+test-dynamodb = ["dynamodb"]
 scylladb = ["linera-views/scylladb"]
+test-scylladb = ["scylladb"]
 storage-service = ["linera-storage-service"]
+test-storage-service = ["storage-service"]
 kubernetes = []
 fs = ["fs-err", "fs4", "linera-execution/fs"]
 metrics = [
