@@ -1,0 +1,131 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`ExecutionProfile` is a grouping of configurable options regarding query execution."><title>scylla::transport::execution_profile - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="scylla" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../scylla/index.html">scylla</a><span class="version">0.12.0</span></h2></div><h2 class="location"><a href="#">Module execution_profile</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In scylla::transport</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">scylla</a>::<wbr><a href="../index.html">transport</a>::<wbr><a class="mod" href="#">execution_profile</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/scylla/transport/execution_profile.rs.html#1-488">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>ExecutionProfile</code> is a grouping of configurable options regarding query execution.</p>
+<p>Profiles can be created to represent different workloads, which thanks to them
+can be run conveniently on a single session.</p>
+<p>There are two classes of objects related to execution profiles: <code>ExecutionProfile</code> and <code>ExecutionProfileHandle</code>.
+The former is simply an immutable set of the settings. The latter is a handle that at particular moment points
+to some <code>ExecutionProfile</code> (but during its lifetime, it can change the profile it points at).
+Handles are assigned to <code>Sessions</code> and <code>Statements</code>.
+At any moment, handles point to another <code>ExecutionProfile</code>. This allows convenient switching between workloads
+for all <code>Sessions</code> and/or <code>Statements</code> that, for instance, share common characteristics.</p>
+<h4 id="example"><a class="doc-anchor" href="#example">§</a>Example</h4>
+<p>To create an <code>ExecutionProfile</code> and attach it as default for <code>Session</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>scylla::{Session, SessionBuilder};
+<span class="kw">use </span>scylla::statement::Consistency;
+<span class="kw">use </span>scylla::transport::ExecutionProfile;
+
+<span class="kw">let </span>profile = ExecutionProfile::builder()
+    .consistency(Consistency::LocalOne)
+    .request_timeout(<span class="prelude-val">None</span>) <span class="comment">// no request timeout
+    </span>.build();
+
+<span class="kw">let </span>handle = profile.into_handle();
+
+<span class="kw">let </span>session: Session = SessionBuilder::new()
+    .known_node(<span class="string">"127.0.0.1:9042"</span>)
+    .default_execution_profile_handle(handle)
+    .build()
+    .<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<h4 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h4>
+<p>To create an <code>ExecutionProfile</code> and attach it to a <code>Query</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>scylla::query::Query;
+<span class="kw">use </span>scylla::statement::Consistency;
+<span class="kw">use </span>scylla::transport::ExecutionProfile;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">let </span>profile = ExecutionProfile::builder()
+    .consistency(Consistency::All)
+    .request_timeout(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">30</span>)))
+    .build();
+
+<span class="kw">let </span>handle = profile.into_handle();
+
+<span class="kw">let </span><span class="kw-2">mut </span>query1 = Query::from(<span class="string">"SELECT * FROM ks.table"</span>);
+query1.set_execution_profile_handle(<span class="prelude-val">Some</span>(handle.clone()));
+
+<span class="kw">let </span><span class="kw-2">mut </span>query2 = Query::from(<span class="string">"SELECT pk FROM ks.table WHERE pk = ?"</span>);
+query2.set_execution_profile_handle(<span class="prelude-val">Some</span>(handle));</code></pre></div>
+<h4 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h4>
+<p>To create an <code>ExecutionProfile</code> with config options defaulting
+to those set on another profile:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>scylla::statement::Consistency;
+<span class="kw">use </span>scylla::transport::ExecutionProfile;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">let </span>base_profile = ExecutionProfile::builder()
+    .request_timeout(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">30</span>)))
+    .build();
+
+<span class="kw">let </span>profile = base_profile.to_builder()
+    .consistency(Consistency::All)
+    .build();</code></pre></div>
+<p><code>ExecutionProfileHandle</code>s can be remapped to another <code>ExecutionProfile</code>, and the change affects all sessions and statements that have been assigned that handle. This enables quick workload switches.</p>
+<p>Example mapping:</p>
+<ul>
+<li>session1 -&gt; handle1 -&gt; profile1</li>
+<li>statement1 -&gt; handle1 -&gt; profile1</li>
+<li>statement2 -&gt; handle2 -&gt; profile2</li>
+</ul>
+<p>We can now remap handle2 to profile1, so that the mapping for statement2 becomes as follows:</p>
+<ul>
+<li>statement2 -&gt; handle2 -&gt; profile1</li>
+</ul>
+<p>We can also change statement1’s handle to handle2, and remap handle1 to profile2, yielding:</p>
+<ul>
+<li>session1 -&gt; handle1 -&gt; profile2</li>
+<li>statement1 -&gt; handle2 -&gt; profile1</li>
+<li>statement2 -&gt; handle2 -&gt; profile1</li>
+</ul>
+<p>As you can see, profiles are a powerful and convenient way to define and modify your workloads.</p>
+<h4 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h4>
+<p>Below, the remaps described above are followed in code.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>scylla::{Session, SessionBuilder};
+<span class="kw">use </span>scylla::query::Query;
+<span class="kw">use </span>scylla::statement::Consistency;
+<span class="kw">use </span>scylla::transport::ExecutionProfile;
+
+<span class="kw">let </span>profile1 = ExecutionProfile::builder()
+    .consistency(Consistency::One)
+    .build();
+
+<span class="kw">let </span>profile2 = ExecutionProfile::builder()
+    .consistency(Consistency::Two)
+    .build();
+
+<span class="kw">let </span><span class="kw-2">mut </span>handle1 = profile1.clone().into_handle();
+<span class="kw">let </span><span class="kw-2">mut </span>handle2 = profile2.clone().into_handle();
+
+<span class="kw">let </span>session: Session = SessionBuilder::new()
+    .known_node(<span class="string">"127.0.0.1:9042"</span>)
+    .default_execution_profile_handle(handle1.clone())
+    .build()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>query1 = Query::from(<span class="string">"SELECT * FROM ks.table"</span>);
+<span class="kw">let </span><span class="kw-2">mut </span>query2 = Query::from(<span class="string">"SELECT pk FROM ks.table WHERE pk = ?"</span>);
+
+query1.set_execution_profile_handle(<span class="prelude-val">Some</span>(handle1.clone()));
+query2.set_execution_profile_handle(<span class="prelude-val">Some</span>(handle2.clone()));
+
+<span class="comment">// session1 -&gt; handle1 -&gt; profile1
+//   query1 -&gt; handle1 -&gt; profile1
+//   query2 -&gt; handle2 -&gt; profile2
+
+// We can now remap handle2 to profile1:
+</span>handle2.map_to_another_profile(profile1);
+<span class="comment">// ...so that the mapping for query2 becomes as follows:
+// query2 -&gt; handle2 -&gt; profile1
+
+// We can also change query1's handle to handle2:
+</span>query1.set_execution_profile_handle(<span class="prelude-val">Some</span>(handle2.clone()));
+<span class="comment">// ...and remap handle1 to profile2:
+</span>handle1.map_to_another_profile(profile2);
+<span class="comment">// ...yielding:
+// session1 -&gt; handle1 -&gt; profile2
+//   query1 -&gt; handle2 -&gt; profile1
+//   query2 -&gt; handle2 -&gt; profile1
+</span></code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.ExecutionProfile.html" title="struct scylla::transport::execution_profile::ExecutionProfile">ExecutionProfile</a></div><div class="desc docblock-short">A profile that groups configurable options regarding query execution.</div></li><li><div class="item-name"><a class="struct" href="struct.ExecutionProfileBuilder.html" title="struct scylla::transport::execution_profile::ExecutionProfileBuilder">ExecutionProfileBuilder</a></div><div class="desc docblock-short"><code>ExecutionProfileBuilder</code> is used to create new <code>ExecutionProfile</code>s</div></li><li><div class="item-name"><a class="struct" href="struct.ExecutionProfileHandle.html" title="struct scylla::transport::execution_profile::ExecutionProfileHandle">ExecutionProfileHandle</a></div><div class="desc docblock-short">A handle that points to an ExecutionProfile.</div></li></ul></section></div></main></body></html>

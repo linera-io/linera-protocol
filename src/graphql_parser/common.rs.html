@@ -1,0 +1,703 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/graphql-parser-0.4.0/src/common.rs`."><title>common.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="graphql_parser" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::{fmt, collections::BTreeMap};
+
+<span class="kw">use </span>combine::{parser, ParseResult, Parser};
+<span class="kw">use </span>combine::easy::Error;
+<span class="kw">use </span>combine::error::StreamError;
+<span class="kw">use </span>combine::combinator::{many, many1, optional, position, choice};
+
+<span class="kw">use </span><span class="kw">crate</span>::tokenizer::{Kind <span class="kw">as </span>T, Token, TokenStream};
+<span class="kw">use </span><span class="kw">crate</span>::helpers::{punct, ident, kind, name};
+<span class="kw">use </span><span class="kw">crate</span>::position::Pos;
+
+<span class="doccomment">/// Text abstracts over types that hold a string value.
+/// It is used to make the AST generic over the string type.
+</span><span class="kw">pub trait </span>Text&lt;<span class="lifetime">'a</span>&gt;: <span class="lifetime">'a </span>{
+    <span class="kw">type </span>Value: <span class="lifetime">'a </span>+ From&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt; + AsRef&lt;str&gt; + std::borrow::Borrow&lt;str&gt; + PartialEq + Eq + PartialOrd + Ord + fmt::Debug + Clone; 
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Text&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>str {
+    <span class="kw">type </span>Value = <span class="self">Self</span>;
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Text&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>String {
+    <span class="kw">type </span>Value = String;
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Text&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>std::borrow::Cow&lt;<span class="lifetime">'a</span>, str&gt; {
+    <span class="kw">type </span>Value = <span class="self">Self</span>;
+}
+
+<span class="attr">#[derive(Debug, Clone, PartialEq)]
+</span><span class="kw">pub struct </span>Directive&lt;<span class="lifetime">'a</span>, T: Text&lt;<span class="lifetime">'a</span>&gt;&gt; {
+    <span class="kw">pub </span>position: Pos,
+    <span class="kw">pub </span>name: T::Value,
+    <span class="kw">pub </span>arguments: Vec&lt;(T::Value, Value&lt;<span class="lifetime">'a</span>, T&gt;)&gt;,
+}
+
+<span class="doccomment">/// This represents integer number
+///
+/// But since there is no definition on limit of number in spec
+/// (only in implemetation), we do a trick similar to the one
+/// in `serde_json`: encapsulate value in new-type, allowing type
+/// to be extended later.
+</span><span class="attr">#[derive(Debug, Clone, PartialEq)]
+</span><span class="comment">// we use i64 as a reference implementation: graphql-js thinks even 32bit
+// integers is enough. We might consider lift this limit later though
+</span><span class="kw">pub struct </span>Number(<span class="kw">pub</span>(<span class="kw">crate</span>) i64);
+
+<span class="attr">#[derive(Debug, Clone, PartialEq)]
+</span><span class="kw">pub enum </span>Value&lt;<span class="lifetime">'a</span>, T: Text&lt;<span class="lifetime">'a</span>&gt;&gt; {
+    Variable(T::Value),
+    Int(Number),
+    Float(f64),
+    String(String),
+    Boolean(bool),
+    Null,
+    Enum(T::Value),
+    List(Vec&lt;Value&lt;<span class="lifetime">'a</span>, T&gt;&gt;),
+    Object(BTreeMap&lt;T::Value, Value&lt;<span class="lifetime">'a</span>, T&gt;&gt;),
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T: Text&lt;<span class="lifetime">'a</span>&gt;&gt; Value&lt;<span class="lifetime">'a</span>, T&gt; {
+    <span class="kw">pub fn </span>into_static(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Value&lt;<span class="lifetime">'static</span>, String&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Variable(v) =&gt; Value::Variable(v.as_ref().into()),
+            <span class="self">Self</span>::Int(i) =&gt; Value::Int(i.clone()),
+            <span class="self">Self</span>::Float(f) =&gt; Value::Float(<span class="kw-2">*</span>f),
+            <span class="self">Self</span>::String(s) =&gt; Value::String(s.clone()),
+            <span class="self">Self</span>::Boolean(b) =&gt; Value::Boolean(<span class="kw-2">*</span>b),
+            <span class="self">Self</span>::Null =&gt; Value::Null,
+            <span class="self">Self</span>::Enum(v) =&gt; Value::Enum(v.as_ref().into()),
+            <span class="self">Self</span>::List(l) =&gt; {
+                Value::List(l.iter().map(|e| e.into_static()).collect())
+            },
+            <span class="self">Self</span>::Object(o) =&gt; {
+                Value::Object(o.iter().map(|(k, v)| (k.as_ref().into(), v.into_static())).collect())
+            },
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, PartialEq)]
+</span><span class="kw">pub enum </span>Type&lt;<span class="lifetime">'a</span>, T: Text&lt;<span class="lifetime">'a</span>&gt;&gt; {
+    NamedType(T::Value),
+    ListType(Box&lt;Type&lt;<span class="lifetime">'a</span>, T&gt;&gt;),
+    NonNullType(Box&lt;Type&lt;<span class="lifetime">'a</span>, T&gt;&gt;),
+}
+
+<span class="kw">impl </span>Number {
+    <span class="doccomment">/// Returns a number as i64 if it fits the type
+    </span><span class="kw">pub fn </span>as_i64(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;i64&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.<span class="number">0</span>)
+    }
+}
+
+<span class="kw">impl </span>From&lt;i32&gt; <span class="kw">for </span>Number {
+    <span class="kw">fn </span>from(i: i32) -&gt; <span class="self">Self </span>{
+        Number(i <span class="kw">as </span>i64)
+    }
+}
+
+<span class="kw">pub fn </span>directives&lt;<span class="lifetime">'a</span>, T&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Vec&lt;Directive&lt;<span class="lifetime">'a</span>, T&gt;&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>T: Text&lt;<span class="lifetime">'a</span>&gt;, 
+{
+    many(position()
+        .skip(punct(<span class="string">"@"</span>))
+        .and(name::&lt;<span class="lifetime">'a</span>, T&gt;())
+        .and(parser(arguments))
+        .map(|((position, name), arguments)| {
+            Directive { position, name, arguments }
+        }))
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>arguments&lt;<span class="lifetime">'a</span>, T&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Vec&lt;(T::Value, Value&lt;<span class="lifetime">'a</span>, T&gt;)&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>T: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    optional(
+        punct(<span class="string">"("</span>)
+        .with(many1(name::&lt;<span class="lifetime">'a</span>, T&gt;()
+            .skip(punct(<span class="string">":"</span>))
+            .and(parser(value))))
+        .skip(punct(<span class="string">")"</span>)))
+    .map(|opt| {
+        opt.unwrap_or_else(Vec::new)
+    })
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>int_value&lt;<span class="lifetime">'a</span>, S&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, S&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>S: Text&lt;<span class="lifetime">'a</span>&gt;
+{
+    kind(T::IntValue).and_then(|tok| tok.value.parse())
+            .map(Number).map(Value::Int)
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>float_value&lt;<span class="lifetime">'a</span>, S&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, S&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>S: Text&lt;<span class="lifetime">'a</span>&gt;
+{
+    kind(T::FloatValue).and_then(|tok| tok.value.parse())
+            .map(Value::Float)
+    .parse_stream(input)
+}
+
+<span class="kw">fn </span>unquote_block_string&lt;<span class="lifetime">'a</span>&gt;(src: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&lt;Token&lt;<span class="lifetime">'a</span>&gt;, Token&lt;<span class="lifetime">'a</span>&gt;&gt;&gt; {
+    <span class="macro">debug_assert!</span>(src.starts_with(<span class="string">"\"\"\""</span>) &amp;&amp; src.ends_with(<span class="string">"\"\"\""</span>));
+    <span class="kw">let </span>indent = src[<span class="number">3</span>..src.len()-<span class="number">3</span>].lines().skip(<span class="number">1</span>)
+        .filter_map(|line| {
+            <span class="kw">let </span>trimmed = line.trim_start().len();
+            <span class="kw">if </span>trimmed &gt; <span class="number">0 </span>{
+                <span class="prelude-val">Some</span>(line.len() - trimmed)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None  </span><span class="comment">// skip whitespace-only lines
+            </span>}
+        })
+        .min().unwrap_or(<span class="number">0</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>result = String::with_capacity(src.len()-<span class="number">6</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>lines = src[<span class="number">3</span>..src.len()-<span class="number">3</span>].lines();
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(first) = lines.next() {
+        <span class="kw">let </span>stripped = first.trim();
+        <span class="kw">if </span>!stripped.is_empty() {
+            result.push_str(stripped);
+            result.push(<span class="string">'\n'</span>);
+        }
+    }
+    <span class="kw">let </span><span class="kw-2">mut </span>last_line = <span class="number">0</span>;
+    <span class="kw">for </span>line <span class="kw">in </span>lines {
+        last_line = result.len();
+        <span class="kw">if </span>line.len() &gt; indent {
+            result.push_str(<span class="kw-2">&amp;</span>line[indent..].replace(<span class="string">r#"\""""#</span>, <span class="string">r#"""""#</span>));
+        }
+        result.push(<span class="string">'\n'</span>);
+    }
+    <span class="kw">if </span>result[last_line..].trim().is_empty() {
+        result.truncate(last_line);
+    }
+
+    <span class="prelude-val">Ok</span>(result)
+}
+
+<span class="kw">fn </span>unquote_string&lt;<span class="lifetime">'a</span>&gt;(s: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&lt;Token, Token&gt;&gt; 
+{
+    <span class="kw">let </span><span class="kw-2">mut </span>res = String::with_capacity(s.len());
+    <span class="macro">debug_assert!</span>(s.starts_with(<span class="string">'"'</span>) &amp;&amp; s.ends_with(<span class="string">'"'</span>));
+    <span class="kw">let </span><span class="kw-2">mut </span>chars = s[<span class="number">1</span>..s.len()-<span class="number">1</span>].chars();
+    <span class="kw">let </span><span class="kw-2">mut </span>temp_code_point = String::with_capacity(<span class="number">4</span>);
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(c) = chars.next() {
+        <span class="kw">match </span>c {
+            <span class="string">'\\' </span>=&gt; {
+                <span class="kw">match </span>chars.next().expect(<span class="string">"slash cant be at the end"</span>) {
+                    c@<span class="string">'"' </span>| c@<span class="string">'\\' </span>| c@<span class="string">'/' </span>=&gt; res.push(c),
+                    <span class="string">'b' </span>=&gt; res.push(<span class="string">'\u{0010}'</span>),
+                    <span class="string">'f' </span>=&gt; res.push(<span class="string">'\u{000C}'</span>),
+                    <span class="string">'n' </span>=&gt; res.push(<span class="string">'\n'</span>),
+                    <span class="string">'r' </span>=&gt; res.push(<span class="string">'\r'</span>),
+                    <span class="string">'t' </span>=&gt; res.push(<span class="string">'\t'</span>),
+                    <span class="string">'u' </span>=&gt; {
+                        temp_code_point.clear();
+                        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">4 </span>{
+                            <span class="kw">match </span>chars.next() {
+                                <span class="prelude-val">Some</span>(inner_c) =&gt; temp_code_point.push(inner_c),
+                                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(Error::unexpected_message(
+                                    <span class="macro">format_args!</span>(<span class="string">"\\u must have 4 characters after it, only found '{}'"</span>, temp_code_point)
+                                )),
+                            }
+                        }
+
+                        <span class="comment">// convert our hex string into a u32, then convert that into a char
+                        </span><span class="kw">match </span>u32::from_str_radix(<span class="kw-2">&amp;</span>temp_code_point, <span class="number">16</span>).map(std::char::from_u32) {
+                            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(unicode_char)) =&gt; res.push(unicode_char),
+                            <span class="kw">_ </span>=&gt; {
+                                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::unexpected_message(
+                                    <span class="macro">format_args!</span>(<span class="string">"{} is not a valid unicode code point"</span>, temp_code_point)))
+                            }
+                        }
+                    },
+                    c =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(Error::unexpected_message(
+                            <span class="macro">format_args!</span>(<span class="string">"bad escaped char {:?}"</span>, c)));
+                    }
+                }
+            }
+            c =&gt; res.push(c),
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(res)
+}
+
+<span class="kw">pub fn </span>string&lt;<span class="lifetime">'a</span>&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;String, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+{
+    choice((
+        kind(T::StringValue).and_then(|tok| unquote_string(tok.value)),
+        kind(T::BlockString).and_then(|tok| unquote_block_string(tok.value)),
+    )).parse_stream(input)
+}
+
+<span class="kw">pub fn </span>string_value&lt;<span class="lifetime">'a</span>, S&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, S&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>S: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    kind(T::StringValue).and_then(|tok| unquote_string(tok.value))
+        .map(Value::String)
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>block_string_value&lt;<span class="lifetime">'a</span>, S&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, S&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>S: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    kind(T::BlockString).and_then(|tok| unquote_block_string(tok.value))
+        .map(Value::String)
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>plain_value&lt;<span class="lifetime">'a</span>, T&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, T&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>T: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    ident(<span class="string">"true"</span>).map(|<span class="kw">_</span>| Value::Boolean(<span class="bool-val">true</span>))
+    .or(ident(<span class="string">"false"</span>).map(|<span class="kw">_</span>| Value::Boolean(<span class="bool-val">false</span>)))
+    .or(ident(<span class="string">"null"</span>).map(|<span class="kw">_</span>| Value::Null))
+    .or(name::&lt;<span class="lifetime">'a</span>, T&gt;().map(Value::Enum))
+    .or(parser(int_value))
+    .or(parser(float_value))
+    .or(parser(string_value))
+    .or(parser(block_string_value))
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>value&lt;<span class="lifetime">'a</span>, T&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, T&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>T: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    parser(plain_value)
+    .or(punct(<span class="string">"$"</span>).with(name::&lt;<span class="lifetime">'a</span>, T&gt;()).map(Value::Variable))
+    .or(punct(<span class="string">"["</span>).with(many(parser(value))).skip(punct(<span class="string">"]"</span>))
+        .map(Value::List))
+    .or(punct(<span class="string">"{"</span>)
+        .with(many(name::&lt;<span class="lifetime">'a</span>, T&gt;().skip(punct(<span class="string">":"</span>)).and(parser(value))))
+        .skip(punct(<span class="string">"}"</span>))
+        .map(Value::Object))
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>default_value&lt;<span class="lifetime">'a</span>, T&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Value&lt;<span class="lifetime">'a</span>, T&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>T: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    parser(plain_value)
+    .or(punct(<span class="string">"["</span>).with(many(parser(default_value))).skip(punct(<span class="string">"]"</span>))
+        .map(Value::List))
+    .or(punct(<span class="string">"{"</span>)
+        .with(many(name::&lt;<span class="lifetime">'a</span>, T&gt;().skip(punct(<span class="string">":"</span>)).and(parser(default_value))))
+        .skip(punct(<span class="string">"}"</span>))
+        .map(Value::Object))
+    .parse_stream(input)
+}
+
+<span class="kw">pub fn </span>parse_type&lt;<span class="lifetime">'a</span>, T&gt;(input: <span class="kw-2">&amp;mut </span>TokenStream&lt;<span class="lifetime">'a</span>&gt;)
+    -&gt; ParseResult&lt;Type&lt;<span class="lifetime">'a</span>, T&gt;, TokenStream&lt;<span class="lifetime">'a</span>&gt;&gt;
+    <span class="kw">where </span>T: Text&lt;<span class="lifetime">'a</span>&gt;,
+{
+    name::&lt;<span class="lifetime">'a</span>, T&gt;().map(Type::NamedType)
+    .or(punct(<span class="string">"["</span>)
+        .with(parser(parse_type))
+        .skip(punct(<span class="string">"]"</span>))
+        .map(Box::new)
+        .map(Type::ListType))
+    .and(optional(punct(<span class="string">"!"</span>)).map(|v| v.is_some()))
+    .map(|(typ, strict)|
+        <span class="kw">if </span>strict {
+            Type::NonNullType(Box::new(typ))
+        } <span class="kw">else </span>{
+            typ
+        }
+    )
+    .parse_stream(input)
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">super</span>::Number;
+    <span class="kw">use </span><span class="kw">super</span>::unquote_string;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>number_from_i32_and_to_i64_conversion() {
+        <span class="macro">assert_eq!</span>(Number::from(<span class="number">1</span>).as_i64(), <span class="prelude-val">Some</span>(<span class="number">1</span>));
+        <span class="macro">assert_eq!</span>(Number::from(<span class="number">584</span>).as_i64(), <span class="prelude-val">Some</span>(<span class="number">584</span>));
+        <span class="macro">assert_eq!</span>(Number::from(i32::min_value()).as_i64(), <span class="prelude-val">Some</span>(i32::min_value() <span class="kw">as </span>i64));
+        <span class="macro">assert_eq!</span>(Number::from(i32::max_value()).as_i64(), <span class="prelude-val">Some</span>(i32::max_value() <span class="kw">as </span>i64));
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>unquote_unicode_string() {
+        <span class="comment">// basic tests
+        </span><span class="macro">assert_eq!</span>(unquote_string(<span class="string">r#""\u0009""#</span>).expect(<span class="string">""</span>), <span class="string">"\u{0009}"</span>);
+        <span class="macro">assert_eq!</span>(unquote_string(<span class="string">r#""\u000A""#</span>).expect(<span class="string">""</span>), <span class="string">"\u{000A}"</span>);
+        <span class="macro">assert_eq!</span>(unquote_string(<span class="string">r#""\u000D""#</span>).expect(<span class="string">""</span>), <span class="string">"\u{000D}"</span>);
+        <span class="macro">assert_eq!</span>(unquote_string(<span class="string">r#""\u0020""#</span>).expect(<span class="string">""</span>), <span class="string">"\u{0020}"</span>);
+        <span class="macro">assert_eq!</span>(unquote_string(<span class="string">r#""\uFFFF""#</span>).expect(<span class="string">""</span>), <span class="string">"\u{FFFF}"</span>);
+
+        <span class="comment">// a more complex string
+        </span><span class="macro">assert_eq!</span>(unquote_string(<span class="string">r#""\u0009 hello \u000A there""#</span>).expect(<span class="string">""</span>), <span class="string">"\u{0009} hello \u{000A} there"</span>);
+    }
+}
+</code></pre></div></section></main></body></html>

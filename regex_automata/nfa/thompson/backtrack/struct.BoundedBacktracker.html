@@ -1,0 +1,651 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A backtracking regex engine that bounds its execution to avoid exponential blow-up."><title>BoundedBacktracker in regex_automata::nfa::thompson::backtrack - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">BoundedBacktracker</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.always_match">always_match</a></li><li><a href="#method.builder">builder</a></li><li><a href="#method.config">config</a></li><li><a href="#method.create_cache">create_cache</a></li><li><a href="#method.create_captures">create_captures</a></li><li><a href="#method.get_config">get_config</a></li><li><a href="#method.get_nfa">get_nfa</a></li><li><a href="#method.max_haystack_len">max_haystack_len</a></li><li><a href="#method.never_match">never_match</a></li><li><a href="#method.new">new</a></li><li><a href="#method.new_from_nfa">new_from_nfa</a></li><li><a href="#method.new_many">new_many</a></li><li><a href="#method.pattern_len">pattern_len</a></li><li><a href="#method.reset_cache">reset_cache</a></li><li><a href="#method.try_captures">try_captures</a></li><li><a href="#method.try_captures_iter">try_captures_iter</a></li><li><a href="#method.try_find">try_find</a></li><li><a href="#method.try_find_iter">try_find_iter</a></li><li><a href="#method.try_is_match">try_is_match</a></li><li><a href="#method.try_search">try_search</a></li><li><a href="#method.try_search_slots">try_search_slots</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-BoundedBacktracker">Clone</a></li><li><a href="#impl-Debug-for-BoundedBacktracker">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-BoundedBacktracker">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-BoundedBacktracker">RefUnwindSafe</a></li><li><a href="#impl-Send-for-BoundedBacktracker">Send</a></li><li><a href="#impl-Sync-for-BoundedBacktracker">Sync</a></li><li><a href="#impl-Unpin-for-BoundedBacktracker">Unpin</a></li><li><a href="#impl-UnwindSafe-for-BoundedBacktracker">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::nfa::thompson::backtrack</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../../index.html">regex_automata</a>::<wbr><a href="../../index.html">nfa</a>::<wbr><a href="../index.html">thompson</a>::<wbr><a href="index.html">backtrack</a>::<wbr><a class="struct" href="#">BoundedBacktracker</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#427-430">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct BoundedBacktracker { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A backtracking regex engine that bounds its execution to avoid exponential
+blow-up.</p>
+<p>This regex engine only implements leftmost-first match semantics and
+only supports leftmost searches. It effectively does the same thing as a
+<a href="../pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>PikeVM</code></a>, but typically does it faster because
+it doesn’t have to worry about copying capturing group spans for most NFA
+states. Instead, the backtracker can maintain one set of captures (provided
+by the caller) and never needs to copy them. In exchange, the backtracker
+bounds itself to ensure it doesn’t exhibit worst case exponential time.
+This results in the backtracker only being able to handle short haystacks
+given reasonable memory usage.</p>
+<h2 id="searches-may-return-an-error"><a class="doc-anchor" href="#searches-may-return-an-error">§</a>Searches may return an error!</h2>
+<p>By design, this backtracking regex engine is bounded. This bound is
+implemented by not visiting any combination of NFA state ID and position
+in a haystack more than once. Thus, the total memory required to bound
+backtracking is proportional to <code>haystack.len() * nfa.states().len()</code>.
+This can obviously get quite large, since large haystacks aren’t terribly
+uncommon. To avoid using exorbitant memory, the capacity is bounded by
+a fixed limit set via <a href="struct.Config.html#method.visited_capacity" title="method regex_automata::nfa::thompson::backtrack::Config::visited_capacity"><code>Config::visited_capacity</code></a>. Thus, if the total
+capacity required for a particular regex and a haystack exceeds this
+capacity, then the search routine will return an error.</p>
+<p>Unlike other regex engines that may return an error at search time (like
+the DFA or the hybrid NFA/DFA), there is no way to guarantee that a bounded
+backtracker will work for every haystack. Therefore, this regex engine
+<em>only</em> exposes fallible search routines to avoid the footgun of panicking
+when running a search on a haystack that is too big.</p>
+<p>If one wants to use the fallible search APIs without handling the
+error, the only way to guarantee an error won’t occur from the
+haystack length is to ensure the haystack length does not exceed
+<a href="struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>.</p>
+<h2 id="example-unicode-word-boundaries"><a class="doc-anchor" href="#example-unicode-word-boundaries">§</a>Example: Unicode word boundaries</h2>
+<p>This example shows that the bounded backtracker implements Unicode word
+boundaries correctly by default.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::backtrack::BoundedBacktracker, Match};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">r"\b\w+\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Шерлок Холмс"</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">12</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">13</span>..<span class="number">23</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());</code></pre></div>
+<h2 id="example-multiple-regex-patterns"><a class="doc-anchor" href="#example-multiple-regex-patterns">§</a>Example: multiple regex patterns</h2>
+<p>The bounded backtracker supports searching for multiple patterns
+simultaneously, just like other regex engines. Note though that because it
+uses a backtracking strategy, this regex engine is unlikely to scale well
+as more patterns are added. But then again, as more patterns are added, the
+maximum haystack length allowed will also shorten (assuming the visited
+capacity remains invariant).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::backtrack::BoundedBacktracker, Match};
+
+<span class="kw">let </span>re = BoundedBacktracker::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[a-z]+"</span>, <span class="string">"[0-9]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc 1 foo 4567 0 quux"</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">1</span>, <span class="number">4</span>..<span class="number">5</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">6</span>..<span class="number">9</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">1</span>, <span class="number">10</span>..<span class="number">14</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">1</span>, <span class="number">15</span>..<span class="number">16</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">17</span>..<span class="number">21</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-BoundedBacktracker" class="impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#432-829">source</a><a href="#impl-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#456-458">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(pattern: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::nfa::thompson::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Parse the given regular expression using the default configuration and
+return the corresponding <code>BoundedBacktracker</code>.</p>
+<p>If you want a non-default configuration, then use the <a href="struct.Builder.html" title="struct regex_automata::nfa::thompson::backtrack::Builder"><code>Builder</code></a> to
+set your own configuration.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">"foo[0-9]+bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">14</span>))),
+    re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"zzzfoo12345barzzz"</span>).next(),
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_many" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#485-489">source</a><h4 class="code-header">pub fn <a href="#method.new_many" class="fn">new_many</a>&lt;P: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>&gt;&gt;(
+    patterns: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.slice.html">[P]</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::nfa::thompson::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Like <code>new</code>, but parses multiple patterns into a single “multi regex.”
+This similarly uses the default regex configuration.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[a-z]+"</span>, <span class="string">"[0-9]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span><span class="kw-2">mut </span>it = re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"abc 1 foo 4567 0 quux"</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">1</span>, <span class="number">4</span>..<span class="number">5</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">6</span>..<span class="number">9</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">1</span>, <span class="number">10</span>..<span class="number">14</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">1</span>, <span class="number">15</span>..<span class="number">16</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">17</span>..<span class="number">21</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.new_from_nfa" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#521-523">source</a><h4 class="code-header">pub fn <a href="#method.new_from_nfa" class="fn">new_from_nfa</a>(nfa: <a class="struct" href="../struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::nfa::thompson::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This shows how to hand assemble a regular expression via its HIR,
+compile an NFA from it and build a BoundedBacktracker from the NFA.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::{NFA, backtrack::BoundedBacktracker},
+    Match,
+};
+<span class="kw">use </span>regex_syntax::hir::{Hir, Class, ClassBytes, ClassBytesRange};
+
+<span class="kw">let </span>hir = Hir::class(Class::Bytes(ClassBytes::new(<span class="macro">vec!</span>[
+    ClassBytesRange::new(<span class="string">b'0'</span>, <span class="string">b'9'</span>),
+    ClassBytesRange::new(<span class="string">b'A'</span>, <span class="string">b'Z'</span>),
+    ClassBytesRange::new(<span class="string">b'_'</span>, <span class="string">b'_'</span>),
+    ClassBytesRange::new(<span class="string">b'a'</span>, <span class="string">b'z'</span>),
+])));
+
+<span class="kw">let </span>config = NFA::config().nfa_size_limit(<span class="prelude-val">Some</span>(<span class="number">1_000</span>));
+<span class="kw">let </span>nfa = NFA::compiler().configure(config).build_from_hir(<span class="kw-2">&amp;</span>hir)<span class="question-mark">?</span>;
+
+<span class="kw">let </span>re = BoundedBacktracker::new_from_nfa(nfa)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">4</span>));
+re.try_captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"!@#A#@!"</span>, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.always_match" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#543-546">source</a><h4 class="code-header">pub fn <a href="#method.always_match" class="fn">always_match</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::nfa::thompson::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new <code>BoundedBacktracker</code> that matches every input.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::always_match()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>)));
+<span class="macro">assert_eq!</span>(expected, re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">""</span>).next());
+<span class="macro">assert_eq!</span>(expected, re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo"</span>).next());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.never_match" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#562-565">source</a><h4 class="code-header">pub fn <a href="#method.never_match" class="fn">never_match</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a>, <a class="struct" href="../struct.BuildError.html" title="struct regex_automata::nfa::thompson::BuildError">BuildError</a>&gt;</h4></section></summary><div class="docblock"><p>Create a new <code>BoundedBacktracker</code> that never matches any input.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::backtrack::BoundedBacktracker;
+
+<span class="kw">let </span>re = BoundedBacktracker::never_match()<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">""</span>).next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo"</span>).next());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.config" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#604-606">source</a><h4 class="code-header">pub fn <a href="#method.config" class="fn">config</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::backtrack::Config">Config</a></h4></section></summary><div class="docblock"><p>Return a default configuration for a <code>BoundedBacktracker</code>.</p>
+<p>This is a convenience routine to avoid needing to import the <code>Config</code>
+type when customizing the construction of a <code>BoundedBacktracker</code>.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>This example shows how to disable UTF-8 mode. When UTF-8 mode is
+disabled, zero-width matches that split a codepoint are allowed.
+Otherwise they are never reported.</p>
+<p>In the code below, notice that <code>""</code> is permitted to match positions
+that split the encoding of a codepoint.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::{<span class="self">self</span>, backtrack::BoundedBacktracker},
+    Match,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::builder()
+    .thompson(thompson::Config::new().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">r""</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>haystack = <span class="string">"a☃z"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>it = re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, haystack);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">0</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">1</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">2</span>..<span class="number">2</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">3</span>..<span class="number">3</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">4</span>..<span class="number">4</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">5</span>..<span class="number">5</span>))), it.next());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, it.next());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.builder" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#640-642">source</a><h4 class="code-header">pub fn <a href="#method.builder" class="fn">builder</a>() -&gt; <a class="struct" href="struct.Builder.html" title="struct regex_automata::nfa::thompson::backtrack::Builder">Builder</a></h4></section></summary><div class="docblock"><p>Return a builder for configuring the construction of a
+<code>BoundedBacktracker</code>.</p>
+<p>This is a convenience routine to avoid needing to import the
+<a href="struct.Builder.html" title="struct regex_automata::nfa::thompson::backtrack::Builder"><code>Builder</code></a> type in common cases.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows how to use the builder to disable UTF-8 mode
+everywhere.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::{<span class="self">self</span>, backtrack::BoundedBacktracker},
+    util::syntax,
+    Match,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::builder()
+    .syntax(syntax::Config::new().utf8(<span class="bool-val">false</span>))
+    .thompson(thompson::Config::new().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">r"foo(?-u:[^b])ar.*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+<span class="kw">let </span>haystack = <span class="string">b"\xFEfoo\xFFarzz\xE2\x98\xFF\n"</span>;
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">1</span>..<span class="number">9</span>));
+re.try_captures(<span class="kw-2">&amp;mut </span>cache, haystack, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_cache" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#650-652">source</a><h4 class="code-header">pub fn <a href="#method.create_cache" class="fn">create_cache</a>(&amp;self) -&gt; <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a></h4></section></summary><div class="docblock"><p>Create a new cache for this regex.</p>
+<p>The cache returned should only be used for searches for this
+regex. If you want to reuse the cache for another regex, then you
+must call <a href="struct.Cache.html#method.reset" title="method regex_automata::nfa::thompson::backtrack::Cache::reset"><code>Cache::reset</code></a> with that regex (or, equivalently,
+<a href="struct.BoundedBacktracker.html#method.reset_cache" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::reset_cache"><code>BoundedBacktracker::reset_cache</code></a>).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.create_captures" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#664-666">source</a><h4 class="code-header">pub fn <a href="#method.create_captures" class="fn">create_captures</a>(&amp;self) -&gt; <a class="struct" href="../../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h4></section></summary><div class="docblock"><p>Create a new empty set of capturing groups that is guaranteed to be
+valid for the search APIs on this <code>BoundedBacktracker</code>.</p>
+<p>A <code>Captures</code> value created for a specific <code>BoundedBacktracker</code> cannot
+be used with any other <code>BoundedBacktracker</code>.</p>
+<p>This is a convenience function for <a href="../../../util/captures/struct.Captures.html#method.all" title="associated function regex_automata::util::captures::Captures::all"><code>Captures::all</code></a>. See the
+<a href="../../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a> documentation for an explanation of its alternative
+constructors that permit the <code>BoundedBacktracker</code> to do less work
+during a search, and thus might make it faster.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.reset_cache" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#709-711">source</a><h4 class="code-header">pub fn <a href="#method.reset_cache" class="fn">reset_cache</a>(&amp;self, cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>)</h4></section></summary><div class="docblock"><p>Reset the given cache such that it can be used for searching with the
+this <code>BoundedBacktracker</code> (and only this <code>BoundedBacktracker</code>).</p>
+<p>A cache reset permits reusing memory already allocated in this cache
+with a different <code>BoundedBacktracker</code>.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This shows how to re-purpose a cache for use with a different
+<code>BoundedBacktracker</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match,
+};
+
+<span class="kw">let </span>re1 = BoundedBacktracker::new(<span class="string">r"\w"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>re2 = BoundedBacktracker::new(<span class="string">r"\W"</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re1.create_cache();
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">2</span>))),
+    re1.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Δ"</span>).next(),
+);
+
+<span class="comment">// Using 'cache' with re2 is not allowed. It may result in panics or
+// incorrect results. In order to re-purpose the cache, we must reset
+// it with the BoundedBacktracker we'd like to use it with.
+//
+// Similarly, after this reset, using the cache with 're1' is also not
+// allowed.
+</span>cache.reset(<span class="kw-2">&amp;</span>re2);
+<span class="macro">assert_eq!</span>(
+    <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>))),
+    re2.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="string">"☃"</span>).next(),
+);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pattern_len" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#753-755">source</a><h4 class="code-header">pub fn <a href="#method.pattern_len" class="fn">pattern_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the total number of patterns compiled into this
+<code>BoundedBacktracker</code>.</p>
+<p>In the case of a <code>BoundedBacktracker</code> that contains no patterns, this
+returns <code>0</code>.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<p>This example shows the pattern length for a <code>BoundedBacktracker</code> that
+never matches:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::backtrack::BoundedBacktracker;
+
+<span class="kw">let </span>re = BoundedBacktracker::never_match()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(re.pattern_len(), <span class="number">0</span>);</code></pre></div>
+<p>And another example for a <code>BoundedBacktracker</code> that matches at every
+position:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::backtrack::BoundedBacktracker;
+
+<span class="kw">let </span>re = BoundedBacktracker::always_match()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(re.pattern_len(), <span class="number">1</span>);</code></pre></div>
+<p>And finally, a <code>BoundedBacktracker</code> that was constructed from multiple
+patterns:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::backtrack::BoundedBacktracker;
+
+<span class="kw">let </span>re = BoundedBacktracker::new_many(<span class="kw-2">&amp;</span>[<span class="string">"[0-9]+"</span>, <span class="string">"[a-z]+"</span>, <span class="string">"[A-Z]+"</span>])<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(re.pattern_len(), <span class="number">3</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_config" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#759-761">source</a><h4 class="code-header">pub fn <a href="#method.get_config" class="fn">get_config</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.Config.html" title="struct regex_automata::nfa::thompson::backtrack::Config">Config</a></h4></section></summary><div class="docblock"><p>Return the config for this <code>BoundedBacktracker</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_nfa" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#765-767">source</a><h4 class="code-header">pub fn <a href="#method.get_nfa" class="fn">get_nfa</a>(&amp;self) -&gt; &amp;<a class="struct" href="../struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA">NFA</a></h4></section></summary><div class="docblock"><p>Returns a reference to the underlying NFA.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.max_haystack_len" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#817-828">source</a><h4 class="code-header">pub fn <a href="#method.max_haystack_len" class="fn">max_haystack_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the maximum haystack length supported by this backtracker.</p>
+<p>This routine is a function of both <a href="struct.Config.html#method.visited_capacity" title="method regex_automata::nfa::thompson::backtrack::Config::visited_capacity"><code>Config::visited_capacity</code></a> and the
+internal size of the backtracker’s NFA.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<p>This example shows how the maximum haystack length can vary depending
+on the size of the regex itself. Note though that the specific maximum
+values here are not an API guarantee. The default visited capacity is
+subject to change and not covered by semver.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match, MatchError,
+};
+
+<span class="comment">// If you're only using ASCII, you get a big budget.
+</span><span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">r"(?-u)\w+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="macro">assert_eq!</span>(re.max_haystack_len(), <span class="number">299_592</span>);
+<span class="comment">// Things work up to the max.
+</span><span class="kw">let </span><span class="kw-2">mut </span>haystack = <span class="string">"a"</span>.repeat(<span class="number">299_592</span>);
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">299_592</span>)));
+<span class="macro">assert_eq!</span>(expected, re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>haystack).next());
+<span class="comment">// But you'll get an error if you provide a haystack that's too big.
+// Notice that we use the 'try_find_iter' routine instead, which
+// yields Result&lt;Match, MatchError&gt; instead of Match.
+</span>haystack.push(<span class="string">'a'</span>);
+<span class="kw">let </span>expected = <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(MatchError::haystack_too_long(<span class="number">299_593</span>)));
+<span class="macro">assert_eq!</span>(expected, re.try_find_iter(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>haystack).next());
+
+<span class="comment">// Unicode inflates the size of the underlying NFA quite a bit, and
+// thus means that the backtracker can only handle smaller haystacks,
+// assuming that the visited capacity remains unchanged.
+</span><span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">r"\w+"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(re.max_haystack_len() &lt;= <span class="number">7_000</span>);
+<span class="comment">// But we can increase the visited capacity to handle bigger haystacks!
+</span><span class="kw">let </span>re = BoundedBacktracker::builder()
+    .configure(BoundedBacktracker::config().visited_capacity(<span class="number">1</span>&lt;&lt;<span class="number">20</span>))
+    .build(<span class="string">r"\w+"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(re.max_haystack_len() &gt;= <span class="number">25_000</span>);
+<span class="macro">assert!</span>(re.max_haystack_len() &lt;= <span class="number">28_000</span>);</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-BoundedBacktracker-1" class="impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#831-1114">source</a><a href="#impl-BoundedBacktracker-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.try_is_match" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#899-906">source</a><h4 class="code-header">pub fn <a href="#method.try_is_match" class="fn">try_is_match</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: I,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>, <a class="struct" href="../../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Returns true if and only if this regex matches the given haystack.</p>
+<p>In the case of a backtracking regex engine, and unlike most other
+regex engines in this crate, short circuiting isn’t practical. However,
+this routine may still be faster because it instructs backtracking to
+not keep track of any capturing groups.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This routine only errors if the search could not complete. For this
+backtracking regex engine, this only occurs when the haystack length
+exceeds <a href="struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>.</p>
+<p>When a search cannot complete, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::backtrack::BoundedBacktracker;
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">"foo[0-9]+bar"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.try_is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo12345bar"</span>)<span class="question-mark">?</span>);
+<span class="macro">assert!</span>(!re.try_is_match(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foobar"</span>)<span class="question-mark">?</span>);</code></pre></div>
+<h5 id="example-consistency-with-search-apis"><a class="doc-anchor" href="#example-consistency-with-search-apis">§</a>Example: consistency with search APIs</h5>
+<p><code>is_match</code> is guaranteed to return <code>true</code> whenever <code>find</code> returns a
+match. This includes searches that are executed entirely within a
+codepoint:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Input,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">"a*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(!re.try_is_match(<span class="kw-2">&amp;mut </span>cache, Input::new(<span class="string">"☃"</span>).span(<span class="number">1</span>..<span class="number">2</span>))<span class="question-mark">?</span>);</code></pre></div>
+<p>Notice that when UTF-8 mode is disabled, then the above reports a
+match because the restriction against zero-width matches that split a
+codepoint has been lifted:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::{backtrack::BoundedBacktracker, NFA},
+    Input,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::builder()
+    .thompson(NFA::config().utf8(<span class="bool-val">false</span>))
+    .build(<span class="string">"a*"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="macro">assert!</span>(re.try_is_match(<span class="kw-2">&amp;mut </span>cache, Input::new(<span class="string">"☃"</span>).span(<span class="number">1</span>..<span class="number">2</span>))<span class="question-mark">?</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#939-977">source</a><h4 class="code-header">pub fn <a href="#method.try_find" class="fn">try_find</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: I,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;, <a class="struct" href="../../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a leftmost forward search and returns a <code>Match</code> if one exists.</p>
+<p>This routine only includes the overall match span. To get
+access to the individual spans of each capturing group, use
+<a href="struct.BoundedBacktracker.html#method.try_captures" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::try_captures"><code>BoundedBacktracker::try_captures</code></a>.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This routine only errors if the search could not complete. For this
+backtracking regex engine, this only occurs when the haystack length
+exceeds <a href="struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>.</p>
+<p>When a search cannot complete, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">"foo[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>expected = Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">8</span>);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(expected), re.try_find(<span class="kw-2">&amp;mut </span>cache, <span class="string">"foo12345"</span>)<span class="question-mark">?</span>);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_captures" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#1015-1022">source</a><h4 class="code-header">pub fn <a href="#method.try_captures" class="fn">try_captures</a>&lt;'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: I,
+    caps: &amp;mut <a class="struct" href="../../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a leftmost forward search and writes the spans of capturing
+groups that participated in a match into the provided <a href="../../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a>
+value. If no match was found, then <a href="../../../util/captures/struct.Captures.html#method.is_match" title="method regex_automata::util::captures::Captures::is_match"><code>Captures::is_match</code></a> is guaranteed
+to return <code>false</code>.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This routine only errors if the search could not complete. For this
+backtracking regex engine, this only occurs when the haystack length
+exceeds <a href="struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>.</p>
+<p>When a search cannot complete, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Span,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(
+    <span class="string">r"^([0-9]{4})-([0-9]{2})-([0-9]{2})$"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.try_captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"2010-03-14"</span>, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">4</span>)), caps.get_group(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">5</span>..<span class="number">7</span>)), caps.get_group(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">8</span>..<span class="number">10</span>)), caps.get_group(<span class="number">3</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_find_iter" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#1054-1062">source</a><h4 class="code-header">pub fn <a href="#method.try_find_iter" class="fn">try_find_iter</a>&lt;'r, 'c, 'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;'r self,
+    cache: &amp;'c mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: I,
+) -&gt; <a class="struct" href="struct.TryFindMatches.html" title="struct regex_automata::nfa::thompson::backtrack::TryFindMatches">TryFindMatches</a>&lt;'r, 'c, 'h&gt; <a href="#" class="tooltip" data-notable-ty="TryFindMatches&lt;&#39;r, &#39;c, &#39;h&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns an iterator over all non-overlapping leftmost matches in the
+given bytes. If no match exists, then the iterator yields no elements.</p>
+<p>If the regex engine returns an error at any point, then the iterator
+will yield that error.</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match, MatchError,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">"foo[0-9]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>text = <span class="string">"foo1 foo12 foo123"</span>;
+<span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;Vec&lt;Match&gt;, MatchError&gt; = re
+    .try_find_iter(<span class="kw-2">&amp;mut </span>cache, text)
+    .collect();
+<span class="kw">let </span>matches = result<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(matches, <span class="macro">vec!</span>[
+    Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">4</span>),
+    Match::must(<span class="number">0</span>, <span class="number">5</span>..<span class="number">10</span>),
+    Match::must(<span class="number">0</span>, <span class="number">11</span>..<span class="number">17</span>),
+]);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_captures_iter" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#1105-1113">source</a><h4 class="code-header">pub fn <a href="#method.try_captures_iter" class="fn">try_captures_iter</a>&lt;'r, 'c, 'h, I: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'h&gt;&gt;&gt;(
+    &amp;'r self,
+    cache: &amp;'c mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: I,
+) -&gt; <a class="struct" href="struct.TryCapturesMatches.html" title="struct regex_automata::nfa::thompson::backtrack::TryCapturesMatches">TryCapturesMatches</a>&lt;'r, 'c, 'h&gt; <a href="#" class="tooltip" data-notable-ty="TryCapturesMatches&lt;&#39;r, &#39;c, &#39;h&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns an iterator over all non-overlapping <code>Captures</code> values. If no
+match exists, then the iterator yields no elements.</p>
+<p>This yields the same matches as <a href="struct.BoundedBacktracker.html#method.try_find_iter" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::try_find_iter"><code>BoundedBacktracker::try_find_iter</code></a>,
+but it includes the spans of all capturing groups that participate in
+each match.</p>
+<p>If the regex engine returns an error at any point, then the iterator
+will yield that error.</p>
+<p><strong>Tip:</strong> See <a href="../../../util/iter/struct.Searcher.html" title="struct regex_automata::util::iter::Searcher"><code>util::iter::Searcher</code></a> for
+how to correctly iterate over all matches in a haystack while avoiding
+the creation of a new <code>Captures</code> value for every match. (Which you are
+forced to do with an <code>Iterator</code>.)</p>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Span,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">"foo(?P&lt;numbers&gt;[0-9]+)"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+
+<span class="kw">let </span>text = <span class="string">"foo1 foo12 foo123"</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>spans = <span class="macro">vec!</span>[];
+<span class="kw">for </span>result <span class="kw">in </span>re.try_captures_iter(<span class="kw-2">&amp;mut </span>cache, text) {
+    <span class="kw">let </span>caps = result<span class="question-mark">?</span>;
+    <span class="comment">// The unwrap is OK since 'numbers' matches if the pattern matches.
+    </span>spans.push(caps.get_group_by_name(<span class="string">"numbers"</span>).unwrap());
+}
+<span class="macro">assert_eq!</span>(spans, <span class="macro">vec!</span>[
+    Span::from(<span class="number">3</span>..<span class="number">4</span>),
+    Span::from(<span class="number">8</span>..<span class="number">10</span>),
+    Span::from(<span class="number">14</span>..<span class="number">17</span>),
+]);</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-BoundedBacktracker-2" class="impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#1116-1556">source</a><a href="#impl-BoundedBacktracker-2" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.try_search" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#1209-1219">source</a><h4 class="code-header">pub fn <a href="#method.try_search" class="fn">try_search</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    caps: &amp;mut <a class="struct" href="../../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a>,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>, <a class="struct" href="../../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a leftmost forward search and writes the spans of capturing
+groups that participated in a match into the provided <a href="../../../util/captures/struct.Captures.html" title="struct regex_automata::util::captures::Captures"><code>Captures</code></a>
+value. If no match was found, then <a href="../../../util/captures/struct.Captures.html#method.is_match" title="method regex_automata::util::captures::Captures::is_match"><code>Captures::is_match</code></a> is guaranteed
+to return <code>false</code>.</p>
+<p>This is like <a href="struct.BoundedBacktracker.html#method.try_captures" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::try_captures"><code>BoundedBacktracker::try_captures</code></a>, but it accepts a
+concrete <code>&amp;Input</code> instead of an <code>Into&lt;Input&gt;</code>.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>This routine only errors if the search could not complete. For this
+backtracking regex engine, this only occurs when the haystack length
+exceeds <a href="struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>.</p>
+<p>When a search cannot complete, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-specific-pattern-search"><a class="doc-anchor" href="#example-specific-pattern-search">§</a>Example: specific pattern search</h5>
+<p>This example shows how to build a multi bounded backtracker that
+permits searching for specific patterns.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Anchored, Input, Match, PatternID,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">"[a-z0-9]{6}"</span>,
+    <span class="string">"[a-z][a-z0-9]{5}"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>haystack = <span class="string">"foo123"</span>;
+
+<span class="comment">// Since we are using the default leftmost-first match and both
+// patterns match at the same starting position, only the first pattern
+// will be returned in this case when doing a search for any of the
+// patterns.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>));
+re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack), <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+
+<span class="comment">// But if we want to check whether some other pattern matches, then we
+// can provide its pattern ID.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">6</span>));
+<span class="kw">let </span>input = Input::new(haystack)
+    .anchored(Anchored::Pattern(PatternID::must(<span class="number">1</span>)));
+re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+<h5 id="example-specifying-the-bounds-of-a-search"><a class="doc-anchor" href="#example-specifying-the-bounds-of-a-search">§</a>Example: specifying the bounds of a search</h5>
+<p>This example shows how providing the bounds of a search can produce
+different results than simply sub-slicing the haystack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    Match, Input,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new(<span class="string">r"\b[0-9]{3}\b"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+<span class="kw">let </span>haystack = <span class="string">"foo123bar"</span>;
+
+<span class="comment">// Since we sub-slice the haystack, the search doesn't know about
+// the larger context and assumes that `123` is surrounded by word
+// boundaries. And of course, the match position is reported relative
+// to the sub-slice as well, which means we get `0..3` instead of
+// `3..6`.
+</span><span class="kw">let </span>expected = <span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">3</span>));
+re.try_search(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(<span class="kw-2">&amp;</span>haystack[<span class="number">3</span>..<span class="number">6</span>]), <span class="kw-2">&amp;mut </span>caps)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+
+<span class="comment">// But if we provide the bounds of the search within the context of the
+// entire haystack, then the search can take the surrounding context
+// into account. (And if we did find a match, it would be reported
+// as a valid offset into `haystack` instead of its sub-slice.)
+</span><span class="kw">let </span>expected = <span class="prelude-val">None</span>;
+re.try_search(
+    <span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>Input::new(haystack).range(<span class="number">3</span>..<span class="number">6</span>), <span class="kw-2">&amp;mut </span>caps,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(expected, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_search_slots" class="method"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#1293-1324">source</a><h4 class="code-header">pub fn <a href="#method.try_search_slots" class="fn">try_search_slots</a>(
+    &amp;self,
+    cache: &amp;mut <a class="struct" href="struct.Cache.html" title="struct regex_automata::nfa::thompson::backtrack::Cache">Cache</a>,
+    input: &amp;<a class="struct" href="../../../struct.Input.html" title="struct regex_automata::Input">Input</a>&lt;'_&gt;,
+    slots: &amp;mut [<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../../util/primitives/struct.NonMaxUsize.html" title="struct regex_automata::util::primitives::NonMaxUsize">NonMaxUsize</a>&gt;],
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>&gt;, <a class="struct" href="../../../struct.MatchError.html" title="struct regex_automata::MatchError">MatchError</a>&gt;</h4></section></summary><div class="docblock"><p>Executes a leftmost forward search and writes the spans of capturing
+groups that participated in a match into the provided <code>slots</code>, and
+returns the matching pattern ID. The contents of the slots for patterns
+other than the matching pattern are unspecified. If no match was found,
+then <code>None</code> is returned and the contents of all <code>slots</code> is unspecified.</p>
+<p>This is like <a href="struct.BoundedBacktracker.html#method.try_search" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::try_search"><code>BoundedBacktracker::try_search</code></a>, but it accepts a raw
+slots slice instead of a <code>Captures</code> value. This is useful in contexts
+where you don’t want or need to allocate a <code>Captures</code>.</p>
+<p>It is legal to pass <em>any</em> number of slots to this routine. If the regex
+engine would otherwise write a slot offset that doesn’t fit in the
+provided slice, then it is simply skipped. In general though, there are
+usually three slice lengths you might want to use:</p>
+<ul>
+<li>An empty slice, if you only care about which pattern matched.</li>
+<li>A slice with
+<a href="../struct.NFA.html#method.pattern_len" title="method regex_automata::nfa::thompson::NFA::pattern_len"><code>pattern_len() * 2</code></a>
+slots, if you only care about the overall match spans for each matching
+pattern.</li>
+<li>A slice with
+<a href="../../../util/captures/struct.GroupInfo.html#method.slot_len" title="method regex_automata::util::captures::GroupInfo::slot_len"><code>slot_len()</code></a> slots, which
+permits recording match offsets for every capturing group in every
+pattern.</li>
+</ul>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>This routine only errors if the search could not complete. For this
+backtracking regex engine, this only occurs when the haystack length
+exceeds <a href="struct.BoundedBacktracker.html#method.max_haystack_len" title="method regex_automata::nfa::thompson::backtrack::BoundedBacktracker::max_haystack_len"><code>BoundedBacktracker::max_haystack_len</code></a>.</p>
+<p>When a search cannot complete, callers cannot know whether a match
+exists or not.</p>
+<h5 id="example-15"><a class="doc-anchor" href="#example-15">§</a>Example</h5>
+<p>This example shows how to find the overall match offsets in a
+multi-pattern search without allocating a <code>Captures</code> value. Indeed, we
+can put our slots right on the stack.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::backtrack::BoundedBacktracker,
+    PatternID, Input,
+};
+
+<span class="kw">let </span>re = BoundedBacktracker::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"\pL+"</span>,
+    <span class="string">r"\d+"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span>input = Input::new(<span class="string">"!@#123"</span>);
+
+<span class="comment">// We only care about the overall match offsets here, so we just
+// allocate two slots for each pattern. Each slot records the start
+// and end of the match.
+</span><span class="kw">let </span><span class="kw-2">mut </span>slots = [<span class="prelude-val">None</span>; <span class="number">4</span>];
+<span class="kw">let </span>pid = re.try_search_slots(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span>input, <span class="kw-2">&amp;mut </span>slots)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)), pid);
+
+<span class="comment">// The overall match offsets are always at 'pid * 2' and 'pid * 2 + 1'.
+// See 'GroupInfo' for more details on the mapping between groups and
+// slot indices.
+</span><span class="kw">let </span>slot_start = pid.unwrap().as_usize() * <span class="number">2</span>;
+<span class="kw">let </span>slot_end = slot_start + <span class="number">1</span>;
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">3</span>), slots[slot_start].map(|s| s.get()));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(<span class="number">6</span>), slots[slot_end].map(|s| s.get()));
+</code></pre></div>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-BoundedBacktracker" class="impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#426">source</a><a href="#impl-Clone-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#426">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-BoundedBacktracker" class="impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#426">source</a><a href="#impl-Debug-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../../src/regex_automata/nfa/thompson/backtrack.rs.html#426">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-BoundedBacktracker" class="impl"><a href="#impl-Freeze-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section><section id="impl-RefUnwindSafe-for-BoundedBacktracker" class="impl"><a href="#impl-RefUnwindSafe-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section><section id="impl-Send-for-BoundedBacktracker" class="impl"><a href="#impl-Send-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section><section id="impl-Sync-for-BoundedBacktracker" class="impl"><a href="#impl-Sync-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section><section id="impl-Unpin-for-BoundedBacktracker" class="impl"><a href="#impl-Unpin-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section><section id="impl-UnwindSafe-for-BoundedBacktracker" class="impl"><a href="#impl-UnwindSafe-for-BoundedBacktracker" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.BoundedBacktracker.html" title="struct regex_automata::nfa::thompson::backtrack::BoundedBacktracker">BoundedBacktracker</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"TryCapturesMatches<'r, 'c, 'h>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryCapturesMatches.html\" title=\"struct regex_automata::nfa::thompson::backtrack::TryCapturesMatches\">TryCapturesMatches</a>&lt;'r, 'c, 'h&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'r, 'c, 'h&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.TryCapturesMatches.html\" title=\"struct regex_automata::nfa::thompson::backtrack::TryCapturesMatches\">TryCapturesMatches</a>&lt;'r, 'c, 'h&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"../../../util/captures/struct.Captures.html\" title=\"struct regex_automata::util::captures::Captures\">Captures</a>, <a class=\"struct\" href=\"../../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;;</div>","TryFindMatches<'r, 'c, 'h>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.TryFindMatches.html\" title=\"struct regex_automata::nfa::thompson::backtrack::TryFindMatches\">TryFindMatches</a>&lt;'r, 'c, 'h&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'r, 'c, 'h&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.TryFindMatches.html\" title=\"struct regex_automata::nfa::thompson::backtrack::TryFindMatches\">TryFindMatches</a>&lt;'r, 'c, 'h&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html\" title=\"enum core::result::Result\">Result</a>&lt;<a class=\"struct\" href=\"../../../struct.Match.html\" title=\"struct regex_automata::Match\">Match</a>, <a class=\"struct\" href=\"../../../struct.MatchError.html\" title=\"struct regex_automata::MatchError\">MatchError</a>&gt;;</div>"}</script></section></div></main></body></html>

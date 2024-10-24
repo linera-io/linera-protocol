@@ -1,0 +1,88 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A typemap for storing configuration. Layers and layered bags of configuration data."><title>aws_smithy_types::config_bag - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aws_smithy_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aws_smithy_types/index.html">aws_smithy_types</a><span class="version">1.2.7</span></h2></div><h2 class="location"><a href="#">Module config_bag</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate aws_smithy_types</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">aws_smithy_types</a>::<wbr><a class="mod" href="#">config_bag</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aws_smithy_types/config_bag.rs.html#6-1028">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A typemap for storing configuration.
+Layers and layered bags of configuration data.</p>
+<p>The <a href="struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag"><code>ConfigBag</code></a> structure is used to store and pass around configuration for client operations.
+Interacting with it may be required in order to write an <code>Interceptor</code> or <code>RuntimePlugin</code> to
+customize a client.</p>
+<p>A <code>ConfigBag</code> is essentially a stack of several immutable and sharable layers, with a single <em>mutable</em> layer at
+the top of the stack that is called “interceptor state”. The intent of this last mutable layer is to allow for
+more performant mutation of config within the execution of an operation.</p>
+<p>There are three separate layer types to be aware of when using a <code>ConfigBag</code>:</p>
+<ol>
+<li><a href="struct.Layer.html" title="struct aws_smithy_types::config_bag::Layer"><code>Layer</code></a> - A mutable layer. This is usually only used for adding config
+to the <code>ConfigBag</code>, but is also used for the interceptor state.</li>
+<li><a href="struct.CloneableLayer.html" title="struct aws_smithy_types::config_bag::CloneableLayer"><code>CloneableLayer</code></a> - Identical to <code>Layer</code>, except that it requires
+<code>Clone</code> bounds on the items added to it so that it can be deep cloned. Can be converted to a <code>Layer</code>
+while retaining the cloneability of its items such that the resulting layer could be cloned as long as
+nothing else is added to it later. A <code>Layer</code> cannot be converted back into a <code>CloneableLayer</code>.</li>
+<li><a href="struct.FrozenLayer.html" title="struct aws_smithy_types::config_bag::FrozenLayer"><code>FrozenLayer</code></a> - Basically an <a href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a> wrapper around
+a <code>Layer</code>. This wrapper is used to make the layer immutable, and to make it shareable between multiple
+<code>ConfigBag</code> instances. The frozen layer can be converted back to a <code>Layer</code> if there is only a single reference to it.</li>
+</ol>
+<p>All of <code>Layer</code>, <code>CloneableLayer</code>, <code>FrozenLayer</code>, and <code>ConfigBag</code> are considered to be “bag” types.
+That is, they store arbitrary types so long as they implement the <a href="trait.Storable.html" title="trait aws_smithy_types::config_bag::Storable"><code>Storable</code></a> trait.</p>
+<p>A <code>Storable</code> requires a <code>Storer</code> to be configured, and the storer allows for storables to be stored
+in two different modes:</p>
+<ol>
+<li><a href="struct.StoreReplace.html" title="struct aws_smithy_types::config_bag::StoreReplace"><code>StoreReplace</code></a> - Only one value of this type is allowed in a bag, and
+calling <a href="struct.Layer.html#method.store_put" title="method aws_smithy_types::config_bag::Layer::store_put"><code>store_put()</code></a> multiple times will replace the existing value
+in the bag. Calling <a href="struct.Layer.html#method.load" title="method aws_smithy_types::config_bag::Layer::load"><code>load::&lt;T&gt;()</code></a> returns exactly one value, if present.</li>
+<li><a href="struct.StoreAppend.html" title="struct aws_smithy_types::config_bag::StoreAppend"><code>StoreAppend</code></a> - Multiple values of this type are allowed in a bag, and
+calling <a href="struct.Layer.html#method.store_append" title="method aws_smithy_types::config_bag::Layer::store_append"><code>store_append()</code></a> will add an additional value of this type
+to the bag. Calling <a href="struct.Layer.html#method.load" title="method aws_smithy_types::config_bag::Layer::load"><code>load::&lt;T&gt;()</code></a> returns an iterator over multiple values.</li>
+</ol>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Creating a storable data type with <code>StoreReplace</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::config_bag::{Storable, StoreReplace};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SomeDataType {
+    some_data: String,
+}
+<span class="kw">impl </span>Storable <span class="kw">for </span>SomeDataType {
+    <span class="kw">type </span>Storer = StoreReplace&lt;<span class="self">Self</span>&gt;;
+}</code></pre></div>
+<p>Creating a storable data type with <code>StoreAppend</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::config_bag::{Storable, StoreAppend};
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>SomeDataType {
+    some_data: String,
+}
+<span class="kw">impl </span>Storable <span class="kw">for </span>SomeDataType {
+    <span class="kw">type </span>Storer = StoreAppend&lt;<span class="self">Self</span>&gt;;
+}</code></pre></div>
+<p>Storing a storable in a bag when it is configured for <code>StoreReplace</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::config_bag::{CloneableLayer, Layer};
+
+<span class="kw">let </span><span class="kw-2">mut </span>layer = Layer::new(<span class="string">"example"</span>);
+layer.store_put(SomeDataType { some_data: <span class="string">"some data"</span>.to_string() });
+
+<span class="comment">// `store_put` can be called again to replace the original value:
+</span>layer.store_put(SomeDataType { some_data: <span class="string">"replacement"</span>.to_string() });
+
+<span class="comment">// Note: `SomeDataType` below must implement `Clone` to work with `CloneableLayer`
+</span><span class="kw">let </span><span class="kw-2">mut </span>cloneable = CloneableLayer::new(<span class="string">"example"</span>);
+cloneable.store_put(SomeDataType { some_data: <span class="string">"some data"</span>.to_string() });</code></pre></div>
+<p>Storing a storable in a bag when it is configured for <code>StoreAppend</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>aws_smithy_types::config_bag::{CloneableLayer, Layer};
+
+<span class="kw">let </span><span class="kw-2">mut </span>layer = Layer::new(<span class="string">"example"</span>);
+layer.store_append(SomeDataType { some_data: <span class="string">"1"</span>.to_string() });
+layer.store_append(SomeDataType { some_data: <span class="string">"2"</span>.to_string() });</code></pre></div>
+<p>Loading a <code>StoreReplace</code> value from a bag:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>maybe_value: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>SomeDataType&gt; = layer.load::&lt;SomeDataType&gt;();</code></pre></div>
+<p>Loading a <code>StoreAppend</code> value from a bag:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>values: Vec&lt;SomeDataType&gt; = layer.load::&lt;SomeDataType&gt;().cloned().collect();
+
+<span class="comment">// or iterate over them directly:
+</span><span class="kw">for </span>value <span class="kw">in </span>layer.load::&lt;SomeDataType&gt;() {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.AppendItemIter.html" title="struct aws_smithy_types::config_bag::AppendItemIter">AppendItemIter</a></div><div class="desc docblock-short">Iterator of items returned by <a href="struct.StoreAppend.html" title="struct aws_smithy_types::config_bag::StoreAppend"><code>StoreAppend</code></a></div></li><li><div class="item-name"><a class="struct" href="struct.CloneableLayer.html" title="struct aws_smithy_types::config_bag::CloneableLayer">CloneableLayer</a></div><div class="desc docblock-short"><a href="struct.CloneableLayer.html" title="struct aws_smithy_types::config_bag::CloneableLayer"><code>CloneableLayer</code></a> allows itself to be cloned. This is useful when a type that implements
+<code>Clone</code> wishes to store a config layer.</div></li><li><div class="item-name"><a class="struct" href="struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag">ConfigBag</a></div><div class="desc docblock-short">Layered configuration structure</div></li><li><div class="item-name"><a class="struct" href="struct.FrozenLayer.html" title="struct aws_smithy_types::config_bag::FrozenLayer">FrozenLayer</a></div><div class="desc docblock-short"><a href="struct.FrozenLayer.html" title="struct aws_smithy_types::config_bag::FrozenLayer"><code>FrozenLayer</code></a> is the immutable and shareable form of <a href="struct.Layer.html" title="struct aws_smithy_types::config_bag::Layer"><code>Layer</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.ItemIter.html" title="struct aws_smithy_types::config_bag::ItemIter">ItemIter</a></div><div class="desc docblock-short">Iterator of items returned from <a href="struct.ConfigBag.html" title="struct aws_smithy_types::config_bag::ConfigBag"><code>ConfigBag</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Layer.html" title="struct aws_smithy_types::config_bag::Layer">Layer</a></div><div class="desc docblock-short">A named layer comprising a config bag</div></li><li><div class="item-name"><a class="struct" href="struct.StoreAppend.html" title="struct aws_smithy_types::config_bag::StoreAppend">StoreAppend</a></div><div class="desc docblock-short">Store an item in the config bag by effectively appending it to a list</div></li><li><div class="item-name"><a class="struct" href="struct.StoreReplace.html" title="struct aws_smithy_types::config_bag::StoreReplace">StoreReplace</a></div><div class="desc docblock-short">Store an item in the config bag by replacing the existing value</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Storable.html" title="trait aws_smithy_types::config_bag::Storable">Storable</a></div><div class="desc docblock-short">Trait that marks the implementing types as able to be stored in the config bag</div></li><li><div class="item-name"><a class="trait" href="trait.Store.html" title="trait aws_smithy_types::config_bag::Store">Store</a></div><div class="desc docblock-short">Trait defining how types can be stored and loaded from the config bag</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A helper macro to conveniently iterate over all opcodes recognized by this crate. This can be used to work with either the `Operator` enumeration or the `VisitOperator` trait if your use case uniformly handles all operators the same way."><title>for_each_operator in wasmparser - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmparser" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmparser/index.html">wasmparser</a><span class="version">0.217.0</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">wasmparser</a>::<wbr><a class="macro" href="#">for_each_operator</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasmparser/lib.rs.html#148-808">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> for_each_operator {
+    (<span class="macro-nonterminal">$mac</span>:ident) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A helper macro to conveniently iterate over all opcodes recognized by this
+crate. This can be used to work with either the <a href="enum.Operator.html" title="enum wasmparser::Operator"><code>Operator</code></a> enumeration or
+the <a href="trait.VisitOperator.html" title="trait wasmparser::VisitOperator"><code>VisitOperator</code></a> trait if your use case uniformly handles all operators
+the same way.</p>
+<p>It is also possible to specialize handling of operators depending on the
+Wasm proposal from which they are originating.</p>
+<p>This is an “iterator macro” where this macro is invoked with the name of
+another macro, and then that macro is invoked with the list of all
+operators. An example invocation of this looks like:</p>
+<p>The list of specializable Wasm proposals is as follows:</p>
+<ul>
+<li><code>@mvp</code>: Denoting a Wasm operator from the initial Wasm MVP version.</li>
+<li><code>@exceptions</code>: <a href="https://github.com/WebAssembly/exception-handling">Wasm <code>exception-handling</code> proposal</a></li>
+<li><code>@tail_call</code>: <a href="https://github.com/WebAssembly/tail-call">Wasm <code>tail-calls</code> proposal</a></li>
+<li><code>@reference_types</code>: <a href="https://github.com/WebAssembly/reference-types">Wasm <code>reference-types</code> proposal</a></li>
+<li><code>@sign_extension</code>: <a href="https://github.com/WebAssembly/sign-extension-ops">Wasm <code>sign-extension-ops</code> proposal</a></li>
+<li><code>@saturating_float_to_int</code>: <a href="https://github.com/WebAssembly/nontrapping-float-to-int-conversions">Wasm <code>non_trapping_float-to-int-conversions</code> proposal</a></li>
+<li><code>@bulk_memory </code>:<a href="https://github.com/WebAssembly/bulk-memory-operations">Wasm <code>bulk-memory</code> proposal</a></li>
+<li><code>@threads</code>: <a href="https://github.com/webassembly/threads">Wasm <code>threads</code> proposal</a></li>
+<li><code>@simd</code>: <a href="https://github.com/webassembly/simd">Wasm <code>simd</code> proposal</a></li>
+<li><code>@relaxed_simd</code>: <a href="https://github.com/WebAssembly/relaxed-simd">Wasm <code>relaxed-simd</code> proposal</a></li>
+<li><code>@gc</code>: <a href="https://github.com/WebAssembly/gc">Wasm <code>gc</code> proposal</a></li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">macro_rules!</span> define_visit_operator {
+    <span class="comment">// The outer layer of repetition represents how all operators are
+    // provided to the macro at the same time.
+    //
+    // The `$proposal` identifier indicates the Wasm proposals from which
+    // the Wasm operator is originating.
+    // For example to specialize the macro match arm for Wasm SIMD proposal
+    // operators you could write `@simd` instead of `@$proposal:ident` to
+    // only catch those operators.
+    //
+    // The `$op` name is bound to the `Operator` variant name. The
+    // payload of the operator is optionally specified (the `$(...)?`
+    // clause) since not all instructions have payloads. Within the payload
+    // each argument is named and has its type specified.
+    //
+    // The `$visit` name is bound to the corresponding name in the
+    // `VisitOperator` trait that this corresponds to.
+    </span>($( @<span class="macro-nonterminal">$proposal</span>:ident <span class="macro-nonterminal">$op</span>:ident $({ $(<span class="macro-nonterminal">$arg</span>:ident: <span class="macro-nonterminal">$argty</span>:ty),* })<span class="question-mark">? </span>=&gt; <span class="macro-nonterminal">$visit</span>:ident)<span class="kw-2">*</span>) =&gt; {
+        $(
+            <span class="kw">fn </span><span class="macro-nonterminal">$visit</span>(<span class="kw-2">&amp;mut </span><span class="self">self </span>$($(,<span class="macro-nonterminal">$arg</span>: <span class="macro-nonterminal">$argty</span>)<span class="kw-2">*</span>)<span class="question-mark">?</span>) {
+                <span class="comment">// do nothing for this example
+            </span>}
+        )*
+    }
+}
+
+<span class="kw">pub struct </span>VisitAndDoNothing;
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; wasmparser::VisitOperator&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>VisitAndDoNothing {
+    <span class="kw">type </span>Output = ();
+
+    <span class="macro">wasmparser::for_each_operator!</span>(define_visit_operator);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

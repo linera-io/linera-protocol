@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a middleware from an extractor."><title>from_extractor in axum::middleware - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="axum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../axum/index.html">axum</a><span class="version">0.7.6</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In axum::middleware</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../index.html">axum</a>::<wbr><a href="index.html">middleware</a>::<wbr><a class="fn" href="#">from_extractor</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/axum/middleware/from_extractor.rs.html#91-93">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn from_extractor&lt;E&gt;() -&gt; <a class="struct" href="struct.FromExtractorLayer.html" title="struct axum::middleware::FromExtractorLayer">FromExtractorLayer</a>&lt;E, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a middleware from an extractor.</p>
+<p>If the extractor succeeds the value will be discarded and the inner service
+will be called. If the extractor fails the rejection will be returned and
+the inner service will <em>not</em> be called.</p>
+<p>This can be used to perform validation of requests if the validation doesn’t
+produce any useful output, and run the extractor for several handlers
+without repeating it in the function signature.</p>
+<p>Note that if the extractor consumes the request body, as <code>String</code> or
+<a href="../../bytes/bytes/struct.Bytes.html" title="struct bytes::bytes::Bytes"><code>Bytes</code></a> does, an empty body will be left in its place. Thus won’t be
+accessible to subsequent extractors or handlers.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    extract::FromRequestParts,
+    middleware::from_extractor,
+    routing::{get, post},
+    Router,
+    http::{header, StatusCode, request::Parts},
+};
+<span class="kw">use </span>async_trait::async_trait;
+
+<span class="comment">// An extractor that performs authorization.
+</span><span class="kw">struct </span>RequireAuth;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;S&gt; FromRequestParts&lt;S&gt; <span class="kw">for </span>RequireAuth
+<span class="kw">where
+    </span>S: Send + Sync,
+{
+    <span class="kw">type </span>Rejection = StatusCode;
+
+    <span class="kw">async fn </span>from_request_parts(parts: <span class="kw-2">&amp;mut </span>Parts, state: <span class="kw-2">&amp;</span>S) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Rejection&gt; {
+        <span class="kw">let </span>auth_header = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok());
+
+        <span class="kw">match </span>auth_header {
+            <span class="prelude-val">Some</span>(auth_header) <span class="kw">if </span>token_is_valid(auth_header) =&gt; {
+                <span class="prelude-val">Ok</span>(<span class="self">Self</span>)
+            }
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED),
+        }
+    }
+}
+
+<span class="kw">fn </span>token_is_valid(token: <span class="kw-2">&amp;</span>str) -&gt; bool {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">async fn </span>handler() {
+    <span class="comment">// If we get here the request has been authorized
+</span>}
+
+<span class="kw">async fn </span>other_handler() {
+    <span class="comment">// If we get here the request has been authorized
+</span>}
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(handler))
+    .route(<span class="string">"/foo"</span>, post(other_handler))
+    <span class="comment">// The extractor will run before all routes
+    </span>.route_layer(from_extractor::&lt;RequireAuth&gt;());</code></pre></div>
+</div></details></section></div></main></body></html>

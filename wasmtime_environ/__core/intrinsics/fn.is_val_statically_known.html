@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns whether the argument’s value is statically known at compile-time."><title>is_val_statically_known in wasmtime_environ::__core::intrinsics - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::intrinsics</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">intrinsics</a>::<wbr><a class="fn" href="#">is_val_statically_known</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/intrinsics.rs.html#2645">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const fn is_val_statically_known&lt;T&gt;(_arg: T) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a><div class="where">where
+    T: <a class="trait" href="../marker/trait.Copy.html" title="trait wasmtime_environ::__core::marker::Copy">Copy</a>,</div></code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>core_intrinsics</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns whether the argument’s value is statically known at
+compile-time.</p>
+<p>This is useful when there is a way of writing the code that will
+be <em>faster</em> when some variables have known values, but <em>slower</em>
+in the general case: an <code>if is_val_statically_known(var)</code> can be used
+to select between these two variants. The <code>if</code> will be optimized away
+and only the desired branch remains.</p>
+<p>Formally speaking, this function non-deterministically returns <code>true</code>
+or <code>false</code>, and the caller has to ensure sound behavior for both cases.
+In other words, the following code has <em>Undefined Behavior</em>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(is_val_statically_known)]
+#![feature(core_intrinsics)]
+</span><span class="kw">use </span>std::hint::unreachable_unchecked;
+<span class="kw">use </span>std::intrinsics::is_val_statically_known;
+
+<span class="kw">if </span>!is_val_statically_known(<span class="number">0</span>) { <span class="kw">unsafe </span>{ unreachable_unchecked(); } }</code></pre></div>
+<p>This also means that the following code’s behavior is unspecified; it
+may panic, or it may not:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(is_val_statically_known)]
+#![feature(core_intrinsics)]
+</span><span class="kw">use </span>std::intrinsics::is_val_statically_known;
+
+<span class="macro">assert_eq!</span>(is_val_statically_known(<span class="number">0</span>), is_val_statically_known(<span class="number">0</span>));</code></pre></div>
+<p>Unsafe code may not rely on <code>is_val_statically_known</code> returning any
+particular value, ever. However, the compiler will generally make it
+return <code>true</code> only if the value of the argument is actually known.</p>
+<h2 id="stability-concerns"><a class="doc-anchor" href="#stability-concerns">§</a>Stability concerns</h2>
+<p>While it is safe to call, this intrinsic may behave differently in
+a <code>const</code> context than otherwise. See the <a href="fn.const_eval_select.html" title="fn wasmtime_environ::__core::intrinsics::const_eval_select"><code>const_eval_select</code></a>
+documentation for an explanation of the issues this can cause. Unlike
+<code>const_eval_select</code>, this intrinsic isn’t guaranteed to behave
+deterministically even in a <code>const</code> context.</p>
+<h2 id="type-requirements"><a class="doc-anchor" href="#type-requirements">§</a>Type Requirements</h2>
+<p><code>T</code> must be either a <code>bool</code>, a <code>char</code>, a primitive numeric type (e.g. <code>f32</code>,
+but not <code>NonZeroISize</code>), or any thin pointer (e.g. <code>*mut String</code>).
+Any other argument types <em>may</em> cause a compiler error.</p>
+<h3 id="pointers"><a class="doc-anchor" href="#pointers">§</a>Pointers</h3>
+<p>When the input is a pointer, only the pointer itself is
+ever considered. The pointee has no effect. Currently, these functions
+behave identically:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(is_val_statically_known)]
+#![feature(core_intrinsics)]
+#![feature(strict_provenance)]
+</span><span class="kw">use </span>std::intrinsics::is_val_statically_known;
+
+<span class="kw">fn </span>foo(x: <span class="kw-2">&amp;</span>i32) -&gt; bool {
+    is_val_statically_known(x)
+}
+
+<span class="kw">fn </span>bar(x: <span class="kw-2">&amp;</span>i32) -&gt; bool {
+    is_val_statically_known(
+        (x <span class="kw">as </span><span class="kw-2">*const </span>i32).addr()
+    )
+}</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,545 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/aws-sdk-sts-1.43.0/src/operation/get_federation_token/builders.rs`."><title>builders.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="aws_sdk_sts" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+</pre></div><pre class="rust"><code><span class="comment">// Code generated by software.amazon.smithy.rust.codegen.smithy-rs. DO NOT EDIT.
+</span><span class="kw">pub use </span><span class="kw">crate</span>::operation::get_federation_token::_get_federation_token_output::GetFederationTokenOutputBuilder;
+
+<span class="kw">pub use </span><span class="kw">crate</span>::operation::get_federation_token::_get_federation_token_input::GetFederationTokenInputBuilder;
+
+<span class="kw">impl </span><span class="kw">crate</span>::operation::get_federation_token::builders::GetFederationTokenInputBuilder {
+    <span class="doccomment">/// Sends a request with this input using the given client.
+    </span><span class="kw">pub async fn </span>send_with(
+        <span class="self">self</span>,
+        client: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Client,
+    ) -&gt; ::std::result::Result&lt;
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenOutput,
+        ::aws_smithy_runtime_api::client::result::SdkError&lt;
+            <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenError,
+            ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
+        &gt;,
+    &gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>fluent_builder = client.get_federation_token();
+        fluent_builder.inner = <span class="self">self</span>;
+        fluent_builder.send().<span class="kw">await
+    </span>}
+}
+<span class="doccomment">/// Fluent builder constructing a request to `GetFederationToken`.
+///
+/// &lt;p&gt;Returns a set of temporary security credentials (consisting of an access key ID, a secret access key, and a security token) for a user. A typical use is in a proxy application that gets temporary security credentials on behalf of distributed applications inside a corporate network.&lt;/p&gt;
+/// &lt;p&gt;You must call the &lt;code&gt;GetFederationToken&lt;/code&gt; operation using the long-term security credentials of an IAM user. As a result, this call is appropriate in contexts where those credentials can be safeguarded, usually in a server-based application. For a comparison of &lt;code&gt;GetFederationToken&lt;/code&gt; with the other API operations that produce temporary credentials, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html"&gt;Requesting Temporary Security Credentials&lt;/a&gt; and &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html#stsapi_comparison"&gt;Comparing the Amazon Web Services STS API operations&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+/// &lt;p&gt;Although it is possible to call &lt;code&gt;GetFederationToken&lt;/code&gt; using the security credentials of an Amazon Web Services account root user rather than an IAM user that you create for the purpose of a proxy application, we do not recommend it. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#lock-away-credentials"&gt;Safeguard your root user credentials and don't use them for everyday tasks&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;&lt;note&gt;
+/// &lt;p&gt;You can create a mobile-based or browser-based app that can authenticate users using a web identity provider like Login with Amazon, Facebook, Google, or an OpenID Connect-compatible identity provider. In this case, we recommend that you use &lt;a href="http://aws.amazon.com/cognito/"&gt;Amazon Cognito&lt;/a&gt; or &lt;code&gt;AssumeRoleWithWebIdentity&lt;/code&gt;. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html#api_assumerolewithwebidentity"&gt;Federation Through a Web-based Identity Provider&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+/// &lt;/note&gt;
+/// &lt;p&gt;&lt;b&gt;Session duration&lt;/b&gt;&lt;/p&gt;
+/// &lt;p&gt;The temporary credentials are valid for the specified duration, from 900 seconds (15 minutes) up to a maximum of 129,600 seconds (36 hours). The default session duration is 43,200 seconds (12 hours). Temporary credentials obtained by using the root user credentials have a maximum duration of 3,600 seconds (1 hour).&lt;/p&gt;
+/// &lt;p&gt;&lt;b&gt;Permissions&lt;/b&gt;&lt;/p&gt;
+/// &lt;p&gt;You can use the temporary credentials created by &lt;code&gt;GetFederationToken&lt;/code&gt; in any Amazon Web Services service with the following exceptions:&lt;/p&gt;
+/// &lt;ul&gt;
+/// &lt;li&gt;
+/// &lt;p&gt;You cannot call any IAM operations using the CLI or the Amazon Web Services API. This limitation does not apply to console sessions.&lt;/p&gt;&lt;/li&gt;
+/// &lt;li&gt;
+/// &lt;p&gt;You cannot call any STS operations except &lt;code&gt;GetCallerIdentity&lt;/code&gt;.&lt;/p&gt;&lt;/li&gt;
+/// &lt;/ul&gt;
+/// &lt;p&gt;You can use temporary credentials for single sign-on (SSO) to the console.&lt;/p&gt;
+/// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies. The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters.&lt;/p&gt;
+/// &lt;p&gt;Though the session policy parameters are optional, if you do not pass a policy, then the resulting federated user session has no permissions. When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;. For information about using &lt;code&gt;GetFederationToken&lt;/code&gt; to create temporary security credentials, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html#api_getfederationtoken"&gt;GetFederationToken—Federation Through a Custom Identity Broker&lt;/a&gt;.&lt;/p&gt;
+/// &lt;p&gt;You can use the credentials to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions granted by the session policies.&lt;/p&gt;
+/// &lt;p&gt;&lt;b&gt;Tags&lt;/b&gt;&lt;/p&gt;
+/// &lt;p&gt;(Optional) You can pass tag key-value pairs to your session. These are called session tags. For more information about session tags, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html"&gt;Passing Session Tags in STS&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;&lt;note&gt;
+/// &lt;p&gt;You can create a mobile-based or browser-based app that can authenticate users using a web identity provider like Login with Amazon, Facebook, Google, or an OpenID Connect-compatible identity provider. In this case, we recommend that you use &lt;a href="http://aws.amazon.com/cognito/"&gt;Amazon Cognito&lt;/a&gt; or &lt;code&gt;AssumeRoleWithWebIdentity&lt;/code&gt;. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html#api_assumerolewithwebidentity"&gt;Federation Through a Web-based Identity Provider&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+/// &lt;/note&gt;
+/// &lt;p&gt;An administrator must grant you the permissions necessary to pass session tags. The administrator can also create granular permissions to allow you to pass only specific session tags. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_attribute-based-access-control.html"&gt;Tutorial: Using Tags for Attribute-Based Access Control&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+/// &lt;p&gt;Tag key–value pairs are not case sensitive, but case is preserved. This means that you cannot have separate &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; tag keys. Assume that the user that you are federating has the &lt;code&gt;Department&lt;/code&gt;=&lt;code&gt;Marketing&lt;/code&gt; tag and you pass the &lt;code&gt;department&lt;/code&gt;=&lt;code&gt;engineering&lt;/code&gt; session tag. &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; are not saved as separate tags, and the session tag passed in the request takes precedence over the user tag.&lt;/p&gt;
+</span><span class="attr">#[derive(::std::clone::Clone, ::std::fmt::Debug)]
+</span><span class="kw">pub struct </span>GetFederationTokenFluentBuilder {
+    handle: ::std::sync::Arc&lt;<span class="kw">crate</span>::client::Handle&gt;,
+    inner: <span class="kw">crate</span>::operation::get_federation_token::builders::GetFederationTokenInputBuilder,
+    config_override: ::std::option::Option&lt;<span class="kw">crate</span>::config::Builder&gt;,
+}
+<span class="kw">impl
+    </span><span class="kw">crate</span>::client::customize::internal::CustomizableSend&lt;
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenOutput,
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenError,
+    &gt; <span class="kw">for </span>GetFederationTokenFluentBuilder
+{
+    <span class="kw">fn </span>send(
+        <span class="self">self</span>,
+        config_override: <span class="kw">crate</span>::config::Builder,
+    ) -&gt; <span class="kw">crate</span>::client::customize::internal::BoxFuture&lt;
+        <span class="kw">crate</span>::client::customize::internal::SendResult&lt;
+            <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenOutput,
+            <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenError,
+        &gt;,
+    &gt; {
+        ::std::boxed::Box::pin(<span class="kw">async move </span>{ <span class="self">self</span>.config_override(config_override).send().<span class="kw">await </span>})
+    }
+}
+<span class="kw">impl </span>GetFederationTokenFluentBuilder {
+    <span class="doccomment">/// Creates a new `GetFederationTokenFluentBuilder`.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(handle: ::std::sync::Arc&lt;<span class="kw">crate</span>::client::Handle&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            handle,
+            inner: ::std::default::Default::default(),
+            config_override: ::std::option::Option::None,
+        }
+    }
+    <span class="doccomment">/// Access the GetFederationToken as a reference.
+    </span><span class="kw">pub fn </span>as_input(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">crate</span>::operation::get_federation_token::builders::GetFederationTokenInputBuilder {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.inner
+    }
+    <span class="doccomment">/// Sends the request and returns the response.
+    ///
+    /// If an error occurs, an `SdkError` will be returned with additional details that
+    /// can be matched against.
+    ///
+    /// By default, any retryable failures will be retried twice. Retry behavior
+    /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
+    /// set when configuring the client.
+    </span><span class="kw">pub async fn </span>send(
+        <span class="self">self</span>,
+    ) -&gt; ::std::result::Result&lt;
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenOutput,
+        ::aws_smithy_runtime_api::client::result::SdkError&lt;
+            <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenError,
+            ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
+        &gt;,
+    &gt; {
+        <span class="kw">let </span>input = <span class="self">self
+            </span>.inner
+            .build()
+            .map_err(::aws_smithy_runtime_api::client::result::SdkError::construction_failure)<span class="question-mark">?</span>;
+        <span class="kw">let </span>runtime_plugins = <span class="kw">crate</span>::operation::get_federation_token::GetFederationToken::operation_runtime_plugins(
+            <span class="self">self</span>.handle.runtime_plugins.clone(),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.handle.conf,
+            <span class="self">self</span>.config_override,
+        );
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationToken::orchestrate(<span class="kw-2">&amp;</span>runtime_plugins, input).<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Consumes this builder, creating a customizable operation that can be modified before being sent.
+    </span><span class="kw">pub fn </span>customize(
+        <span class="self">self</span>,
+    ) -&gt; <span class="kw">crate</span>::client::customize::CustomizableOperation&lt;
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenOutput,
+        <span class="kw">crate</span>::operation::get_federation_token::GetFederationTokenError,
+        <span class="self">Self</span>,
+    &gt; {
+        <span class="kw">crate</span>::client::customize::CustomizableOperation::new(<span class="self">self</span>)
+    }
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>config_override(<span class="kw-2">mut </span><span class="self">self</span>, config_override: <span class="kw">impl </span>::std::convert::Into&lt;<span class="kw">crate</span>::config::Builder&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.set_config_override(::std::option::Option::Some(config_override.into()));
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set_config_override(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config_override: ::std::option::Option&lt;<span class="kw">crate</span>::config::Builder&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.config_override = config_override;
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The name of the federated user. The name is used as an identifier for the temporary security credentials (such as &lt;code&gt;Bob&lt;/code&gt;). For example, you can reference the federated user name in a resource-based policy, such as in an Amazon S3 bucket policy.&lt;/p&gt;
+    /// &lt;p&gt;The regex used to validate this parameter is a string of characters consisting of upper- and lower-case alphanumeric characters with no spaces. You can also include underscores or any of the following characters: =,.@-&lt;/p&gt;
+    </span><span class="kw">pub fn </span>name(<span class="kw-2">mut </span><span class="self">self</span>, input: <span class="kw">impl </span>::std::convert::Into&lt;::std::string::String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.name(input.into());
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The name of the federated user. The name is used as an identifier for the temporary security credentials (such as &lt;code&gt;Bob&lt;/code&gt;). For example, you can reference the federated user name in a resource-based policy, such as in an Amazon S3 bucket policy.&lt;/p&gt;
+    /// &lt;p&gt;The regex used to validate this parameter is a string of characters consisting of upper- and lower-case alphanumeric characters with no spaces. You can also include underscores or any of the following characters: =,.@-&lt;/p&gt;
+    </span><span class="kw">pub fn </span>set_name(<span class="kw-2">mut </span><span class="self">self</span>, input: ::std::option::Option&lt;::std::string::String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.set_name(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The name of the federated user. The name is used as an identifier for the temporary security credentials (such as &lt;code&gt;Bob&lt;/code&gt;). For example, you can reference the federated user name in a resource-based policy, such as in an Amazon S3 bucket policy.&lt;/p&gt;
+    /// &lt;p&gt;The regex used to validate this parameter is a string of characters consisting of upper- and lower-case alphanumeric characters with no spaces. You can also include underscores or any of the following characters: =,.@-&lt;/p&gt;
+    </span><span class="kw">pub fn </span>get_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>::std::option::Option&lt;::std::string::String&gt; {
+        <span class="self">self</span>.inner.get_name()
+    }
+    <span class="doccomment">/// &lt;p&gt;An IAM policy in JSON format that you want to use as an inline session policy.&lt;/p&gt;
+    /// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. However, if you do not pass any session policies, then the resulting federated user session has no permissions.&lt;/p&gt;
+    /// &lt;p&gt;When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;The resulting credentials can be used to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions that are granted by the session policies.&lt;/p&gt;
+    /// &lt;p&gt;The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters. The JSON policy characters can be any ASCII character from the space character to the end of the valid character list (\u0020 through \u00FF). It can also include the tab (\u0009), linefeed (\u000A), and carriage return (\u000D) characters.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    </span><span class="kw">pub fn </span>policy(<span class="kw-2">mut </span><span class="self">self</span>, input: <span class="kw">impl </span>::std::convert::Into&lt;::std::string::String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.policy(input.into());
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;An IAM policy in JSON format that you want to use as an inline session policy.&lt;/p&gt;
+    /// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. However, if you do not pass any session policies, then the resulting federated user session has no permissions.&lt;/p&gt;
+    /// &lt;p&gt;When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;The resulting credentials can be used to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions that are granted by the session policies.&lt;/p&gt;
+    /// &lt;p&gt;The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters. The JSON policy characters can be any ASCII character from the space character to the end of the valid character list (\u0020 through \u00FF). It can also include the tab (\u0009), linefeed (\u000A), and carriage return (\u000D) characters.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    </span><span class="kw">pub fn </span>set_policy(<span class="kw-2">mut </span><span class="self">self</span>, input: ::std::option::Option&lt;::std::string::String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.set_policy(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;An IAM policy in JSON format that you want to use as an inline session policy.&lt;/p&gt;
+    /// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. However, if you do not pass any session policies, then the resulting federated user session has no permissions.&lt;/p&gt;
+    /// &lt;p&gt;When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;The resulting credentials can be used to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions that are granted by the session policies.&lt;/p&gt;
+    /// &lt;p&gt;The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters. The JSON policy characters can be any ASCII character from the space character to the end of the valid character list (\u0020 through \u00FF). It can also include the tab (\u0009), linefeed (\u000A), and carriage return (\u000D) characters.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    </span><span class="kw">pub fn </span>get_policy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>::std::option::Option&lt;::std::string::String&gt; {
+        <span class="self">self</span>.inner.get_policy()
+    }
+    <span class="doccomment">///
+    /// Appends an item to `PolicyArns`.
+    ///
+    /// To override the contents of this collection use [`set_policy_arns`](Self::set_policy_arns).
+    ///
+    /// &lt;p&gt;The Amazon Resource Names (ARNs) of the IAM managed policies that you want to use as a managed session policy. The policies must exist in the same account as the IAM user that is requesting federated access.&lt;/p&gt;
+    /// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies. The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters. You can provide up to 10 managed policy ARNs. For more information about ARNs, see &lt;a href="https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html"&gt;Amazon Resource Names (ARNs) and Amazon Web Services Service Namespaces&lt;/a&gt; in the Amazon Web Services General Reference.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. However, if you do not pass any session policies, then the resulting federated user session has no permissions.&lt;/p&gt;
+    /// &lt;p&gt;When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;The resulting credentials can be used to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions that are granted by the session policies.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    </span><span class="kw">pub fn </span>policy_arns(<span class="kw-2">mut </span><span class="self">self</span>, input: <span class="kw">crate</span>::types::PolicyDescriptorType) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.policy_arns(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The Amazon Resource Names (ARNs) of the IAM managed policies that you want to use as a managed session policy. The policies must exist in the same account as the IAM user that is requesting federated access.&lt;/p&gt;
+    /// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies. The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters. You can provide up to 10 managed policy ARNs. For more information about ARNs, see &lt;a href="https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html"&gt;Amazon Resource Names (ARNs) and Amazon Web Services Service Namespaces&lt;/a&gt; in the Amazon Web Services General Reference.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. However, if you do not pass any session policies, then the resulting federated user session has no permissions.&lt;/p&gt;
+    /// &lt;p&gt;When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;The resulting credentials can be used to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions that are granted by the session policies.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    </span><span class="kw">pub fn </span>set_policy_arns(<span class="kw-2">mut </span><span class="self">self</span>, input: ::std::option::Option&lt;::std::vec::Vec&lt;<span class="kw">crate</span>::types::PolicyDescriptorType&gt;&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.set_policy_arns(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The Amazon Resource Names (ARNs) of the IAM managed policies that you want to use as a managed session policy. The policies must exist in the same account as the IAM user that is requesting federated access.&lt;/p&gt;
+    /// &lt;p&gt;You must pass an inline or managed &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;session policy&lt;/a&gt; to this operation. You can pass a single JSON policy document to use as an inline session policy. You can also specify up to 10 managed policy Amazon Resource Names (ARNs) to use as managed session policies. The plaintext that you use for both inline and managed session policies can't exceed 2,048 characters. You can provide up to 10 managed policy ARNs. For more information about ARNs, see &lt;a href="https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html"&gt;Amazon Resource Names (ARNs) and Amazon Web Services Service Namespaces&lt;/a&gt; in the Amazon Web Services General Reference.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. However, if you do not pass any session policies, then the resulting federated user session has no permissions.&lt;/p&gt;
+    /// &lt;p&gt;When you pass session policies, the session permissions are the intersection of the IAM user policies and the session policies that you pass. This gives you a way to further restrict the permissions for a federated user. You cannot use session policies to grant more permissions than those that are defined in the permissions policy of the IAM user. For more information, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_session"&gt;Session Policies&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;The resulting credentials can be used to access a resource that has a resource-based policy. If that policy specifically references the federated user session in the &lt;code&gt;Principal&lt;/code&gt; element of the policy, the session has the permissions allowed by the policy. These permissions are granted in addition to the permissions that are granted by the session policies.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    </span><span class="kw">pub fn </span>get_policy_arns(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>::std::option::Option&lt;::std::vec::Vec&lt;<span class="kw">crate</span>::types::PolicyDescriptorType&gt;&gt; {
+        <span class="self">self</span>.inner.get_policy_arns()
+    }
+    <span class="doccomment">/// &lt;p&gt;The duration, in seconds, that the session should last. Acceptable durations for federation sessions range from 900 seconds (15 minutes) to 129,600 seconds (36 hours), with 43,200 seconds (12 hours) as the default. Sessions obtained using root user credentials are restricted to a maximum of 3,600 seconds (one hour). If the specified duration is longer than one hour, the session obtained by using root user credentials defaults to one hour.&lt;/p&gt;
+    </span><span class="kw">pub fn </span>duration_seconds(<span class="kw-2">mut </span><span class="self">self</span>, input: i32) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.duration_seconds(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The duration, in seconds, that the session should last. Acceptable durations for federation sessions range from 900 seconds (15 minutes) to 129,600 seconds (36 hours), with 43,200 seconds (12 hours) as the default. Sessions obtained using root user credentials are restricted to a maximum of 3,600 seconds (one hour). If the specified duration is longer than one hour, the session obtained by using root user credentials defaults to one hour.&lt;/p&gt;
+    </span><span class="kw">pub fn </span>set_duration_seconds(<span class="kw-2">mut </span><span class="self">self</span>, input: ::std::option::Option&lt;i32&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.set_duration_seconds(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;The duration, in seconds, that the session should last. Acceptable durations for federation sessions range from 900 seconds (15 minutes) to 129,600 seconds (36 hours), with 43,200 seconds (12 hours) as the default. Sessions obtained using root user credentials are restricted to a maximum of 3,600 seconds (one hour). If the specified duration is longer than one hour, the session obtained by using root user credentials defaults to one hour.&lt;/p&gt;
+    </span><span class="kw">pub fn </span>get_duration_seconds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>::std::option::Option&lt;i32&gt; {
+        <span class="self">self</span>.inner.get_duration_seconds()
+    }
+    <span class="doccomment">///
+    /// Appends an item to `Tags`.
+    ///
+    /// To override the contents of this collection use [`set_tags`](Self::set_tags).
+    ///
+    /// &lt;p&gt;A list of session tags. Each session tag consists of a key name and an associated value. For more information about session tags, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html"&gt;Passing Session Tags in STS&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. You can pass up to 50 session tags. The plaintext session tag keys can’t exceed 128 characters and the values can’t exceed 256 characters. For these and additional limits, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html#reference_iam-limits-entity-length"&gt;IAM and STS Character Limits&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    /// &lt;p&gt;You can pass a session tag with the same key as a tag that is already attached to the user you are federating. When you do, session tags override a user tag with the same key.&lt;/p&gt;
+    /// &lt;p&gt;Tag key–value pairs are not case sensitive, but case is preserved. This means that you cannot have separate &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; tag keys. Assume that the role has the &lt;code&gt;Department&lt;/code&gt;=&lt;code&gt;Marketing&lt;/code&gt; tag and you pass the &lt;code&gt;department&lt;/code&gt;=&lt;code&gt;engineering&lt;/code&gt; session tag. &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; are not saved as separate tags, and the session tag passed in the request takes precedence over the role tag.&lt;/p&gt;
+    </span><span class="kw">pub fn </span>tags(<span class="kw-2">mut </span><span class="self">self</span>, input: <span class="kw">crate</span>::types::Tag) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.tags(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;A list of session tags. Each session tag consists of a key name and an associated value. For more information about session tags, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html"&gt;Passing Session Tags in STS&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. You can pass up to 50 session tags. The plaintext session tag keys can’t exceed 128 characters and the values can’t exceed 256 characters. For these and additional limits, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html#reference_iam-limits-entity-length"&gt;IAM and STS Character Limits&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    /// &lt;p&gt;You can pass a session tag with the same key as a tag that is already attached to the user you are federating. When you do, session tags override a user tag with the same key.&lt;/p&gt;
+    /// &lt;p&gt;Tag key–value pairs are not case sensitive, but case is preserved. This means that you cannot have separate &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; tag keys. Assume that the role has the &lt;code&gt;Department&lt;/code&gt;=&lt;code&gt;Marketing&lt;/code&gt; tag and you pass the &lt;code&gt;department&lt;/code&gt;=&lt;code&gt;engineering&lt;/code&gt; session tag. &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; are not saved as separate tags, and the session tag passed in the request takes precedence over the role tag.&lt;/p&gt;
+    </span><span class="kw">pub fn </span>set_tags(<span class="kw-2">mut </span><span class="self">self</span>, input: ::std::option::Option&lt;::std::vec::Vec&lt;<span class="kw">crate</span>::types::Tag&gt;&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner = <span class="self">self</span>.inner.set_tags(input);
+        <span class="self">self
+    </span>}
+    <span class="doccomment">/// &lt;p&gt;A list of session tags. Each session tag consists of a key name and an associated value. For more information about session tags, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html"&gt;Passing Session Tags in STS&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;
+    /// &lt;p&gt;This parameter is optional. You can pass up to 50 session tags. The plaintext session tag keys can’t exceed 128 characters and the values can’t exceed 256 characters. For these and additional limits, see &lt;a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html#reference_iam-limits-entity-length"&gt;IAM and STS Character Limits&lt;/a&gt; in the &lt;i&gt;IAM User Guide&lt;/i&gt;.&lt;/p&gt;&lt;note&gt;
+    /// &lt;p&gt;An Amazon Web Services conversion compresses the passed inline session policy, managed policy ARNs, and session tags into a packed binary format that has a separate limit. Your request can fail for this limit even if your plaintext meets the other requirements. The &lt;code&gt;PackedPolicySize&lt;/code&gt; response element indicates by percentage how close the policies and tags for your request are to the upper size limit.&lt;/p&gt;
+    /// &lt;/note&gt;
+    /// &lt;p&gt;You can pass a session tag with the same key as a tag that is already attached to the user you are federating. When you do, session tags override a user tag with the same key.&lt;/p&gt;
+    /// &lt;p&gt;Tag key–value pairs are not case sensitive, but case is preserved. This means that you cannot have separate &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; tag keys. Assume that the role has the &lt;code&gt;Department&lt;/code&gt;=&lt;code&gt;Marketing&lt;/code&gt; tag and you pass the &lt;code&gt;department&lt;/code&gt;=&lt;code&gt;engineering&lt;/code&gt; session tag. &lt;code&gt;Department&lt;/code&gt; and &lt;code&gt;department&lt;/code&gt; are not saved as separate tags, and the session tag passed in the request takes precedence over the role tag.&lt;/p&gt;
+    </span><span class="kw">pub fn </span>get_tags(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>::std::option::Option&lt;::std::vec::Vec&lt;<span class="kw">crate</span>::types::Tag&gt;&gt; {
+        <span class="self">self</span>.inner.get_tags()
+    }
+}
+</code></pre></div></section></main></body></html>

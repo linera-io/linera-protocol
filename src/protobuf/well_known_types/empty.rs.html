@@ -1,0 +1,417 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-6f17d22bba15001f/protobuf-2.28.0/src/well_known_types/empty.rs`."><title>empty.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="protobuf" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+</pre></div><pre class="rust"><code><span class="comment">// This file is generated by rust-protobuf 2.27.1. Do not edit
+// @generated
+
+// https://github.com/rust-lang/rust-clippy/issues/702
+</span><span class="attr">#![allow(unknown_lints)]
+#![allow(clippy::all)]
+
+#![allow(unused_attributes)]
+#![cfg_attr(rustfmt, rustfmt::skip)]
+
+#![allow(box_pointers)]
+#![allow(dead_code)]
+#![allow(missing_docs)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+#![allow(trivial_casts)]
+#![allow(unused_imports)]
+#![allow(unused_results)]
+</span><span class="doccomment">//! Generated file from `google/protobuf/empty.proto`
+
+</span><span class="attr">#[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = <span class="string">"with-serde"</span>, derive(::serde::Serialize, ::serde::Deserialize))]
+</span><span class="kw">pub struct </span>Empty {
+    <span class="comment">// special fields
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">"with-serde"</span>, serde(skip))]
+    </span><span class="kw">pub </span>unknown_fields: <span class="kw">crate</span>::UnknownFields,
+    <span class="attr">#[cfg_attr(feature = <span class="string">"with-serde"</span>, serde(skip))]
+    </span><span class="kw">pub </span>cached_size: <span class="kw">crate</span>::CachedSize,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ::std::default::Default <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>Empty {
+    <span class="kw">fn </span>default() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Empty {
+        &lt;Empty <span class="kw">as </span><span class="kw">crate</span>::Message&gt;::default_instance()
+    }
+}
+
+<span class="kw">impl </span>Empty {
+    <span class="kw">pub fn </span>new() -&gt; Empty {
+        ::std::default::Default::default()
+    }
+}
+
+<span class="kw">impl </span><span class="kw">crate</span>::Message <span class="kw">for </span>Empty {
+    <span class="kw">fn </span>is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="bool-val">true
+    </span>}
+
+    <span class="kw">fn </span>merge_from(<span class="kw-2">&amp;mut </span><span class="self">self</span>, is: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::CodedInputStream&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="kw">crate</span>::ProtobufResult&lt;()&gt; {
+        <span class="kw">while </span>!is.eof()<span class="question-mark">? </span>{
+            <span class="kw">let </span>(field_number, wire_type) = is.read_tag_unpack()<span class="question-mark">?</span>;
+            <span class="kw">match </span>field_number {
+                <span class="kw">_ </span>=&gt; {
+                    <span class="kw">crate</span>::rt::read_unknown_or_skip_group(field_number, wire_type, is, <span class="self">self</span>.mut_unknown_fields())<span class="question-mark">?</span>;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    <span class="comment">// Compute sizes of nested messages
+    </span><span class="attr">#[allow(unused_variables)]
+    </span><span class="kw">fn </span>compute_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="kw">let </span><span class="kw-2">mut </span>my_size = <span class="number">0</span>;
+        my_size += <span class="kw">crate</span>::rt::unknown_fields_size(<span class="self">self</span>.get_unknown_fields());
+        <span class="self">self</span>.cached_size.set(my_size);
+        my_size
+    }
+
+    <span class="kw">fn </span>write_to_with_cached_sizes(<span class="kw-2">&amp;</span><span class="self">self</span>, os: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::CodedOutputStream&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="kw">crate</span>::ProtobufResult&lt;()&gt; {
+        os.write_unknown_fields(<span class="self">self</span>.get_unknown_fields())<span class="question-mark">?</span>;
+        ::std::result::Result::Ok(())
+    }
+
+    <span class="kw">fn </span>get_cached_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="self">self</span>.cached_size.get()
+    }
+
+    <span class="kw">fn </span>get_unknown_fields(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">crate</span>::UnknownFields {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.unknown_fields
+    }
+
+    <span class="kw">fn </span>mut_unknown_fields(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::UnknownFields {
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.unknown_fields
+    }
+
+    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>(::std::any::Any) {
+        <span class="self">self </span><span class="kw">as </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>(::std::any::Any)
+    }
+    <span class="kw">fn </span>as_any_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>(::std::any::Any) {
+        <span class="self">self </span><span class="kw">as </span><span class="kw-2">&amp;mut </span><span class="kw">dyn </span>(::std::any::Any)
+    }
+    <span class="kw">fn </span>into_any(<span class="self">self</span>: ::std::boxed::Box&lt;<span class="self">Self</span>&gt;) -&gt; ::std::boxed::Box&lt;<span class="kw">dyn </span>(::std::any::Any)&gt; {
+        <span class="self">self
+    </span>}
+
+    <span class="kw">fn </span>descriptor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">crate</span>::reflect::MessageDescriptor {
+        <span class="self">Self</span>::descriptor_static()
+    }
+
+    <span class="kw">fn </span>new() -&gt; Empty {
+        Empty::new()
+    }
+
+    <span class="kw">fn </span>descriptor_static() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">crate</span>::reflect::MessageDescriptor {
+        <span class="kw">static </span>descriptor: <span class="kw">crate</span>::rt::LazyV2&lt;<span class="kw">crate</span>::reflect::MessageDescriptor&gt; = <span class="kw">crate</span>::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            <span class="kw">let </span>fields = ::std::vec::Vec::new();
+            <span class="kw">crate</span>::reflect::MessageDescriptor::new_pb_name::&lt;Empty&gt;(
+                <span class="string">"Empty"</span>,
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    <span class="kw">fn </span>default_instance() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>Empty {
+        <span class="kw">static </span>instance: <span class="kw">crate</span>::rt::LazyV2&lt;Empty&gt; = <span class="kw">crate</span>::rt::LazyV2::INIT;
+        instance.get(Empty::new)
+    }
+}
+
+<span class="kw">impl </span><span class="kw">crate</span>::Clear <span class="kw">for </span>Empty {
+    <span class="kw">fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.unknown_fields.clear();
+    }
+}
+
+<span class="kw">impl </span>::std::fmt::Debug <span class="kw">for </span>Empty {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>::std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; ::std::fmt::Result {
+        <span class="kw">crate</span>::text_format::fmt(<span class="self">self</span>, f)
+    }
+}
+
+<span class="kw">impl </span><span class="kw">crate</span>::reflect::ProtobufValue <span class="kw">for </span>Empty {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::reflect::ReflectValueRef {
+        <span class="kw">crate</span>::reflect::ReflectValueRef::Message(<span class="self">self</span>)
+    }
+}
+
+<span class="kw">static </span>file_descriptor_proto_data: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8] = <span class="string">b"\
+    \n\x1bgoogle/protobuf/empty.proto\x12\x0fgoogle.protobuf\"\x07\n\x05Empt\
+    yB}\n\x13com.google.protobufB\nEmptyProtoP\x01Z.google.golang.org/protob\
+    uf/types/known/emptypb\xf8\x01\x01\xa2\x02\x03GPB\xaa\x02\x1eGoogle.Prot\
+    obuf.WellKnownTypesJ\xfe\x10\n\x06\x12\x04\x1e\03\x10\n\xcc\x0c\n\x01\
+    \x0c\x12\x03\x1e\0\x122\xc1\x0c\x20Protocol\x20Buffers\x20-\x20Google's\
+    \x20data\x20interchange\x20format\n\x20Copyright\x202008\x20Google\x20In\
+    c.\x20\x20All\x20rights\x20reserved.\n\x20https://developers.google.com/\
+    protocol-buffers/\n\n\x20Redistribution\x20and\x20use\x20in\x20source\
+    \x20and\x20binary\x20forms,\x20with\x20or\x20without\n\x20modification,\
+    \x20are\x20permitted\x20provided\x20that\x20the\x20following\x20conditio\
+    ns\x20are\n\x20met:\n\n\x20\x20\x20\x20\x20*\x20Redistributions\x20of\
+    \x20source\x20code\x20must\x20retain\x20the\x20above\x20copyright\n\x20n\
+    otice,\x20this\x20list\x20of\x20conditions\x20and\x20the\x20following\
+    \x20disclaimer.\n\x20\x20\x20\x20\x20*\x20Redistributions\x20in\x20binar\
+    y\x20form\x20must\x20reproduce\x20the\x20above\n\x20copyright\x20notice,\
+    \x20this\x20list\x20of\x20conditions\x20and\x20the\x20following\x20discl\
+    aimer\n\x20in\x20the\x20documentation\x20and/or\x20other\x20materials\
+    \x20provided\x20with\x20the\n\x20distribution.\n\x20\x20\x20\x20\x20*\
+    \x20Neither\x20the\x20name\x20of\x20Google\x20Inc.\x20nor\x20the\x20name\
+    s\x20of\x20its\n\x20contributors\x20may\x20be\x20used\x20to\x20endorse\
+    \x20or\x20promote\x20products\x20derived\x20from\n\x20this\x20software\
+    \x20without\x20specific\x20prior\x20written\x20permission.\n\n\x20THIS\
+    \x20SOFTWARE\x20IS\x20PROVIDED\x20BY\x20THE\x20COPYRIGHT\x20HOLDERS\x20A\
+    ND\x20CONTRIBUTORS\n\x20\"AS\x20IS\"\x20AND\x20ANY\x20EXPRESS\x20OR\x20I\
+    MPLIED\x20WARRANTIES,\x20INCLUDING,\x20BUT\x20NOT\n\x20LIMITED\x20TO,\
+    \x20THE\x20IMPLIED\x20WARRANTIES\x20OF\x20MERCHANTABILITY\x20AND\x20FITN\
+    ESS\x20FOR\n\x20A\x20PARTICULAR\x20PURPOSE\x20ARE\x20DISCLAIMED.\x20IN\
+    \x20NO\x20EVENT\x20SHALL\x20THE\x20COPYRIGHT\n\x20OWNER\x20OR\x20CONTRIB\
+    UTORS\x20BE\x20LIABLE\x20FOR\x20ANY\x20DIRECT,\x20INDIRECT,\x20INCIDENTA\
+    L,\n\x20SPECIAL,\x20EXEMPLARY,\x20OR\x20CONSEQUENTIAL\x20DAMAGES\x20(INC\
+    LUDING,\x20BUT\x20NOT\n\x20LIMITED\x20TO,\x20PROCUREMENT\x20OF\x20SUBSTI\
+    TUTE\x20GOODS\x20OR\x20SERVICES;\x20LOSS\x20OF\x20USE,\n\x20DATA,\x20OR\
+    \x20PROFITS;\x20OR\x20BUSINESS\x20INTERRUPTION)\x20HOWEVER\x20CAUSED\x20\
+    AND\x20ON\x20ANY\n\x20THEORY\x20OF\x20LIABILITY,\x20WHETHER\x20IN\x20CON\
+    TRACT,\x20STRICT\x20LIABILITY,\x20OR\x20TORT\n\x20(INCLUDING\x20NEGLIGEN\
+    CE\x20OR\x20OTHERWISE)\x20ARISING\x20IN\x20ANY\x20WAY\x20OUT\x20OF\x20TH\
+    E\x20USE\n\x20OF\x20THIS\x20SOFTWARE,\x20EVEN\x20IF\x20ADVISED\x20OF\x20\
+    THE\x20POSSIBILITY\x20OF\x20SUCH\x20DAMAGE.\n\n\x08\n\x01\x02\x12\x03\
+    \x20\0\x18\n\x08\n\x01\x08\x12\x03\"\0;\n\t\n\x02\x08%\x12\x03\"\0;\n\
+    \x08\n\x01\x08\x12\x03#\0E\n\t\n\x02\x08\x0b\x12\x03#\0E\n\x08\n\x01\x08\
+    \x12\x03$\0,\n\t\n\x02\x08\x01\x12\x03$\0,\n\x08\n\x01\x08\x12\x03%\0+\n\
+    \t\n\x02\x08\x08\x12\x03%\0+\n\x08\n\x01\x08\x12\x03&amp;\0\"\n\t\n\x02\x08\
+    \n\x12\x03&amp;\0\"\n\x08\n\x01\x08\x12\x03'\0!\n\t\n\x02\x08$\x12\x03'\0!\n\
+    \x08\n\x01\x08\x12\x03(\0\x1f\n\t\n\x02\x08\x1f\x12\x03(\0\x1f\n\xfb\x02\
+    \n\x02\x04\0\x12\x033\0\x10\x1a\xef\x02\x20A\x20generic\x20empty\x20mess\
+    age\x20that\x20you\x20can\x20re-use\x20to\x20avoid\x20defining\x20duplic\
+    ated\n\x20empty\x20messages\x20in\x20your\x20APIs.\x20A\x20typical\x20ex\
+    ample\x20is\x20to\x20use\x20it\x20as\x20the\x20request\n\x20or\x20the\
+    \x20response\x20type\x20of\x20an\x20API\x20method.\x20For\x20instance:\n\
+    \n\x20\x20\x20\x20\x20service\x20Foo\x20{\n\x20\x20\x20\x20\x20\x20\x20r\
+    pc\x20Bar(google.protobuf.Empty)\x20returns\x20(google.protobuf.Empty);\
+    \n\x20\x20\x20\x20\x20}\n\n\x20The\x20JSON\x20representation\x20for\x20`\
+    Empty`\x20is\x20empty\x20JSON\x20object\x20`{}`.\n\n\n\n\x03\x04\0\x01\
+    \x12\x033\x08\rb\x06proto3\
+"</span>;
+
+<span class="kw">static </span>file_descriptor_proto_lazy: <span class="kw">crate</span>::rt::LazyV2&lt;<span class="kw">crate</span>::descriptor::FileDescriptorProto&gt; = <span class="kw">crate</span>::rt::LazyV2::INIT;
+
+<span class="kw">fn </span>parse_descriptor_proto() -&gt; <span class="kw">crate</span>::descriptor::FileDescriptorProto {
+    <span class="kw">crate</span>::Message::parse_from_bytes(file_descriptor_proto_data).unwrap()
+}
+
+<span class="kw">pub fn </span>file_descriptor_proto() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">crate</span>::descriptor::FileDescriptorProto {
+    file_descriptor_proto_lazy.get(|| {
+        parse_descriptor_proto()
+    })
+}
+</code></pre></div></section></main></body></html>

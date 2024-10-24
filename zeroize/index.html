@@ -1,0 +1,173 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Securely zero memory with a simple trait (`Zeroize`) built on stable Rust primitives which guarantee the operation will not be “optimized away”."><title>zeroize - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zeroize" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../zeroize/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../zeroize/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../zeroize/index.html">zeroize</a><span class="version">1.8.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">zeroize</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zeroize/lib.rs.html#1-873">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Securely zero memory with a simple trait (<a href="trait.Zeroize.html" title="trait zeroize::Zeroize"><code>Zeroize</code></a>) built on stable Rust
+primitives which guarantee the operation will not be “optimized away”.</p>
+<h3 id="about"><a class="doc-anchor" href="#about">§</a>About</h3>
+<p><a href="http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html">Zeroing memory securely is hard</a> - compilers optimize for performance, and
+in doing so they love to “optimize away” unnecessary zeroing calls. There are
+many documented “tricks” to attempt to avoid these optimizations and ensure
+that a zeroing routine is performed reliably.</p>
+<p>This crate isn’t about tricks: it uses <a href="https://doc.rust-lang.org/1.81.0/core/ptr/fn.write_volatile.html" title="fn core::ptr::write_volatile"><code>core::ptr::write_volatile</code></a>
+and <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/index.html" title="mod core::sync::atomic"><code>core::sync::atomic</code></a> memory fences to provide easy-to-use, portable
+zeroing behavior which works on all of Rust’s core number types and slices
+thereof, implemented in pure Rust with no usage of FFI or assembly.</p>
+<ul>
+<li>No insecure fallbacks!</li>
+<li>No dependencies!</li>
+<li>No FFI or inline assembly! <strong>WASM friendly</strong> (and tested)!</li>
+<li><code>#![no_std]</code> i.e. <strong>embedded-friendly</strong>!</li>
+<li>No functionality besides securely zeroing memory!</li>
+<li>(Optional) Custom derive support for zeroing complex structures</li>
+</ul>
+<h3 id="minimum-supported-rust-version"><a class="doc-anchor" href="#minimum-supported-rust-version">§</a>Minimum Supported Rust Version</h3>
+<p>Requires Rust <strong>1.72</strong> or newer.</p>
+<p>In the future, we reserve the right to change MSRV (i.e. MSRV is out-of-scope
+for this crate’s SemVer guarantees), however when we do it will be accompanied
+by a minor version bump.</p>
+<h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zeroize::Zeroize;
+
+<span class="comment">// Protip: don't embed secrets in your source code.
+// This is just an example.
+</span><span class="kw">let </span><span class="kw-2">mut </span>secret = <span class="string">b"Air shield password: 1,2,3,4,5"</span>.to_vec();
+<span class="comment">// [ ... ] open the air shield here
+
+// Now that we're done using the secret, zero it out.
+</span>secret.zeroize();</code></pre></div>
+<p>The <a href="trait.Zeroize.html" title="trait zeroize::Zeroize"><code>Zeroize</code></a> trait is impl’d on all of Rust’s core scalar types including
+integers, floats, <code>bool</code>, and <code>char</code>.</p>
+<p>Additionally, it’s implemented on slices and <code>IterMut</code>s of the above types.</p>
+<p>When the <code>alloc</code> feature is enabled (which it is by default), it’s also
+impl’d for <code>Vec&lt;T&gt;</code> for the above types as well as <code>String</code>, where it provides
+<a href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html#method.clear" title="method alloc::vec::Vec::clear"><code>Vec::clear</code></a> / <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html#method.clear" title="method alloc::string::String::clear"><code>String::clear</code></a>-like behavior (truncating to zero-length)
+but ensures the backing memory is securely zeroed with some caveats.</p>
+<p>With the <code>std</code> feature enabled (which it is <strong>not</strong> by default), <a href="trait.Zeroize.html" title="trait zeroize::Zeroize"><code>Zeroize</code></a>
+is also implemented for <a href="https://doc.rust-lang.org/std/ffi/struct.CString.html"><code>CString</code></a>. After calling <code>zeroize()</code> on a <code>CString</code>,
+its internal buffer will contain exactly one nul byte. The backing
+memory is zeroed by converting it to a <code>Vec&lt;u8&gt;</code> and back into a <code>CString</code>.
+(NOTE: see “Stack/Heap Zeroing Notes” for important <code>Vec</code>/<code>String</code>/<code>CString</code> details)</p>
+<p>The <a href="trait.DefaultIsZeroes.html" title="trait zeroize::DefaultIsZeroes"><code>DefaultIsZeroes</code></a> marker trait can be impl’d on types which also
+impl <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a>, which implements <a href="trait.Zeroize.html" title="trait zeroize::Zeroize"><code>Zeroize</code></a> by overwriting a value with
+the default value.</p>
+<h3 id="custom-derive-support"><a class="doc-anchor" href="#custom-derive-support">§</a>Custom Derive Support</h3>
+<p>This crate has custom derive support for the <code>Zeroize</code> trait,
+gated under the <code>zeroize</code> crate’s <code>zeroize_derive</code> Cargo feature,
+which automatically calls <code>zeroize()</code> on all members of a struct
+or tuple struct.</p>
+<p>Attributes supported for <code>Zeroize</code>:</p>
+<p>On the item level:</p>
+<ul>
+<li><code>#[zeroize(drop)]</code>: <em>deprecated</em> use <code>ZeroizeOnDrop</code> instead</li>
+<li><code>#[zeroize(bound = "T: MyTrait")]</code>: this replaces any trait bounds
+inferred by zeroize</li>
+</ul>
+<p>On the field level:</p>
+<ul>
+<li><code>#[zeroize(skip)]</code>: skips this field or variant when calling <code>zeroize()</code></li>
+</ul>
+<p>Attributes supported for <code>ZeroizeOnDrop</code>:</p>
+<p>On the field level:</p>
+<ul>
+<li><code>#[zeroize(skip)]</code>: skips this field or variant when calling <code>zeroize()</code></li>
+</ul>
+<p>Example which derives <code>Drop</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zeroize::{Zeroize, ZeroizeOnDrop};
+
+<span class="comment">// This struct will be zeroized on drop
+</span><span class="attr">#[derive(Zeroize, ZeroizeOnDrop)]
+</span><span class="kw">struct </span>MyStruct([u8; <span class="number">32</span>]);</code></pre></div>
+<p>Example which does not derive <code>Drop</code> (useful for e.g. <code>Copy</code> types)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[cfg(feature = <span class="string">"zeroize_derive"</span>)]
+</span><span class="kw">use </span>zeroize::Zeroize;
+
+<span class="comment">// This struct will *NOT* be zeroized on drop
+</span><span class="attr">#[derive(Copy, Clone, Zeroize)]
+</span><span class="kw">struct </span>MyStruct([u8; <span class="number">32</span>]);</code></pre></div>
+<p>Example which only derives <code>Drop</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zeroize::ZeroizeOnDrop;
+
+<span class="comment">// This struct will be zeroized on drop
+</span><span class="attr">#[derive(ZeroizeOnDrop)]
+</span><span class="kw">struct </span>MyStruct([u8; <span class="number">32</span>]);</code></pre></div>
+<h3 id="zeroizingz-wrapper-for-zeroizing-arbitrary-values-on-drop"><a class="doc-anchor" href="#zeroizingz-wrapper-for-zeroizing-arbitrary-values-on-drop">§</a><code>Zeroizing&lt;Z&gt;</code>: wrapper for zeroizing arbitrary values on drop</h3>
+<p><code>Zeroizing&lt;Z: Zeroize&gt;</code> is a generic wrapper type that impls <code>Deref</code>
+and <code>DerefMut</code>, allowing access to an inner value of type <code>Z</code>, and also
+impls a <code>Drop</code> handler which calls <code>zeroize()</code> on its contents:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>zeroize::Zeroizing;
+
+<span class="kw">fn </span>use_secret() {
+    <span class="kw">let </span><span class="kw-2">mut </span>secret = Zeroizing::new([<span class="number">0u8</span>; <span class="number">5</span>]);
+
+    <span class="comment">// Set the air shield password
+    // Protip (again): don't embed secrets in your source code.
+    </span>secret.copy_from_slice(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]);
+    <span class="macro">assert_eq!</span>(secret.as_ref(), <span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]);
+
+    <span class="comment">// The contents of `secret` will be automatically zeroized on drop
+</span>}
+</code></pre></div>
+<h3 id="what-guarantees-does-this-crate-provide"><a class="doc-anchor" href="#what-guarantees-does-this-crate-provide">§</a>What guarantees does this crate provide?</h3>
+<p>This crate guarantees the following:</p>
+<ol>
+<li>The zeroing operation can’t be “optimized away” by the compiler.</li>
+<li>All subsequent reads to memory will see “zeroized” values.</li>
+</ol>
+<p>LLVM’s volatile semantics ensure #1 is true.</p>
+<p>Additionally, thanks to work by the <a href="https://github.com/rust-lang/unsafe-code-guidelines">Unsafe Code Guidelines Working Group</a>,
+we can now fairly confidently say #2 is true as well. Previously there were
+worries that the approach used by this crate (mixing volatile and
+non-volatile accesses) was undefined behavior due to language contained
+in the documentation for <code>write_volatile</code>, however after some discussion
+<a href="https://github.com/rust-lang/rust/pull/60972">these remarks have been removed</a> and the specific usage pattern in this
+crate is considered to be well-defined.</p>
+<p>Additionally this crate leverages <a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/fn.compiler_fence.html" title="fn core::sync::atomic::compiler_fence"><code>core::sync::atomic::compiler_fence</code></a>
+with the strictest ordering
+(<a href="https://doc.rust-lang.org/1.81.0/core/sync/atomic/enum.Ordering.html#variant.SeqCst" title="variant core::sync::atomic::Ordering::SeqCst"><code>Ordering::SeqCst</code></a>) as a
+precaution to help ensure reads are not reordered before memory has been
+zeroed.</p>
+<p>All of that said, there is still potential for microarchitectural attacks
+(ala Spectre/Meltdown) to leak “zeroized” secrets through covert channels.
+This crate makes no guarantees that zeroized values cannot be leaked
+through such channels, as they represent flaws in the underlying hardware.</p>
+<h3 id="stackheap-zeroing-notes"><a class="doc-anchor" href="#stackheap-zeroing-notes">§</a>Stack/Heap Zeroing Notes</h3>
+<p>This crate can be used to zero values from either the stack or the heap.</p>
+<p>However, be aware several operations in Rust can unintentionally leave
+copies of data in memory. This includes but is not limited to:</p>
+<ul>
+<li>Moves and <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Copy.html" title="trait core::marker::Copy"><code>Copy</code></a></li>
+<li>Heap reallocation when using <a href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>Vec</code></a> and <a href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a></li>
+<li>Borrowers of a reference making copies of the data</li>
+</ul>
+<p><a href="https://doc.rust-lang.org/1.81.0/core/pin/struct.Pin.html" title="struct core::pin::Pin"><code>Pin</code></a> can be leveraged in conjunction with this crate
+to ensure data kept on the stack isn’t moved.</p>
+<p>The <code>Zeroize</code> impls for <code>Vec</code>, <code>String</code> and <code>CString</code> zeroize the entire
+capacity of their backing buffer, but cannot guarantee copies of the data
+were not previously made by buffer reallocation. It’s therefore important
+when attempting to zeroize such buffers to initialize them to the correct
+capacity, and take care to prevent subsequent reallocation.</p>
+<p>The <code>secrecy</code> crate provides higher-level abstractions for eliminating
+usage patterns which can cause reallocations:</p>
+<p><a href="https://crates.io/crates/secrecy">https://crates.io/crates/secrecy</a></p>
+<h3 id="what-about-clearing-registers-mlock-mprotect-etc"><a class="doc-anchor" href="#what-about-clearing-registers-mlock-mprotect-etc">§</a>What about: clearing registers, mlock, mprotect, etc?</h3>
+<p>This crate is focused on providing simple, unobtrusive support for reliably
+zeroing memory using the best approach possible on stable Rust.</p>
+<p>Clearing registers is a difficult problem that can’t easily be solved by
+something like a crate, and requires either inline ASM or rustc support.
+See <a href="https://github.com/rust-lang/rust/issues/17046">https://github.com/rust-lang/rust/issues/17046</a> for background on
+this particular problem.</p>
+<p>Other memory protection mechanisms are interesting and useful, but often
+overkill (e.g. defending against RAM scraping or attackers with swap access).
+In as much as there may be merit to these approaches, there are also many
+other crates that already implement more sophisticated memory protections.
+Such protections are explicitly out-of-scope for this crate.</p>
+<p>Zeroing memory is <a href="https://github.com/veorq/cryptocoding#clean-memory-of-secret-data">good cryptographic hygiene</a> and this crate seeks to promote
+it in the most unobtrusive manner possible. This includes omitting complex
+<code>unsafe</code> memory protection systems and just trying to make the best memory
+zeroing crate available.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Zeroizing.html" title="struct zeroize::Zeroizing">Zeroizing</a></div><div class="desc docblock-short"><code>Zeroizing</code> is a a wrapper for any <code>Z: Zeroize</code> type which implements a
+<code>Drop</code> handler which zeroizes dropped values.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.DefaultIsZeroes.html" title="trait zeroize::DefaultIsZeroes">DefaultIsZeroes</a></div><div class="desc docblock-short">Marker trait for types whose <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a> is the desired zeroization result</div></li><li><div class="item-name"><a class="trait" href="trait.TryZeroize.html" title="trait zeroize::TryZeroize">TryZeroize</a></div><div class="desc docblock-short">Fallible trait for representing cases where zeroization may or may not be
+possible.</div></li><li><div class="item-name"><a class="trait" href="trait.Zeroize.html" title="trait zeroize::Zeroize">Zeroize</a></div><div class="desc docblock-short">Trait for securely erasing values from memory.</div></li><li><div class="item-name"><a class="trait" href="trait.ZeroizeOnDrop.html" title="trait zeroize::ZeroizeOnDrop">ZeroizeOnDrop</a></div><div class="desc docblock-short">Marker trait signifying that this type will <a href="trait.Zeroize.html#tymethod.zeroize" title="method zeroize::Zeroize::zeroize"><code>Zeroize::zeroize</code></a> itself on <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a>.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.zeroize_flat_type.html" title="fn zeroize::zeroize_flat_type">zeroize_flat_type</a><sup title="unsafe function">⚠</sup></div><div class="desc docblock-short">Zeroizes a flat type/struct. Only zeroizes the values that it owns, and it does not work on
+dynamically sized values or trait objects. It would be inefficient to use this function on a
+type that already implements <code>ZeroizeOnDrop</code>.</div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Zeroize.html" title="derive zeroize::Zeroize">Zeroize</a></div><div class="desc docblock-short">Derive the <code>Zeroize</code> trait.</div></li><li><div class="item-name"><a class="derive" href="derive.ZeroizeOnDrop.html" title="derive zeroize::ZeroizeOnDrop">ZeroizeOnDrop</a></div><div class="desc docblock-short">Derive the <code>ZeroizeOnDrop</code> trait.</div></li></ul></section></div></main></body></html>

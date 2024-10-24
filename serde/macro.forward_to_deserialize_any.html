@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Helper macro when implementing the `Deserializer` part of a new data format for Serde."><title>forward_to_deserialize_any in serde - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">serde</a>::<wbr><a class="macro" href="#">forward_to_deserialize_any</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/serde/macros.rs.html#111-119">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> forward_to_deserialize_any {
+    (&lt;<span class="macro-nonterminal">$visitor</span>:ident: Visitor&lt;<span class="macro-nonterminal">$lifetime</span>:tt&gt;&gt; $(<span class="macro-nonterminal">$func</span>:ident)<span class="kw-2">*</span>) =&gt; { ... };
+    ($(<span class="macro-nonterminal">$func</span>:ident)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Helper macro when implementing the <code>Deserializer</code> part of a new data format
+for Serde.</p>
+<p>Some <a href="trait.Deserializer.html"><code>Deserializer</code></a> implementations for self-describing formats do not
+care what hint the <a href="de/trait.Visitor.html"><code>Visitor</code></a> gives them, they just want to blindly call
+the <a href="de/trait.Visitor.html"><code>Visitor</code></a> method corresponding to the data they can tell is in the
+input. This requires repetitive implementations of all the <a href="trait.Deserializer.html"><code>Deserializer</code></a>
+trait methods.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[inline]
+</span><span class="kw">fn </span>deserialize_bool&lt;V&gt;(<span class="self">self</span>, visitor: V) -&gt; <span class="prelude-ty">Result</span>&lt;V::Value, <span class="self">Self</span>::Error&gt;
+<span class="kw">where
+    </span>V: Visitor&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="self">self</span>.deserialize_any(visitor)
+}</code></pre></div>
+<p>The <code>forward_to_deserialize_any!</code> macro implements these simple forwarding
+methods so that they forward directly to <a href="trait.Deserializer.html#tymethod.deserialize_any"><code>Deserializer::deserialize_any</code></a>.
+You can choose which methods to forward.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserializer&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>MyDeserializer {
+    <span class="kw">fn </span>deserialize_any&lt;V&gt;(<span class="self">self</span>, visitor: V) -&gt; <span class="prelude-ty">Result</span>&lt;V::Value, <span class="self">Self</span>::Error&gt;
+    <span class="kw">where
+        </span>V: Visitor&lt;<span class="lifetime">'de</span>&gt;,
+    {
+        <span class="comment">/* ... */
+    </span>}
+
+    <span class="macro">forward_to_deserialize_any!</span> {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bytes byte_buf option unit unit_struct newtype_struct seq tuple
+        tuple_struct map <span class="kw">struct enum </span>identifier ignored_any
+    }
+}</code></pre></div>
+<p>The macro assumes the convention that your <code>Deserializer</code> lifetime parameter
+is called <code>'de</code> and that the <code>Visitor</code> type parameters on each method are
+called <code>V</code>. A different type parameter and a different lifetime can be
+specified explicitly if necessary.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">forward_to_deserialize_any!</span> {
+    &lt;W: Visitor&lt;<span class="lifetime">'q</span>&gt;&gt;
+    bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+    bytes byte_buf option unit unit_struct newtype_struct seq tuple
+    tuple_struct map <span class="kw">struct enum </span>identifier ignored_any
+}</code></pre></div>
+</div></details></section></div></main></body></html>

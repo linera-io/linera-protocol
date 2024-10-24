@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Main decompression function. Keeps decompressing data from `in_buf` until the `in_buf` is empty, `out` is full, the end of the deflate stream is hit, or there is an error in the deflate stream."><title>decompress in miniz_oxide::inflate::core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="miniz_oxide" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../miniz_oxide/index.html">miniz_oxide</a><span class="version">0.8.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In miniz_oxide::inflate::core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">miniz_oxide</a>::<wbr><a href="../index.html">inflate</a>::<wbr><a href="index.html">core</a>::<wbr><a class="fn" href="#">decompress</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/miniz_oxide/inflate/core.rs.html#1170-1816">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn decompress(
+    r: &amp;mut <a class="struct" href="struct.DecompressorOxide.html" title="struct miniz_oxide::inflate::core::DecompressorOxide">DecompressorOxide</a>,
+    in_buf: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>],
+    out: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u8.html">u8</a>],
+    out_pos: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a>,
+    flags: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.u32.html">u32</a>,
+) -&gt; (<a class="enum" href="../enum.TINFLStatus.html" title="enum miniz_oxide::inflate::TINFLStatus">TINFLStatus</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a>, <a class="primitive" href="https://doc.rust-lang.org/1.81.0/core/primitive.usize.html">usize</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Main decompression function. Keeps decompressing data from <code>in_buf</code> until the <code>in_buf</code> is
+empty, <code>out</code> is full, the end of the deflate stream is hit, or there is an error in the
+deflate stream.</p>
+<h2 id="arguments"><a class="doc-anchor" href="#arguments">§</a>Arguments</h2>
+<p><code>r</code> is a <a href="struct.DecompressorOxide.html" title="struct miniz_oxide::inflate::core::DecompressorOxide"><code>DecompressorOxide</code></a> struct with the state of this stream.</p>
+<p><code>in_buf</code> is a reference to the compressed data that is to be decompressed. The decompressor will
+start at the first byte of this buffer.</p>
+<p><code>out</code> is a reference to the buffer that will store the decompressed data, and that
+stores previously decompressed data if any.</p>
+<ul>
+<li>The offset given by <code>out_pos</code> indicates where in the output buffer slice writing should start.</li>
+<li>If <a href="inflate_flags/constant.TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF.html" title="constant miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF"><code>TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF</code></a> is not set, the output buffer is used in a
+wrapping manner, and it’s size is required to be a power of 2.</li>
+<li>The decompression function normally needs access to 32KiB of the previously decompressed data
+(or to the beginning of the decompressed data if less than 32KiB has been decompressed.)
+<ul>
+<li>If this data is not available, decompression may fail.</li>
+<li>Some deflate compressors allow specifying a window size which limits match distances to
+less than this, or alternatively an RLE mode where matches will only refer to the previous byte
+and thus allows a smaller output buffer. The window size can be specified in the zlib
+header structure, however, the header data should not be relied on to be correct.</li>
+</ul>
+</li>
+</ul>
+<p><code>flags</code> indicates settings and status to the decompression function.</p>
+<ul>
+<li>The <a href="inflate_flags/constant.TINFL_FLAG_HAS_MORE_INPUT.html" title="constant miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_HAS_MORE_INPUT"><code>TINFL_FLAG_HAS_MORE_INPUT</code></a> has to be specified if more compressed data is to be provided
+in a subsequent call to this function.</li>
+<li>See the the <a href="inflate_flags/index.html" title="mod miniz_oxide::inflate::core::inflate_flags"><code>inflate_flags</code></a> module for details on other flags.</li>
+</ul>
+<h2 id="returns"><a class="doc-anchor" href="#returns">§</a>Returns</h2>
+<p>Returns a tuple containing the status of the compressor, the number of input bytes read, and the
+number of bytes output to <code>out</code>.</p>
+<p>This function shouldn’t panic pending any bugs.</p>
+</div></details></section></div></main></body></html>

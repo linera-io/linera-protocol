@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Utilities for implementing and composing `tracing` subscribers."><title>tracing_subscriber - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing_subscriber" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tracing_subscriber/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../tracing_subscriber/index.html">tracing_subscriber</a><span class="version">0.3.18</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">tracing_subscriber</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tracing_subscriber/lib.rs.html#1-250">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Utilities for implementing and composing <a href="https://docs.rs/tracing/latest/tracing"><code>tracing</code></a> subscribers.</p>
+<p><a href="https://docs.rs/tracing/latest/tracing"><code>tracing</code></a> is a framework for instrumenting Rust programs to collect
+scoped, structured, and async-aware diagnostics. The <a href="../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> trait
+represents the functionality necessary to collect this trace data. This
+crate contains tools for composing subscribers out of smaller units of
+behaviour, and batteries-included implementations of common subscriber
+functionality.</p>
+<p><code>tracing-subscriber</code> is intended for use by both <code>Subscriber</code> authors and
+application authors using <code>tracing</code> to instrument their applications.</p>
+<p><em>Compiler support: <a href="#supported-rust-versions">requires <code>rustc</code> 1.63+</a></em></p>
+<h3 id="layers-and-filters"><a class="doc-anchor" href="#layers-and-filters">§</a><code>Layer</code>s and <code>Filter</code>s</h3>
+<p>The most important component of the <code>tracing-subscriber</code> API is the
+<a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait, which provides a composable abstraction for building
+<a href="../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>s. Like the <a href="../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> trait, a <a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> defines a
+particular behavior for collecting trace data. Unlike <a href="../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>s,
+which implement a <em>complete</em> strategy for how trace data is collected,
+<a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s provide <em>modular</em> implementations of specific behaviors.
+Therefore, they can be <a href="layer/index.html#composing-layers" title="mod tracing_subscriber::layer">composed together</a> to form a <a href="../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a> which is
+capable of recording traces in a variety of ways. See the <a href="layer/index.html" title="mod tracing_subscriber::layer"><code>layer</code> module’s
+documentation</a> for details on using <a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s.</p>
+<p>In addition, the <a href="layer/trait.Filter.html" title="trait tracing_subscriber::layer::Filter"><code>Filter</code></a> trait defines an interface for filtering what
+spans and events are recorded by a particular layer. This allows different
+<a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s to handle separate subsets of the trace data emitted by a
+program. See the <a href="layer/index.html#per-layer-filtering" title="mod tracing_subscriber::layer">documentation on per-layer filtering</a> for more
+information on using <a href="layer/trait.Filter.html" title="trait tracing_subscriber::layer::Filter"><code>Filter</code></a>s.</p>
+<h3 id="included-subscribers"><a class="doc-anchor" href="#included-subscribers">§</a>Included Subscribers</h3>
+<p>The following <code>Subscriber</code>s are provided for application authors:</p>
+<ul>
+<li><a href="fmt/index.html" title="mod tracing_subscriber::fmt"><code>fmt</code></a> - Formats and logs tracing data (requires the <code>fmt</code> feature flag)</li>
+</ul>
+<h3 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h3>
+<ul>
+<li><code>std</code>: Enables APIs that depend on the Rust standard library
+(enabled by default).</li>
+<li><code>alloc</code>: Depend on <a href="https://doc.rust-lang.org/alloc/index.html"><code>liballoc</code></a> (enabled by “std”).</li>
+<li><code>env-filter</code>: Enables the <a href="filter/struct.EnvFilter.html" title="struct tracing_subscriber::filter::EnvFilter"><code>EnvFilter</code></a> type, which implements filtering
+similar to the <a href="https://crates.io/crates/env_logger"><code>env_logger</code> crate</a>. <strong>Requires “std”</strong>.</li>
+<li><code>fmt</code>: Enables the <a href="fmt/index.html" title="mod tracing_subscriber::fmt"><code>fmt</code></a> module, which provides a subscriber
+implementation for printing formatted representations of trace events.
+Enabled by default. <strong>Requires “registry” and “std”</strong>.</li>
+<li><code>ansi</code>: Enables <code>fmt</code> support for ANSI terminal colors. Enabled by
+default.</li>
+<li><code>registry</code>: enables the <a href="registry/index.html" title="mod tracing_subscriber::registry"><code>registry</code></a> module. Enabled by default.
+<strong>Requires “std”</strong>.</li>
+<li><code>json</code>: Enables <code>fmt</code> support for JSON output. In JSON output, the ANSI
+feature does nothing. <strong>Requires “fmt” and “std”</strong>.</li>
+<li><code>local-time</code>: Enables local time formatting when using the <a href="https://crates.io/crates/time"><code>time</code>
+crate</a>’s timestamp formatters with the <code>fmt</code> subscriber.</li>
+</ul>
+<h4 id="optional-dependencies"><a class="doc-anchor" href="#optional-dependencies">§</a>Optional Dependencies</h4>
+<ul>
+<li><a href="https://crates.io/crates/tracing-log"><code>tracing-log</code></a>: Enables better formatting for events emitted by <code>log</code>
+macros in the <code>fmt</code> subscriber. Enabled by default.</li>
+<li><a href="https://crates.io/crates/time"><code>time</code></a>: Enables support for using the <a href="https://crates.io/crates/time"><code>time</code> crate</a> for timestamp
+formatting in the <code>fmt</code> subscriber.</li>
+<li><a href="https://crates.io/crates/smallvec"><code>smallvec</code></a>: Causes the <code>EnvFilter</code> type to use the <code>smallvec</code> crate (rather
+than <code>Vec</code>) as a performance optimization. Enabled by default.</li>
+<li><a href="https://crates.io/crates/parking_lot"><code>parking_lot</code></a>: Use the <code>parking_lot</code> crate’s <code>RwLock</code> implementation
+rather than the Rust standard library’s implementation.</li>
+</ul>
+<h4 id="no_std-support"><a class="doc-anchor" href="#no_std-support">§</a><code>no_std</code> Support</h4>
+<p>In embedded systems and other bare-metal applications, <code>tracing</code> can be
+used without requiring the Rust standard library, although some features are
+disabled. Although most of the APIs provided by <code>tracing-subscriber</code>, such
+as <a href="fmt/index.html" title="mod tracing_subscriber::fmt"><code>fmt</code></a> and <a href="filter/struct.EnvFilter.html" title="struct tracing_subscriber::filter::EnvFilter"><code>EnvFilter</code></a>, require the standard library, some
+functionality, such as the <a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait, can still be used in
+<code>no_std</code> environments.</p>
+<p>The dependency on the standard library is controlled by two crate feature
+flags, “std”, which enables the dependency on <a href="https://doc.rust-lang.org/std/index.html"><code>libstd</code></a>, and “alloc”, which
+enables the dependency on <a href="https://doc.rust-lang.org/alloc/index.html"><code>liballoc</code></a> (and is enabled by the “std”
+feature). These features are enabled by default, but <code>no_std</code> users can
+disable them using:</p>
+<div class="example-wrap"><pre class="language-toml"><code># Cargo.toml
+tracing-subscriber = { version = &quot;0.3&quot;, default-features = false }
+</code></pre></div>
+<p>Additional APIs are available when <a href="https://doc.rust-lang.org/alloc/index.html"><code>liballoc</code></a> is available. To enable
+<code>liballoc</code> but not <code>std</code>, use:</p>
+<div class="example-wrap"><pre class="language-toml"><code># Cargo.toml
+tracing-subscriber = { version = &quot;0.3&quot;, default-features = false, features = [&quot;alloc&quot;] }
+</code></pre></div><h4 id="unstable-features"><a class="doc-anchor" href="#unstable-features">§</a>Unstable Features</h4>
+<p>These feature flags enable <strong>unstable</strong> features. The public API may break in 0.1.x
+releases. To enable these features, the <code>--cfg tracing_unstable</code> must be passed to
+<code>rustc</code> when compiling.</p>
+<p>The following unstable feature flags are currently available:</p>
+<ul>
+<li><code>valuable</code>: Enables support for serializing values recorded using the
+<a href="https://crates.io/crates/valuable"><code>valuable</code></a> crate as structured JSON in the <a href="fmt/format/struct.Json.html" title="struct tracing_subscriber::fmt::format::Json"><code>format::Json</code></a> formatter.</li>
+</ul>
+<h5 id="enabling-unstable-features"><a class="doc-anchor" href="#enabling-unstable-features">§</a>Enabling Unstable Features</h5>
+<p>The easiest way to set the <code>tracing_unstable</code> cfg is to use the <code>RUSTFLAGS</code>
+env variable when running <code>cargo</code> commands:</p>
+<div class="example-wrap"><pre class="language-shell"><code>RUSTFLAGS=&quot;--cfg tracing_unstable&quot; cargo build
+</code></pre></div>
+<p>Alternatively, the following can be added to the <code>.cargo/config</code> file in a
+project to automatically enable the cfg flag for that project:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[build]
+rustflags = [&quot;--cfg&quot;, &quot;tracing_unstable&quot;]
+</code></pre></div><h3 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h3>
+<p>Tracing is built against the latest stable release. The minimum supported
+version is 1.63. The current Tracing version is not guaranteed to build on
+Rust versions earlier than the minimum supported version.</p>
+<p>Tracing follows the same compiler support policies as the rest of the Tokio
+project. The current stable Rust compiler and the three most recent minor
+versions before it will always be supported. For example, if the current
+stable compiler version is 1.69, the minimum supported version will not be
+increased past 1.66, three minor versions prior. Increasing the minimum
+supported compiler version is not considered a semver breaking change as
+long as doing so complies with this policy.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.fmt"><code>pub use fmt::<a class="fn" href="fmt/fn.fmt.html" title="fn tracing_subscriber::fmt::fmt">fmt</a>;</code></div></li><li><div class="item-name" id="reexport.FmtSubscriber"><code>pub use fmt::<a class="struct" href="fmt/struct.Subscriber.html" title="struct tracing_subscriber::fmt::Subscriber">Subscriber</a> as FmtSubscriber;</code></div></li><li><div class="item-name" id="reexport.EnvFilter"><code>pub use filter::<a class="struct" href="filter/struct.EnvFilter.html" title="struct tracing_subscriber::filter::EnvFilter">EnvFilter</a>;</code></div></li><li><div class="item-name" id="reexport.Layer"><code>pub use layer::<a class="trait" href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer">Layer</a>;</code></div></li><li><div class="item-name" id="reexport.Registry"><code>pub use registry::<a class="struct" href="registry/struct.Registry.html" title="struct tracing_subscriber::registry::Registry">Registry</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="field/index.html" title="mod tracing_subscriber::field">field</a></div><div class="desc docblock-short">Utilities for working with <a href="../tracing_core/field/index.html" title="mod tracing_core::field">fields</a> and <a href="field/trait.Visit.html" title="trait tracing_subscriber::field::Visit">field visitors</a>.</div></li><li><div class="item-name"><a class="mod" href="filter/index.html" title="mod tracing_subscriber::filter">filter</a></div><div class="desc docblock-short"><a href="layer/index.html" title="mod tracing_subscriber::layer"><code>Layer</code></a>s that control which spans and events are enabled by the wrapped
+subscriber.</div></li><li><div class="item-name"><a class="mod" href="fmt/index.html" title="mod tracing_subscriber::fmt">fmt</a></div><div class="desc docblock-short">A <code>Subscriber</code> for formatting and logging <code>tracing</code> data.</div></li><li><div class="item-name"><a class="mod" href="layer/index.html" title="mod tracing_subscriber::layer">layer</a></div><div class="desc docblock-short">The <a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a> trait, a composable abstraction for building <a href="../tracing_core/subscriber/trait.Subscriber.html" title="trait tracing_core::subscriber::Subscriber"><code>Subscriber</code></a>s.</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod tracing_subscriber::prelude">prelude</a></div><div class="desc docblock-short">The <code>tracing-subscriber</code> prelude.</div></li><li><div class="item-name"><a class="mod" href="registry/index.html" title="mod tracing_subscriber::registry">registry</a></div><div class="desc docblock-short">Storage for span data shared by multiple <a href="layer/trait.Layer.html" title="trait tracing_subscriber::layer::Layer"><code>Layer</code></a>s.</div></li><li><div class="item-name"><a class="mod" href="reload/index.html" title="mod tracing_subscriber::reload">reload</a></div><div class="desc docblock-short">Wrapper for a <code>Layer</code> to allow it to be dynamically reloaded.</div></li><li><div class="item-name"><a class="mod" href="util/index.html" title="mod tracing_subscriber::util">util</a></div><div class="desc docblock-short">Extension traits and other utilities to make working with subscribers more
+ergonomic.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.registry.html" title="fn tracing_subscriber::registry">registry</a></div></li></ul></section></div></main></body></html>

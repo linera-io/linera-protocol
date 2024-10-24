@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Analyzes whether a type is `FromZeroes`."><title>FromZeroes in zerocopy - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="zerocopy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../zerocopy/index.html">zerocopy</a><span class="version">0.7.35</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Derive Macro <a href="index.html">zerocopy</a>::<wbr><a class="derive" href="#">FromZeroes</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/zerocopy_derive/lib.rs.html#247">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>#[derive(FromZeroes)]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Analyzes whether a type is <a href="trait.FromZeroes.html" title="trait zerocopy::FromZeroes"><code>FromZeroes</code></a>.</p>
+<p>This derive analyzes, at compile time, whether the annotated type satisfies
+the <a href="trait.FromZeroes.html#safety" title="trait zerocopy::FromZeroes">safety conditions</a> of <code>FromZeroes</code> and implements <code>FromZeroes</code> if it is
+sound to do so. This derive can be applied to structs, enums, and unions;
+e.g.:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(FromZeroes)]
+</span><span class="kw">struct </span>MyStruct {
+    ...
+}
+
+<span class="attr">#[derive(FromZeroes)]
+#[repr(u8)]
+</span><span class="kw">enum </span>MyEnum {
+    ...
+}
+
+<span class="attr">#[derive(FromZeroes)]
+</span><span class="kw">union </span>MyUnion {
+    ...
+}</code></pre></div>
+<h2 id="analysis"><a class="doc-anchor" href="#analysis">§</a>Analysis</h2>
+<p><em>This section describes, roughly, the analysis performed by this derive to
+determine whether it is sound to implement <code>FromZeroes</code> for a given type.
+Unless you are modifying the implementation of this derive, or attempting to
+manually implement <code>FromZeroes</code> for a type yourself, you don’t need to read
+this section.</em></p>
+<p>If a type has the following properties, then this derive can implement
+<code>FromZeroes</code> for that type:</p>
+<ul>
+<li>If the type is a struct, all of its fields must be <code>FromZeroes</code>.</li>
+<li>If the type is an enum, it must be C-like (meaning that all variants have
+no fields) and it must have a variant with a discriminant of <code>0</code>. See <a href="https://doc.rust-lang.org/reference/items/enumerations.html#custom-discriminant-values-for-fieldless-enumerations">the
+reference</a> for a description of how discriminant values are chosen.</li>
+<li>The type must not contain any <a href="https://doc.rust-lang.org/1.81.0/core/cell/struct.UnsafeCell.html" title="struct core::cell::UnsafeCell"><code>UnsafeCell</code></a>s (this is required in order
+for it to be sound to construct a <code>&amp;[u8]</code> and a <code>&amp;T</code> to the same region of
+memory). The type may contain references or pointers to <code>UnsafeCell</code>s so
+long as those values can themselves be initialized from zeroes
+(<code>FromZeroes</code> is not currently implemented for, e.g.,
+<code>Option&lt;&amp;UnsafeCell&lt;_&gt;&gt;</code>, but it could be one day).</li>
+</ul>
+<p>This analysis is subject to change. Unsafe code may <em>only</em> rely on the
+documented <a href="trait.FromZeroes.html#safety" title="trait zerocopy::FromZeroes">safety conditions</a> of <code>FromZeroes</code>, and must <em>not</em> rely on the
+implementation details of this derive.</p>
+<h3 id="why-isnt-an-explicit-representation-required-for-structs"><a class="doc-anchor" href="#why-isnt-an-explicit-representation-required-for-structs">§</a>Why isn’t an explicit representation required for structs?</h3>
+<p>Neither this derive, nor the <a href="trait.FromZeroes.html#safety" title="trait zerocopy::FromZeroes">safety conditions</a> of <code>FromZeroes</code>, requires
+that structs are marked with <code>#[repr(C)]</code>.</p>
+<p>Per the <a href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html" title="primitive reference">Rust reference</a>,</p>
+<blockquote>
+<p>The representation of a type can change the padding between fields, but
+does not change the layout of the fields themselves.</p>
+</blockquote>
+<p>Since the layout of structs only consists of padding bytes and field bytes,
+a struct is soundly <code>FromZeroes</code> if:</p>
+<ol>
+<li>its padding is soundly <code>FromZeroes</code>, and</li>
+<li>its fields are soundly <code>FromZeroes</code>.</li>
+</ol>
+<p>The answer to the first question is always yes: padding bytes do not have
+any validity constraints. A <a href="https://github.com/rust-lang/unsafe-code-guidelines/issues/174">discussion</a> of this question in the Unsafe Code
+Guidelines Working Group concluded that it would be virtually unimaginable
+for future versions of rustc to add validity constraints to padding bytes.</p>
+<p>Whether a struct is soundly <code>FromZeroes</code> therefore solely depends on whether
+its fields are <code>FromZeroes</code>.</p>
+</div></details></section></div></main></body></html>

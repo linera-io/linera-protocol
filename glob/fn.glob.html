@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Return an iterator that produces all the `Path`s that match the given pattern using default match options, which may be absolute or relative to the current working directory."><title>glob in glob - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="glob" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://www.rust-lang.org/favicon.ico"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../glob/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../glob/index.html"><img src="https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png" alt="logo"></a><h2><a href="../glob/index.html">glob</a><span class="version">0.3.1</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="index.html">glob</a>::<wbr><a class="fn" href="#">glob</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/glob/lib.rs.html#160-162">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn glob(pattern: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Paths.html" title="struct glob::Paths">Paths</a>, <a class="struct" href="struct.PatternError.html" title="struct glob::PatternError">PatternError</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Return an iterator that produces all the <code>Path</code>s that match the given
+pattern using default match options, which may be absolute or relative to
+the current working directory.</p>
+<p>This may return an error if the pattern is invalid.</p>
+<p>This method uses the default match options and is equivalent to calling
+<code>glob_with(pattern, MatchOptions::new())</code>. Use <code>glob_with</code> directly if you
+want to use non-default match options.</p>
+<p>When iterating, each result is a <code>GlobResult</code> which expresses the
+possibility that there was an <code>IoError</code> when attempting to read the contents
+of the matched path.  In other words, each item returned by the iterator
+will either be an <code>Ok(Path)</code> if the path matched, or an <code>Err(GlobError)</code> if
+the path (partially) matched <em>but</em> its contents could not be read in order
+to determine if its contents matched.</p>
+<p>See the <code>Paths</code> documentation for more information.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Consider a directory <code>/media/pictures</code> containing only the files
+<code>kittens.jpg</code>, <code>puppies.jpg</code> and <code>hamsters.gif</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>glob::glob;
+
+<span class="kw">for </span>entry <span class="kw">in </span>glob(<span class="string">"/media/pictures/*.jpg"</span>).unwrap() {
+    <span class="kw">match </span>entry {
+        <span class="prelude-val">Ok</span>(path) =&gt; <span class="macro">println!</span>(<span class="string">"{:?}"</span>, path.display()),
+
+        <span class="comment">// if the path matched but was unreadable,
+        // thereby preventing its contents from matching
+        </span><span class="prelude-val">Err</span>(e) =&gt; <span class="macro">println!</span>(<span class="string">"{:?}"</span>, e),
+    }
+}</code></pre></div>
+<p>The above code will print:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>/media/pictures/kittens.jpg
+/media/pictures/puppies.jpg</code></pre></div>
+<p>If you want to ignore unreadable paths, you can use something like
+<code>filter_map</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>glob::glob;
+<span class="kw">use </span>std::result::Result;
+
+<span class="kw">for </span>path <span class="kw">in </span>glob(<span class="string">"/media/pictures/*.jpg"</span>).unwrap().filter_map(Result::ok) {
+    <span class="macro">println!</span>(<span class="string">"{}"</span>, path.display());
+}</code></pre></div>
+<p>Paths are yielded in alphabetical order.</p>
+</div></details></section></div></main></body></html>

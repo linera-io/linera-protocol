@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This section documents rustls itself: what protocol features are and are not implemented."><title>rustls::manual::_04_features - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="rustls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../rustls/index.html">rustls</a><span class="version">0.23.13</span></h2></div><h2 class="location"><a href="#">Module _04_features</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In rustls::manual</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">rustls</a>::<wbr><a href="../index.html">manual</a>::<wbr><a class="mod" href="#">_04_features</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/rustls/manual/features.rs.html#1-54">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This section documents rustls itself: what protocol features are and are not implemented.</p>
+<p>The below list reflects the support provided with the default crate features.
+Items marked with an asterisk <code>*</code> can be extended or altered via public
+APIs (<a href="../../crypto/struct.CryptoProvider.html" title="struct rustls::crypto::CryptoProvider"><code>CryptoProvider</code></a> for example).</p>
+<h3 id="current-features"><a class="doc-anchor" href="#current-features">§</a>Current features</h3>
+<ul>
+<li>TLS1.2 and TLS1.3</li>
+<li>ECDSA, Ed25519 or RSA server authentication by clients <code>*</code></li>
+<li>ECDSA, Ed25519 or RSA server authentication by servers <code>*</code></li>
+<li>Forward secrecy using ECDHE; with curve25519, nistp256 or nistp384 curves <code>*</code></li>
+<li>AES128-GCM and AES256-GCM bulk encryption, with safe nonces <code>*</code></li>
+<li>ChaCha20-Poly1305 bulk encryption (<a href="https://tools.ietf.org/html/rfc7905">RFC7905</a>) <code>*</code></li>
+<li>ALPN support</li>
+<li>SNI support</li>
+<li>Tunable fragment size to make TLS messages match size of underlying transport</li>
+<li>Optional use of vectored IO to minimise system calls</li>
+<li>TLS1.2 session resumption</li>
+<li>TLS1.2 resumption via tickets (<a href="https://tools.ietf.org/html/rfc5077">RFC5077</a>)</li>
+<li>TLS1.3 resumption via tickets or session storage</li>
+<li>TLS1.3 0-RTT data</li>
+<li>Server and optional client authentication</li>
+<li>Extended master secret support (<a href="https://tools.ietf.org/html/rfc7627">RFC7627</a>)</li>
+<li>Exporters (<a href="https://tools.ietf.org/html/rfc5705">RFC5705</a>)</li>
+<li>OCSP stapling by servers</li>
+<li><a href="https://tools.ietf.org/html/rfc8879">RFC8879</a> certificate compression by clients
+and servers <code>*</code></li>
+</ul>
+<h3 id="non-features"><a class="doc-anchor" href="#non-features">§</a>Non-features</h3>
+<p>For reasons explained in the other sections of this manual, rustls does not
+and will not support:</p>
+<ul>
+<li>SSL1, SSL2, SSL3, TLS1 or TLS1.1</li>
+<li>RC4</li>
+<li>DES or triple DES</li>
+<li>EXPORT ciphersuites</li>
+<li>MAC-then-encrypt ciphersuites</li>
+<li>Ciphersuites without forward secrecy</li>
+<li>Renegotiation</li>
+<li>Kerberos</li>
+<li>TLS 1.2 protocol compression</li>
+<li>Discrete-log Diffie-Hellman <code>*</code></li>
+<li>Automatic protocol version downgrade</li>
+<li>Using CA certificates directly to authenticate a server/client (often called “self-signed
+certificates”). <em>Rustls’ default certificate verifier does not support using a trust anchor as
+both a CA certificate and an end-entity certificate in order to limit complexity and risk in
+path building. While dangerous, all authentication can be turned off if required –
+see the <a href="https://github.com/rustls/rustls/blob/992e2364a006b2e84a8cf6a7c3eaf0bdb773c9de/examples/src/bin/tlsclient-mio.rs#L318">example code</a></em> <code>*</code></li>
+</ul>
+</div></details></section></div></main></body></html>

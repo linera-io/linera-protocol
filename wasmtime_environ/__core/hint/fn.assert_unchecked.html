@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Makes a soundness promise to the compiler that `cond` holds."><title>assert_unchecked in wasmtime_environ::__core::hint - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::hint</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">hint</a>::<wbr><a class="fn" href="#">assert_unchecked</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.81.0, const since 1.81.0">1.81.0 (const: 1.81.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/hint.rs.html#200">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const unsafe fn assert_unchecked(cond: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Makes a <em>soundness</em> promise to the compiler that <code>cond</code> holds.</p>
+<p>This may allow the optimizer to simplify things, but it might also make the generated code
+slower. Either way, calling it will most likely make compilation take longer.</p>
+<p>You may know this from other places as
+<a href="https://llvm.org/docs/LangRef.html#llvm-assume-intrinsic"><code>llvm.assume</code></a> or, in C,
+<a href="https://clang.llvm.org/docs/LanguageExtensions.html#builtin-assume"><code>__builtin_assume</code></a>.</p>
+<p>This promotes a correctness requirement to a soundness requirement. Don’t do that without
+very good reason.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>This is a situational tool for micro-optimization, and is allowed to do nothing. Any use
+should come with a repeatable benchmark to show the value, with the expectation to drop it
+later should the optimizer get smarter and no longer need it.</p>
+<p>The more complicated the condition, the less likely this is to be useful. For example,
+<code>assert_unchecked(foo.is_sorted())</code> is a complex enough value that the compiler is unlikely
+to be able to take advantage of it.</p>
+<p>There’s also no need to <code>assert_unchecked</code> basic properties of things.  For example, the
+compiler already knows the range of <code>count_ones</code>, so there is no benefit to
+<code>let n = u32::count_ones(x); assert_unchecked(n &lt;= u32::BITS);</code>.</p>
+<p><code>assert_unchecked</code> is logically equivalent to <code>if !cond { unreachable_unchecked(); }</code>. If
+ever you are tempted to write <code>assert_unchecked(false)</code>, you should instead use
+<a href="fn.unreachable_unchecked.html" title="fn wasmtime_environ::__core::hint::unreachable_unchecked"><code>unreachable_unchecked()</code></a> directly.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p><code>cond</code> must be <code>true</code>. It is immediate UB to call this with <code>false</code>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::hint;
+
+<span class="doccomment">/// # Safety
+///
+/// `p` must be nonnull and valid
+</span><span class="kw">pub unsafe fn </span>next_value(p: <span class="kw-2">*const </span>i32) -&gt; i32 {
+    <span class="comment">// SAFETY: caller invariants guarantee that `p` is not null
+    </span><span class="kw">unsafe </span>{ hint::assert_unchecked(!p.is_null()) }
+
+    <span class="kw">if </span>p.is_null() {
+        <span class="kw">return </span>-<span class="number">1</span>;
+    } <span class="kw">else </span>{
+        <span class="comment">// SAFETY: caller invariants guarantee that `p` is valid
+        </span><span class="kw">unsafe </span>{ <span class="kw-2">*</span>p + <span class="number">1 </span>}
+    }
+}</code></pre></div>
+<p>Without the <code>assert_unchecked</code>, the above function produces the following with optimizations
+enabled:</p>
+<div class="example-wrap"><pre class="language-asm"><code>next_value:
+        test    rdi, rdi
+        je      .LBB0_1
+        mov     eax, dword ptr [rdi]
+        inc     eax
+        ret
+.LBB0_1:
+        mov     eax, -1
+        ret
+</code></pre></div>
+<p>Adding the assertion allows the optimizer to remove the extra check:</p>
+<div class="example-wrap"><pre class="language-asm"><code>next_value:
+        mov     eax, dword ptr [rdi]
+        inc     eax
+        ret
+</code></pre></div>
+<p>This example is quite unlike anything that would be used in the real world: it is redundant
+to put an assertion right next to code that checks the same thing, and dereferencing a
+pointer already has the builtin assumption that it is nonnull. However, it illustrates the
+kind of changes the optimizer can make even when the behavior is less obviously related.</p>
+</div></details></section></div></main></body></html>

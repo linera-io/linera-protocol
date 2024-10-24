@@ -1,0 +1,540 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Extends `Read` with methods for reading numbers. (For `std::io`.)"><title>ReadBytesExt in byteorder - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="byteorder" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../byteorder/index.html">byteorder</a><span class="version">1.5.0</span></h2></div><h2 class="location"><a href="#">ReadBytesExt</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.read_f32">read_f32</a></li><li><a href="#method.read_f32_into">read_f32_into</a></li><li><a href="#method.read_f32_into_unchecked">read_f32_into_unchecked</a></li><li><a href="#method.read_f64">read_f64</a></li><li><a href="#method.read_f64_into">read_f64_into</a></li><li><a href="#method.read_f64_into_unchecked">read_f64_into_unchecked</a></li><li><a href="#method.read_i128">read_i128</a></li><li><a href="#method.read_i128_into">read_i128_into</a></li><li><a href="#method.read_i16">read_i16</a></li><li><a href="#method.read_i16_into">read_i16_into</a></li><li><a href="#method.read_i24">read_i24</a></li><li><a href="#method.read_i32">read_i32</a></li><li><a href="#method.read_i32_into">read_i32_into</a></li><li><a href="#method.read_i48">read_i48</a></li><li><a href="#method.read_i64">read_i64</a></li><li><a href="#method.read_i64_into">read_i64_into</a></li><li><a href="#method.read_i8">read_i8</a></li><li><a href="#method.read_i8_into">read_i8_into</a></li><li><a href="#method.read_int">read_int</a></li><li><a href="#method.read_int128">read_int128</a></li><li><a href="#method.read_u128">read_u128</a></li><li><a href="#method.read_u128_into">read_u128_into</a></li><li><a href="#method.read_u16">read_u16</a></li><li><a href="#method.read_u16_into">read_u16_into</a></li><li><a href="#method.read_u24">read_u24</a></li><li><a href="#method.read_u32">read_u32</a></li><li><a href="#method.read_u32_into">read_u32_into</a></li><li><a href="#method.read_u48">read_u48</a></li><li><a href="#method.read_u64">read_u64</a></li><li><a href="#method.read_u64_into">read_u64_into</a></li><li><a href="#method.read_u8">read_u8</a></li><li><a href="#method.read_uint">read_uint</a></li><li><a href="#method.read_uint128">read_uint128</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate byteorder</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">byteorder</a>::<wbr><a class="trait" href="#">ReadBytesExt</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/byteorder/io.rs.html#30-1045">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait ReadBytesExt: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a> {
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 33 methods</span></summary>    // Provided methods
+    fn <a href="#method.read_u8" class="fn">read_u8</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i8" class="fn">read_i8</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u16" class="fn">read_u16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i16" class="fn">read_i16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u24" class="fn">read_u24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i24" class="fn">read_i24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u32" class="fn">read_u32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i32" class="fn">read_i32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u48" class="fn">read_u48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i48" class="fn">read_i48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u64" class="fn">read_u64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i64" class="fn">read_i64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u128" class="fn">read_u128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i128" class="fn">read_i128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_uint" class="fn">read_uint</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_int" class="fn">read_int</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_uint128" class="fn">read_uint128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_int128" class="fn">read_int128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32" class="fn">read_f32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64" class="fn">read_f64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u16_into" class="fn">read_u16_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u32_into" class="fn">read_u32_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u64_into" class="fn">read_u64_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_u128_into" class="fn">read_u128_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i8_into" class="fn">read_i8_into</a>(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i16_into" class="fn">read_i16_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i32_into" class="fn">read_i32_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i64_into" class="fn">read_i64_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_i128_into" class="fn">read_i128_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32_into" class="fn">read_f32_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f32_into_unchecked" class="fn">read_f32_into_unchecked</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(
+        &amp;mut self,
+        dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>],
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64_into" class="fn">read_f64_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.read_f64_into_unchecked" class="fn">read_f64_into_unchecked</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(
+        &amp;mut self,
+        dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>],
+    ) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt; { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Extends <a href="https://doc.rust-lang.org/std/io/trait.Read.html"><code>Read</code></a> with methods for reading numbers. (For <code>std::io</code>.)</p>
+<p>Most of the methods defined here have an unconstrained type parameter that
+must be explicitly instantiated. Typically, it is instantiated with either
+the <a href="enum.BigEndian.html"><code>BigEndian</code></a> or <a href="enum.LittleEndian.html"><code>LittleEndian</code></a> types defined in this crate.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Read unsigned 16 bit big-endian integers from a <a href="https://doc.rust-lang.org/std/io/trait.Read.html"><code>Read</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">517</span>, rdr.read_u16::&lt;BigEndian&gt;().unwrap());
+<span class="macro">assert_eq!</span>(<span class="number">768</span>, rdr.read_u16::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.read_u8" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#55-59">source</a><h4 class="code-header">fn <a href="#method.read_u8" class="fn">read_u8</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 8 bit integer from the underlying reader.</p>
+<p>Note that since this reads a single byte, no byte order conversions
+are used. It is included for completeness.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<p>Read unsigned 8 bit integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::ReadBytesExt;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, rdr.read_u8().unwrap());
+<span class="macro">assert_eq!</span>(<span class="number">5</span>, rdr.read_u8().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i8" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#85-89">source</a><h4 class="code-header">fn <a href="#method.read_i8" class="fn">read_i8</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 8 bit integer from the underlying reader.</p>
+<p>Note that since this reads a single byte, no byte order conversions
+are used. It is included for completeness.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
+<p>Read signed 8 bit integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::ReadBytesExt;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x02</span>, <span class="number">0xfb</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">2</span>, rdr.read_i8().unwrap());
+<span class="macro">assert_eq!</span>(-<span class="number">5</span>, rdr.read_i8().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u16" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#112-116">source</a><h4 class="code-header">fn <a href="#method.read_u16" class="fn">read_u16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 16 bit integer from the underlying reader.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
+<p>Read unsigned 16 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">517</span>, rdr.read_u16::&lt;BigEndian&gt;().unwrap());
+<span class="macro">assert_eq!</span>(<span class="number">768</span>, rdr.read_u16::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i16" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#139-143">source</a><h4 class="code-header">fn <a href="#method.read_i16" class="fn">read_i16</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 16 bit integer from the underlying reader.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
+<p>Read signed 16 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0xc1</span>, <span class="number">0xff</span>, <span class="number">0x7c</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">193</span>, rdr.read_i16::&lt;BigEndian&gt;().unwrap());
+<span class="macro">assert_eq!</span>(-<span class="number">132</span>, rdr.read_i16::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u24" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#165-169">source</a><h4 class="code-header">fn <a href="#method.read_u24" class="fn">read_u24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 24 bit integer from the underlying reader.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-5"><a class="doc-anchor" href="#examples-5">§</a>Examples</h5>
+<p>Read unsigned 24 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0x01</span>, <span class="number">0x0b</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">267</span>, rdr.read_u24::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i24" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#191-195">source</a><h4 class="code-header">fn <a href="#method.read_i24" class="fn">read_i24</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 24 bit integer from the underlying reader.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-6"><a class="doc-anchor" href="#examples-6">§</a>Examples</h5>
+<p>Read signed 24 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xff</span>, <span class="number">0x7a</span>, <span class="number">0x33</span>]);
+<span class="macro">assert_eq!</span>(-<span class="number">34253</span>, rdr.read_i24::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u32" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#217-221">source</a><h4 class="code-header">fn <a href="#method.read_u32" class="fn">read_u32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 32 bit integer from the underlying reader.</p>
+<h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-7"><a class="doc-anchor" href="#examples-7">§</a>Examples</h5>
+<p>Read unsigned 32 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x01</span>, <span class="number">0x0b</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">267</span>, rdr.read_u32::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i32" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#243-247">source</a><h4 class="code-header">fn <a href="#method.read_i32" class="fn">read_i32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 32 bit integer from the underlying reader.</p>
+<h5 id="errors-7"><a class="doc-anchor" href="#errors-7">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-8"><a class="doc-anchor" href="#examples-8">§</a>Examples</h5>
+<p>Read signed 32 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0x7a</span>, <span class="number">0x33</span>]);
+<span class="macro">assert_eq!</span>(-<span class="number">34253</span>, rdr.read_i32::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u48" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#269-273">source</a><h4 class="code-header">fn <a href="#method.read_u48" class="fn">read_u48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 48 bit integer from the underlying reader.</p>
+<h5 id="errors-8"><a class="doc-anchor" href="#errors-8">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-9"><a class="doc-anchor" href="#examples-9">§</a>Examples</h5>
+<p>Read unsigned 48 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xb6</span>, <span class="number">0x71</span>, <span class="number">0x6b</span>, <span class="number">0xdc</span>, <span class="number">0x2b</span>, <span class="number">0x31</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">200598257150769</span>, rdr.read_u48::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i48" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#295-299">source</a><h4 class="code-header">fn <a href="#method.read_i48" class="fn">read_i48</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 48 bit integer from the underlying reader.</p>
+<h5 id="errors-9"><a class="doc-anchor" href="#errors-9">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-10"><a class="doc-anchor" href="#examples-10">§</a>Examples</h5>
+<p>Read signed 48 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x9d</span>, <span class="number">0x71</span>, <span class="number">0xab</span>, <span class="number">0xe7</span>, <span class="number">0x97</span>, <span class="number">0x8f</span>]);
+<span class="macro">assert_eq!</span>(-<span class="number">108363435763825</span>, rdr.read_i48::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u64" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#321-325">source</a><h4 class="code-header">fn <a href="#method.read_u64" class="fn">read_u64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 64 bit integer from the underlying reader.</p>
+<h5 id="errors-10"><a class="doc-anchor" href="#errors-10">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-11"><a class="doc-anchor" href="#examples-11">§</a>Examples</h5>
+<p>Read an unsigned 64 bit big-endian integer from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">918733457491587</span>, rdr.read_u64::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i64" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#347-351">source</a><h4 class="code-header">fn <a href="#method.read_i64" class="fn">read_i64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 64 bit integer from the underlying reader.</p>
+<h5 id="errors-11"><a class="doc-anchor" href="#errors-11">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-12"><a class="doc-anchor" href="#examples-12">§</a>Examples</h5>
+<p>Read a signed 64 bit big-endian integer from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x80</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);
+<span class="macro">assert_eq!</span>(i64::min_value(), rdr.read_i64::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#376-380">source</a><h4 class="code-header">fn <a href="#method.read_u128" class="fn">read_u128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned 128 bit integer from the underlying reader.</p>
+<h5 id="errors-12"><a class="doc-anchor" href="#errors-12">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-13"><a class="doc-anchor" href="#examples-13">§</a>Examples</h5>
+<p>Read an unsigned 128 bit big-endian integer from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83</span>,
+    <span class="number">0x00</span>, <span class="number">0x03</span>, <span class="number">0x43</span>, <span class="number">0x95</span>, <span class="number">0x4d</span>, <span class="number">0x60</span>, <span class="number">0x86</span>, <span class="number">0x83
+</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">16947640962301618749969007319746179</span>, rdr.read_u128::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#402-406">source</a><h4 class="code-header">fn <a href="#method.read_i128" class="fn">read_i128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed 128 bit integer from the underlying reader.</p>
+<h5 id="errors-13"><a class="doc-anchor" href="#errors-13">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-14"><a class="doc-anchor" href="#examples-14">§</a>Examples</h5>
+<p>Read a signed 128 bit big-endian integer from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x80</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]);
+<span class="macro">assert_eq!</span>(i128::min_value(), rdr.read_i128::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_uint" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#427-431">source</a><h4 class="code-header">fn <a href="#method.read_uint" class="fn">read_uint</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned n-bytes integer from the underlying reader.</p>
+<h5 id="errors-14"><a class="doc-anchor" href="#errors-14">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-15"><a class="doc-anchor" href="#examples-15">§</a>Examples</h5>
+<p>Read an unsigned n-byte big-endian integer from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0x80</span>, <span class="number">0x74</span>, <span class="number">0xfa</span>]);
+<span class="macro">assert_eq!</span>(<span class="number">8418554</span>, rdr.read_uint::&lt;BigEndian&gt;(<span class="number">3</span>).unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_int" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#452-456">source</a><h4 class="code-header">fn <a href="#method.read_int" class="fn">read_int</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed n-bytes integer from the underlying reader.</p>
+<h5 id="errors-15"><a class="doc-anchor" href="#errors-15">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-16"><a class="doc-anchor" href="#examples-16">§</a>Examples</h5>
+<p>Read an unsigned n-byte big-endian integer from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0xc1</span>, <span class="number">0xff</span>, <span class="number">0x7c</span>]);
+<span class="macro">assert_eq!</span>(-<span class="number">4063364</span>, rdr.read_int::&lt;BigEndian&gt;(<span class="number">3</span>).unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_uint128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#460-464">source</a><h4 class="code-header">fn <a href="#method.read_uint128" class="fn">read_uint128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>&gt;</h4></section></summary><div class="docblock"><p>Reads an unsigned n-bytes integer from the underlying reader.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_int128" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#468-472">source</a><h4 class="code-header">fn <a href="#method.read_int128" class="fn">read_int128</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, nbytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a signed n-bytes integer from the underlying reader.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#499-503">source</a><h4 class="code-header">fn <a href="#method.read_f32" class="fn">read_f32</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a IEEE754 single-precision (4 bytes) floating point number from
+the underlying reader.</p>
+<h5 id="errors-16"><a class="doc-anchor" href="#errors-16">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-17"><a class="doc-anchor" href="#examples-17">§</a>Examples</h5>
+<p>Read a big-endian single-precision floating point number from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f32;
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x40</span>, <span class="number">0x49</span>, <span class="number">0x0f</span>, <span class="number">0xdb</span>,
+]);
+<span class="macro">assert_eq!</span>(f32::consts::PI, rdr.read_f32::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#530-534">source</a><h4 class="code-header">fn <a href="#method.read_f64" class="fn">read_f64</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a IEEE754 double-precision (8 bytes) floating point number from
+the underlying reader.</p>
+<h5 id="errors-17"><a class="doc-anchor" href="#errors-17">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-18"><a class="doc-anchor" href="#examples-18">§</a>Examples</h5>
+<p>Read a big-endian double-precision floating point number from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f64;
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x40</span>, <span class="number">0x09</span>, <span class="number">0x21</span>, <span class="number">0xfb</span>, <span class="number">0x54</span>, <span class="number">0x44</span>, <span class="number">0x2d</span>, <span class="number">0x18</span>,
+]);
+<span class="macro">assert_eq!</span>(f64::consts::PI, rdr.read_f64::&lt;BigEndian&gt;().unwrap());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u16_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#562-569">source</a><h4 class="code-header">fn <a href="#method.read_u16_into" class="fn">read_u16_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u16.html">u16</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of unsigned 16 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-18"><a class="doc-anchor" href="#errors-18">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-19"><a class="doc-anchor" href="#examples-19">§</a>Examples</h5>
+<p>Read a sequence of unsigned 16 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_u16_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u32_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#597-604">source</a><h4 class="code-header">fn <a href="#method.read_u32_into" class="fn">read_u32_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u32.html">u32</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of unsigned 32 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-19"><a class="doc-anchor" href="#errors-19">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-20"><a class="doc-anchor" href="#examples-20">§</a>Examples</h5>
+<p>Read a sequence of unsigned 32 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">5</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_u32_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u64_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#635-642">source</a><h4 class="code-header">fn <a href="#method.read_u64_into" class="fn">read_u64_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of unsigned 64 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-20"><a class="doc-anchor" href="#errors-20">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-21"><a class="doc-anchor" href="#examples-21">§</a>Examples</h5>
+<p>Read a sequence of unsigned 64 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">5</span>,
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_u64_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_u128_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#673-683">source</a><h4 class="code-header">fn <a href="#method.read_u128_into" class="fn">read_u128_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u128.html">u128</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of unsigned 128 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-21"><a class="doc-anchor" href="#errors-21">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-22"><a class="doc-anchor" href="#examples-22">§</a>Examples</h5>
+<p>Read a sequence of unsigned 128 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">5</span>,
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_u128_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i8_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#716-719">source</a><h4 class="code-header">fn <a href="#method.read_i8_into" class="fn">read_i8_into</a>(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i8.html">i8</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of signed 8 bit integers from the underlying reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<p>Note that since each <code>i8</code> is a single byte, no byte order conversions
+are used. This method is included because it provides a safe, simple
+way for the caller to read into a <code>&amp;mut [i8]</code> buffer. (Without this
+method, the caller would have to either use <code>unsafe</code> code or convert
+each byte to <code>i8</code> individually.)</p>
+<h5 id="errors-22"><a class="doc-anchor" href="#errors-22">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-23"><a class="doc-anchor" href="#examples-23">§</a>Examples</h5>
+<p>Read a sequence of signed 8 bit integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">251</span>, <span class="number">3</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">3</span>];
+rdr.read_i8_into(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">2</span>, -<span class="number">5</span>, <span class="number">3</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i16_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#747-754">source</a><h4 class="code-header">fn <a href="#method.read_i16_into" class="fn">read_i16_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i16.html">i16</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of signed 16 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-23"><a class="doc-anchor" href="#errors-23">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-24"><a class="doc-anchor" href="#examples-24">§</a>Examples</h5>
+<p>Read a sequence of signed 16 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">5</span>, <span class="number">3</span>, <span class="number">0</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_i16_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i32_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#782-789">source</a><h4 class="code-header">fn <a href="#method.read_i32_into" class="fn">read_i32_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of signed 32 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-24"><a class="doc-anchor" href="#errors-24">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-25"><a class="doc-anchor" href="#examples-25">§</a>Examples</h5>
+<p>Read a sequence of signed 32 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">5</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_i32_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i64_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#820-827">source</a><h4 class="code-header">fn <a href="#method.read_i64_into" class="fn">read_i64_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i64.html">i64</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of signed 64 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-25"><a class="doc-anchor" href="#errors-25">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-26"><a class="doc-anchor" href="#examples-26">§</a>Examples</h5>
+<p>Read a sequence of signed 64 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">5</span>,
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_i64_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_i128_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#858-868">source</a><h4 class="code-header">fn <a href="#method.read_i128_into" class="fn">read_i128_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i128.html">i128</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of signed 128 bit integers from the underlying
+reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-26"><a class="doc-anchor" href="#errors-26">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-27"><a class="doc-anchor" href="#examples-27">§</a>Examples</h5>
+<p>Read a sequence of signed 128 bit big-endian integers from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">5</span>,
+    <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0</span>; <span class="number">2</span>];
+rdr.read_i128_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([<span class="number">517</span>, <span class="number">768</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#902-909">source</a><h4 class="code-header">fn <a href="#method.read_f32_into" class="fn">read_f32_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of IEEE754 single-precision (4 bytes) floating
+point numbers from the underlying reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-27"><a class="doc-anchor" href="#errors-27">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-28"><a class="doc-anchor" href="#examples-28">§</a>Examples</h5>
+<p>Read a sequence of big-endian single-precision floating point number
+from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f32;
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x40</span>, <span class="number">0x49</span>, <span class="number">0x0f</span>, <span class="number">0xdb</span>,
+    <span class="number">0x3f</span>, <span class="number">0x80</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0.0</span>; <span class="number">2</span>];
+rdr.read_f32_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([f32::consts::PI, <span class="number">1.0</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f32_into_unchecked" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#948-953">source</a><h4 class="code-header">fn <a href="#method.read_f32_into_unchecked" class="fn">read_f32_into_unchecked</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(
+    &amp;mut self,
+    dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f32.html">f32</a>],
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 1.2.0: please use <code>read_f32_into</code> instead</span></div></span></summary><div class="docblock"><p><strong>DEPRECATED</strong>.</p>
+<p>This method is deprecated. Use <code>read_f32_into</code> instead.</p>
+<p>Reads a sequence of IEEE754 single-precision (4 bytes) floating
+point numbers from the underlying reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-28"><a class="doc-anchor" href="#errors-28">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-29"><a class="doc-anchor" href="#examples-29">§</a>Examples</h5>
+<p>Read a sequence of big-endian single-precision floating point number
+from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f32;
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x40</span>, <span class="number">0x49</span>, <span class="number">0x0f</span>, <span class="number">0xdb</span>,
+    <span class="number">0x3f</span>, <span class="number">0x80</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0.0</span>; <span class="number">2</span>];
+rdr.read_f32_into_unchecked::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([f32::consts::PI, <span class="number">1.0</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64_into" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#987-994">source</a><h4 class="code-header">fn <a href="#method.read_f64_into" class="fn">read_f64_into</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(&amp;mut self, dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>]) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Reads a sequence of IEEE754 double-precision (8 bytes) floating
+point numbers from the underlying reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="errors-29"><a class="doc-anchor" href="#errors-29">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-30"><a class="doc-anchor" href="#examples-30">§</a>Examples</h5>
+<p>Read a sequence of big-endian single-precision floating point number
+from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f64;
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x40</span>, <span class="number">0x09</span>, <span class="number">0x21</span>, <span class="number">0xfb</span>, <span class="number">0x54</span>, <span class="number">0x44</span>, <span class="number">0x2d</span>, <span class="number">0x18</span>,
+    <span class="number">0x3f</span>, <span class="number">0xF0</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0.0</span>; <span class="number">2</span>];
+rdr.read_f64_into::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([f64::consts::PI, <span class="number">1.0</span>], dst);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.read_f64_into_unchecked" class="method"><a class="src rightside" href="../src/byteorder/io.rs.html#1039-1044">source</a><h4 class="code-header">fn <a href="#method.read_f64_into_unchecked" class="fn">read_f64_into_unchecked</a>&lt;T: <a class="trait" href="trait.ByteOrder.html" title="trait byteorder::ByteOrder">ByteOrder</a>&gt;(
+    &amp;mut self,
+    dst: &amp;mut [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.f64.html">f64</a>],
+) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.unit.html">()</a>&gt;</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 1.2.0: please use <code>read_f64_into</code> instead</span></div></span></summary><div class="docblock"><p><strong>DEPRECATED</strong>.</p>
+<p>This method is deprecated. Use <code>read_f64_into</code> instead.</p>
+<p>Reads a sequence of IEEE754 double-precision (8 bytes) floating
+point numbers from the underlying reader.</p>
+<p>The given buffer is either filled completely or an error is returned.
+If an error is returned, the contents of <code>dst</code> are unspecified.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>This method is unsafe because there are no guarantees made about the
+floating point values. In particular, this method does not check for
+signaling NaNs, which may result in undefined behavior.</p>
+<h5 id="errors-30"><a class="doc-anchor" href="#errors-30">§</a>Errors</h5>
+<p>This method returns the same errors as <a href="https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact"><code>Read::read_exact</code></a>.</p>
+<h5 id="examples-31"><a class="doc-anchor" href="#examples-31">§</a>Examples</h5>
+<p>Read a sequence of big-endian single-precision floating point number
+from a <code>Read</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::f64;
+<span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>byteorder::{BigEndian, ReadBytesExt};
+
+<span class="kw">let </span><span class="kw-2">mut </span>rdr = Cursor::new(<span class="macro">vec!</span>[
+    <span class="number">0x40</span>, <span class="number">0x09</span>, <span class="number">0x21</span>, <span class="number">0xfb</span>, <span class="number">0x54</span>, <span class="number">0x44</span>, <span class="number">0x2d</span>, <span class="number">0x18</span>,
+    <span class="number">0x3f</span>, <span class="number">0xF0</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,
+]);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = [<span class="number">0.0</span>; <span class="number">2</span>];
+rdr.read_f64_into_unchecked::&lt;BigEndian&gt;(<span class="kw-2">&amp;mut </span>dst).unwrap();
+<span class="macro">assert_eq!</span>([f64::consts::PI, <span class="number">1.0</span>], dst);</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-ReadBytesExt-for-R" class="impl"><a class="src rightside" href="../src/byteorder/io.rs.html#1049">source</a><a href="#impl-ReadBytesExt-for-R" class="anchor">§</a><h3 class="code-header">impl&lt;R: <a class="trait" href="https://doc.rust-lang.org/1.81.0/std/io/trait.Read.html" title="trait std::io::Read">Read</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.ReadBytesExt.html" title="trait byteorder::ReadBytesExt">ReadBytesExt</a> for R</h3></section><div class="docblock"><p>All types that implement <code>Read</code> get methods defined in <code>ReadBytesExt</code>
+for free.</p>
+</div></div><script src="../trait.impl/byteorder/io/trait.ReadBytesExt.js" async></script></section></div></main></body></html>

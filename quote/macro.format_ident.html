@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Formatting macro for constructing `Ident`s."><title>format_ident in quote - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="quote" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../quote/index.html">quote</a><span class="version">1.0.37</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">quote</a>::<wbr><a class="macro" href="#">format_ident</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/quote/format.rs.html#111-125">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> format_ident {
+    (<span class="macro-nonterminal">$fmt</span>:expr) =&gt; { ... };
+    (<span class="macro-nonterminal">$fmt</span>:expr, $(<span class="macro-nonterminal">$rest</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Formatting macro for constructing <code>Ident</code>s.</p>
+<br>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<p>Syntax is copied from the <a href="https://doc.rust-lang.org/1.81.0/alloc/macro.format.html" title="macro alloc::format"><code>format!</code></a> macro, supporting both positional and
+named arguments.</p>
+<p>Only a limited set of formatting traits are supported. The current mapping
+of format types to traits is:</p>
+<ul>
+<li><code>{}</code> ⇒ <a href="trait.IdentFragment.html" title="trait quote::IdentFragment"><code>IdentFragment</code></a></li>
+<li><code>{:o}</code> ⇒ <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Octal.html" title="trait core::fmt::Octal"><code>Octal</code></a></li>
+<li><code>{:x}</code> ⇒ <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.LowerHex.html" title="trait core::fmt::LowerHex"><code>LowerHex</code></a></li>
+<li><code>{:X}</code> ⇒ <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.UpperHex.html" title="trait core::fmt::UpperHex"><code>UpperHex</code></a></li>
+<li><code>{:b}</code> ⇒ <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Binary.html" title="trait core::fmt::Binary"><code>Binary</code></a></li>
+</ul>
+<p>See <a href="https://doc.rust-lang.org/1.81.0/alloc/fmt/index.html" title="mod alloc::fmt"><code>std::fmt</code></a> for more information.</p>
+<br>
+<h2 id="identfragment"><a class="doc-anchor" href="#identfragment">§</a>IdentFragment</h2>
+<p>Unlike <code>format!</code>, this macro uses the <a href="trait.IdentFragment.html" title="trait quote::IdentFragment"><code>IdentFragment</code></a> formatting trait by
+default. This trait is like <code>Display</code>, with a few differences:</p>
+<ul>
+<li><code>IdentFragment</code> is only implemented for a limited set of types, such as
+unsigned integers and strings.</li>
+<li><a href="../proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident"><code>Ident</code></a> arguments will have their <code>r#</code> prefixes stripped, if present.</li>
+</ul>
+<br>
+<h2 id="hygiene"><a class="doc-anchor" href="#hygiene">§</a>Hygiene</h2>
+<p>The <a href="../proc_macro2/struct.Span.html" title="struct proc_macro2::Span"><code>Span</code></a> of the first <code>Ident</code> argument is used as the span of the final
+identifier, falling back to <a href="../proc_macro2/struct.Span.html#method.call_site" title="associated function proc_macro2::Span::call_site"><code>Span::call_site</code></a> when no identifiers are
+provided.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// If `ident` is an Ident, the span of `my_ident` will be inherited from it.
+</span><span class="kw">let </span>my_ident = <span class="macro">format_ident!</span>(<span class="string">"My{}{}"</span>, ident, <span class="string">"IsCool"</span>);
+<span class="macro">assert_eq!</span>(my_ident, <span class="string">"MyIdentIsCool"</span>);</code></pre></div>
+<p>Alternatively, the span can be overridden by passing the <code>span</code> named
+argument.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>my_span = <span class="comment">/* ... */</span>;
+<span class="macro">format_ident!</span>(<span class="string">"MyIdent"</span>, span = my_span);</code></pre></div>
+<p><br></p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This method will panic if the resulting formatted string is not a valid
+identifier.</p>
+<br>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Composing raw and non-raw identifiers:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>my_ident = <span class="macro">format_ident!</span>(<span class="string">"My{}"</span>, <span class="string">"Ident"</span>);
+<span class="macro">assert_eq!</span>(my_ident, <span class="string">"MyIdent"</span>);
+
+<span class="kw">let </span>raw = <span class="macro">format_ident!</span>(<span class="string">"r#Raw"</span>);
+<span class="macro">assert_eq!</span>(raw, <span class="string">"r#Raw"</span>);
+
+<span class="kw">let </span>my_ident_raw = <span class="macro">format_ident!</span>(<span class="string">"{}Is{}"</span>, my_ident, raw);
+<span class="macro">assert_eq!</span>(my_ident_raw, <span class="string">"MyIdentIsRaw"</span>);</code></pre></div>
+<p>Integer formatting options:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>num: u32 = <span class="number">10</span>;
+
+<span class="kw">let </span>decimal = <span class="macro">format_ident!</span>(<span class="string">"Id_{}"</span>, num);
+<span class="macro">assert_eq!</span>(decimal, <span class="string">"Id_10"</span>);
+
+<span class="kw">let </span>octal = <span class="macro">format_ident!</span>(<span class="string">"Id_{:o}"</span>, num);
+<span class="macro">assert_eq!</span>(octal, <span class="string">"Id_12"</span>);
+
+<span class="kw">let </span>binary = <span class="macro">format_ident!</span>(<span class="string">"Id_{:b}"</span>, num);
+<span class="macro">assert_eq!</span>(binary, <span class="string">"Id_1010"</span>);
+
+<span class="kw">let </span>lower_hex = <span class="macro">format_ident!</span>(<span class="string">"Id_{:x}"</span>, num);
+<span class="macro">assert_eq!</span>(lower_hex, <span class="string">"Id_a"</span>);
+
+<span class="kw">let </span>upper_hex = <span class="macro">format_ident!</span>(<span class="string">"Id_{:X}"</span>, num);
+<span class="macro">assert_eq!</span>(upper_hex, <span class="string">"Id_A"</span>);</code></pre></div>
+</div></details></section></div></main></body></html>

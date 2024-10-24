@@ -1,0 +1,154 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Error handling model and utilities"><title>axum::error_handling - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="axum" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../axum/index.html">axum</a><span class="version">0.7.6</span></h2></div><h2 class="location"><a href="#">Module error_handling</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate axum</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">axum</a>::<wbr><a class="mod" href="#">error_handling</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/axum/error_handling/mod.rs.html#1-262">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Error handling model and utilities</p>
+<h2 id="table-of-contents"><a class="doc-anchor" href="#table-of-contents">§</a>Table of contents</h2>
+<ul>
+<li><a href="#axums-error-handling-model">axum’s error handling model</a></li>
+<li><a href="#routing-to-fallible-services">Routing to fallible services</a></li>
+<li><a href="#applying-fallible-middleware">Applying fallible middleware</a></li>
+<li><a href="#running-extractors-for-error-handling">Running extractors for error handling</a></li>
+</ul>
+<h2 id="axums-error-handling-model"><a class="doc-anchor" href="#axums-error-handling-model">§</a>axum’s error handling model</h2>
+<p>axum is based on <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>tower::Service</code></a> which bundles errors through its associated
+<code>Error</code> type. If you have a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> that produces an error and that error
+makes it all the way up to hyper, the connection will be terminated <em>without</em>
+sending a response. This is generally not desirable so axum makes sure you
+always produce a response by relying on the type system.</p>
+<p>axum does this by requiring all services have <a href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible"><code>Infallible</code></a> as their error
+type. <code>Infallible</code> is the error type for errors that can never happen.</p>
+<p>This means if you define a handler like:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::http::StatusCode;
+
+<span class="kw">async fn </span>handler() -&gt; <span class="prelude-ty">Result</span>&lt;String, StatusCode&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+<p>While it looks like it might fail with a <code>StatusCode</code> this actually isn’t an
+“error”. If this handler returns <code>Err(some_status_code)</code> that will still be
+converted into a <a href="../response/type.Response.html" title="type axum::response::Response"><code>Response</code></a> and sent back to the client. This is done
+through <code>StatusCode</code>’s <a href="../response/trait.IntoResponse.html" title="trait axum::response::IntoResponse"><code>IntoResponse</code></a> implementation.</p>
+<p>It doesn’t matter whether you return <code>Err(StatusCode::NOT_FOUND)</code> or
+<code>Err(StatusCode::INTERNAL_SERVER_ERROR)</code>. These are not considered errors in
+axum.</p>
+<p>Instead of a direct <code>StatusCode</code>, it makes sense to use intermediate error type
+that can ultimately be converted to <code>Response</code>. This allows using <code>?</code> operator
+in handlers. See those examples:</p>
+<ul>
+<li><a href="https://github.com/tokio-rs/axum/blob/main/examples/anyhow-error-response/src/main.rs"><code>anyhow-error-response</code></a> for generic boxed errors</li>
+<li><a href="https://github.com/tokio-rs/axum/blob/main/examples/error-handling/src/main.rs"><code>error-handling</code></a> for application-specific detailed errors</li>
+</ul>
+<p>This also applies to extractors. If an extractor doesn’t match the request the
+request will be rejected and a response will be returned without calling your
+handler. See <a href="../extract/index.html" title="mod axum::extract"><code>extract</code></a> to learn more about handling extractor
+failures.</p>
+<h2 id="routing-to-fallible-services"><a class="doc-anchor" href="#routing-to-fallible-services">§</a>Routing to fallible services</h2>
+<p>You generally don’t have to think about errors if you’re only using async
+functions as handlers. However if you’re embedding general <code>Service</code>s or
+applying middleware, which might produce errors you have to tell axum how to
+convert those errors into responses.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    body::Body,
+    http::{Request, Response, StatusCode},
+    error_handling::HandleError,
+};
+
+<span class="kw">async fn </span>thing_that_might_fail() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// this service might fail with `anyhow::Error`
+</span><span class="kw">let </span>some_fallible_service = tower::service_fn(|_req| <span class="kw">async </span>{
+    thing_that_might_fail().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(Response::new(Body::empty()))
+});
+
+<span class="kw">let </span>app = Router::new().route_service(
+    <span class="string">"/"</span>,
+    <span class="comment">// we cannot route to `some_fallible_service` directly since it might fail.
+    // we have to use `handle_error` which converts its errors into responses
+    // and changes its error type from `anyhow::Error` to `Infallible`.
+    </span>HandleError::new(some_fallible_service, handle_anyhow_error),
+);
+
+<span class="comment">// handle errors by converting them into something that implements
+// `IntoResponse`
+</span><span class="kw">async fn </span>handle_anyhow_error(err: anyhow::Error) -&gt; (StatusCode, String) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        <span class="macro">format!</span>(<span class="string">"Something went wrong: {err}"</span>),
+    )
+}</code></pre></div>
+<h2 id="applying-fallible-middleware"><a class="doc-anchor" href="#applying-fallible-middleware">§</a>Applying fallible middleware</h2>
+<p>Similarly axum requires you to handle errors from middleware. That is done with
+<a href="struct.HandleErrorLayer.html" title="struct axum::error_handling::HandleErrorLayer"><code>HandleErrorLayer</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    BoxError,
+    routing::get,
+    http::StatusCode,
+    error_handling::HandleErrorLayer,
+};
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>tower::ServiceBuilder;
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(|| <span class="kw">async </span>{}))
+    .layer(
+        ServiceBuilder::new()
+            <span class="comment">// `timeout` will produce an error if the handler takes
+            // too long so we must handle those
+            </span>.layer(HandleErrorLayer::new(handle_timeout_error))
+            .timeout(Duration::from_secs(<span class="number">30</span>))
+    );
+
+<span class="kw">async fn </span>handle_timeout_error(err: BoxError) -&gt; (StatusCode, String) {
+    <span class="kw">if </span>err.is::&lt;tower::timeout::error::Elapsed&gt;() {
+        (
+            StatusCode::REQUEST_TIMEOUT,
+            <span class="string">"Request took too long"</span>.to_string(),
+        )
+    } <span class="kw">else </span>{
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            <span class="macro">format!</span>(<span class="string">"Unhandled internal error: {err}"</span>),
+        )
+    }
+}</code></pre></div>
+<h2 id="running-extractors-for-error-handling"><a class="doc-anchor" href="#running-extractors-for-error-handling">§</a>Running extractors for error handling</h2>
+<p><code>HandleErrorLayer</code> also supports running extractors:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    Router,
+    BoxError,
+    routing::get,
+    http::{StatusCode, Method, Uri},
+    error_handling::HandleErrorLayer,
+};
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>tower::ServiceBuilder;
+
+<span class="kw">let </span>app = Router::new()
+    .route(<span class="string">"/"</span>, get(|| <span class="kw">async </span>{}))
+    .layer(
+        ServiceBuilder::new()
+            <span class="comment">// `timeout` will produce an error if the handler takes
+            // too long so we must handle those
+            </span>.layer(HandleErrorLayer::new(handle_timeout_error))
+            .timeout(Duration::from_secs(<span class="number">30</span>))
+    );
+
+<span class="kw">async fn </span>handle_timeout_error(
+    <span class="comment">// `Method` and `Uri` are extractors so they can be used here
+    </span>method: Method,
+    uri: Uri,
+    <span class="comment">// the last argument must be the error itself
+    </span>err: BoxError,
+) -&gt; (StatusCode, String) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        <span class="macro">format!</span>(<span class="string">"`{method} {uri}` failed with {err}"</span>),
+    )
+}</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="future/index.html" title="mod axum::error_handling::future">future</a></div><div class="desc docblock-short">Future types.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.HandleError.html" title="struct axum::error_handling::HandleError">HandleError</a></div><div class="desc docblock-short">A <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> adapter that handles errors by converting them into responses.</div></li><li><div class="item-name"><a class="struct" href="struct.HandleErrorLayer.html" title="struct axum::error_handling::HandleErrorLayer">HandleErrorLayer</a></div><div class="desc docblock-short"><a href="../../tower_layer/trait.Layer.html" title="trait tower_layer::Layer"><code>Layer</code></a> that applies <a href="struct.HandleError.html" title="struct axum::error_handling::HandleError"><code>HandleError</code></a> which is a <a href="../../tower_service/trait.Service.html" title="trait tower_service::Service"><code>Service</code></a> adapter
+that handles errors by converting them into responses.</div></li></ul></section></div></main></body></html>

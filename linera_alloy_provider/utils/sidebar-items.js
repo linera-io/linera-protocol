@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EIP1559_BASE_FEE_MULTIPLIER","EIP1559_FEE_ESTIMATION_PAST_BLOCKS","EIP1559_FEE_ESTIMATION_REWARD_PERCENTILE"],"fn":["eip1559_default_estimator"],"struct":["Eip1559Estimation"],"type":["EstimatorFunction"]};

@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Attaches spans to a `std::future::Future`."><title>Instrument in tracing - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="tracing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../tracing/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../tracing/index.html"><img src="https://raw.githubusercontent.com/tokio-rs/tracing/master/assets/logo-type.png" alt="logo"></a><h2><a href="../tracing/index.html">tracing</a><span class="version">0.1.40</span></h2></div><h2 class="location"><a href="#">Instrument</a></h2><div class="sidebar-elems"><section><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.in_current_span">in_current_span</a></li><li><a href="#method.instrument">instrument</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate tracing</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">tracing</a>::<wbr><a class="trait" href="#">Instrument</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/tracing/instrument.rs.html#20-131">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Instrument: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    // Provided methods
+    fn <a href="#method.instrument" class="fn">instrument</a>(self, span: <a class="struct" href="struct.Span.html" title="struct tracing::Span">Span</a>) -&gt; <a class="struct" href="instrument/struct.Instrumented.html" title="struct tracing::instrument::Instrumented">Instrumented</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="Instrumented&lt;Self&gt;">ⓘ</a> { ... }
+<span class="item-spacer"></span>    fn <a href="#method.in_current_span" class="fn">in_current_span</a>(self) -&gt; <a class="struct" href="instrument/struct.Instrumented.html" title="struct tracing::instrument::Instrumented">Instrumented</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="Instrumented&lt;Self&gt;">ⓘ</a> { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Attaches spans to a <a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>std::future::Future</code></a>.</p>
+<p>Extension trait allowing futures to be
+instrumented with a <code>tracing</code> <a href="struct.Span.html" title="struct tracing::Span">span</a>.</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.instrument" class="method"><a class="src rightside" href="../src/tracing/instrument.rs.html#86-91">source</a><h4 class="code-header">fn <a href="#method.instrument" class="fn">instrument</a>(self, span: <a class="struct" href="struct.Span.html" title="struct tracing::Span">Span</a>) -&gt; <a class="struct" href="instrument/struct.Instrumented.html" title="struct tracing::instrument::Instrumented">Instrumented</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="Instrumented&lt;Self&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Instruments this type with the provided <a href="struct.Span.html" title="struct tracing::Span"><code>Span</code></a>, returning an
+<code>Instrumented</code> wrapper.</p>
+<p>The attached <a href="struct.Span.html" title="struct tracing::Span"><code>Span</code></a> will be <a href="struct.Span.html#method.enter" title="method tracing::Span::enter">entered</a> every time the instrumented
+<a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> is polled or <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a>ped.</p>
+<h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
+<p>Instrumenting a future:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing::Instrument;
+
+<span class="kw">let </span>my_future = <span class="kw">async </span>{
+    <span class="comment">// ...
+</span>};
+
+my_future
+    .instrument(<span class="macro">tracing::info_span!</span>(<span class="string">"my_future"</span>))
+    .<span class="kw">await</span></code></pre></div>
+<p>The <a href="struct.Span.html#method.or_current" title="method tracing::Span::or_current"><code>Span::or_current</code></a> combinator can be used in combination with
+<code>instrument</code> to ensure that the <a href="struct.Span.html#method.current" title="associated function tracing::Span::current">current span</a> is attached to the
+future if the span passed to <code>instrument</code> is <a href="struct.Span.html#method.is_disabled" title="method tracing::Span::is_disabled">disabled</a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing::Instrument;
+
+<span class="kw">let </span>my_future = <span class="kw">async </span>{
+    <span class="comment">// ...
+</span>};
+
+<span class="kw">let </span>outer_span = <span class="macro">tracing::info_span!</span>(<span class="string">"outer"</span>).entered();
+
+<span class="comment">// If the "my_future" span is enabled, then the spawned task will
+// be within both "my_future" *and* "outer", since "outer" is
+// "my_future"'s parent. However, if "my_future" is disabled,
+// the spawned task will *not* be in any span.
+</span>tokio::spawn(
+    my_future
+        .instrument(<span class="macro">tracing::debug_span!</span>(<span class="string">"my_future"</span>))
+);
+
+<span class="comment">// Using `Span::or_current` ensures the spawned task is instrumented
+// with the current span, if the new span passed to `instrument` is
+// not enabled. This means that if the "my_future"  span is disabled,
+// the spawned task will still be instrumented with the "outer" span:
+</span>tokio::spawn(
+   my_future
+        .instrument(<span class="macro">tracing::debug_span!</span>(<span class="string">"my_future"</span>).or_current())
+);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.in_current_span" class="method"><a class="src rightside" href="../src/tracing/instrument.rs.html#128-130">source</a><h4 class="code-header">fn <a href="#method.in_current_span" class="fn">in_current_span</a>(self) -&gt; <a class="struct" href="instrument/struct.Instrumented.html" title="struct tracing::instrument::Instrumented">Instrumented</a>&lt;Self&gt; <a href="#" class="tooltip" data-notable-ty="Instrumented&lt;Self&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Instruments this type with the <a href="struct.Span.html#method.current" title="associated function tracing::Span::current">current</a> <a href="struct.Span.html" title="struct tracing::Span"><code>Span</code></a>, returning an
+<code>Instrumented</code> wrapper.</p>
+<p>The attached <a href="struct.Span.html" title="struct tracing::Span"><code>Span</code></a> will be <a href="struct.Span.html#method.enter" title="method tracing::Span::enter">entered</a> every time the instrumented
+<a href="https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html" title="trait core::future::future::Future"><code>Future</code></a> is polled or <a href="https://doc.rust-lang.org/1.81.0/core/ops/drop/trait.Drop.html" title="trait core::ops::drop::Drop"><code>Drop</code></a>ped.</p>
+<p>This can be used to propagate the current span when spawning a new future.</p>
+<h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tracing::Instrument;
+
+<span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(<span class="string">"my_span"</span>);
+<span class="kw">let </span>_enter = span.enter();
+
+<span class="comment">// ...
+
+</span><span class="kw">let </span>future = <span class="kw">async </span>{
+    <span class="macro">tracing::debug!</span>(<span class="string">"this event will occur inside `my_span`"</span>);
+    <span class="comment">// ...
+</span>};
+tokio::spawn(future.in_current_span());</code></pre></div>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><section id="impl-Instrument-for-T" class="impl"><a class="src rightside" href="../src/tracing/instrument.rs.html#325">source</a><a href="#impl-Instrument-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>&gt; <a class="trait" href="trait.Instrument.html" title="trait tracing::Instrument">Instrument</a> for T</h3></section></div><script src="../trait.impl/tracing/instrument/trait.Instrument.js" async></script><script type="text/json" id="notable-traits-data">{"Instrumented<Self>":"<h3>Notable traits for <code><a class=\"struct\" href=\"instrument/struct.Instrumented.html\" title=\"struct tracing::instrument::Instrumented\">Instrumented</a>&lt;T&gt;</code></h3><pre><code><div class=\"where\">impl&lt;T: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html\" title=\"trait core::future::future::Future\">Future</a> for <a class=\"struct\" href=\"instrument/struct.Instrumented.html\" title=\"struct tracing::instrument::Instrumented\">Instrumented</a>&lt;T&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" class=\"associatedtype\">Output</a> = T::<a class=\"associatedtype\" href=\"https://doc.rust-lang.org/1.81.0/core/future/future/trait.Future.html#associatedtype.Output\" title=\"type core::future::future::Future::Output\">Output</a>;</div>"}</script></section></div></main></body></html>

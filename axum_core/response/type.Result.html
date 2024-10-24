@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An `IntoResponse`-based result type that uses `ErrorResponse` as the error type."><title>Result in axum_core::response - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="axum_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../axum_core/index.html">axum_core</a><span class="version">0.4.4</span></h2></div><h2 class="location"><a href="#">Result</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3><h3><a href="#variants">Variants</a></h3><ul class="block variant"><li><a href="#variant.Err">Err</a></li><li><a href="#variant.Ok">Ok</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-IntoResponse-for-Result%3CT,+ErrorResponse%3E">IntoResponse</a></li></ul></section><h2><a href="index.html">In axum_core::response</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="../index.html">axum_core</a>::<wbr><a href="index.html">response</a>::<wbr><a class="type" href="#">Result</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/axum_core/response/mod.rs.html#102">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type Result&lt;T, E = <a class="struct" href="struct.ErrorResponse.html" title="struct axum_core::response::ErrorResponse">ErrorResponse</a>&gt; = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, E&gt;;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An <a href="trait.IntoResponse.html" title="trait axum_core::response::IntoResponse"><code>IntoResponse</code></a>-based result type that uses <a href="struct.ErrorResponse.html" title="struct axum_core::response::ErrorResponse"><code>ErrorResponse</code></a> as the error type.</p>
+<p>All types which implement <a href="trait.IntoResponse.html" title="trait axum_core::response::IntoResponse"><code>IntoResponse</code></a> can be converted to an <a href="struct.ErrorResponse.html" title="struct axum_core::response::ErrorResponse"><code>ErrorResponse</code></a>. This makes
+it useful as a general purpose error type for functions which combine multiple distinct error
+types that all implement <a href="trait.IntoResponse.html" title="trait axum_core::response::IntoResponse"><code>IntoResponse</code></a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    response::{IntoResponse, Response},
+    http::StatusCode,
+};
+
+<span class="comment">// two fallible functions with different error types
+</span><span class="kw">fn </span>try_something() -&gt; <span class="prelude-ty">Result</span>&lt;(), ErrorA&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">fn </span>try_something_else() -&gt; <span class="prelude-ty">Result</span>&lt;(), ErrorB&gt; {
+    <span class="comment">// ...
+</span>}
+
+<span class="comment">// each error type implements `IntoResponse`
+</span><span class="kw">struct </span>ErrorA;
+
+<span class="kw">impl </span>IntoResponse <span class="kw">for </span>ErrorA {
+    <span class="kw">fn </span>into_response(<span class="self">self</span>) -&gt; Response {
+        <span class="comment">// ...
+    </span>}
+}
+
+<span class="kw">enum </span>ErrorB {
+    SomethingWentWrong,
+}
+
+<span class="kw">impl </span>IntoResponse <span class="kw">for </span>ErrorB {
+    <span class="kw">fn </span>into_response(<span class="self">self</span>) -&gt; Response {
+        <span class="comment">// ...
+    </span>}
+}
+
+<span class="comment">// we can combine them using `axum::response::Result` and still use `?`
+</span><span class="kw">async fn </span>handler() -&gt; axum::response::Result&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    <span class="comment">// the errors are automatically converted to `ErrorResponse`
+    </span>try_something()<span class="question-mark">?</span>;
+    try_something_else()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="string">"it worked!"</span>)
+}</code></pre></div>
+<h2 id="as-a-replacement-for-stdresultresult"><a class="doc-anchor" href="#as-a-replacement-for-stdresultresult">§</a>As a replacement for <code>std::result::Result</code></h2>
+<p>Since <code>axum::response::Result</code> has a default error type you only have to specify the <code>Ok</code> type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>axum::{
+    response::{IntoResponse, Response, <span class="prelude-ty">Result</span>},
+    http::StatusCode,
+};
+
+<span class="comment">// `Result&lt;T&gt;` automatically uses `ErrorResponse` as the error type.
+</span><span class="kw">async fn </span>handler() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+    try_something()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="string">"it worked!"</span>)
+}
+
+<span class="comment">// You can still specify the error even if you've imported `axum::response::Result`
+</span><span class="kw">fn </span>try_something() -&gt; <span class="prelude-ty">Result</span>&lt;(), StatusCode&gt; {
+    <span class="comment">// ...
+</span>}</code></pre></div>
+</div></details><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>enum Result&lt;T, E = <a class="struct" href="struct.ErrorResponse.html" title="struct axum_core::response::ErrorResponse">ErrorResponse</a>&gt; {
+    Ok(T),
+    Err(E),
+}</code></pre><h2 id="variants" class="variants section-header">Variants<a href="#variants" class="anchor">§</a></h2><div class="variants"><section id="variant.Ok" class="variant"><a href="#variant.Ok" class="anchor">§</a><span class="since rightside" title="Stable since Rust version 1.0.0">1.0.0</span><h3 class="code-header">Ok(T)</h3></section><div class="docblock"><p>Contains the success value</p>
+</div><section id="variant.Err" class="variant"><a href="#variant.Err" class="anchor">§</a><span class="since rightside" title="Stable since Rust version 1.0.0">1.0.0</span><h3 class="code-header">Err(E)</h3></section><div class="docblock"><p>Contains the error value</p>
+</div></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-IntoResponse-for-Result%3CT,+ErrorResponse%3E" class="impl"><a class="src rightside" href="../../src/axum_core/response/mod.rs.html#104-114">source</a><a href="#impl-IntoResponse-for-Result%3CT,+ErrorResponse%3E" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.IntoResponse.html" title="trait axum_core::response::IntoResponse">IntoResponse</a> for <a class="type" href="type.Result.html" title="type axum_core::response::Result">Result</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="trait.IntoResponse.html" title="trait axum_core::response::IntoResponse">IntoResponse</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_response" class="method trait-impl"><a class="src rightside" href="../../src/axum_core/response/mod.rs.html#108-113">source</a><a href="#method.into_response" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoResponse.html#tymethod.into_response" class="fn">into_response</a>(self) -&gt; <a class="type" href="type.Response.html" title="type axum_core::response::Response">Response</a></h4></section></summary><div class='docblock'>Create a response.</div></details></div></details></div><script src="../../type.impl/core/result/enum.Result.js" data-self-path="axum_core::response::Result" async></script></section></div></main></body></html>

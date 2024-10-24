@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait used for custom implementations of `Unpin`."><title>UnsafeUnpin in pin_project - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="pin_project" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../pin_project/index.html">pin_project</a><span class="version">1.1.5</span></h2></div><h2 class="location"><a href="#">UnsafeUnpin</a></h2><div class="sidebar-elems"><section><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In crate pin_project</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="index.html">pin_project</a>::<wbr><a class="trait" href="#">UnsafeUnpin</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/pin_project/lib.rs.html#180">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe trait UnsafeUnpin { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait used for custom implementations of <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>.</p>
+<p>This trait is used in conjunction with the <code>UnsafeUnpin</code> argument to
+the <a href="attr.pin_project.html" title="attr pin_project::pin_project"><code>#[pin_project]</code></a> attribute.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>The Rust <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a> trait is safe to implement - by itself,
+implementing it cannot lead to <a href="https://doc.rust-lang.org/reference/behavior-considered-undefined.html">undefined behavior</a>.
+Undefined behavior can only occur when other unsafe code is used.</p>
+<p>It turns out that using pin projections, which requires unsafe code,
+imposes additional requirements on an <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a> impl. Normally, all of this
+unsafety is contained within this crate, ensuring that it’s impossible for
+you to violate any of the guarantees required by pin projection.</p>
+<p>However, things change if you want to provide a custom <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a> impl
+for your <code>#[pin_project]</code> type. As stated in <a href="https://doc.rust-lang.org/1.81.0/core/pin/index.html#projections-and-structural-pinning" title="mod core::pin">the Rust
+documentation</a>, you must be sure to only implement <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>
+when all of your <code>#[pin]</code> fields (i.e. structurally pinned fields) are also
+<a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>.</p>
+<p>To help highlight this unsafety, the <code>UnsafeUnpin</code> trait is provided.
+Implementing this trait is logically equivalent to implementing <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a> -
+this crate will generate an <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a> impl for your type that ‘forwards’ to
+your <code>UnsafeUnpin</code> impl. However, this trait is <code>unsafe</code> - since your type
+uses structural pinning (otherwise, you wouldn’t be using this crate!),
+you must be sure that your <code>UnsafeUnpin</code> impls follows all of
+the requirements for an <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a> impl of a structurally-pinned type.</p>
+<p>Note that if you specify <code>#[pin_project(UnsafeUnpin)]</code>, but do <em>not</em>
+provide an impl of <code>UnsafeUnpin</code>, your type will never implement <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>.
+This is effectively the same thing as adding a <a href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomPinned.html" title="struct core::marker::PhantomPinned"><code>PhantomPinned</code></a> to your
+type.</p>
+<p>Since this trait is <code>unsafe</code>, impls of it will be detected by the
+<code>unsafe_code</code> lint, and by tools like <a href="https://github.com/rust-secure-code/cargo-geiger"><code>cargo geiger</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>An <code>UnsafeUnpin</code> impl which, in addition to requiring that structurally
+pinned fields be <a href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin"><code>Unpin</code></a>, imposes an additional requirement:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>pin_project::{pin_project, UnsafeUnpin};
+
+<span class="attr">#[pin_project(UnsafeUnpin)]
+</span><span class="kw">struct </span>Struct&lt;K, V&gt; {
+    <span class="attr">#[pin]
+    </span>field_1: K,
+    field_2: V,
+}
+
+<span class="kw">unsafe impl</span>&lt;K, V&gt; UnsafeUnpin <span class="kw">for </span>Struct&lt;K, V&gt; <span class="kw">where </span>K: Unpin + Clone {}</code></pre></div>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/pin_project/trait.UnsafeUnpin.js" async></script></section></div></main></body></html>

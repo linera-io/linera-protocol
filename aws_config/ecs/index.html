@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Ecs Credentials Provider"><title>aws_config::ecs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="aws_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../aws_config/index.html">aws_config</a><span class="version">1.5.6</span></h2></div><h2 class="location"><a href="#">Module ecs</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In crate aws_config</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">aws_config</a>::<wbr><a class="mod" href="#">ecs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/aws_config/ecs.rs.html#6-981">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Ecs Credentials Provider</p>
+<p>This credential provider is frequently used with an AWS-provided credentials service (e.g.
+<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html">IAM Roles for tasks</a>).
+However, it’s possible to use environment variables to configure this provider to use your own
+credentials sources.</p>
+<p>This provider is part of the <a href="../default_provider/credentials/index.html" title="mod aws_config::default_provider::credentials">default credentials chain</a>.</p>
+<h3 id="configuration"><a class="doc-anchor" href="#configuration">§</a>Configuration</h3>
+<p><strong>First</strong>: It will check the value of <code>$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>. It will use this
+to construct a URI rooted at <code>http://169.254.170.2</code>. For example, if the value of the environment
+variable was <code>/credentials</code>, the SDK would look for credentials at <code>http://169.254.170.2/credentials</code>.</p>
+<p><strong>Next</strong>: It will check the value of <code>$AWS_CONTAINER_CREDENTIALS_FULL_URI</code>. This specifies the full
+URL to load credentials. The URL MUST satisfy one of the following three properties:</p>
+<ol>
+<li>The URL begins with <code>https</code></li>
+<li>The URL refers to an allowed IP address. If a URL contains a domain name instead of an IP address,
+a DNS lookup will be performed. ALL resolved IP addresses MUST refer to an allowed IP address, or
+the credentials provider will return <code>CredentialsError::InvalidConfiguration</code>. Valid IP addresses are:
+a) Loopback interfaces
+b) The <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v2.html">ECS Task Metadata V2</a>
+address ie 169.254.170.2.
+c) <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html">EKS Pod Identity</a> addresses
+ie 169.254.170.23 or fd00:ec2::23</li>
+</ol>
+<p><strong>Next</strong>: It will check the value of <code>$AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE</code>. If this is set,
+the filename specified will be read, and the value passed in the <code>Authorization</code> header. If the file
+cannot be read, an error is returned.</p>
+<p><strong>Finally</strong>: It will check the value of <code>$AWS_CONTAINER_AUTHORIZATION_TOKEN</code>. If this is set, the
+value will be passed in the <code>Authorization</code> header.</p>
+<h3 id="credentials-format"><a class="doc-anchor" href="#credentials-format">§</a>Credentials Format</h3>
+<p>Credentials MUST be returned in a JSON format:</p>
+<div class="example-wrap"><pre class="language-json"><code>{
+   &quot;AccessKeyId&quot; : &quot;MUA...&quot;,
+   &quot;SecretAccessKey&quot; : &quot;/7PC5om....&quot;,
+   &quot;Token&quot; : &quot;AQoDY....=&quot;,
+   &quot;Expiration&quot; : &quot;2016-02-25T06:03:31Z&quot;
+ }
+</code></pre></div>
+<p>Credentials errors MAY be returned with a <code>code</code> and <code>message</code> field:</p>
+<div class="example-wrap"><pre class="language-json"><code>{
+  &quot;code&quot;: &quot;ErrorCode&quot;,
+  &quot;message&quot;: &quot;Helpful error message.&quot;
+}
+</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct aws_config::ecs::Builder">Builder</a></div><div class="desc docblock-short">Builder for <a href="struct.EcsCredentialsProvider.html" title="struct aws_config::ecs::EcsCredentialsProvider"><code>EcsCredentialsProvider</code></a></div></li><li><div class="item-name"><a class="struct" href="struct.EcsCredentialsProvider.html" title="struct aws_config::ecs::EcsCredentialsProvider">EcsCredentialsProvider</a></div><div class="desc docblock-short">Credential provider for ECS and generalized HTTP credentials</div></li><li><div class="item-name"><a class="struct" href="struct.InvalidFullUriError.html" title="struct aws_config::ecs::InvalidFullUriError">InvalidFullUriError</a></div><div class="desc docblock-short">Invalid Full URI</div></li></ul></section></div></main></body></html>

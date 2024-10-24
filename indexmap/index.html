@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`IndexMap` is a hash table where the iteration order of the key-value pairs is independent of the hash values of the keys."><title>indexmap - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="indexmap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../indexmap/index.html">indexmap</a><span class="version">2.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">indexmap</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/indexmap/lib.rs.html#2-274">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> is a hash table where the iteration order of the key-value
+pairs is independent of the hash values of the keys.</p>
+<p><a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a> is a corresponding hash set using the same implementation and
+with similar properties.</p>
+<h4 id="highlights"><a class="doc-anchor" href="#highlights">§</a>Highlights</h4>
+<p><a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> and <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a> are drop-in compatible with the std <code>HashMap</code>
+and <code>HashSet</code>, but they also have some features of note:</p>
+<ul>
+<li>The ordering semantics (see their documentation for details)</li>
+<li>Sorting methods and the <a href="map/struct.IndexMap.html#method.pop" title="method indexmap::map::IndexMap::pop"><code>.pop()</code></a> methods.</li>
+<li>The <a href="trait.Equivalent.html" title="trait indexmap::Equivalent"><code>Equivalent</code></a> trait, which offers more flexible equality definitions
+between borrowed and owned versions of keys.</li>
+<li>The <a href="map/trait.MutableKeys.html" title="trait indexmap::map::MutableKeys"><code>MutableKeys</code></a> trait, which gives opt-in mutable
+access to map keys, and <a href="set/trait.MutableValues.html" title="trait indexmap::set::MutableValues"><code>MutableValues</code></a> for sets.</li>
+</ul>
+<h4 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h4>
+<p>To reduce the amount of compiled code in the crate by default, certain
+features are gated behind <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-section">feature flags</a>. These allow you to opt in to (or
+out of) functionality. Below is a list of the features available in this
+crate.</p>
+<ul>
+<li><code>std</code>: Enables features which require the Rust standard library. For more
+information see the section on <a href="#no-standard-library-targets"><code>no_std</code></a>.</li>
+<li><code>rayon</code>: Enables parallel iteration and other parallel methods.</li>
+<li><code>serde</code>: Adds implementations for <a href="../serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize"><code>Serialize</code></a> and <a href="../serde/de/trait.Deserialize.html" title="trait serde::de::Deserialize"><code>Deserialize</code></a>
+to <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> and <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a>. Alternative implementations for
+(de)serializing <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> as an ordered sequence are available in the
+<a href="map/serde_seq/index.html" title="mod indexmap::map::serde_seq"><code>map::serde_seq</code></a> module.</li>
+<li><code>borsh</code>: Adds implementations for <a href="%60::borsh::BorshSerialize%60"><code>BorshSerialize</code></a> and <a href="%60::borsh::BorshDeserialize%60"><code>BorshDeserialize</code></a>
+to <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> and <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a>.</li>
+<li><code>arbitrary</code>: Adds implementations for the <a href="%60::arbitrary::Arbitrary%60"><code>arbitrary::Arbitrary</code></a> trait
+to <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> and <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a>.</li>
+<li><code>quickcheck</code>: Adds implementations for the <a href="%60::quickcheck::Arbitrary%60"><code>quickcheck::Arbitrary</code></a> trait
+to <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> and <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a>.</li>
+</ul>
+<p><em>Note: only the <code>std</code> feature is enabled by default.</em></p>
+<h4 id="alternate-hashers"><a class="doc-anchor" href="#alternate-hashers">§</a>Alternate Hashers</h4>
+<p><a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> and <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a> have a default hasher type
+<a href="https://doc.rust-lang.org/1.81.0/std/hash/random/struct.RandomState.html" title="struct std::hash::random::RandomState"><code>S = RandomState</code></a>,
+just like the standard <code>HashMap</code> and <code>HashSet</code>, which is resistant to
+HashDoS attacks but not the most performant. Type aliases can make it easier
+to use alternate hashers:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>fnv::FnvBuildHasher;
+<span class="kw">use </span>fxhash::FxBuildHasher;
+<span class="kw">use </span>indexmap::{IndexMap, IndexSet};
+
+<span class="kw">type </span>FnvIndexMap&lt;K, V&gt; = IndexMap&lt;K, V, FnvBuildHasher&gt;;
+<span class="kw">type </span>FnvIndexSet&lt;T&gt; = IndexSet&lt;T, FnvBuildHasher&gt;;
+
+<span class="kw">type </span>FxIndexMap&lt;K, V&gt; = IndexMap&lt;K, V, FxBuildHasher&gt;;
+<span class="kw">type </span>FxIndexSet&lt;T&gt; = IndexSet&lt;T, FxBuildHasher&gt;;
+
+<span class="kw">let </span>std: IndexSet&lt;i32&gt; = (<span class="number">0</span>..<span class="number">100</span>).collect();
+<span class="kw">let </span>fnv: FnvIndexSet&lt;i32&gt; = (<span class="number">0</span>..<span class="number">100</span>).collect();
+<span class="kw">let </span>fx: FxIndexSet&lt;i32&gt; = (<span class="number">0</span>..<span class="number">100</span>).collect();
+<span class="macro">assert_eq!</span>(std, fnv);
+<span class="macro">assert_eq!</span>(std, fx);</code></pre></div>
+<h4 id="rust-version"><a class="doc-anchor" href="#rust-version">§</a>Rust Version</h4>
+<p>This version of indexmap requires Rust 1.63 or later.</p>
+<p>The indexmap 2.x release series will use a carefully considered version
+upgrade policy, where in a later 2.x version, we will raise the minimum
+required Rust version.</p>
+<h3 id="no-standard-library-targets"><a class="doc-anchor" href="#no-standard-library-targets">§</a>No Standard Library Targets</h3>
+<p>This crate supports being built without <code>std</code>, requiring <code>alloc</code> instead.
+This is chosen by disabling the default “std” cargo feature, by adding
+<code>default-features = false</code> to your dependency specification.</p>
+<ul>
+<li>Creating maps and sets using <a href="map/struct.IndexMap.html#method.new" title="associated function indexmap::map::IndexMap::new"><code>new</code></a> and
+<a href="map/struct.IndexMap.html#method.with_capacity" title="associated function indexmap::map::IndexMap::with_capacity"><code>with_capacity</code></a> is unavailable without <code>std</code>.
+Use methods <a href="map/struct.IndexMap.html#method.default" title="associated function indexmap::map::IndexMap::default"><code>IndexMap::default</code></a>, <a href="map/struct.IndexMap.html#method.with_hasher" title="associated function indexmap::map::IndexMap::with_hasher"><code>with_hasher</code></a>,
+<a href="map/struct.IndexMap.html#method.with_capacity_and_hasher" title="associated function indexmap::map::IndexMap::with_capacity_and_hasher"><code>with_capacity_and_hasher</code></a> instead.
+A no-std compatible hasher will be needed as well, for example
+from the crate <code>twox-hash</code>.</li>
+<li>Macros <a href="macro.indexmap.html" title="macro indexmap::indexmap"><code>indexmap!</code></a> and <a href="macro.indexset.html" title="macro indexmap::indexset"><code>indexset!</code></a> are unavailable without <code>std</code>.</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.IndexMap"><code>pub use crate::map::<a class="struct" href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap">IndexMap</a>;</code></div></li><li><div class="item-name" id="reexport.IndexSet"><code>pub use crate::set::<a class="struct" href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet">IndexSet</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="map/index.html" title="mod indexmap::map">map</a></div><div class="desc docblock-short"><a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> is a hash table where the iteration order of the key-value
+pairs is independent of the hash values of the keys.</div></li><li><div class="item-name"><a class="mod" href="set/index.html" title="mod indexmap::set">set</a></div><div class="desc docblock-short">A hash set implemented using <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a></div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.indexmap.html" title="macro indexmap::indexmap">indexmap</a></div><div class="desc docblock-short">Create an <a href="map/struct.IndexMap.html" title="struct indexmap::map::IndexMap"><code>IndexMap</code></a> from a list of key-value pairs</div></li><li><div class="item-name"><a class="macro" href="macro.indexset.html" title="macro indexmap::indexset">indexset</a></div><div class="desc docblock-short">Create an <a href="set/struct.IndexSet.html" title="struct indexmap::set::IndexSet"><code>IndexSet</code></a> from a list of values</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.TryReserveError.html" title="struct indexmap::TryReserveError">TryReserveError</a></div><div class="desc docblock-short">The error type for <a href="map/struct.IndexMap.html#method.try_reserve" title="method indexmap::map::IndexMap::try_reserve"><code>try_reserve</code></a> methods.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Equivalent.html" title="trait indexmap::Equivalent">Equivalent</a></div><div class="desc docblock-short">Key equivalence trait.</div></li></ul></section></div></main></body></html>

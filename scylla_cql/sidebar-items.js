@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["impl_from_cql_value_from_method","impl_serialize_cql_via_value","impl_serialize_row_via_value_list"],"mod":["errors","frame","macros","types"]};

@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Select a `ValueParser` implementation from the intended type"><title>value_parser in clap - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="clap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../clap/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../clap/index.html"><img src="https://raw.githubusercontent.com/clap-rs/clap/master/assets/clap.png" alt="logo"></a><h2><a href="../clap/index.html">clap</a><span class="version">4.5.18</span></h2></div><div class="sidebar-elems"></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="index.html">clap</a>::<wbr><a class="macro" href="#">value_parser</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/clap_builder/builder/value_parser.rs.html#2610">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> value_parser {
+    (<span class="macro-nonterminal">$name</span>:ty) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Select a <a href="builder/struct.ValueParser.html" title="struct clap::builder::ValueParser"><code>ValueParser</code></a> implementation from the intended type</p>
+<p>Supported types</p>
+<ul>
+<li><a href="builder/trait.ValueParserFactory.html" title="trait clap::builder::ValueParserFactory"><code>ValueParserFactory</code> types</a>, including
+<ul>
+<li><a href="builder/struct.ValueParser.html" title="struct clap::builder::ValueParser">Native types</a>: <code>bool</code>, <code>String</code>, <code>OsString</code>, <code>PathBuf</code></li>
+<li><a href="builder/struct.RangedI64ValueParser.html" title="struct clap::builder::RangedI64ValueParser">Ranged numeric types</a>: <code>u8</code>, <code>i8</code>, <code>u16</code>, <code>i16</code>, <code>u32</code>, <code>i32</code>, <code>u64</code>, <code>i64</code></li>
+</ul>
+</li>
+<li><a href="trait.ValueEnum.html" title="trait clap::ValueEnum"><code>ValueEnum</code> types</a></li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From&lt;OsString&gt;</code> types</a> and <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From&lt;&amp;OsStr&gt;</code> types</a></li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From&lt;String&gt;</code> types</a> and <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From"><code>From&lt;&amp;str&gt;</code> types</a></li>
+<li><a href="https://doc.rust-lang.org/1.81.0/core/str/traits/trait.FromStr.html" title="trait core::str::traits::FromStr"><code>FromStr</code> types</a>, including usize, isize</li>
+</ul>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Usage:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>cmd = clap::Command::new(<span class="string">"raw"</span>)
+    .arg(
+        clap::Arg::new(<span class="string">"output"</span>)
+            .value_parser(<span class="macro">clap::value_parser!</span>(PathBuf))
+            .required(<span class="bool-val">true</span>)
+    );
+
+<span class="kw">let </span>m = cmd.try_get_matches_from_mut([<span class="string">"cmd"</span>, <span class="string">"file.txt"</span>]).unwrap();
+<span class="kw">let </span>port: <span class="kw-2">&amp;</span>PathBuf = m.get_one(<span class="string">"output"</span>)
+    .expect(<span class="string">"required"</span>);
+<span class="macro">assert_eq!</span>(port, Path::new(<span class="string">"file.txt"</span>));</code></pre></div>
+<p>Example mappings:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Built-in types
+</span><span class="kw">let </span>parser = <span class="macro">clap::value_parser!</span>(String);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{parser:?}"</span>), <span class="string">"ValueParser::string"</span>);
+<span class="kw">let </span>parser = <span class="macro">clap::value_parser!</span>(std::ffi::OsString);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{parser:?}"</span>), <span class="string">"ValueParser::os_string"</span>);
+<span class="kw">let </span>parser = <span class="macro">clap::value_parser!</span>(std::path::PathBuf);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{parser:?}"</span>), <span class="string">"ValueParser::path_buf"</span>);
+<span class="macro">clap::value_parser!</span>(u16).range(<span class="number">3000</span>..);
+<span class="macro">clap::value_parser!</span>(u64).range(<span class="number">3000</span>..);
+
+<span class="comment">// FromStr types
+</span><span class="kw">let </span>parser = <span class="macro">clap::value_parser!</span>(usize);
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{parser:?}"</span>), <span class="string">"_AnonymousValueParser(ValueParser::other(usize))"</span>);
+
+<span class="comment">// ValueEnum types
+</span><span class="macro">clap::value_parser!</span>(ColorChoice);</code></pre></div>
+</div></details></section></div></main></body></html>

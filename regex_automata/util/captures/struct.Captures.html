@@ -1,0 +1,782 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The span offsets of capturing groups after a match has been found."><title>Captures in regex_automata::util::captures - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="regex_automata" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../regex_automata/index.html">regex_automata</a><span class="version">0.4.7</span></h2></div><h2 class="location"><a href="#">Captures</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.all">all</a></li><li><a href="#method.clear">clear</a></li><li><a href="#method.empty">empty</a></li><li><a href="#method.extract">extract</a></li><li><a href="#method.extract_bytes">extract_bytes</a></li><li><a href="#method.get_group">get_group</a></li><li><a href="#method.get_group_by_name">get_group_by_name</a></li><li><a href="#method.get_match">get_match</a></li><li><a href="#method.group_info">group_info</a></li><li><a href="#method.group_len">group_len</a></li><li><a href="#method.interpolate_bytes">interpolate_bytes</a></li><li><a href="#method.interpolate_bytes_into">interpolate_bytes_into</a></li><li><a href="#method.interpolate_string">interpolate_string</a></li><li><a href="#method.interpolate_string_into">interpolate_string_into</a></li><li><a href="#method.is_match">is_match</a></li><li><a href="#method.iter">iter</a></li><li><a href="#method.matches">matches</a></li><li><a href="#method.pattern">pattern</a></li><li><a href="#method.set_pattern">set_pattern</a></li><li><a href="#method.slots">slots</a></li><li><a href="#method.slots_mut">slots_mut</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Captures">Clone</a></li><li><a href="#impl-Debug-for-Captures">Debug</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-Captures">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-Captures">RefUnwindSafe</a></li><li><a href="#impl-Send-for-Captures">Send</a></li><li><a href="#impl-Sync-for-Captures">Sync</a></li><li><a href="#impl-Unpin-for-Captures">Unpin</a></li><li><a href="#impl-UnwindSafe-for-Captures">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In regex_automata::util::captures</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="../../index.html">regex_automata</a>::<wbr><a href="../index.html">util</a>::<wbr><a href="index.html">captures</a>::<wbr><a class="struct" href="#">Captures</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/regex_automata/util/captures.rs.html#130-173">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Captures { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The span offsets of capturing groups after a match has been found.</p>
+<p>This type represents the output of regex engines that can report the
+offsets at which capturing groups matches or “submatches” occur. For
+example, the <a href="../../nfa/thompson/pikevm/struct.PikeVM.html" title="struct regex_automata::nfa::thompson::pikevm::PikeVM"><code>PikeVM</code></a>. When a match
+occurs, it will at minimum contain the <a href="../../struct.PatternID.html" title="struct regex_automata::PatternID"><code>PatternID</code></a> of the pattern that
+matched. Depending upon how it was constructed, it may also contain the
+start/end offsets of the entire match of the pattern and the start/end
+offsets of each capturing group that participated in the match.</p>
+<p>Values of this type are always created for a specific <a href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo"><code>GroupInfo</code></a>. It is
+unspecified behavior to use a <code>Captures</code> value in a search with any regex
+engine that has a different <code>GroupInfo</code> than the one the <code>Captures</code> were
+created with.</p>
+<h2 id="constructors"><a class="doc-anchor" href="#constructors">§</a>Constructors</h2>
+<p>There are three constructors for this type that control what kind of
+information is available upon a match:</p>
+<ul>
+<li><a href="struct.Captures.html#method.all" title="associated function regex_automata::util::captures::Captures::all"><code>Captures::all</code></a>: Will store overall pattern match offsets in addition
+to the offsets of capturing groups that participated in the match.</li>
+<li><a href="struct.Captures.html#method.matches" title="associated function regex_automata::util::captures::Captures::matches"><code>Captures::matches</code></a>: Will store only the overall pattern
+match offsets. The offsets of capturing groups (even ones that participated
+in the match) are not available.</li>
+<li><a href="struct.Captures.html#method.empty" title="associated function regex_automata::util::captures::Captures::empty"><code>Captures::empty</code></a>: Will only store the pattern ID that matched. No
+match offsets are available at all.</li>
+</ul>
+<p>If you aren’t sure which to choose, then pick the first one. The first one
+is what convenience routines like,
+<a href="../../nfa/thompson/pikevm/struct.PikeVM.html#method.create_captures" title="method regex_automata::nfa::thompson::pikevm::PikeVM::create_captures"><code>PikeVM::create_captures</code></a>,
+will use automatically.</p>
+<p>The main difference between these choices is performance. Namely, if you
+ask for <em>less</em> information, then the execution of regex search may be able
+to run more quickly.</p>
+<h2 id="notes"><a class="doc-anchor" href="#notes">§</a>Notes</h2>
+<p>It is worth pointing out that this type is not coupled to any one specific
+regex engine. Instead, its coupling is with <a href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo"><code>GroupInfo</code></a>, which is the
+thing that is responsible for mapping capturing groups to “slot” offsets.
+Slot offsets are indices into a single sequence of memory at which matching
+haystack offsets for the corresponding group are written by regex engines.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example shows how to parse a simple date and extract the components of
+the date via capturing groups:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Span};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"^([0-9]{4})-([0-9]{2})-([0-9]{2})$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"2010-03-14"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">4</span>)), caps.get_group(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">5</span>..<span class="number">7</span>)), caps.get_group(<span class="number">2</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">8</span>..<span class="number">10</span>)), caps.get_group(<span class="number">3</span>));
+</code></pre></div>
+<h2 id="example-named-capturing-groups"><a class="doc-anchor" href="#example-named-capturing-groups">§</a>Example: named capturing groups</h2>
+<p>This example is like the one above, but leverages the ability to name
+capturing groups in order to make the code a bit clearer:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Span};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"^(?P&lt;y&gt;[0-9]{4})-(?P&lt;m&gt;[0-9]{2})-(?P&lt;d&gt;[0-9]{2})$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"2010-03-14"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">4</span>)), caps.get_group_by_name(<span class="string">"y"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">5</span>..<span class="number">7</span>)), caps.get_group_by_name(<span class="string">"m"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">8</span>..<span class="number">10</span>)), caps.get_group_by_name(<span class="string">"d"</span>));
+</code></pre></div>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Captures" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#175-1005">source</a><a href="#impl-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.all" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#215-218">source</a><h4 class="code-header">pub fn <a href="#method.all" class="fn">all</a>(group_info: <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a>) -&gt; <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h4></section></summary><div class="docblock"><p>Create new storage for the offsets of all matching capturing groups.</p>
+<p>This routine provides the most information for matches—namely, the
+spans of matching capturing groups—but also requires the regex search
+routines to do the most work.</p>
+<p>It is unspecified behavior to use the returned <code>Captures</code> value in a
+search with a <code>GroupInfo</code> other than the one that is provided to this
+constructor.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<p>This example shows that all capturing groups—but only ones that
+participated in a match—are available to query after a match has
+been found:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::captures::Captures,
+    Span, Match,
+};
+
+<span class="kw">let </span>re = PikeVM::new(
+    <span class="string">r"^(?:(?P&lt;lower&gt;[a-z]+)|(?P&lt;upper&gt;[A-Z]+))(?P&lt;digits&gt;[0-9]+)$"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = Captures::all(re.get_nfa().group_info().clone());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"ABC123"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>)), caps.get_match());
+<span class="comment">// The 'lower' group didn't match, so it won't have any offsets.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group_by_name(<span class="string">"lower"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">3</span>)), caps.get_group_by_name(<span class="string">"upper"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">3</span>..<span class="number">6</span>)), caps.get_group_by_name(<span class="string">"digits"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.matches" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#256-262">source</a><h4 class="code-header">pub fn <a href="#method.matches" class="fn">matches</a>(group_info: <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a>) -&gt; <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h4></section></summary><div class="docblock"><p>Create new storage for only the full match spans of a pattern. This
+does not include any capturing group offsets.</p>
+<p>It is unspecified behavior to use the returned <code>Captures</code> value in a
+search with a <code>GroupInfo</code> other than the one that is provided to this
+constructor.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example shows that only overall match offsets are reported when
+this constructor is used. Accessing any capturing groups other than
+the 0th will always return <code>None</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::captures::Captures,
+    Match,
+};
+
+<span class="kw">let </span>re = PikeVM::new(
+    <span class="string">r"^(?:(?P&lt;lower&gt;[a-z]+)|(?P&lt;upper&gt;[A-Z]+))(?P&lt;digits&gt;[0-9]+)$"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = Captures::matches(re.get_nfa().group_info().clone());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"ABC123"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">6</span>)), caps.get_match());
+<span class="comment">// We didn't ask for capturing group offsets, so they aren't available.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group_by_name(<span class="string">"lower"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group_by_name(<span class="string">"upper"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group_by_name(<span class="string">"digits"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.empty" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#301-303">source</a><h4 class="code-header">pub fn <a href="#method.empty" class="fn">empty</a>(group_info: <a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a>) -&gt; <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h4></section></summary><div class="docblock"><p>Create new storage for only tracking which pattern matched. No offsets
+are stored at all.</p>
+<p>It is unspecified behavior to use the returned <code>Captures</code> value in a
+search with a <code>GroupInfo</code> other than the one that is provided to this
+constructor.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>This example shows that only the pattern that matched can be accessed
+from a <code>Captures</code> value created via this constructor.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::captures::Captures,
+    PatternID,
+};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[<span class="string">r"[a-z]+"</span>, <span class="string">r"[A-Z]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = Captures::empty(re.get_nfa().group_info().clone());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"aABCz"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">0</span>)), caps.pattern());
+<span class="comment">// We didn't ask for any offsets, so they aren't available.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span><span class="string">"aABCz"</span>[<span class="number">1</span>..], <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)), caps.pattern());
+<span class="comment">// We didn't ask for any offsets, so they aren't available.
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_match" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#331-333">source</a><h4 class="code-header">pub fn <a href="#method.is_match" class="fn">is_match</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if this capturing group represents a match.</p>
+<p>This is a convenience routine for <code>caps.pattern().is_some()</code>.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<p>When using the PikeVM (for example), the lightest weight way of
+detecting whether a match exists is to create capturing groups that
+only track the ID of the pattern that match (if any):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::captures::Captures,
+};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"[a-z]+"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = Captures::empty(re.get_nfa().group_info().clone());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"aABCz"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.pattern" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#369-371">source</a><h4 class="code-header">pub fn <a href="#method.pattern" class="fn">pattern</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the identifier of the pattern that matched when this
+capturing group represents a match. If no match was found, then this
+always returns <code>None</code>.</p>
+<p>This returns a pattern ID in precisely the cases in which <code>is_match</code>
+returns <code>true</code>. Similarly, the pattern ID returned is always the
+same pattern ID found in the <code>Match</code> returned by <code>get_match</code>.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<p>When using the PikeVM (for example), the lightest weight way of
+detecting which pattern matched is to create capturing groups that only
+track the ID of the pattern that match (if any):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::captures::Captures,
+    PatternID,
+};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[<span class="string">r"[a-z]+"</span>, <span class="string">r"[A-Z]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = Captures::empty(re.get_nfa().group_info().clone());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"ABC"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)), caps.pattern());
+<span class="comment">// Recall that offsets are only available when using a non-empty
+// Captures value. So even though a match occurred, this returns None!
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_match" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#398-400">source</a><h4 class="code-header">pub fn <a href="#method.get_match" class="fn">get_match</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Match.html" title="struct regex_automata::Match">Match</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the pattern ID and the span of the match, if one occurred.</p>
+<p>This always returns <code>None</code> when <code>Captures</code> was created with
+<a href="struct.Captures.html#method.empty" title="associated function regex_automata::util::captures::Captures::empty"><code>Captures::empty</code></a>, even if a match was found.</p>
+<p>If this routine returns a non-<code>None</code> value, then <code>is_match</code> is
+guaranteed to return <code>true</code> and <code>pattern</code> is also guaranteed to return
+a non-<code>None</code> value.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<p>This example shows how to get the full match from a search:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Match};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[<span class="string">r"[a-z]+"</span>, <span class="string">r"[A-Z]+"</span>])<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"ABC"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">1</span>, <span class="number">0</span>..<span class="number">3</span>)), caps.get_match());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_group" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#454-467">source</a><h4 class="code-header">pub fn <a href="#method.get_group" class="fn">get_group</a>(&amp;self, index: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Span.html" title="struct regex_automata::Span">Span</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the span of a capturing group match corresponding to the group
+index given, only if both the overall pattern matched and the capturing
+group participated in that match.</p>
+<p>This returns <code>None</code> if <code>index</code> is invalid. <code>index</code> is valid if and only
+if it’s less than <a href="struct.Captures.html#method.group_len" title="method regex_automata::util::captures::Captures::group_len"><code>Captures::group_len</code></a> for the matching pattern.</p>
+<p>This always returns <code>None</code> when <code>Captures</code> was created with
+<a href="struct.Captures.html#method.empty" title="associated function regex_automata::util::captures::Captures::empty"><code>Captures::empty</code></a>, even if a match was found. This also always
+returns <code>None</code> for any <code>index &gt; 0</code> when <code>Captures</code> was created with
+<a href="struct.Captures.html#method.matches" title="associated function regex_automata::util::captures::Captures::matches"><code>Captures::matches</code></a>.</p>
+<p>If this routine returns a non-<code>None</code> value, then <code>is_match</code> is
+guaranteed to return <code>true</code>, <code>pattern</code> is guaranteed to return a
+non-<code>None</code> value and <code>get_match</code> is guaranteed to return a non-<code>None</code>
+value.</p>
+<p>By convention, the 0th capture group will always return the same
+span as the span returned by <code>get_match</code>. This is because the 0th
+capture group always corresponds to the entirety of the pattern’s
+match. (It is similarly always unnamed because it is implicit.) This
+isn’t necessarily true of all regex engines. For example, one can
+hand-compile a <a href="../../nfa/thompson/struct.NFA.html" title="struct regex_automata::nfa::thompson::NFA"><code>thompson::NFA</code></a> via a
+<a href="../../nfa/thompson/struct.Builder.html" title="struct regex_automata::nfa::thompson::Builder"><code>thompson::Builder</code></a>, which isn’t
+technically forced to make the 0th capturing group always correspond to
+the entire match.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<p>This example shows how to get the capturing groups, by index, from a
+match:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Span, Match};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?P&lt;last&gt;\pL+)$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Bruce Springsteen"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">17</span>)), caps.get_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">5</span>)), caps.get_group(<span class="number">1</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">6</span>..<span class="number">17</span>)), caps.get_group(<span class="number">2</span>));
+<span class="comment">// Looking for a non-existent capturing group will return None:
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group(<span class="number">9944060567225171988</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get_group_by_name" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#507-510">source</a><h4 class="code-header">pub fn <a href="#method.get_group_by_name" class="fn">get_group_by_name</a>(&amp;self, name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.Span.html" title="struct regex_automata::Span">Span</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the span of a capturing group match corresponding to the group
+name given, only if both the overall pattern matched and the capturing
+group participated in that match.</p>
+<p>This returns <code>None</code> if <code>name</code> does not correspond to a valid capturing
+group for the pattern that matched.</p>
+<p>This always returns <code>None</code> when <code>Captures</code> was created with
+<a href="struct.Captures.html#method.empty" title="associated function regex_automata::util::captures::Captures::empty"><code>Captures::empty</code></a>, even if a match was found. This also always
+returns <code>None</code> for any <code>index &gt; 0</code> when <code>Captures</code> was created with
+<a href="struct.Captures.html#method.matches" title="associated function regex_automata::util::captures::Captures::matches"><code>Captures::matches</code></a>.</p>
+<p>If this routine returns a non-<code>None</code> value, then <code>is_match</code> is
+guaranteed to return <code>true</code>, <code>pattern</code> is guaranteed to return a
+non-<code>None</code> value and <code>get_match</code> is guaranteed to return a non-<code>None</code>
+value.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<p>This example shows how to get the capturing groups, by name, from a
+match:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Span, Match};
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?P&lt;last&gt;\pL+)$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Bruce Springsteen"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Match::must(<span class="number">0</span>, <span class="number">0</span>..<span class="number">17</span>)), caps.get_match());
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">5</span>)), caps.get_group_by_name(<span class="string">"first"</span>));
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(Span::from(<span class="number">6</span>..<span class="number">17</span>)), caps.get_group_by_name(<span class="string">"last"</span>));
+<span class="comment">// Looking for a non-existent capturing group will return None:
+</span><span class="macro">assert_eq!</span>(<span class="prelude-val">None</span>, caps.get_group_by_name(<span class="string">"middle"</span>));
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.iter" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#576-583">source</a><h4 class="code-header">pub fn <a href="#method.iter" class="fn">iter</a>(&amp;self) -&gt; <a class="struct" href="struct.CapturesPatternIter.html" title="struct regex_automata::util::captures::CapturesPatternIter">CapturesPatternIter</a>&lt;'_&gt; <a href="#" class="tooltip" data-notable-ty="CapturesPatternIter&lt;&#39;_&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns an iterator of possible spans for every capturing group in the
+matching pattern.</p>
+<p>If this <code>Captures</code> value does not correspond to a match, then the
+iterator returned yields no elements.</p>
+<p>Note that the iterator returned yields elements of type <code>Option&lt;Span&gt;</code>.
+A span is present if and only if it corresponds to a capturing group
+that participated in a match.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<p>This example shows how to collect all capturing groups:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Span};
+
+<span class="kw">let </span>re = PikeVM::new(
+    <span class="comment">// Matches first/last names, with an optional middle name.
+    </span><span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?:(?P&lt;middle&gt;\pL+)\s+)?(?P&lt;last&gt;\pL+)$"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Harry James Potter"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="kw">let </span>groups: Vec&lt;<span class="prelude-ty">Option</span>&lt;Span&gt;&gt; = caps.iter().collect();
+<span class="macro">assert_eq!</span>(groups, <span class="macro">vec!</span>[
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">18</span>)),
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">5</span>)),
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">6</span>..<span class="number">11</span>)),
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">12</span>..<span class="number">18</span>)),
+]);
+</code></pre></div>
+<p>This example uses the same regex as the previous example, but with a
+haystack that omits the middle name. This results in a capturing group
+that is present in the elements yielded by the iterator but without a
+match:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, Span};
+
+<span class="kw">let </span>re = PikeVM::new(
+    <span class="comment">// Matches first/last names, with an optional middle name.
+    </span><span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?:(?P&lt;middle&gt;\pL+)\s+)?(?P&lt;last&gt;\pL+)$"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Harry Potter"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="kw">let </span>groups: Vec&lt;<span class="prelude-ty">Option</span>&lt;Span&gt;&gt; = caps.iter().collect();
+<span class="macro">assert_eq!</span>(groups, <span class="macro">vec!</span>[
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">12</span>)),
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">0</span>..<span class="number">5</span>)),
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">Some</span>(Span::from(<span class="number">6</span>..<span class="number">12</span>)),
+]);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.group_len" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#615-621">source</a><h4 class="code-header">pub fn <a href="#method.group_len" class="fn">group_len</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Return the total number of capturing groups for the matching pattern.</p>
+<p>If this <code>Captures</code> value does not correspond to a match, then this
+always returns <code>0</code>.</p>
+<p>This always returns the same number of elements yielded by
+<a href="struct.Captures.html#method.iter" title="method regex_automata::util::captures::Captures::iter"><code>Captures::iter</code></a>. That is, the number includes capturing groups even
+if they don’t participate in the match.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<p>This example shows how to count the total number of capturing groups
+associated with a pattern. Notice that it includes groups that did not
+participate in a match (just like <code>Captures::iter</code> does).</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::pikevm::PikeVM;
+
+<span class="kw">let </span>re = PikeVM::new(
+    <span class="comment">// Matches first/last names, with an optional middle name.
+    </span><span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?:(?P&lt;middle&gt;\pL+)\s+)?(?P&lt;last&gt;\pL+)$"</span>,
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Harry Potter"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="number">4</span>, caps.group_len());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.group_info" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#674-676">source</a><h4 class="code-header">pub fn <a href="#method.group_info" class="fn">group_info</a>(&amp;self) -&gt; &amp;<a class="struct" href="struct.GroupInfo.html" title="struct regex_automata::util::captures::GroupInfo">GroupInfo</a></h4></section></summary><div class="docblock"><p>Returns a reference to the underlying group info on which these
+captures are based.</p>
+<p>The difference between <code>GroupInfo</code> and <code>Captures</code> is that the former
+defines the structure of capturing groups where as the latter is what
+stores the actual match information. So where as <code>Captures</code> only gives
+you access to the current match, <code>GroupInfo</code> lets you query any
+information about all capturing groups, even ones for patterns that
+weren’t involved in a match.</p>
+<p>Note that a <code>GroupInfo</code> uses reference counting internally, so it may
+be cloned cheaply.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<p>This example shows how to get all capturing group names from the
+underlying <code>GroupInfo</code>. Notice that we don’t even need to run a
+search.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, PatternID};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"(?P&lt;foo&gt;a)"</span>,
+    <span class="string">r"(a)(b)"</span>,
+    <span class="string">r"ab"</span>,
+    <span class="string">r"(?P&lt;bar&gt;a)(?P&lt;quux&gt;a)"</span>,
+    <span class="string">r"(?P&lt;foo&gt;z)"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>caps = re.create_captures();
+
+<span class="kw">let </span>expected = <span class="macro">vec!</span>[
+    (PatternID::must(<span class="number">0</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">0</span>), <span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)),
+    (PatternID::must(<span class="number">1</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">1</span>), <span class="number">1</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">1</span>), <span class="number">2</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">2</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">3</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">3</span>), <span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="string">"bar"</span>)),
+    (PatternID::must(<span class="number">3</span>), <span class="number">2</span>, <span class="prelude-val">Some</span>(<span class="string">"quux"</span>)),
+    (PatternID::must(<span class="number">4</span>), <span class="number">0</span>, <span class="prelude-val">None</span>),
+    (PatternID::must(<span class="number">4</span>), <span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="string">"foo"</span>)),
+];
+<span class="comment">// We could also just use 're.get_nfa().group_info()'.
+</span><span class="kw">let </span>got: Vec&lt;(PatternID, usize, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;)&gt; =
+    caps.group_info().all_names().collect();
+<span class="macro">assert_eq!</span>(expected, got);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.interpolate_string" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#716-724">source</a><h4 class="code-header">pub fn <a href="#method.interpolate_string" class="fn">interpolate_string</a>(&amp;self, haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, replacement: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a></h4></section></summary><div class="docblock"><p>Interpolates the capture references in <code>replacement</code> with the
+corresponding substrings in <code>haystack</code> matched by each reference. The
+interpolated string is returned.</p>
+<p>See the <a href="../interpolate/index.html" title="mod regex_automata::util::interpolate"><code>interpolate</code> module</a> for documentation on the
+format of the replacement string.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<p>This example shows how to use interpolation, and also shows how it
+can work with multi-pattern regexes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, PatternID};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"(?&lt;day&gt;[0-9]{2})-(?&lt;month&gt;[0-9]{2})-(?&lt;year&gt;[0-9]{4})"</span>,
+    <span class="string">r"(?&lt;year&gt;[0-9]{4})-(?&lt;month&gt;[0-9]{2})-(?&lt;day&gt;[0-9]{2})"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+<span class="kw">let </span>replacement = <span class="string">"year=$year, month=$month, day=$day"</span>;
+
+<span class="comment">// This matches the first pattern.
+</span><span class="kw">let </span>hay = <span class="string">"On 14-03-2010, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span>result = caps.interpolate_string(hay, replacement);
+<span class="macro">assert_eq!</span>(<span class="string">"year=2010, month=03, day=14"</span>, result);
+
+<span class="comment">// And this matches the second pattern.
+</span><span class="kw">let </span>hay = <span class="string">"On 2010-03-14, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span>result = caps.interpolate_string(hay, replacement);
+<span class="macro">assert_eq!</span>(<span class="string">"year=2010, month=03, day=14"</span>, result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.interpolate_string_into" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#766-784">source</a><h4 class="code-header">pub fn <a href="#method.interpolate_string_into" class="fn">interpolate_string_into</a>(
+    &amp;self,
+    haystack: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    replacement: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+)</h4></section></summary><div class="docblock"><p>Interpolates the capture references in <code>replacement</code> with the
+corresponding substrings in <code>haystack</code> matched by each reference. The
+interpolated string is written to <code>dst</code>.</p>
+<p>See the <a href="../interpolate/index.html" title="mod regex_automata::util::interpolate"><code>interpolate</code> module</a> for documentation on the
+format of the replacement string.</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<p>This example shows how to use interpolation, and also shows how it
+can work with multi-pattern regexes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, PatternID};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"(?&lt;day&gt;[0-9]{2})-(?&lt;month&gt;[0-9]{2})-(?&lt;year&gt;[0-9]{4})"</span>,
+    <span class="string">r"(?&lt;year&gt;[0-9]{4})-(?&lt;month&gt;[0-9]{2})-(?&lt;day&gt;[0-9]{2})"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+<span class="kw">let </span>replacement = <span class="string">"year=$year, month=$month, day=$day"</span>;
+
+<span class="comment">// This matches the first pattern.
+</span><span class="kw">let </span>hay = <span class="string">"On 14-03-2010, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = String::new();
+caps.interpolate_string_into(hay, replacement, <span class="kw-2">&amp;mut </span>dst);
+<span class="macro">assert_eq!</span>(<span class="string">"year=2010, month=03, day=14"</span>, dst);
+
+<span class="comment">// And this matches the second pattern.
+</span><span class="kw">let </span>hay = <span class="string">"On 2010-03-14, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = String::new();
+caps.interpolate_string_into(hay, replacement, <span class="kw-2">&amp;mut </span>dst);
+<span class="macro">assert_eq!</span>(<span class="string">"year=2010, month=03, day=14"</span>, dst);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.interpolate_bytes" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#824-832">source</a><h4 class="code-header">pub fn <a href="#method.interpolate_bytes" class="fn">interpolate_bytes</a>(&amp;self, haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], replacement: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;</h4></section></summary><div class="docblock"><p>Interpolates the capture references in <code>replacement</code> with the
+corresponding substrings in <code>haystack</code> matched by each reference. The
+interpolated byte string is returned.</p>
+<p>See the <a href="../interpolate/index.html" title="mod regex_automata::util::interpolate"><code>interpolate</code> module</a> for documentation on the
+format of the replacement string.</p>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<p>This example shows how to use interpolation, and also shows how it
+can work with multi-pattern regexes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, PatternID};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"(?&lt;day&gt;[0-9]{2})-(?&lt;month&gt;[0-9]{2})-(?&lt;year&gt;[0-9]{4})"</span>,
+    <span class="string">r"(?&lt;year&gt;[0-9]{4})-(?&lt;month&gt;[0-9]{2})-(?&lt;day&gt;[0-9]{2})"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+<span class="kw">let </span>replacement = <span class="string">b"year=$year, month=$month, day=$day"</span>;
+
+<span class="comment">// This matches the first pattern.
+</span><span class="kw">let </span>hay = <span class="string">b"On 14-03-2010, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span>result = caps.interpolate_bytes(hay, replacement);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="string">b"year=2010, month=03, day=14"</span>[..], result);
+
+<span class="comment">// And this matches the second pattern.
+</span><span class="kw">let </span>hay = <span class="string">b"On 2010-03-14, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span>result = caps.interpolate_bytes(hay, replacement);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="string">b"year=2010, month=03, day=14"</span>[..], result);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.interpolate_bytes_into" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#874-892">source</a><h4 class="code-header">pub fn <a href="#method.interpolate_bytes_into" class="fn">interpolate_bytes_into</a>(
+    &amp;self,
+    haystack: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    replacement: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+    dst: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>&gt;,
+)</h4></section></summary><div class="docblock"><p>Interpolates the capture references in <code>replacement</code> with the
+corresponding substrings in <code>haystack</code> matched by each reference. The
+interpolated byte string is written to <code>dst</code>.</p>
+<p>See the <a href="../interpolate/index.html" title="mod regex_automata::util::interpolate"><code>interpolate</code> module</a> for documentation on the
+format of the replacement string.</p>
+<h5 id="example-15"><a class="doc-anchor" href="#example-15">§</a>Example</h5>
+<p>This example shows how to use interpolation, and also shows how it
+can work with multi-pattern regexes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{nfa::thompson::pikevm::PikeVM, PatternID};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"(?&lt;day&gt;[0-9]{2})-(?&lt;month&gt;[0-9]{2})-(?&lt;year&gt;[0-9]{4})"</span>,
+    <span class="string">r"(?&lt;year&gt;[0-9]{4})-(?&lt;month&gt;[0-9]{2})-(?&lt;day&gt;[0-9]{2})"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+<span class="kw">let </span>replacement = <span class="string">b"year=$year, month=$month, day=$day"</span>;
+
+<span class="comment">// This matches the first pattern.
+</span><span class="kw">let </span>hay = <span class="string">b"On 14-03-2010, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = <span class="macro">vec!</span>[];
+caps.interpolate_bytes_into(hay, replacement, <span class="kw-2">&amp;mut </span>dst);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="string">b"year=2010, month=03, day=14"</span>[..], dst);
+
+<span class="comment">// And this matches the second pattern.
+</span><span class="kw">let </span>hay = <span class="string">b"On 2010-03-14, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="kw">let </span><span class="kw-2">mut </span>dst = <span class="macro">vec!</span>[];
+caps.interpolate_bytes_into(hay, replacement, <span class="kw-2">&amp;mut </span>dst);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="string">b"year=2010, month=03, day=14"</span>[..], dst);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.extract" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#937-948">source</a><h4 class="code-header">pub fn <a href="#method.extract" class="fn">extract</a>&lt;'h, const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;(
+    &amp;self,
+    haystack: &amp;'h <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; (&amp;'h <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>, [&amp;'h <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">N</a>])</h4></section></summary><div class="docblock"><p>This is a convenience routine for extracting the substrings
+corresponding to matching capture groups in the given <code>haystack</code>. The
+<code>haystack</code> should be the same substring used to find the match spans in
+this <code>Captures</code> value.</p>
+<p>This is identical to <a href="struct.Captures.html#method.extract_bytes" title="method regex_automata::util::captures::Captures::extract_bytes"><code>Captures::extract_bytes</code></a>, except it works with
+<code>&amp;str</code> instead of <code>&amp;[u8]</code>.</p>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This panics if the number of explicit matching groups in this
+<code>Captures</code> value is less than <code>N</code>. This also panics if this <code>Captures</code>
+value does not correspond to a match.</p>
+<p>Note that this does <em>not</em> panic if the number of explicit matching
+groups is bigger than <code>N</code>. In that case, only the first <code>N</code> matching
+groups are extracted.</p>
+<h5 id="example-16"><a class="doc-anchor" href="#example-16">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::pikevm::PikeVM;
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"([0-9]{4})-([0-9]{2})-([0-9]{2})"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+<span class="kw">let </span>hay = <span class="string">"On 2010-03-14, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="kw">let </span>(full, [year, month, day]) = caps.extract(hay);
+<span class="macro">assert_eq!</span>(<span class="string">"2010-03-14"</span>, full);
+<span class="macro">assert_eq!</span>(<span class="string">"2010"</span>, year);
+<span class="macro">assert_eq!</span>(<span class="string">"03"</span>, month);
+<span class="macro">assert_eq!</span>(<span class="string">"14"</span>, day);
+
+<span class="comment">// We can also ask for fewer than all capture groups.
+</span><span class="kw">let </span>(full, [year]) = caps.extract(hay);
+<span class="macro">assert_eq!</span>(<span class="string">"2010-03-14"</span>, full);
+<span class="macro">assert_eq!</span>(<span class="string">"2010"</span>, year);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.extract_bytes" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#993-1004">source</a><h4 class="code-header">pub fn <a href="#method.extract_bytes" class="fn">extract_bytes</a>&lt;'h, const N: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>&gt;(
+    &amp;self,
+    haystack: &amp;'h [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>],
+) -&gt; (&amp;'h [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>], [&amp;'h [<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u8.html">u8</a>]; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.array.html">N</a>])</h4></section></summary><div class="docblock"><p>This is a convenience routine for extracting the substrings
+corresponding to matching capture groups in the given <code>haystack</code>. The
+<code>haystack</code> should be the same substring used to find the match spans in
+this <code>Captures</code> value.</p>
+<p>This is identical to <a href="struct.Captures.html#method.extract" title="method regex_automata::util::captures::Captures::extract"><code>Captures::extract</code></a>, except it works with
+<code>&amp;[u8]</code> instead of <code>&amp;str</code>.</p>
+<h5 id="panics-1"><a class="doc-anchor" href="#panics-1">§</a>Panics</h5>
+<p>This panics if the number of explicit matching groups in this
+<code>Captures</code> value is less than <code>N</code>. This also panics if this <code>Captures</code>
+value does not correspond to a match.</p>
+<p>Note that this does <em>not</em> panic if the number of explicit matching
+groups is bigger than <code>N</code>. In that case, only the first <code>N</code> matching
+groups are extracted.</p>
+<h5 id="example-17"><a class="doc-anchor" href="#example-17">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::pikevm::PikeVM;
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"([0-9]{4})-([0-9]{2})-([0-9]{2})"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>cache = re.create_cache();
+<span class="kw">let </span><span class="kw-2">mut </span>caps = re.create_captures();
+
+<span class="kw">let </span>hay = <span class="string">b"On 2010-03-14, I became a Tenneessee lamb."</span>;
+re.captures(<span class="kw-2">&amp;mut </span>cache, hay, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="kw">let </span>(full, [year, month, day]) = caps.extract_bytes(hay);
+<span class="macro">assert_eq!</span>(<span class="string">b"2010-03-14"</span>, full);
+<span class="macro">assert_eq!</span>(<span class="string">b"2010"</span>, year);
+<span class="macro">assert_eq!</span>(<span class="string">b"03"</span>, month);
+<span class="macro">assert_eq!</span>(<span class="string">b"14"</span>, day);
+
+<span class="comment">// We can also ask for fewer than all capture groups.
+</span><span class="kw">let </span>(full, [year]) = caps.extract_bytes(hay);
+<span class="macro">assert_eq!</span>(<span class="string">b"2010-03-14"</span>, full);
+<span class="macro">assert_eq!</span>(<span class="string">b"2010"</span>, year);
+</code></pre></div>
+</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Captures-1" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1010-1202">source</a><a href="#impl-Captures-1" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section></summary><div class="docblock"><p>Lower level “slot” oriented APIs. One does not typically need to use these
+when executing a search. They are instead mostly intended for folks that
+are writing their own regex engine while reusing this <code>Captures</code> type.</p>
+</div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clear" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1071-1076">source</a><h4 class="code-header">pub fn <a href="#method.clear" class="fn">clear</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Clear this <code>Captures</code> value.</p>
+<p>After clearing, all slots inside this <code>Captures</code> value will be set to
+<code>None</code>. Similarly, any pattern ID that it was previously associated
+with (for a match) is erased.</p>
+<p>It is not usually necessary to call this routine. Namely, a <code>Captures</code>
+value only provides high level access to the capturing groups of the
+pattern that matched, and only low level access to individual slots.
+Thus, even if slots corresponding to groups that aren’t associated
+with the matching pattern are set, then it won’t impact the higher
+level APIs. Namely, higher level APIs like <a href="struct.Captures.html#method.get_group" title="method regex_automata::util::captures::Captures::get_group"><code>Captures::get_group</code></a> will
+return <code>None</code> if no pattern ID is present, even if there are spans set
+in the underlying slots.</p>
+<p>Thus, to “clear” a <code>Captures</code> value of a match, it is usually only
+necessary to call <a href="struct.Captures.html#method.set_pattern" title="method regex_automata::util::captures::Captures::set_pattern"><code>Captures::set_pattern</code></a> with <code>None</code>.</p>
+<h5 id="example-18"><a class="doc-anchor" href="#example-18">§</a>Example</h5>
+<p>This example shows what happens when a <code>Captures</code> value is cleared.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::pikevm::PikeVM;
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?P&lt;last&gt;\pL+)$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Bruce Springsteen"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="kw">let </span>slots: Vec&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt; =
+    caps.slots().iter().map(|s| s.map(|x| x.get())).collect();
+<span class="comment">// Note that the following ordering is considered an API guarantee.
+</span><span class="macro">assert_eq!</span>(slots, <span class="macro">vec!</span>[
+    <span class="prelude-val">Some</span>(<span class="number">0</span>),
+    <span class="prelude-val">Some</span>(<span class="number">17</span>),
+    <span class="prelude-val">Some</span>(<span class="number">0</span>),
+    <span class="prelude-val">Some</span>(<span class="number">5</span>),
+    <span class="prelude-val">Some</span>(<span class="number">6</span>),
+    <span class="prelude-val">Some</span>(<span class="number">17</span>),
+]);
+
+<span class="comment">// Now clear the slots. Everything is gone and it is no longer a match.
+</span>caps.clear();
+<span class="macro">assert!</span>(!caps.is_match());
+<span class="kw">let </span>slots: Vec&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt; =
+    caps.slots().iter().map(|s| s.map(|x| x.get())).collect();
+<span class="macro">assert_eq!</span>(slots, <span class="macro">vec!</span>[
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">None</span>,
+]);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.set_pattern" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1134-1136">source</a><h4 class="code-header">pub fn <a href="#method.set_pattern" class="fn">set_pattern</a>(&amp;mut self, pid: <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../../struct.PatternID.html" title="struct regex_automata::PatternID">PatternID</a>&gt;)</h4></section></summary><div class="docblock"><p>Set the pattern on this <code>Captures</code> value.</p>
+<p>When the pattern ID is <code>None</code>, then this <code>Captures</code> value does not
+correspond to a match (<code>is_match</code> will return <code>false</code>). Otherwise, it
+corresponds to a match.</p>
+<p>This is useful in search implementations where you might want to
+initially call <code>set_pattern(None)</code> in order to avoid the cost of
+calling <code>clear()</code> if it turns out to not be necessary.</p>
+<h5 id="example-19"><a class="doc-anchor" href="#example-19">§</a>Example</h5>
+<p>This example shows that <code>set_pattern</code> merely overwrites the pattern ID.
+It does not actually change the underlying slot values.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::nfa::thompson::pikevm::PikeVM;
+
+<span class="kw">let </span>re = PikeVM::new(<span class="string">r"^(?P&lt;first&gt;\pL+)\s+(?P&lt;last&gt;\pL+)$"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"Bruce Springsteen"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert!</span>(caps.is_match());
+<span class="macro">assert!</span>(caps.pattern().is_some());
+<span class="kw">let </span>slots: Vec&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt; =
+    caps.slots().iter().map(|s| s.map(|x| x.get())).collect();
+<span class="comment">// Note that the following ordering is considered an API guarantee.
+</span><span class="macro">assert_eq!</span>(slots, <span class="macro">vec!</span>[
+    <span class="prelude-val">Some</span>(<span class="number">0</span>),
+    <span class="prelude-val">Some</span>(<span class="number">17</span>),
+    <span class="prelude-val">Some</span>(<span class="number">0</span>),
+    <span class="prelude-val">Some</span>(<span class="number">5</span>),
+    <span class="prelude-val">Some</span>(<span class="number">6</span>),
+    <span class="prelude-val">Some</span>(<span class="number">17</span>),
+]);
+
+<span class="comment">// Now set the pattern to None. Note that the slot values remain.
+</span>caps.set_pattern(<span class="prelude-val">None</span>);
+<span class="macro">assert!</span>(!caps.is_match());
+<span class="macro">assert!</span>(!caps.pattern().is_some());
+<span class="kw">let </span>slots: Vec&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt; =
+    caps.slots().iter().map(|s| s.map(|x| x.get())).collect();
+<span class="comment">// Note that the following ordering is considered an API guarantee.
+</span><span class="macro">assert_eq!</span>(slots, <span class="macro">vec!</span>[
+    <span class="prelude-val">Some</span>(<span class="number">0</span>),
+    <span class="prelude-val">Some</span>(<span class="number">17</span>),
+    <span class="prelude-val">Some</span>(<span class="number">0</span>),
+    <span class="prelude-val">Some</span>(<span class="number">5</span>),
+    <span class="prelude-val">Some</span>(<span class="number">6</span>),
+    <span class="prelude-val">Some</span>(<span class="number">17</span>),
+]);
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slots" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1187-1189">source</a><h4 class="code-header">pub fn <a href="#method.slots" class="fn">slots</a>(&amp;self) -&gt; &amp;[<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../primitives/struct.NonMaxUsize.html" title="struct regex_automata::util::primitives::NonMaxUsize">NonMaxUsize</a>&gt;]</h4></section></summary><div class="docblock"><p>Returns the underlying slots, where each slot stores a single offset.</p>
+<p>Every matching capturing group generally corresponds to two slots: one
+slot for the starting position and another for the ending position.
+Typically, either both are present or neither are. (The weasel word
+“typically” is used here because it really depends on the regex engine
+implementation. Every sensible regex engine likely adheres to this
+invariant, and every regex engine in this crate is sensible.)</p>
+<p>Generally speaking, callers should prefer to use higher level routines
+like <a href="struct.Captures.html#method.get_match" title="method regex_automata::util::captures::Captures::get_match"><code>Captures::get_match</code></a> or <a href="struct.Captures.html#method.get_group" title="method regex_automata::util::captures::Captures::get_group"><code>Captures::get_group</code></a>.</p>
+<p>An important note here is that a regex engine may not reset all of the
+slots to <code>None</code> values when no match occurs, or even when a match of
+a different pattern occurs. But this depends on how the regex engine
+implementation deals with slots.</p>
+<h5 id="example-20"><a class="doc-anchor" href="#example-20">§</a>Example</h5>
+<p>This example shows how to get the underlying slots from a regex match.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>regex_automata::{
+    nfa::thompson::pikevm::PikeVM,
+    util::primitives::{PatternID, NonMaxUsize},
+};
+
+<span class="kw">let </span>re = PikeVM::new_many(<span class="kw-2">&amp;</span>[
+    <span class="string">r"[a-z]+"</span>,
+    <span class="string">r"[0-9]+"</span>,
+])<span class="question-mark">?</span>;
+<span class="kw">let </span>(<span class="kw-2">mut </span>cache, <span class="kw-2">mut </span>caps) = (re.create_cache(), re.create_captures());
+
+re.captures(<span class="kw-2">&amp;mut </span>cache, <span class="string">"123"</span>, <span class="kw-2">&amp;mut </span>caps);
+<span class="macro">assert_eq!</span>(<span class="prelude-val">Some</span>(PatternID::must(<span class="number">1</span>)), caps.pattern());
+<span class="comment">// Note that the only guarantee we have here is that slots 2 and 3
+// are set to correct values. The contents of the first two slots are
+// unspecified since the 0th pattern did not match.
+</span><span class="kw">let </span>expected = <span class="kw-2">&amp;</span>[
+    <span class="prelude-val">None</span>,
+    <span class="prelude-val">None</span>,
+    NonMaxUsize::new(<span class="number">0</span>),
+    NonMaxUsize::new(<span class="number">3</span>),
+];
+<span class="macro">assert_eq!</span>(expected, caps.slots());
+</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.slots_mut" class="method"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1199-1201">source</a><h4 class="code-header">pub fn <a href="#method.slots_mut" class="fn">slots_mut</a>(&amp;mut self) -&gt; &amp;mut [<a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="../primitives/struct.NonMaxUsize.html" title="struct regex_automata::util::primitives::NonMaxUsize">NonMaxUsize</a>&gt;]</h4></section></summary><div class="docblock"><p>Returns the underlying slots as a mutable slice, where each slot stores
+a single offset.</p>
+<p>This tends to be most useful for regex engine implementations for
+writing offsets for matching capturing groups to slots.</p>
+<p>See <a href="struct.Captures.html#method.slots" title="method regex_automata::util::captures::Captures::slots"><code>Captures::slots</code></a> for more information about slots.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Captures" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#129">source</a><a href="#impl-Clone-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#129">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Captures" class="impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1204-1213">source</a><a href="#impl-Debug-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../../../src/regex_automata/util/captures.rs.html#1205-1212">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Captures" class="impl"><a href="#impl-Freeze-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section><section id="impl-RefUnwindSafe-for-Captures" class="impl"><a href="#impl-RefUnwindSafe-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section><section id="impl-Send-for-Captures" class="impl"><a href="#impl-Send-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section><section id="impl-Sync-for-Captures" class="impl"><a href="#impl-Sync-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section><section id="impl-Unpin-for-Captures" class="impl"><a href="#impl-Unpin-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section><section id="impl-UnwindSafe-for-Captures" class="impl"><a href="#impl-UnwindSafe-for-Captures" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Captures.html" title="struct regex_automata::util::captures::Captures">Captures</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div><script type="text/json" id="notable-traits-data">{"CapturesPatternIter<'_>":"<h3>Notable traits for <code><a class=\"struct\" href=\"struct.CapturesPatternIter.html\" title=\"struct regex_automata::util::captures::CapturesPatternIter\">CapturesPatternIter</a>&lt;'a&gt;</code></h3><pre><code><div class=\"where\">impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"struct.CapturesPatternIter.html\" title=\"struct regex_automata::util::captures::CapturesPatternIter\">CapturesPatternIter</a>&lt;'a&gt;</div><div class=\"where\">    type <a href=\"https://doc.rust-lang.org/1.81.0/core/iter/traits/iterator/trait.Iterator.html#associatedtype.Item\" class=\"associatedtype\">Item</a> = <a class=\"enum\" href=\"https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html\" title=\"enum core::option::Option\">Option</a>&lt;<a class=\"struct\" href=\"../../struct.Span.html\" title=\"struct regex_automata::Span\">Span</a>&gt;;</div>"}</script></section></div></main></body></html>

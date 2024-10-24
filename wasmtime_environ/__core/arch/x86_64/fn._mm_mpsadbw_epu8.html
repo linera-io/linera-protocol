@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Subtracts 8-bit unsigned integer values and computes the absolute values of the differences to the corresponding bits in the destination. Then sums of the absolute differences are returned according to the bit fields in the immediate operand."><title>_mm_mpsadbw_epu8 in wasmtime_environ::__core::arch::x86_64 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core::arch::x86_64</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../../index.html">wasmtime_environ</a>::<wbr><a href="../../index.html">__core</a>::<wbr><a href="../index.html">arch</a>::<wbr><a href="index.html">x86_64</a>::<wbr><a class="fn" href="#">_mm_mpsadbw_epu8</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.27.0">1.27.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/stdarch/crates/core_arch/src/x86/sse41.rs.html#1009">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub unsafe fn _mm_mpsadbw_epu8&lt;const IMM8: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.i32.html">i32</a>&gt;(
+    a: <a class="struct" href="struct.__m128i.html" title="struct wasmtime_environ::__core::arch::x86_64::__m128i">__m128i</a>,
+    b: <a class="struct" href="struct.__m128i.html" title="struct wasmtime_environ::__core::arch::x86_64::__m128i">__m128i</a>,
+) -&gt; <a class="struct" href="struct.__m128i.html" title="struct wasmtime_environ::__core::arch::x86_64::__m128i">__m128i</a></code></pre><span class="item-info"><div class="stab portability">Available on <strong>x86-64</strong> only.</div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Subtracts 8-bit unsigned integer values and computes the absolute
+values of the differences to the corresponding bits in the destination.
+Then sums of the absolute differences are returned according to the bit
+fields in the immediate operand.</p>
+<p>The following algorithm is performed:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>i = IMM8[<span class="number">2</span>] * <span class="number">4
+</span>j = IMM8[<span class="number">1</span>:<span class="number">0</span>] * <span class="number">4
+</span><span class="kw">for </span>k := <span class="number">0 </span>to <span class="number">7
+    </span>d0 = abs(a[i + k + <span class="number">0</span>] - b[j + <span class="number">0</span>])
+    d1 = abs(a[i + k + <span class="number">1</span>] - b[j + <span class="number">1</span>])
+    d2 = abs(a[i + k + <span class="number">2</span>] - b[j + <span class="number">2</span>])
+    d3 = abs(a[i + k + <span class="number">3</span>] - b[j + <span class="number">3</span>])
+    r[k] = d0 + d1 + d2 + d3</code></pre></div>
+<p>Arguments:</p>
+<ul>
+<li><code>a</code> - A 128-bit vector of type <code>__m128i</code>.</li>
+<li><code>b</code> - A 128-bit vector of type <code>__m128i</code>.</li>
+<li><code>IMM8</code> - An 8-bit immediate operand specifying how the absolute
+differences are to be calculated
+<ul>
+<li>Bit <code>[2]</code> specify the offset for operand <code>a</code></li>
+<li>Bits <code>[1:0]</code> specify the offset for operand <code>b</code></li>
+</ul>
+</li>
+</ul>
+<p>Returns:</p>
+<ul>
+<li>A <code>__m128i</code> vector containing the sums of the sets of   absolute
+differences between both operands.</li>
+</ul>
+<p><a href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_mpsadbw_epu8">Intel’s documentation</a></p>
+</div></details></section></div></main></body></html>

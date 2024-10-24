@@ -1,0 +1,12 @@
+(function() {var implementors = {
+"ascii":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"ascii/struct.AsciiStr.html\" title=\"struct ascii::AsciiStr\">AsciiStr</a>"]],
+"camino":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"camino/struct.Utf8Path.html\" title=\"struct camino::Utf8Path\">Utf8Path</a>"]],
+"cranelift_wasm":[],
+"serde_bytes":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"serde_bytes/struct.Bytes.html\" title=\"struct serde_bytes::Bytes\">Bytes</a>"]],
+"serde_json":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"serde_json/value/struct.RawValue.html\" title=\"struct serde_json::value::RawValue\">RawValue</a>"]],
+"wasmer_types":[],
+"wasmparser":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"wasmparser/names/struct.KebabStr.html\" title=\"struct wasmparser::names::KebabStr\">KebabStr</a>"]],
+"wasmtime_environ":[],
+"wasmtime_types":[],
+"winnow":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"winnow/stream/struct.BStr.html\" title=\"struct winnow::stream::BStr\">BStr</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html\" title=\"trait alloc::borrow::ToOwned\">ToOwned</a> for <a class=\"struct\" href=\"winnow/stream/struct.Bytes.html\" title=\"struct winnow::stream::Bytes\">Bytes</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

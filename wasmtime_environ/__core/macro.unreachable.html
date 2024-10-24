@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Indicates unreachable code."><title>unreachable in wasmtime_environ::__core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime_environ</a>::<wbr><a href="index.html">__core</a>::<wbr><a class="macro" href="#">unreachable</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#731">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> unreachable {
+    ($(<span class="macro-nonterminal">$arg</span>:tt)<span class="kw-2">*</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Indicates unreachable code.</p>
+<p>This is useful any time that the compiler can’t determine that some code is unreachable. For
+example:</p>
+<ul>
+<li>Match arms with guard conditions.</li>
+<li>Loops that dynamically terminate.</li>
+<li>Iterators that dynamically terminate.</li>
+</ul>
+<p>If the determination that the code is unreachable proves incorrect, the
+program immediately terminates with a <a href="macro.panic.html" title="macro wasmtime_environ::__core::panic"><code>panic!</code></a>.</p>
+<p>The unsafe counterpart of this macro is the <a href="hint/fn.unreachable_unchecked.html" title="fn wasmtime_environ::__core::hint::unreachable_unchecked"><code>unreachable_unchecked</code></a> function, which
+will cause undefined behavior if the code is reached.</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This will always <a href="macro.panic.html" title="macro wasmtime_environ::__core::panic"><code>panic!</code></a> because <code>unreachable!</code> is just a shorthand for <code>panic!</code> with a
+fixed, specific message.</p>
+<p>Like <code>panic!</code>, this macro has a second form for displaying custom values.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>Match arms:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>foo(x: <span class="prelude-ty">Option</span>&lt;i32&gt;) {
+    <span class="kw">match </span>x {
+        <span class="prelude-val">Some</span>(n) <span class="kw">if </span>n &gt;= <span class="number">0 </span>=&gt; <span class="macro">println!</span>(<span class="string">"Some(Non-negative)"</span>),
+        <span class="prelude-val">Some</span>(n) <span class="kw">if </span>n &lt;  <span class="number">0 </span>=&gt; <span class="macro">println!</span>(<span class="string">"Some(Negative)"</span>),
+        <span class="prelude-val">Some</span>(<span class="kw">_</span>)           =&gt; <span class="macro">unreachable!</span>(), <span class="comment">// compile error if commented out
+        </span><span class="prelude-val">None              </span>=&gt; <span class="macro">println!</span>(<span class="string">"None"</span>)
+    }
+}</code></pre></div>
+<p>Iterators:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>divide_by_three(x: u32) -&gt; u32 { <span class="comment">// one of the poorest implementations of x/3
+    </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>.. {
+        <span class="kw">if </span><span class="number">3</span><span class="kw-2">*</span>i &lt; i { <span class="macro">panic!</span>(<span class="string">"u32 overflow"</span>); }
+        <span class="kw">if </span>x &lt; <span class="number">3</span><span class="kw-2">*</span>i { <span class="kw">return </span>i-<span class="number">1</span>; }
+    }
+    <span class="macro">unreachable!</span>(<span class="string">"The loop should always return"</span>);
+}</code></pre></div>
+</div></details></section></div></main></body></html>

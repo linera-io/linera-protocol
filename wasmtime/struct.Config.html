@@ -1,0 +1,773 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Global configuration options used to create an `Engine` and customize its behavior."><title>Config in wasmtime - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="wasmtime" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc struct"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../wasmtime/index.html">wasmtime</a><span class="version">25.0.1</span></h2></div><h2 class="location"><a href="#">Config</a></h2><div class="sidebar-elems"><section><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.allocation_strategy">allocation_strategy</a></li><li><a href="#method.consume_fuel">consume_fuel</a></li><li><a href="#method.cranelift_debug_verifier">cranelift_debug_verifier</a></li><li><a href="#method.cranelift_flag_enable">cranelift_flag_enable</a></li><li><a href="#method.cranelift_flag_set">cranelift_flag_set</a></li><li><a href="#method.cranelift_nan_canonicalization">cranelift_nan_canonicalization</a></li><li><a href="#method.cranelift_opt_level">cranelift_opt_level</a></li><li><a href="#method.cranelift_pcc">cranelift_pcc</a></li><li><a href="#method.debug_info">debug_info</a></li><li><a href="#method.detect_host_feature">detect_host_feature</a></li><li><a href="#method.dynamic_memory_guard_size">dynamic_memory_guard_size</a></li><li><a href="#method.dynamic_memory_reserved_for_growth">dynamic_memory_reserved_for_growth</a></li><li><a href="#method.emit_clif">emit_clif</a></li><li><a href="#method.epoch_interruption">epoch_interruption</a></li><li><a href="#method.force_memory_init_memfd">force_memory_init_memfd</a></li><li><a href="#method.generate_address_map">generate_address_map</a></li><li><a href="#method.guard_before_linear_memory">guard_before_linear_memory</a></li><li><a href="#method.macos_use_mach_ports">macos_use_mach_ports</a></li><li><a href="#method.max_wasm_stack">max_wasm_stack</a></li><li><a href="#method.memory_guaranteed_dense_image_size">memory_guaranteed_dense_image_size</a></li><li><a href="#method.memory_init_cow">memory_init_cow</a></li><li><a href="#method.module_version">module_version</a></li><li><a href="#method.native_unwind_info">native_unwind_info</a></li><li><a href="#method.new">new</a></li><li><a href="#method.profiler">profiler</a></li><li><a href="#method.relaxed_simd_deterministic">relaxed_simd_deterministic</a></li><li><a href="#method.static_memory_forced">static_memory_forced</a></li><li><a href="#method.static_memory_guard_size">static_memory_guard_size</a></li><li><a href="#method.static_memory_maximum_size">static_memory_maximum_size</a></li><li><a href="#method.strategy">strategy</a></li><li><a href="#method.table_lazy_init">table_lazy_init</a></li><li><a href="#method.target">target</a></li><li><a href="#method.wasm_backtrace">wasm_backtrace</a></li><li><a href="#method.wasm_backtrace_details">wasm_backtrace_details</a></li><li><a href="#method.wasm_bulk_memory">wasm_bulk_memory</a></li><li><a href="#method.wasm_custom_page_sizes">wasm_custom_page_sizes</a></li><li><a href="#method.wasm_extended_const">wasm_extended_const</a></li><li><a href="#method.wasm_memory64">wasm_memory64</a></li><li><a href="#method.wasm_multi_memory">wasm_multi_memory</a></li><li><a href="#method.wasm_multi_value">wasm_multi_value</a></li><li><a href="#method.wasm_relaxed_simd">wasm_relaxed_simd</a></li><li><a href="#method.wasm_simd">wasm_simd</a></li><li><a href="#method.wasm_tail_call">wasm_tail_call</a></li><li><a href="#method.with_host_memory">with_host_memory</a></li><li><a href="#method.wmemcheck">wmemcheck</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Clone-for-Config">Clone</a></li><li><a href="#impl-Debug-for-Config">Debug</a></li><li><a href="#impl-Default-for-Config">Default</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-RefUnwindSafe-for-Config">!RefUnwindSafe</a></li><li><a href="#impl-UnwindSafe-for-Config">!UnwindSafe</a></li><li><a href="#impl-Freeze-for-Config">Freeze</a></li><li><a href="#impl-Send-for-Config">Send</a></li><li><a href="#impl-Sync-for-Config">Sync</a></li><li><a href="#impl-Unpin-for-Config">Unpin</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T">Any</a></li><li><a href="#impl-Borrow%3CT%3E-for-T">Borrow&lt;T&gt;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T">BorrowMut&lt;T&gt;</a></li><li><a href="#impl-CloneToUninit-for-T">CloneToUninit</a></li><li><a href="#impl-From%3CT%3E-for-T">From&lt;T&gt;</a></li><li><a href="#impl-Into%3CU%3E-for-T">Into&lt;U&gt;</a></li><li><a href="#impl-IntoEither-for-T">IntoEither</a></li><li><a href="#impl-ToOwned-for-T">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T">TryFrom&lt;U&gt;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T">TryInto&lt;U&gt;</a></li></ul></section><h2><a href="index.html">In crate wasmtime</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Struct <a href="index.html">wasmtime</a>::<wbr><a class="struct" href="#">Config</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/wasmtime/config.rs.html#106-144">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub struct Config { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Global configuration options used to create an <a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a>
+and customize its behavior.</p>
+<p>This structure exposed a builder-like interface and is primarily consumed by
+<a href="struct.Engine.html#method.new" title="associated function wasmtime::Engine::new"><code>Engine::new()</code></a>.</p>
+<p>The validation of <code>Config</code> is deferred until the engine is being built, thus
+a problematic config may cause <code>Engine::new</code> to fail.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Config" class="impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#220-2206">source</a><a href="#impl-Config" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#223-275">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>() -&gt; Self</h4></section></summary><div class="docblock"><p>Creates a new configuration object with the default configuration
+specified.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.target" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#290-295">source</a><h4 class="code-header">pub fn <a href="#method.target" class="fn">target</a>(&amp;mut self, target: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;</h4></section></summary><div class="docblock"><p>Sets the target triple for the <a href="struct.Config.html" title="struct wasmtime::Config"><code>Config</code></a>.</p>
+<p>By default, the host target triple is used for the <a href="struct.Config.html" title="struct wasmtime::Config"><code>Config</code></a>.</p>
+<p>This method can be used to change the target triple.</p>
+<p>Cranelift flags will not be inferred for the given target and any
+existing target-specific Cranelift flags will be cleared.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This method will error if the given target triple is not supported.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.debug_info" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#413-416">source</a><h4 class="code-header">pub fn <a href="#method.debug_info" class="fn">debug_info</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether DWARF debug information will be emitted during
+compilation.</p>
+<p>Note that the <code>debug-builtins</code> compile-time Cargo feature must also be
+enabled for native debuggers such as GDB or LLDB to be able to debug
+guest WebAssembly programs.</p>
+<p>By default this option is <code>false</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_backtrace" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#442-445">source</a><h4 class="code-header">pub fn <a href="#method.wasm_backtrace" class="fn">wasm_backtrace</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether <a href="struct.WasmBacktrace.html" title="struct wasmtime::WasmBacktrace"><code>WasmBacktrace</code></a> will be present in the context of
+errors returned from Wasmtime.</p>
+<p>A backtrace may be collected whenever an error is returned from a host
+function call through to WebAssembly or when WebAssembly itself hits a
+trap condition, such as an out-of-bounds memory access. This flag
+indicates, in these conditions, whether the backtrace is collected or
+not.</p>
+<p>Currently wasm backtraces are implemented through frame pointer walking.
+This means that collecting a backtrace is expected to be a fast and
+relatively cheap operation. Additionally backtrace collection is
+suitable in concurrent environments since one thread capturing a
+backtrace won’t block other threads.</p>
+<p>Collected backtraces are attached via <a href="../anyhow/struct.Error.html#method.context" title="method anyhow::Error::context"><code>anyhow::Error::context</code></a> to
+errors returned from host functions. The <a href="struct.WasmBacktrace.html" title="struct wasmtime::WasmBacktrace"><code>WasmBacktrace</code></a> type can be
+acquired via <a href="../anyhow/struct.Error.html#method.downcast_ref" title="method anyhow::Error::downcast_ref"><code>anyhow::Error::downcast_ref</code></a> to inspect the backtrace.
+When this option is disabled then this context is never applied to
+errors coming out of wasm.</p>
+<p>This option is <code>true</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_backtrace_details" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#460-480">source</a><h4 class="code-header">pub fn <a href="#method.wasm_backtrace_details" class="fn">wasm_backtrace_details</a>(
+    &amp;mut self,
+    enable: <a class="enum" href="enum.WasmBacktraceDetails.html" title="enum wasmtime::WasmBacktraceDetails">WasmBacktraceDetails</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether backtraces in <code>Trap</code> will parse debug info in the wasm file to
+have filename/line number information.</p>
+<p>When enabled this will causes modules to retain debugging information
+found in wasm binaries. This debug information will be used when a trap
+happens to symbolicate each stack frame and attempt to print a
+filename/line number for each wasm frame in the stack trace.</p>
+<p>By default this option is <code>WasmBacktraceDetails::Environment</code>, meaning
+that wasm will read <code>WASMTIME_BACKTRACE_DETAILS</code> to indicate whether
+details should be parsed. Note that the <code>std</code> feature of this crate must
+be active to read environment variables, otherwise this is disabled by
+default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.native_unwind_info" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#497-500">source</a><h4 class="code-header">pub fn <a href="#method.native_unwind_info" class="fn">native_unwind_info</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether to generate native unwind information
+(e.g. <code>.eh_frame</code> on Linux).</p>
+<p>This configuration option only exists to help third-party stack
+capturing mechanisms, such as the system’s unwinder or the <code>backtrace</code>
+crate, determine how to unwind through Wasm frames. It does not affect
+whether Wasmtime can capture Wasm backtraces or not. The presence of
+<a href="struct.WasmBacktrace.html" title="struct wasmtime::WasmBacktrace"><code>WasmBacktrace</code></a> is controlled by the <a href="struct.Config.html#method.wasm_backtrace" title="method wasmtime::Config::wasm_backtrace"><code>Config::wasm_backtrace</code></a>
+option.</p>
+<p>Native unwind information is included:</p>
+<ul>
+<li>When targeting Windows, since the Windows ABI requires it.</li>
+<li>By default.</li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.consume_fuel" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#518-521">source</a><h4 class="code-header">pub fn <a href="#method.consume_fuel" class="fn">consume_fuel</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether execution of WebAssembly will “consume fuel” to
+either halt or yield execution as desired.</p>
+<p>This can be used to deterministically prevent infinitely-executing
+WebAssembly code by instrumenting generated code to consume fuel as it
+executes. When fuel runs out a trap is raised, however <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> can be
+configured to yield execution periodically via
+<a href="struct.Store.html#method.fuel_async_yield_interval" title="method wasmtime::Store::fuel_async_yield_interval"><code>crate::Store::fuel_async_yield_interval</code></a>.</p>
+<p>Note that a <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> starts with no fuel, so if you enable this option
+you’ll have to be sure to pour some fuel into <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> before
+executing some code.</p>
+<p>By default this option is <code>false</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.epoch_interruption" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#630-633">source</a><h4 class="code-header">pub fn <a href="#method.epoch_interruption" class="fn">epoch_interruption</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Enables epoch-based interruption.</p>
+<p>When executing code in async mode, we sometimes want to
+implement a form of cooperative timeslicing: long-running Wasm
+guest code should periodically yield to the executor
+loop. This yielding could be implemented by using “fuel” (see
+<a href="struct.Config.html#method.consume_fuel" title="method wasmtime::Config::consume_fuel"><code>consume_fuel</code></a>). However, fuel
+instrumentation is somewhat expensive: it modifies the
+compiled form of the Wasm code so that it maintains a precise
+instruction count, frequently checking this count against the
+remaining fuel. If one does not need this precise count or
+deterministic interruptions, and only needs a periodic
+interrupt of some form, then It would be better to have a more
+lightweight mechanism.</p>
+<p>Epoch-based interruption is that mechanism. There is a global
+“epoch”, which is a counter that divides time into arbitrary
+periods (or epochs). This counter lives on the
+<a href="struct.Engine.html" title="struct wasmtime::Engine"><code>Engine</code></a> and can be incremented by calling
+<a href="struct.Engine.html#method.increment_epoch" title="method wasmtime::Engine::increment_epoch"><code>Engine::increment_epoch</code></a>.
+Epoch-based instrumentation works by setting a “deadline
+epoch”. The compiled code knows the deadline, and at certain
+points, checks the current epoch against that deadline. It
+will yield if the deadline has been reached.</p>
+<p>The idea is that checking an infrequently-changing counter is
+cheaper than counting and frequently storing a precise metric
+(instructions executed) locally. The interruptions are not
+deterministic, but if the embedder increments the epoch in a
+periodic way (say, every regular timer tick by a thread or
+signal handler), then we can ensure that all async code will
+yield to the executor within a bounded time.</p>
+<p>The deadline check cannot be avoided by malicious wasm code. It is safe
+to use epoch deadlines to limit the execution time of untrusted
+code.</p>
+<p>The <a href="struct.Store.html" title="struct wasmtime::Store"><code>Store</code></a> tracks the deadline, and controls
+what happens when the deadline is reached during
+execution. Several behaviors are possible:</p>
+<ul>
+<li>
+<p>Trap if code is executing when the epoch deadline is
+met. See
+<a href="struct.Store.html#method.epoch_deadline_trap" title="method wasmtime::Store::epoch_deadline_trap"><code>Store::epoch_deadline_trap</code></a>.</p>
+</li>
+<li>
+<p>Call an arbitrary function. This function may chose to trap or
+increment the epoch. See
+<a href="struct.Store.html#method.epoch_deadline_callback" title="method wasmtime::Store::epoch_deadline_callback"><code>Store::epoch_deadline_callback</code></a>.</p>
+</li>
+<li>
+<p>Yield to the executor loop, then resume when the future is
+next polled. See
+<a href="crate::Store::epoch_deadline_async_yield_and_update"><code>Store::epoch_deadline_async_yield_and_update</code></a>.</p>
+</li>
+</ul>
+<p>Trapping is the default. The yielding behaviour may be used for
+the timeslicing behavior described above.</p>
+<p>This feature is available with or without async support.
+However, without async support, the timeslicing behaviour is
+not available. This means epoch-based interruption can only
+serve as a simple external-interruption mechanism.</p>
+<p>An initial deadline must be set before executing code by calling
+<a href="struct.Store.html#method.set_epoch_deadline" title="method wasmtime::Store::set_epoch_deadline"><code>Store::set_epoch_deadline</code></a>. If this
+deadline is not configured then wasm will immediately trap.</p>
+<h6 id="interaction-with-blocking-host-calls"><a class="doc-anchor" href="#interaction-with-blocking-host-calls">§</a>Interaction with blocking host calls</h6>
+<p>Epochs (and fuel) do not assist in handling WebAssembly code blocked in
+a call to the host. For example if the WebAssembly function calls
+<code>wasi:io/poll/poll</code> to sleep epochs will not assist in waking this up or
+timing it out. Epochs intentionally only affect running WebAssembly code
+itself and it’s left to the embedder to determine how best to wake up
+indefinitely blocking code in the host.</p>
+<p>The typical solution for this, however, is to use
+<a href="struct.Config.html#structfield.async_support" title="field wasmtime::Config::async_support"><code>Config::async_support(true)</code></a> and the <code>async</code>
+variant of WASI host functions. This models computation as a Rust
+<code>Future</code> which means that when blocking happens the future is only
+suspended and control yields back to the main event loop. This gives the
+embedder the opportunity to use <code>tokio::time::timeout</code> for example on a
+wasm computation and have the desired effect of cancelling a blocking
+operation when a timeout expires.</p>
+<h6 id="when-to-use-fuel-vs-epochs"><a class="doc-anchor" href="#when-to-use-fuel-vs-epochs">§</a>When to use fuel vs. epochs</h6>
+<p>In general, epoch-based interruption results in faster
+execution. This difference is sometimes significant: in some
+measurements, up to 2-3x. This is because epoch-based
+interruption does less work: it only watches for a global
+rarely-changing counter to increment, rather than keeping a
+local frequently-changing counter and comparing it to a
+deadline.</p>
+<p>Fuel, in contrast, should be used when <em>deterministic</em>
+yielding or trapping is needed. For example, if it is required
+that the same function call with the same starting state will
+always either complete or trap with an out-of-fuel error,
+deterministically, then fuel with a fixed bound should be
+used.</p>
+<h5 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See Also</h5>
+<ul>
+<li><a href="struct.Engine.html#method.increment_epoch" title="method wasmtime::Engine::increment_epoch"><code>Engine::increment_epoch</code></a></li>
+<li><a href="struct.Store.html#method.set_epoch_deadline" title="method wasmtime::Store::set_epoch_deadline"><code>Store::set_epoch_deadline</code></a></li>
+<li><a href="struct.Store.html#method.epoch_deadline_trap" title="method wasmtime::Store::epoch_deadline_trap"><code>Store::epoch_deadline_trap</code></a></li>
+<li><a href="struct.Store.html#method.epoch_deadline_callback" title="method wasmtime::Store::epoch_deadline_callback"><code>Store::epoch_deadline_callback</code></a></li>
+<li><a href="crate::Store::epoch_deadline_async_yield_and_update"><code>Store::epoch_deadline_async_yield_and_update</code></a></li>
+</ul>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.max_wasm_stack" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#681-684">source</a><h4 class="code-header">pub fn <a href="#method.max_wasm_stack" class="fn">max_wasm_stack</a>(&amp;mut self, size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the maximum amount of stack space available for
+executing WebAssembly code.</p>
+<p>WebAssembly has well-defined semantics on stack overflow. This is
+intended to be a knob which can help configure how much stack space
+wasm execution is allowed to consume. Note that the number here is not
+super-precise, but rather wasm will take at most “pretty close to this
+much” stack space.</p>
+<p>If a wasm call (or series of nested wasm calls) take more stack space
+than the <code>size</code> specified then a stack overflow trap will be raised.</p>
+<p>Caveat: this knob only limits the stack space consumed by wasm code.
+More importantly, it does not ensure that this much stack space is
+available on the calling thread stack. Exhausting the thread stack
+typically leads to an <strong>abort</strong> of the process.</p>
+<p>Here are some examples of how that could happen:</p>
+<ul>
+<li>
+<p>Let’s assume this option is set to 2 MiB and then a thread that has
+a stack with 512 KiB left.</p>
+<p>If wasm code consumes more than 512 KiB then the process will be aborted.</p>
+</li>
+<li>
+<p>Assuming the same conditions, but this time wasm code does not consume
+any stack but calls into a host function. The host function consumes
+more than 512 KiB of stack space. The process will be aborted.</p>
+</li>
+</ul>
+<p>There’s another gotcha related to recursive calling into wasm: the stack
+space consumed by a host function is counted towards this limit. The
+host functions are not prevented from consuming more than this limit.
+However, if the host function that used more than this limit and called
+back into wasm, then the execution will trap immediately because of
+stack overflow.</p>
+<p>When the <code>async</code> feature is enabled, this value cannot exceed the
+<code>async_stack_size</code> option. Be careful not to set this value too close
+to <code>async_stack_size</code> as doing so may limit how much stack space
+is available for host functions.</p>
+<p>By default this option is 512 KiB.</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>The <code>Engine::new</code> method will fail if the <code>size</code> specified here is
+either 0 or larger than the [<code>Config::async_stack_size</code>] configuration.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_tail_call" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#725-728">source</a><h4 class="code-header">pub fn <a href="#method.wasm_tail_call" class="fn">wasm_tail_call</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly tail calls proposal will be enabled
+for compilation or not.</p>
+<p>The <a href="https://github.com/WebAssembly/tail-call">WebAssembly tail calls proposal</a> introduces the <code>return_call</code> and
+<code>return_call_indirect</code> instructions. These instructions allow for Wasm
+programs to implement some recursive algorithms with <em>O(1)</em> stack space
+usage.</p>
+<p>This is <code>true</code> by default except when the Winch compiler is enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_custom_page_sizes" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#750-753">source</a><h4 class="code-header">pub fn <a href="#method.wasm_custom_page_sizes" class="fn">wasm_custom_page_sizes</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly custom-page-sizes proposal will be
+enabled for compilation or not.</p>
+<p>The <a href="https://github.com/WebAssembly/custom-page-sizes">WebAssembly custom-page-sizes proposal</a> allows a memory to
+customize its page sizes. By default, Wasm page sizes are 64KiB
+large. This proposal allows the memory to opt into smaller page sizes
+instead, allowing Wasm to run in environments with less than 64KiB RAM
+available, for example.</p>
+<p>Note that the page size is part of the memory’s type, and because
+different memories may have different types, they may also have
+different page sizes.</p>
+<p>Currently the only valid page sizes are 64KiB (the default) and 1
+byte. Future extensions may relax this constraint and allow all powers
+of two.</p>
+<p>Support for this proposal is disabled by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_simd" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#855-858">source</a><h4 class="code-header">pub fn <a href="#method.wasm_simd" class="fn">wasm_simd</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly SIMD proposal will be
+enabled for compilation.</p>
+<p>The <a href="https://github.com/webassembly/simd">WebAssembly SIMD proposal</a>. This feature gates items such
+as the <code>v128</code> type and all of its operators being in a module. Note that
+this does not enable the <a href="https://github.com/WebAssembly/relaxed-simd">relaxed simd proposal</a>.</p>
+<p>On x86_64 platforms note that enabling this feature requires SSE 4.2 and
+below to be available on the target platform. Compilation will fail if
+the compile target does not include SSE 4.2.</p>
+<p>This is <code>true</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_relaxed_simd" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#882-885">source</a><h4 class="code-header">pub fn <a href="#method.wasm_relaxed_simd" class="fn">wasm_relaxed_simd</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly Relaxed SIMD proposal will be
+enabled for compilation.</p>
+<p>The relaxed SIMD proposal adds new instructions to WebAssembly which,
+for some specific inputs, are allowed to produce different results on
+different hosts. More-or-less this proposal enables exposing
+platform-specific semantics of SIMD instructions in a controlled
+fashion to a WebAssembly program. From an embedder’s perspective this
+means that WebAssembly programs may execute differently depending on
+whether the host is x86_64 or AArch64, for example.</p>
+<p>By default Wasmtime lowers relaxed SIMD instructions to the fastest
+lowering for the platform it’s running on. This means that, by default,
+some relaxed SIMD instructions may have different results for the same
+inputs across x86_64 and AArch64. This behavior can be disabled through
+the <a href="struct.Config.html#method.relaxed_simd_deterministic" title="method wasmtime::Config::relaxed_simd_deterministic"><code>Config::relaxed_simd_deterministic</code></a> option which will force
+deterministic behavior across all platforms, as classified by the
+specification, at the cost of performance.</p>
+<p>This is <code>true</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.relaxed_simd_deterministic" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#903-906">source</a><h4 class="code-header">pub fn <a href="#method.relaxed_simd_deterministic" class="fn">relaxed_simd_deterministic</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>This option can be used to control the behavior of the <a href="https://github.com/webassembly/relaxed-simd">relaxed SIMD
+proposal’s</a> instructions.</p>
+<p>The relaxed SIMD proposal introduces instructions that are allowed to
+have different behavior on different architectures, primarily to afford
+an efficient implementation on all architectures. This means, however,
+that the same module may execute differently on one host than another,
+which typically is not otherwise the case. This option is provided to
+force Wasmtime to generate deterministic code for all relaxed simd
+instructions, at the cost of performance, for all architectures. When
+this option is enabled then the deterministic behavior of all
+instructions in the relaxed SIMD proposal is selected.</p>
+<p>This is <code>false</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_bulk_memory" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#926-929">source</a><h4 class="code-header">pub fn <a href="#method.wasm_bulk_memory" class="fn">wasm_bulk_memory</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the <a href="https://github.com/webassembly/bulk-memory-operations">WebAssembly bulk memory operations
+proposal</a> will be enabled for compilation.</p>
+<p>This feature gates items such as the <code>memory.copy</code> instruction, passive
+data/table segments, etc, being in a module.</p>
+<p>This is <code>true</code> by default.</p>
+<p>Feature <code>reference_types</code>, which is also <code>true</code> by default, requires
+this feature to be enabled. Thus disabling this feature must also disable
+<code>reference_types</code> as well using <a href="crate::Config::wasm_reference_types"><code>wasm_reference_types</code></a>.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>Disabling this feature without disabling <code>reference_types</code> will cause
+<code>Engine::new</code> to fail.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_multi_value" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#940-943">source</a><h4 class="code-header">pub fn <a href="#method.wasm_multi_value" class="fn">wasm_multi_value</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly multi-value <a href="https://github.com/webassembly/multi-value">proposal</a> will
+be enabled for compilation.</p>
+<p>This feature gates functions and blocks returning multiple values in a
+module, for example.</p>
+<p>This is <code>true</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_multi_memory" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#954-957">source</a><h4 class="code-header">pub fn <a href="#method.wasm_multi_memory" class="fn">wasm_multi_memory</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly multi-memory <a href="https://github.com/webassembly/multi-memory">proposal</a> will
+be enabled for compilation.</p>
+<p>This feature gates modules having more than one linear memory
+declaration or import.</p>
+<p>This is <code>true</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_memory64" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#969-972">source</a><h4 class="code-header">pub fn <a href="#method.wasm_memory64" class="fn">wasm_memory64</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly memory64 <a href="https://github.com/webassembly/memory64">proposal</a> will
+be enabled for compilation.</p>
+<p>Note that this the upstream specification is not finalized and Wasmtime
+may also have bugs for this feature since it hasn’t been exercised
+much.</p>
+<p>This is <code>false</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wasm_extended_const" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#980-983">source</a><h4 class="code-header">pub fn <a href="#method.wasm_extended_const" class="fn">wasm_extended_const</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the WebAssembly extended-const <a href="https://github.com/webassembly/extended-const">proposal</a> will
+be enabled for compilation.</p>
+<p>This is <code>true</code> by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.strategy" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1028-1031">source</a><h4 class="code-header">pub fn <a href="#method.strategy" class="fn">strategy</a>(&amp;mut self, strategy: <a class="enum" href="enum.Strategy.html" title="enum wasmtime::Strategy">Strategy</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures which compilation strategy will be used for wasm modules.</p>
+<p>This method can be used to configure which compiler is used for wasm
+modules, and for more documentation consult the <a href="enum.Strategy.html" title="enum wasmtime::Strategy"><code>Strategy</code></a> enumeration
+and its documentation.</p>
+<p>The default value for this is <code>Strategy::Auto</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.profiler" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1047-1050">source</a><h4 class="code-header">pub fn <a href="#method.profiler" class="fn">profiler</a>(&amp;mut self, profile: <a class="enum" href="enum.ProfilingStrategy.html" title="enum wasmtime::ProfilingStrategy">ProfilingStrategy</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Creates a default profiler based on the profiling strategy chosen.</p>
+<p>Profiler creation calls the type’s default initializer where the purpose is
+really just to put in place the type used for profiling.</p>
+<p>Some <a href="enum.ProfilingStrategy.html" title="enum wasmtime::ProfilingStrategy"><code>ProfilingStrategy</code></a> require specific platforms or particular feature
+to be enabled, such as <code>ProfilingStrategy::JitDump</code> requires the <code>jitdump</code>
+feature.</p>
+<h5 id="errors-3"><a class="doc-anchor" href="#errors-3">§</a>Errors</h5>
+<p>The validation of this field is deferred until the engine is being built, and thus may
+cause <code>Engine::new</code> fail if the required feature is disabled, or the platform is not
+supported.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cranelift_debug_verifier" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1061-1067">source</a><h4 class="code-header">pub fn <a href="#method.cranelift_debug_verifier" class="fn">cranelift_debug_verifier</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether the debug verifier of Cranelift is enabled or not.</p>
+<p>When Cranelift is used as a code generation backend this will configure
+it to have the <code>enable_verifier</code> flag which will enable a number of debug
+checks inside of Cranelift. This is largely only useful for the
+developers of wasmtime itself.</p>
+<p>The default value for this is <code>false</code></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cranelift_opt_level" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1077-1087">source</a><h4 class="code-header">pub fn <a href="#method.cranelift_opt_level" class="fn">cranelift_opt_level</a>(&amp;mut self, level: <a class="enum" href="enum.OptLevel.html" title="enum wasmtime::OptLevel">OptLevel</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the Cranelift code generator optimization level.</p>
+<p>When the Cranelift code generator is used you can configure the
+optimization level used for generated code in a few various ways. For
+more information see the documentation of <a href="enum.OptLevel.html" title="enum wasmtime::OptLevel"><code>OptLevel</code></a>.</p>
+<p>The default value for this is <code>OptLevel::None</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cranelift_nan_canonicalization" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1103-1109">source</a><h4 class="code-header">pub fn <a href="#method.cranelift_nan_canonicalization" class="fn">cranelift_nan_canonicalization</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether Cranelift should perform a NaN-canonicalization pass.</p>
+<p>When Cranelift is used as a code generation backend this will configure
+it to replace NaNs with a single canonical value. This is useful for
+users requiring entirely deterministic WebAssembly computation.  This is
+not required by the WebAssembly spec, so it is not enabled by default.</p>
+<p>Note that this option affects not only WebAssembly’s <code>f32</code> and <code>f64</code>
+types but additionally the <code>v128</code> type. This option will cause
+operations using any of these types to have extra checks placed after
+them to normalize NaN values as needed.</p>
+<p>The default value for this is <code>false</code></p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cranelift_pcc" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1125-1131">source</a><h4 class="code-header">pub fn <a href="#method.cranelift_pcc" class="fn">cranelift_pcc</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Controls whether proof-carrying code (PCC) is used to validate
+lowering of Wasm sandbox checks.</p>
+<p>Proof-carrying code carries “facts” about program values from
+the IR all the way to machine code, and checks those facts
+against known machine-instruction semantics. This guards
+against bugs in instruction lowering that might create holes
+in the Wasm sandbox.</p>
+<p>PCC is designed to be fast: it does not require complex
+solvers or logic engines to verify, but only a linear pass
+over a trail of “breadcrumbs” or facts at each intermediate
+value. Thus, it is appropriate to enable in production.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cranelift_flag_enable" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1150-1153">source</a><h4 class="code-header">pub unsafe fn <a href="#method.cranelift_flag_enable" class="fn">cranelift_flag_enable</a>(&amp;mut self, flag: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Allows setting a Cranelift boolean flag or preset. This allows
+fine-tuning of Cranelift settings.</p>
+<p>Since Cranelift flags may be unstable, this method should not be considered to be stable
+either; other <code>Config</code> functions should be preferred for stability.</p>
+<h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
+<p>This is marked as unsafe, because setting the wrong flag might break invariants,
+resulting in execution hazards.</p>
+<h5 id="errors-4"><a class="doc-anchor" href="#errors-4">§</a>Errors</h5>
+<p>The validation of the flags are deferred until the engine is being built, and thus may
+cause <code>Engine::new</code> fail if the flag’s name does not exist, or the value is not appropriate
+for the flag type.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.cranelift_flag_set" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1175-1180">source</a><h4 class="code-header">pub unsafe fn <a href="#method.cranelift_flag_set" class="fn">cranelift_flag_set</a>(
+    &amp;mut self,
+    name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+    value: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Allows settings another Cranelift flag defined by a flag name and value. This allows
+fine-tuning of Cranelift settings.</p>
+<p>Since Cranelift flags may be unstable, this method should not be considered to be stable
+either; other <code>Config</code> functions should be preferred for stability.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>This is marked as unsafe, because setting the wrong flag might break invariants,
+resulting in execution hazards.</p>
+<h5 id="errors-5"><a class="doc-anchor" href="#errors-5">§</a>Errors</h5>
+<p>The validation of the flags are deferred until the engine is being built, and thus may
+cause <code>Engine::new</code> fail if the flag’s name does not exist, or incompatible with other
+settings.</p>
+<p>For example, feature <code>wasm_backtrace</code> will set <code>unwind_info</code> to <code>true</code>, but if it’s
+manually set to false then it will fail.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_host_memory" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1254-1257">source</a><h4 class="code-header">pub fn <a href="#method.with_host_memory" class="fn">with_host_memory</a>(
+    &amp;mut self,
+    mem_creator: <a class="struct" href="https://doc.rust-lang.org/1.81.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;dyn <a class="trait" href="trait.MemoryCreator.html" title="trait wasmtime::MemoryCreator">MemoryCreator</a>&gt;,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Sets a custom memory creator.</p>
+<p>Custom memory creators are used when creating host <code>Memory</code> objects or when
+creating instance linear memories for the on-demand instance allocation strategy.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.allocation_strategy" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1276-1279">source</a><h4 class="code-header">pub fn <a href="#method.allocation_strategy" class="fn">allocation_strategy</a>(
+    &amp;mut self,
+    strategy: <a class="enum" href="enum.InstanceAllocationStrategy.html" title="enum wasmtime::InstanceAllocationStrategy">InstanceAllocationStrategy</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Sets the instance allocation strategy to use.</p>
+<p>When using the pooling instance allocation strategy, all linear memories
+will be created as “static” and the
+<a href="struct.Config.html#method.static_memory_maximum_size" title="method wasmtime::Config::static_memory_maximum_size"><code>Config::static_memory_maximum_size</code></a> and
+<a href="struct.Config.html#method.static_memory_guard_size" title="method wasmtime::Config::static_memory_guard_size"><code>Config::static_memory_guard_size</code></a> options will be used to configure
+the virtual memory allocations of linear memories.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.static_memory_maximum_size" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1373-1376">source</a><h4 class="code-header">pub fn <a href="#method.static_memory_maximum_size" class="fn">static_memory_maximum_size</a>(&amp;mut self, max_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the maximum size, in bytes, where a linear memory is
+considered static, above which it’ll be considered dynamic.</p>
+<blockquote>
+<p>Note: this value has important performance ramifications, be sure to
+understand what this value does before tweaking it and benchmarking.</p>
+</blockquote>
+<p>This function configures the threshold for wasm memories whether they’re
+implemented as a dynamically relocatable chunk of memory or a statically
+located chunk of memory. The <code>max_size</code> parameter here is the size, in
+bytes, where if the maximum size of a linear memory is below <code>max_size</code>
+then it will be statically allocated with enough space to never have to
+move. If the maximum size of a linear memory is larger than <code>max_size</code>
+then wasm memory will be dynamically located and may move in memory
+through growth operations.</p>
+<p>Specifying a <code>max_size</code> of 0 means that all memories will be dynamic and
+may be relocated through <code>memory.grow</code>. Also note that if any wasm
+memory’s maximum size is below <code>max_size</code> then it will still reserve
+<code>max_size</code> bytes in the virtual memory space.</p>
+<h6 id="static-vs-dynamic-memory"><a class="doc-anchor" href="#static-vs-dynamic-memory">§</a>Static vs Dynamic Memory</h6>
+<p>Linear memories represent contiguous arrays of bytes, but they can also
+be grown through the API and wasm instructions. When memory is grown if
+space hasn’t been preallocated then growth may involve relocating the
+base pointer in memory. Memories in Wasmtime are classified in two
+different ways:</p>
+<ul>
+<li>
+<p><strong>static</strong> - these memories preallocate all space necessary they’ll
+ever need, meaning that the base pointer of these memories is never
+moved. Static memories may take more virtual memory space because of
+pre-reserving space for memories.</p>
+</li>
+<li>
+<p><strong>dynamic</strong> - these memories are not preallocated and may move during
+growth operations. Dynamic memories consume less virtual memory space
+because they don’t need to preallocate space for future growth.</p>
+</li>
+</ul>
+<p>Static memories can be optimized better in JIT code because once the
+base address is loaded in a function it’s known that we never need to
+reload it because it never changes, <code>memory.grow</code> is generally a pretty
+fast operation because the wasm memory is never relocated, and under
+some conditions bounds checks can be elided on memory accesses.</p>
+<p>Dynamic memories can’t be quite as heavily optimized because the base
+address may need to be reloaded more often, they may require relocating
+lots of data on <code>memory.grow</code>, and dynamic memories require
+unconditional bounds checks on all memory accesses.</p>
+<h6 id="should-you-use-static-or-dynamic-memory"><a class="doc-anchor" href="#should-you-use-static-or-dynamic-memory">§</a>Should you use static or dynamic memory?</h6>
+<p>In general you probably don’t need to change the value of this property.
+The defaults here are optimized for each target platform to consume a
+reasonable amount of physical memory while also generating speedy
+machine code.</p>
+<p>One of the main reasons you may want to configure this today is if your
+environment can’t reserve virtual memory space for each wasm linear
+memory. On 64-bit platforms wasm memories require a 6GB reservation by
+default, and system limits may prevent this in some scenarios. In this
+case you may wish to force memories to be allocated dynamically meaning
+that the virtual memory footprint of creating a wasm memory should be
+exactly what’s used by the wasm itself.</p>
+<p>For 32-bit memories a static memory must contain at least 4GB of
+reserved address space plus a guard page to elide any bounds checks at
+all. Smaller static memories will use similar bounds checks as dynamic
+memories.</p>
+<h6 id="default"><a class="doc-anchor" href="#default">§</a>Default</h6>
+<p>The default value for this property depends on the host platform. For
+64-bit platforms there’s lots of address space available, so the default
+configured here is 4GB. WebAssembly linear memories currently max out at
+4GB which means that on 64-bit platforms Wasmtime by default always uses
+a static memory. This, coupled with a sufficiently sized guard region,
+should produce the fastest JIT code on 64-bit platforms, but does
+require a large address space reservation for each wasm memory.</p>
+<p>For 32-bit platforms this value defaults to 1GB. This means that wasm
+memories whose maximum size is less than 1GB will be allocated
+statically, otherwise they’ll be considered dynamic.</p>
+<h6 id="static-memory-and-pooled-instance-allocation"><a class="doc-anchor" href="#static-memory-and-pooled-instance-allocation">§</a>Static Memory and Pooled Instance Allocation</h6>
+<p>When using the pooling instance allocator memories are considered to
+always be static memories, they are never dynamic. This setting
+configures the size of linear memory to reserve for each memory in the
+pooling allocator.</p>
+<p>Note that the pooling allocator can reduce the amount of memory needed
+for pooling allocation by using memory protection; see
+<code>PoolingAllocatorConfig::memory_protection_keys</code> for details.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.static_memory_forced" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1389-1392">source</a><h4 class="code-header">pub fn <a href="#method.static_memory_forced" class="fn">static_memory_forced</a>(&amp;mut self, force: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Indicates that the “static” style of memory should always be used.</p>
+<p>This configuration option enables selecting the “static” option for all
+linear memories created within this <code>Config</code>. This means that all
+memories will be allocated up-front and will never move. Additionally
+this means that all memories are synthetically limited by the
+<a href="struct.Config.html#method.static_memory_maximum_size" title="method wasmtime::Config::static_memory_maximum_size"><code>Config::static_memory_maximum_size</code></a> option, regardless of what the
+actual maximum size is on the memory’s original type.</p>
+<p>For the difference between static and dynamic memories, see the
+<a href="struct.Config.html#method.static_memory_maximum_size" title="method wasmtime::Config::static_memory_maximum_size"><code>Config::static_memory_maximum_size</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.static_memory_guard_size" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1444-1447">source</a><h4 class="code-header">pub fn <a href="#method.static_memory_guard_size" class="fn">static_memory_guard_size</a>(&amp;mut self, guard_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the size, in bytes, of the guard region used at the end of a
+static memory’s address space reservation.</p>
+<blockquote>
+<p>Note: this value has important performance ramifications, be sure to
+understand what this value does before tweaking it and benchmarking.</p>
+</blockquote>
+<p>All WebAssembly loads/stores are bounds-checked and generate a trap if
+they’re out-of-bounds. Loads and stores are often very performance
+critical, so we want the bounds check to be as fast as possible!
+Accelerating these memory accesses is the motivation for a guard after a
+memory allocation.</p>
+<p>Memories (both static and dynamic) can be configured with a guard at the
+end of them which consists of unmapped virtual memory. This unmapped
+memory will trigger a memory access violation (e.g. segfault) if
+accessed. This allows JIT code to elide bounds checks if it can prove
+that an access, if out of bounds, would hit the guard region. This means
+that having such a guard of unmapped memory can remove the need for
+bounds checks in JIT code.</p>
+<p>For the difference between static and dynamic memories, see the
+<a href="struct.Config.html#method.static_memory_maximum_size" title="method wasmtime::Config::static_memory_maximum_size"><code>Config::static_memory_maximum_size</code></a>.</p>
+<h6 id="how-big-should-the-guard-be"><a class="doc-anchor" href="#how-big-should-the-guard-be">§</a>How big should the guard be?</h6>
+<p>In general, like with configuring <code>static_memory_maximum_size</code>, you
+probably don’t want to change this value from the defaults. Otherwise,
+though, the size of the guard region affects the number of bounds checks
+needed for generated wasm code. More specifically, loads/stores with
+immediate offsets will generate bounds checks based on how big the guard
+page is.</p>
+<p>For 32-bit wasm memories a 4GB static memory is required to even start
+removing bounds checks. A 4GB guard size will guarantee that the module
+has zero bounds checks for memory accesses. A 2GB guard size will
+eliminate all bounds checks with an immediate offset less than 2GB. A
+guard size of zero means that all memory accesses will still have bounds
+checks.</p>
+<h6 id="default-1"><a class="doc-anchor" href="#default-1">§</a>Default</h6>
+<p>The default value for this property is 2GB on 64-bit platforms. This
+allows eliminating almost all bounds checks on loads/stores with an
+immediate offset of less than 2GB. On 32-bit platforms this defaults to
+64KB.</p>
+<h6 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h6>
+<p>The <code>Engine::new</code> method will return an error if this option is smaller
+than the value configured for <a href="struct.Config.html#method.dynamic_memory_guard_size" title="method wasmtime::Config::dynamic_memory_guard_size"><code>Config::dynamic_memory_guard_size</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dynamic_memory_guard_size" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1476-1479">source</a><h4 class="code-header">pub fn <a href="#method.dynamic_memory_guard_size" class="fn">dynamic_memory_guard_size</a>(&amp;mut self, guard_size: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the size, in bytes, of the guard region used at the end of a
+dynamic memory’s address space reservation.</p>
+<p>For the difference between static and dynamic memories, see the
+<a href="struct.Config.html#method.static_memory_maximum_size" title="method wasmtime::Config::static_memory_maximum_size"><code>Config::static_memory_maximum_size</code></a></p>
+<p>For more information about what a guard is, see the documentation on
+<a href="struct.Config.html#method.static_memory_guard_size" title="method wasmtime::Config::static_memory_guard_size"><code>Config::static_memory_guard_size</code></a>.</p>
+<p>Note that the size of the guard region for dynamic memories is not super
+critical for performance. Making it reasonably-sized can improve
+generated code slightly, but for maximum performance you’ll want to lean
+towards static memories rather than dynamic anyway.</p>
+<p>Also note that the dynamic memory guard size must be smaller than the
+static memory guard size, so if a large dynamic memory guard is
+specified then the static memory guard size will also be automatically
+increased.</p>
+<h6 id="default-2"><a class="doc-anchor" href="#default-2">§</a>Default</h6>
+<p>This value defaults to 64KB.</p>
+<h6 id="errors-7"><a class="doc-anchor" href="#errors-7">§</a>Errors</h6>
+<p>The <code>Engine::new</code> method will return an error if this option is larger
+than the value configured for <a href="struct.Config.html#method.static_memory_guard_size" title="method wasmtime::Config::static_memory_guard_size"><code>Config::static_memory_guard_size</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.dynamic_memory_reserved_for_growth" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1515-1518">source</a><h4 class="code-header">pub fn <a href="#method.dynamic_memory_reserved_for_growth" class="fn">dynamic_memory_reserved_for_growth</a>(&amp;mut self, reserved: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the size, in bytes, of the extra virtual memory space
+reserved after a “dynamic” memory for growing into.</p>
+<p>For the difference between static and dynamic memories, see the
+<a href="struct.Config.html#method.static_memory_maximum_size" title="method wasmtime::Config::static_memory_maximum_size"><code>Config::static_memory_maximum_size</code></a></p>
+<p>Dynamic memories can be relocated in the process’s virtual address space
+on growth and do not always reserve their entire space up-front. This
+means that a growth of the memory may require movement in the address
+space, which in the worst case can copy a large number of bytes from one
+region to another.</p>
+<p>This setting configures how many bytes are reserved after the initial
+reservation for a dynamic memory for growing into. A value of 0 here
+means that no extra bytes are reserved and all calls to <code>memory.grow</code>
+will need to relocate the wasm linear memory (copying all the bytes). A
+value of 1 megabyte, however, means that <code>memory.grow</code> can allocate up
+to a megabyte of extra memory before the memory needs to be moved in
+linear memory.</p>
+<p>Note that this is a currently simple heuristic for optimizing the growth
+of dynamic memories, primarily implemented for the memory64 proposal
+where all memories are currently “dynamic”. This is unlikely to be a
+one-size-fits-all style approach and if you’re an embedder running into
+issues with dynamic memories and growth and are interested in having
+other growth strategies available here please feel free to <a href="https://github.com/bytecodealliance/wasmtime/issues/ne">open an
+issue on the Wasmtime repository</a>!</p>
+<h6 id="default-3"><a class="doc-anchor" href="#default-3">§</a>Default</h6>
+<p>For 64-bit platforms this defaults to 2GB, and for 32-bit platforms this
+defaults to 1MB.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.guard_before_linear_memory" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1540-1543">source</a><h4 class="code-header">pub fn <a href="#method.guard_before_linear_memory" class="fn">guard_before_linear_memory</a>(&amp;mut self, guard: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Indicates whether a guard region is present before allocations of
+linear memory.</p>
+<p>Guard regions before linear memories are never used during normal
+operation of WebAssembly modules, even if they have out-of-bounds
+loads. The only purpose for a preceding guard region in linear memory
+is extra protection against possible bugs in code generators like
+Cranelift. This setting does not affect performance in any way, but will
+result in larger virtual memory reservations for linear memories (it
+won’t actually ever use more memory, just use more of the address
+space).</p>
+<p>The size of the guard region before linear memory is the same as the
+guard size that comes after linear memory, which is configured by
+<a href="struct.Config.html#method.static_memory_guard_size" title="method wasmtime::Config::static_memory_guard_size"><code>Config::static_memory_guard_size</code></a> and
+<a href="struct.Config.html#method.dynamic_memory_guard_size" title="method wasmtime::Config::dynamic_memory_guard_size"><code>Config::dynamic_memory_guard_size</code></a>.</p>
+<h6 id="default-4"><a class="doc-anchor" href="#default-4">§</a>Default</h6>
+<p>This value defaults to <code>true</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.table_lazy_init" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1553-1556">source</a><h4 class="code-header">pub fn <a href="#method.table_lazy_init" class="fn">table_lazy_init</a>(&amp;mut self, table_lazy_init: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Indicates whether to initialize tables lazily, so that instantiation
+is fast but indirect calls are a little slower. If false, tables
+are initialized eagerly during instantiation from any active element
+segments that apply to them.</p>
+<h6 id="default-5"><a class="doc-anchor" href="#default-5">§</a>Default</h6>
+<p>This value defaults to <code>true</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.module_version" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1563-1575">source</a><h4 class="code-header">pub fn <a href="#method.module_version" class="fn">module_version</a>(
+    &amp;mut self,
+    strategy: <a class="enum" href="enum.ModuleVersionStrategy.html" title="enum wasmtime::ModuleVersionStrategy">ModuleVersionStrategy</a>,
+) -&gt; <a class="type" href="../anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a>&gt;</h4></section></summary><div class="docblock"><p>Configure the version information used in serialized and deserialized <a href="struct.Module.html" title="struct wasmtime::Module"><code>crate::Module</code></a>s.
+This effects the behavior of <a href="struct.Module.html#method.serialize" title="method wasmtime::Module::serialize"><code>crate::Module::serialize()</code></a>, as well as
+<a href="struct.Module.html#method.deserialize" title="associated function wasmtime::Module::deserialize"><code>crate::Module::deserialize()</code></a> and related functions.</p>
+<p>The default strategy is to use the wasmtime crate’s Cargo package version.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.generate_address_map" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1599-1602">source</a><h4 class="code-header">pub fn <a href="#method.generate_address_map" class="fn">generate_address_map</a>(&amp;mut self, generate: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether compiled artifacts will contain information to map
+native program addresses back to the original wasm module.</p>
+<p>This configuration option is <code>true</code> by default and, if enabled,
+generates the appropriate tables in compiled modules to map from native
+address back to wasm source addresses. This is used for displaying wasm
+program counters in backtraces as well as generating filenames/line
+numbers if so configured as well (and the original wasm module has DWARF
+debugging information present).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memory_init_cow" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1653-1656">source</a><h4 class="code-header">pub fn <a href="#method.memory_init_cow" class="fn">memory_init_cow</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether copy-on-write memory-mapped data is used to
+initialize a linear memory.</p>
+<p>Initializing linear memory via a copy-on-write mapping can drastically
+improve instantiation costs of a WebAssembly module because copying
+memory is deferred. Additionally if a page of memory is only ever read
+from WebAssembly and never written too then the same underlying page of
+data will be reused between all instantiations of a module meaning that
+if a module is instantiated many times this can lower the overall memory
+required needed to run that module.</p>
+<p>The main disadvantage of copy-on-write initialization, however, is that
+it may be possible for highly-parallel scenarios to be less scalable. If
+a page is read initially by a WebAssembly module then that page will be
+mapped to a read-only copy shared between all WebAssembly instances. If
+the same page is then written, however, then a private copy is created
+and swapped out from the read-only version. This also requires an <a href="https://en.wikipedia.org/wiki/Inter-processor_interrupt">IPI</a>,
+however, which can be a significant bottleneck in high-parallelism
+situations.</p>
+<p>This feature is only applicable when a WebAssembly module meets specific
+criteria to be initialized in this fashion, such as:</p>
+<ul>
+<li>Only memories defined in the module can be initialized this way.</li>
+<li>Data segments for memory must use statically known offsets.</li>
+<li>Data segments for memory must all be in-bounds.</li>
+</ul>
+<p>Modules which do not meet these criteria will fall back to
+initialization of linear memory based on copying memory.</p>
+<p>This feature of Wasmtime is also platform-specific:</p>
+<ul>
+<li>Linux - this feature is supported for all instances of <a href="struct.Module.html" title="struct wasmtime::Module"><code>Module</code></a>.
+Modules backed by an existing mmap (such as those created by
+<a href="struct.Module.html#method.deserialize_file" title="associated function wasmtime::Module::deserialize_file"><code>Module::deserialize_file</code></a>) will reuse that mmap to cow-initialize
+memory. Other instance of <a href="struct.Module.html" title="struct wasmtime::Module"><code>Module</code></a> may use the <code>memfd_create</code>
+syscall to create an initialization image to <code>mmap</code>.</li>
+<li>Unix (not Linux) - this feature is only supported when loading modules
+from a precompiled file via <a href="struct.Module.html#method.deserialize_file" title="associated function wasmtime::Module::deserialize_file"><code>Module::deserialize_file</code></a> where there
+is a file descriptor to use to map data into the process. Note that
+the module must have been compiled with this setting enabled as well.</li>
+<li>Windows - there is no support for this feature at this time. Memory
+initialization will always copy bytes.</li>
+</ul>
+<p>By default this option is enabled.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.force_memory_init_memfd" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1678-1681">source</a><h4 class="code-header">pub fn <a href="#method.force_memory_init_memfd" class="fn">force_memory_init_memfd</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>A configuration option to force the usage of <code>memfd_create</code> on Linux to
+be used as the backing source for a module’s initial memory image.</p>
+<p>When <a href="struct.Config.html#method.memory_init_cow" title="method wasmtime::Config::memory_init_cow"><code>Config::memory_init_cow</code></a> is enabled, which is enabled by
+default, module memory initialization images are taken from a module’s
+original mmap if possible. If a precompiled module was loaded from disk
+this means that the disk’s file is used as an mmap source for the
+initial linear memory contents. This option can be used to force, on
+Linux, that instead of using the original file on disk a new in-memory
+file is created with <code>memfd_create</code> to hold the contents of the initial
+image.</p>
+<p>This option can be used to avoid possibly loading the contents of memory
+from disk through a page fault. Instead with <code>memfd_create</code> the contents
+of memory are always in RAM, meaning that even page faults which
+initially populate a wasm linear memory will only work with RAM instead
+of ever hitting the disk that the original precompiled module is stored
+on.</p>
+<p>This option is disabled by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.wmemcheck" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1697-1701">source</a><h4 class="code-header">pub fn <a href="#method.wmemcheck" class="fn">wmemcheck</a>(&amp;mut self, enable: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Enables memory error checking for wasm programs.</p>
+<p>This option is disabled by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.memory_guaranteed_dense_image_size" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#1738-1741">source</a><h4 class="code-header">pub fn <a href="#method.memory_guaranteed_dense_image_size" class="fn">memory_guaranteed_dense_image_size</a>(
+    &amp;mut self,
+    size_in_bytes: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.u64.html">u64</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures the “guaranteed dense image size” for copy-on-write
+initialized memories.</p>
+<p>When using the <a href="struct.Config.html#method.memory_init_cow" title="method wasmtime::Config::memory_init_cow"><code>Config::memory_init_cow</code></a> feature to initialize memory
+efficiently (which is enabled by default), compiled modules contain an
+image of the module’s initial heap. If the module has a fairly sparse
+initial heap, with just a few data segments at very different offsets,
+this could result in a large region of zero bytes in the image. In
+other words, it’s not very memory-efficient.</p>
+<p>We normally use a heuristic to avoid this: if less than half
+of the initialized range (first non-zero to last non-zero
+byte) of any memory in the module has pages with nonzero
+bytes, then we avoid creating a memory image for the entire module.</p>
+<p>However, if the embedder always needs the instantiation-time efficiency
+of copy-on-write initialization, and is otherwise carefully controlling
+parameters of the modules (for example, by limiting the maximum heap
+size of the modules), then it may be desirable to ensure a memory image
+is created even if this could go against the heuristic above. Thus, we
+add another condition: there is a size of initialized data region up to
+which we <em>always</em> allow a memory image. The embedder can set this to a
+known maximum heap size if they desire to always get the benefits of
+copy-on-write images.</p>
+<p>In the future we may implement a “best of both worlds”
+solution where we have a dense image up to some limit, and
+then support a sparse list of initializers beyond that; this
+would get most of the benefit of copy-on-write and pay the incremental
+cost of eager initialization only for those bits of memory
+that are out-of-bounds. However, for now, an embedder desiring
+fast instantiation should ensure that this setting is as large
+as the maximum module initial memory content size.</p>
+<p>By default this value is 16 MiB.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.emit_clif" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#2133-2136">source</a><h4 class="code-header">pub fn <a href="#method.emit_clif" class="fn">emit_clif</a>(&amp;mut self, path: &amp;<a class="struct" href="https://doc.rust-lang.org/1.81.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Enables clif output when compiling a WebAssembly module.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.macos_use_mach_ports" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#2165-2168">source</a><h4 class="code-header">pub fn <a href="#method.macos_use_mach_ports" class="fn">macos_use_mach_ports</a>(&amp;mut self, mach_ports: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures whether, when on macOS, Mach ports are used for exception
+handling instead of traditional Unix-based signal handling.</p>
+<p>WebAssembly traps in Wasmtime are implemented with native faults, for
+example a <code>SIGSEGV</code> will occur when a WebAssembly guest accesses
+out-of-bounds memory. Handling this can be configured to either use Unix
+signals or Mach ports on macOS. By default Mach ports are used.</p>
+<p>Mach ports enable Wasmtime to work by default with foreign
+error-handling systems such as breakpad which also use Mach ports to
+handle signals. In this situation Wasmtime will continue to handle guest
+faults gracefully while any non-guest faults will get forwarded to
+process-level handlers such as breakpad. Some more background on this
+can be found in #2456.</p>
+<p>A downside of using mach ports, however, is that they don’t interact
+well with <code>fork()</code>. Forking a Wasmtime process on macOS will produce a
+child process that cannot successfully run WebAssembly. In this
+situation traditional Unix signal handling should be used as that’s
+inherited and works across forks.</p>
+<p>If your embedding wants to use a custom error handler which leverages
+Mach ports and you additionally wish to <code>fork()</code> the process and use
+Wasmtime in the child process that’s not currently possible. Please
+reach out to us if you’re in this bucket!</p>
+<p>This option defaults to <code>true</code>, using Mach ports by default.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.detect_host_feature" class="method"><a class="src rightside" href="../src/wasmtime/config.rs.html#2202-2205">source</a><h4 class="code-header">pub unsafe fn <a href="#method.detect_host_feature" class="fn">detect_host_feature</a>(
+    &amp;mut self,
+    detect: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.fn.html">fn</a>(_: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>&gt;,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut Self</a></h4></section></summary><div class="docblock"><p>Configures an embedder-provided function, <code>detect</code>, which is used to
+determine if an ISA-specific feature is available on the current host.</p>
+<p>This function is used to verify that any features enabled for a compiler
+backend, such as AVX support on x86_64, are also available on the host.
+It is undefined behavior to execute an AVX instruction on a host that
+doesn’t support AVX instructions, for example.</p>
+<p>When the <code>std</code> feature is active on this crate then this function is
+configured to a default implementation that uses the standard library’s
+feature detection. When the <code>std</code> feature is disabled then there is no
+default available and this method must be called to configure a feature
+probing function.</p>
+<p>The <code>detect</code> function provided is given a string name of an ISA feature.
+The function should then return:</p>
+<ul>
+<li><code>Some(true)</code> - indicates that the feature was found on the host and it
+is supported.</li>
+<li><code>Some(false)</code> - the feature name was recognized but it was not
+detected on the host, for example the CPU is too old.</li>
+<li><code>None</code> - the feature name was not recognized and it’s not known
+whether it’s on the host or not.</li>
+</ul>
+<p>Feature names passed to <code>detect</code> match the same feature name used in the
+Rust standard library. For example <code>"sse4.2"</code> is used on x86_64.</p>
+<h5 id="unsafety"><a class="doc-anchor" href="#unsafety">§</a>Unsafety</h5>
+<p>This function is <code>unsafe</code> because it is undefined behavior to execute
+instructions that a host does not support. This means that the result of
+<code>detect</code> must be correct for memory safe execution at runtime.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-Config" class="impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#105">source</a><a href="#impl-Clone-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#105">source</a><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h4></section></summary><div class='docblock'>Returns a copy of the value. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#172">source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-Config" class="impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#2214-2255">source</a><a href="#impl-Debug-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#2215-2254">source</a><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/1.81.0/core/fmt/type.Result.html" title="type core::fmt::Result">Result</a></h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.81.0/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Config" class="impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#2208-2212">source</a><a href="#impl-Default-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a class="src rightside" href="../src/wasmtime/config.rs.html#2209-2211">source</a><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-Config" class="impl"><a href="#impl-Freeze-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section><section id="impl-RefUnwindSafe-for-Config" class="impl"><a href="#impl-RefUnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section><section id="impl-Send-for-Config" class="impl"><a href="#impl-Send-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section><section id="impl-Sync-for-Config" class="impl"><a href="#impl-Sync-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section><section id="impl-Unpin-for-Config" class="impl"><a href="#impl-Unpin-for-Config" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section><section id="impl-UnwindSafe-for-Config" class="impl"><a href="#impl-UnwindSafe-for-Config" class="anchor">§</a><h3 class="code-header">impl !<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.Config.html" title="struct wasmtime::Config">Config</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#140">source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/any.rs.html#141">source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.81.0/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#209">source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#211">source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#217">source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/borrow.rs.html#218">source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.81.0/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#271">source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/clone.rs.html#272">source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">default unsafe fn <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dst: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.pointer.html">*mut T</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dst</code>. <a href="https://doc.rust-lang.org/1.81.0/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#765">source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#768">source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#748-750">source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#758">source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-IntoEither-for-T" class="impl"><a class="src rightside" href="../src/either/into_either.rs.html#64">source</a><a href="#impl-IntoEither-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="../either/into_either/trait.IntoEither.html" title="trait either::into_either::IntoEither">IntoEither</a> for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_either" class="method trait-impl"><a class="src rightside" href="../src/either/into_either.rs.html#29">source</a><a href="#method.into_either" class="anchor">§</a><h4 class="code-header">fn <a href="../either/into_either/trait.IntoEither.html#method.into_either" class="fn">into_either</a>(self, into_left: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>) -&gt; <a class="enum" href="../either/enum.Either.html" title="enum either::Either">Either</a>&lt;Self, Self&gt;</h4></section></summary><div class='docblock'>Converts <code>self</code> into a <a href="../either/enum.Either.html#variant.Left" title="variant either::Either::Left"><code>Left</code></a> variant of <a href="../either/enum.Either.html" title="enum either::Either"><code>Either&lt;Self, Self&gt;</code></a>
+if <code>into_left</code> is <code>true</code>.
+Converts <code>self</code> into a <a href="../either/enum.Either.html#variant.Right" title="variant either::Either::Right"><code>Right</code></a> variant of <a href="../either/enum.Either.html" title="enum either::Either"><code>Either&lt;Self, Self&gt;</code></a>
+otherwise. <a href="../either/into_either/trait.IntoEither.html#method.into_either">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.into_either_with" class="method trait-impl"><a class="src rightside" href="../src/either/into_either.rs.html#55-57">source</a><a href="#method.into_either_with" class="anchor">§</a><h4 class="code-header">fn <a href="../either/into_either/trait.IntoEither.html#method.into_either_with" class="fn">into_either_with</a>&lt;F&gt;(self, into_left: F) -&gt; <a class="enum" href="../either/enum.Either.html" title="enum either::Either">Either</a>&lt;Self, Self&gt;<div class="where">where
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(<a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;Self</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.bool.html">bool</a>,</div></h4></section></summary><div class='docblock'>Converts <code>self</code> into a <a href="../either/enum.Either.html#variant.Left" title="variant either::Either::Left"><code>Left</code></a> variant of <a href="../either/enum.Either.html" title="enum either::Either"><code>Either&lt;Self, Self&gt;</code></a>
+if <code>into_left(&amp;self)</code> returns <code>true</code>.
+Converts <code>self</code> into a <a href="../either/enum.Either.html#variant.Right" title="variant either::Either::Right"><code>Right</code></a> variant of <a href="../either/enum.Either.html" title="enum either::Either"><code>Either&lt;Self, Self&gt;</code></a>
+otherwise. <a href="../either/into_either/trait.IntoEither.html#method.into_either_with">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#83-85">source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#88">source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/alloc/borrow.rs.html#92">source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.81.0/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#805-807">source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#812">source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#790-792">source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.81.0/src/core/convert/mod.rs.html#797">source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.81.0/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details></div></section></div></main></body></html>

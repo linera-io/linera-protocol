@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Client implementation of the HTTP/2 protocol."><title>h2::client - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="h2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../h2/index.html">h2</a><span class="version">0.4.6</span></h2></div><h2 class="location"><a href="#">Module client</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#functions">Functions</a></li></ul></section><h2><a href="../index.html">In crate h2</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">h2</a>::<wbr><a class="mod" href="#">client</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/h2/client.rs.html#1-1687">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Client implementation of the HTTP/2 protocol.</p>
+<h2 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting started</h2>
+<p>Running an HTTP/2 client requires the caller to establish the underlying
+connection as well as get the connection to a state that is ready to begin
+the HTTP/2 handshake. See <a href="../index.html#handshake">here</a> for more
+details.</p>
+<p>This could be as basic as using Tokio’s <a href="https://docs.rs/tokio-core/0.1/tokio_core/net/struct.TcpStream.html"><code>TcpStream</code></a> to connect to a remote
+host, but usually it means using either ALPN or HTTP/1.1 protocol upgrades.</p>
+<p>Once a connection is obtained, it is passed to <a href="fn.handshake.html"><code>handshake</code></a>, which will
+begin the <a href="http://httpwg.org/specs/rfc7540.html#ConnectionHeader">HTTP/2 handshake</a>. This returns a future that completes once
+the handshake process is performed and HTTP/2 streams may be initialized.</p>
+<p><a href="fn.handshake.html"><code>handshake</code></a> uses default configuration values. There are a number of
+settings that can be changed by using <a href="struct.Builder.html"><code>Builder</code></a> instead.</p>
+<p>Once the handshake future completes, the caller is provided with a
+<a href="struct.Connection.html"><code>Connection</code></a> instance and a <a href="struct.SendRequest.html"><code>SendRequest</code></a> instance. The <a href="struct.Connection.html"><code>Connection</code></a>
+instance is used to drive the connection (see <a href="#managing-the-connection">Managing the connection</a>).
+The <a href="struct.SendRequest.html"><code>SendRequest</code></a> instance is used to initialize new streams (see <a href="#making-requests">Making
+requests</a>).</p>
+<h2 id="making-requests"><a class="doc-anchor" href="#making-requests">§</a>Making requests</h2>
+<p>Requests are made using the <a href="struct.SendRequest.html"><code>SendRequest</code></a> handle provided by the handshake
+future. Once a request is submitted, an HTTP/2 stream is initialized and
+the request is sent to the server.</p>
+<p>A request body and request trailers are sent using <a href="struct.SendRequest.html"><code>SendRequest</code></a> and the
+server’s response is returned once the <a href="struct.ResponseFuture.html"><code>ResponseFuture</code></a> future completes.
+Both the <a href="../struct.SendStream.html"><code>SendStream</code></a> and <a href="struct.ResponseFuture.html"><code>ResponseFuture</code></a> instances are returned by
+<a href="struct.SendRequest.html#method.send_request"><code>SendRequest::send_request</code></a> and are tied to the HTTP/2 stream
+initialized by the sent request.</p>
+<p>The <a href="struct.SendRequest.html#method.poll_ready"><code>SendRequest::poll_ready</code></a> function returns <code>Ready</code> when a new HTTP/2
+stream can be created, i.e. as long as the current number of active streams
+is below <a href="http://httpwg.org/specs/rfc7540.html#SettingValues"><code>MAX_CONCURRENT_STREAMS</code></a>. If a new stream cannot be created, the
+caller will be notified once an existing stream closes, freeing capacity for
+the caller.  The caller should use <a href="struct.SendRequest.html#method.poll_ready"><code>SendRequest::poll_ready</code></a> to check for
+capacity before sending a request to the server.</p>
+<p><a href="struct.SendRequest.html"><code>SendRequest</code></a> enforces the <a href="http://httpwg.org/specs/rfc7540.html#SettingValues"><code>MAX_CONCURRENT_STREAMS</code></a> setting. The user
+must not send a request if <code>poll_ready</code> does not return <code>Ready</code>. Attempting
+to do so will result in an <a href="../struct.Error.html"><code>Error</code></a> being returned.</p>
+<h2 id="managing-the-connection"><a class="doc-anchor" href="#managing-the-connection">§</a>Managing the connection</h2>
+<p>The <a href="struct.Connection.html"><code>Connection</code></a> instance is used to manage connection state. The caller
+is required to call <a href="struct.Connection.html#method.poll"><code>Connection::poll</code></a> in order to advance state.
+<a href="struct.SendRequest.html#method.send_request"><code>SendRequest::send_request</code></a> and other functions have no effect unless
+<a href="struct.Connection.html#method.poll"><code>Connection::poll</code></a> is called.</p>
+<p>The <a href="struct.Connection.html"><code>Connection</code></a> instance should only be dropped once <a href="struct.Connection.html#method.poll"><code>Connection::poll</code></a>
+returns <code>Ready</code>. At this point, the underlying socket has been closed and no
+further work needs to be done.</p>
+<p>The easiest way to ensure that the <a href="struct.Connection.html"><code>Connection</code></a> instance gets polled is to
+submit the <a href="struct.Connection.html"><code>Connection</code></a> instance to an <a href="https://docs.rs/futures/0.1/futures/future/trait.Executor.html">executor</a>. The executor will then
+manage polling the connection until the connection is complete.
+Alternatively, the caller can call <code>poll</code> manually.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+<span class="kw">use </span>h2::client;
+
+<span class="kw">use </span>http::{Request, Method};
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>tokio::net::TcpStream;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">pub async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
+    <span class="comment">// Establish TCP connection to the server.
+    </span><span class="kw">let </span>tcp = TcpStream::connect(<span class="string">"127.0.0.1:5928"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(h2, connection) = client::handshake(tcp).<span class="kw">await</span><span class="question-mark">?</span>;
+    tokio::spawn(<span class="kw">async move </span>{
+        connection.<span class="kw">await</span>.unwrap();
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>h2 = h2.ready().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="comment">// Prepare the HTTP request to send to the server.
+    </span><span class="kw">let </span>request = Request::builder()
+                    .method(Method::GET)
+                    .uri(<span class="string">"https://www.example.com/"</span>)
+                    .body(())
+                    .unwrap();
+
+    <span class="comment">// Send the request. The second tuple item allows the caller
+    // to stream a request body.
+    </span><span class="kw">let </span>(response, <span class="kw">_</span>) = h2.send_request(request, <span class="bool-val">true</span>).unwrap();
+
+    <span class="kw">let </span>(head, <span class="kw-2">mut </span>body) = response.<span class="kw">await</span><span class="question-mark">?</span>.into_parts();
+
+    <span class="macro">println!</span>(<span class="string">"Received response: {:?}"</span>, head);
+
+    <span class="comment">// The `flow_control` handle allows the caller to manage
+    // flow control.
+    //
+    // Whenever data is received, the caller is responsible for
+    // releasing capacity back to the server once it has freed
+    // the data from memory.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>flow_control = body.flow_control().clone();
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(chunk) = body.data().<span class="kw">await </span>{
+        <span class="kw">let </span>chunk = chunk<span class="question-mark">?</span>;
+        <span class="macro">println!</span>(<span class="string">"RX: {:?}"</span>, chunk);
+
+        <span class="comment">// Let the server send more data.
+        </span><span class="kw">let _ </span>= flow_control.release_capacity(chunk.len());
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Builder.html" title="struct h2::client::Builder">Builder</a></div><div class="desc docblock-short">Builds client connections with custom configuration values.</div></li><li><div class="item-name"><a class="struct" href="struct.Connection.html" title="struct h2::client::Connection">Connection</a></div><div class="desc docblock-short">Manages all state associated with an HTTP/2 client connection.</div></li><li><div class="item-name"><a class="struct" href="struct.PushPromise.html" title="struct h2::client::PushPromise">PushPromise</a></div><div class="desc docblock-short">A pushed response and corresponding request headers</div></li><li><div class="item-name"><a class="struct" href="struct.PushPromises.html" title="struct h2::client::PushPromises">PushPromises</a></div><div class="desc docblock-short">A stream of pushed responses and corresponding promised requests</div></li><li><div class="item-name"><a class="struct" href="struct.PushedResponseFuture.html" title="struct h2::client::PushedResponseFuture">PushedResponseFuture</a></div><div class="desc docblock-short">A future of a pushed HTTP response.</div></li><li><div class="item-name"><a class="struct" href="struct.ReadySendRequest.html" title="struct h2::client::ReadySendRequest">ReadySendRequest</a></div><div class="desc docblock-short">Returns a <code>SendRequest</code> instance once it is ready to send at least one
+request.</div></li><li><div class="item-name"><a class="struct" href="struct.ResponseFuture.html" title="struct h2::client::ResponseFuture">ResponseFuture</a></div><div class="desc docblock-short">A future of an HTTP response.</div></li><li><div class="item-name"><a class="struct" href="struct.SendRequest.html" title="struct h2::client::SendRequest">SendRequest</a></div><div class="desc docblock-short">Initializes new HTTP/2 streams on a connection by sending a request.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.handshake.html" title="fn h2::client::handshake">handshake</a></div><div class="desc docblock-short">Creates a new configured HTTP/2 client with default configuration
+values backed by <code>io</code>.</div></li></ul></section></div></main></body></html>

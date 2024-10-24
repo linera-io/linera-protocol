@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Getting started guide."><title>mio::guide - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../mio/index.html">mio</a><span class="version">1.0.2</span></h2></div><h2 class="location"><a href="#">Module guide</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In crate mio</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">mio</a>::<wbr><a class="mod" href="#">guide</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/mio/lib.rs.html#130">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="getting-started-guide"><a class="doc-anchor" href="#getting-started-guide">§</a>Getting started guide.</h2>
+<p>In this guide we’ll do the following:</p>
+<ol>
+<li>Create a <a href="../struct.Poll.html"><code>Poll</code></a> instance (and learn what it is).</li>
+<li>Register an <a href="../event/trait.Source.html">event source</a>.</li>
+<li>Create an event loop.</li>
+</ol>
+<p>At the end you’ll have a very small (but quick) TCP server that accepts
+connections and then drops (disconnects) them.</p>
+<h3 id="1-creating-a-poll-instance"><a class="doc-anchor" href="#1-creating-a-poll-instance">§</a>1. Creating a <code>Poll</code> instance</h3>
+<p>Using Mio starts by creating a <a href="../struct.Poll.html"><code>Poll</code></a> instance, which monitors events
+from the OS and puts them into <a href="../event/struct.Events.html"><code>Events</code></a>. This allows us to execute I/O
+operations based on what operations are ready.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// `Poll` allows for polling of readiness events.
+</span><span class="kw">let </span>poll = Poll::new()<span class="question-mark">?</span>;
+<span class="comment">// `Events` is collection of readiness `Event`s and can be filled by
+// calling `Poll::poll`.
+</span><span class="kw">let </span>events = Events::with_capacity(<span class="number">128</span>);</code></pre></div>
+<p>For example if we’re using a <a href="../net/struct.TcpListener.html"><code>TcpListener</code></a>,  we’ll only want to
+attempt to accept an incoming connection <em>iff</em> any connections are
+queued and ready to be accepted. We don’t want to waste our time if no
+connections are ready.</p>
+<h3 id="2-registering-event-source"><a class="doc-anchor" href="#2-registering-event-source">§</a>2. Registering event source</h3>
+<p>After we’ve created a <a href="../struct.Poll.html"><code>Poll</code></a> instance that monitors events from the OS
+for us, we need to provide it with a source of events. This is done by
+registering an <a href="../event/trait.Source.html">event source</a>. As the name “event source” suggests it is
+a source of events which can be polled using a <code>Poll</code> instance. On Unix
+systems this is usually a file descriptor, or a socket/handle on
+Windows.</p>
+<p>In the example below we’ll use a <a href="../net/struct.TcpListener.html"><code>TcpListener</code></a> for which we’ll receive
+an event (from <a href="../struct.Poll.html"><code>Poll</code></a>) once a connection is ready to be accepted.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Create a `TcpListener`, binding it to `address`.
+</span><span class="kw">let </span><span class="kw-2">mut </span>listener = TcpListener::bind(address)<span class="question-mark">?</span>;
+
+<span class="comment">// Next we register it with `Poll` to receive events for it. The `SERVER`
+// `Token` is used to determine that we received an event for the listener
+// later on.
+</span><span class="kw">const </span>SERVER: Token = Token(<span class="number">0</span>);
+poll.registry().register(<span class="kw-2">&amp;mut </span>listener, SERVER, Interest::READABLE)<span class="question-mark">?</span>;</code></pre></div>
+<p>Multiple event sources can be <a href="../struct.Registry.html#method.register">registered</a> (concurrently), so we can
+monitor multiple sources at a time.</p>
+<h3 id="3-creating-the-event-loop"><a class="doc-anchor" href="#3-creating-the-event-loop">§</a>3. Creating the event loop</h3>
+<p>After we’ve created a <a href="../struct.Poll.html"><code>Poll</code></a> instance and registered one or more
+<a href="../event/trait.Source.html">event sources</a> with it, we can <a href="../struct.Poll.html#method.poll">poll</a> it for events. Polling for events
+is simple, we need a container to store the events: <a href="../event/struct.Events.html"><code>Events</code></a> and need
+to do something based on the polled events (this part is up to you, we
+can’t do it all!). If we do this in a loop we’ve got ourselves an event
+loop.</p>
+<p>The example below shows the event loop in action, completing our small
+TCP server.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Start our event loop.
+</span><span class="kw">loop </span>{
+    <span class="comment">// Poll the OS for events, waiting at most 100 milliseconds.
+    </span>poll.poll(<span class="kw-2">&amp;mut </span>events, <span class="prelude-val">Some</span>(Duration::from_millis(<span class="number">100</span>)))<span class="question-mark">?</span>;
+
+    <span class="comment">// Process each event.
+    </span><span class="kw">for </span>event <span class="kw">in </span>events.iter() {
+        <span class="comment">// We can use the token we previously provided to `register` to
+        // determine for which type the event is.
+        </span><span class="kw">match </span>event.token() {
+            SERVER =&gt; <span class="kw">loop </span>{
+                <span class="comment">// One or more connections are ready, so we'll attempt to
+                // accept them (in a loop).
+                </span><span class="kw">match </span>listener.accept() {
+                    <span class="prelude-val">Ok</span>((connection, address)) =&gt; {
+                        <span class="macro">println!</span>(<span class="string">"Got a connection from: {}"</span>, address);
+                    },
+                    <span class="comment">// A "would block error" is returned if the operation
+                    // is not ready, so we'll stop trying to accept
+                    // connections.
+                    </span><span class="prelude-val">Err</span>(<span class="kw-2">ref </span>err) <span class="kw">if </span>would_block(err) =&gt; <span class="kw">break</span>,
+                    <span class="prelude-val">Err</span>(err) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(err),
+                }
+            }
+        }
+    }
+}
+
+<span class="kw">fn </span>would_block(err: <span class="kw-2">&amp;</span>io::Error) -&gt; bool {
+    err.kind() == io::ErrorKind::WouldBlock
+}</code></pre></div>
+</div></details></section></div></main></body></html>

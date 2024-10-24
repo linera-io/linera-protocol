@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Asserts that a boolean expression is `true` at runtime."><title>assert in wasmtime_environ::__core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../wasmtime_environ/index.html">wasmtime_environ</a><span class="version">25.0.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In wasmtime_environ::__core</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">wasmtime_environ</a>::<wbr><a href="index.html">__core</a>::<wbr><a class="macro" href="#">assert</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><span class="since" title="Stable since Rust version 1.0.0">1.0.0</span> · <a class="src" href="https://doc.rust-lang.org/1.81.0/src/core/macros/mod.rs.html#1578">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> assert {
+    (<span class="macro-nonterminal">$cond</span>:expr $(,)<span class="question-mark">?</span>) =&gt; { ... };
+    (<span class="macro-nonterminal">$cond</span>:expr, $(<span class="macro-nonterminal">$arg</span>:tt)+) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Asserts that a boolean expression is <code>true</code> at runtime.</p>
+<p>This will invoke the <a href="macro.panic.html" title="macro wasmtime_environ::__core::panic"><code>panic!</code></a> macro if the provided expression cannot be
+evaluated to <code>true</code> at runtime.</p>
+<h2 id="uses"><a class="doc-anchor" href="#uses">§</a>Uses</h2>
+<p>Assertions are always checked in both debug and release builds, and cannot
+be disabled. See <a href="macro.debug_assert.html" title="macro wasmtime_environ::__core::debug_assert"><code>debug_assert!</code></a> for assertions that are not enabled in
+release builds by default.</p>
+<p>Unsafe code may rely on <code>assert!</code> to enforce run-time invariants that, if
+violated could lead to unsafety.</p>
+<p>Other use-cases of <code>assert!</code> include testing and enforcing run-time
+invariants in safe code (whose violation cannot result in unsafety).</p>
+<h2 id="custom-messages"><a class="doc-anchor" href="#custom-messages">§</a>Custom Messages</h2>
+<p>This macro has a second form, where a custom panic message can
+be provided with or without arguments for formatting. See <a href="../std/fmt/index.html"><code>std::fmt</code></a>
+for syntax for this form. Expressions used as format arguments will only
+be evaluated if the assertion fails.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// the panic message for these assertions is the stringified value of the
+// expression given.
+</span><span class="macro">assert!</span>(<span class="bool-val">true</span>);
+
+<span class="kw">fn </span>some_computation() -&gt; bool { <span class="bool-val">true </span>} <span class="comment">// a very simple function
+
+</span><span class="macro">assert!</span>(some_computation());
+
+<span class="comment">// assert with a custom message
+</span><span class="kw">let </span>x = <span class="bool-val">true</span>;
+<span class="macro">assert!</span>(x, <span class="string">"x wasn't true!"</span>);
+
+<span class="kw">let </span>a = <span class="number">3</span>; <span class="kw">let </span>b = <span class="number">27</span>;
+<span class="macro">assert!</span>(a + b == <span class="number">30</span>, <span class="string">"a = {}, b = {}"</span>, a, b);</code></pre></div>
+</div></details></section></div></main></body></html>

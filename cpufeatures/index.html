@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crate provides macros for runtime CPU feature detection. It’s intended as a stopgap until Rust RFC 2725 adding first-class target feature detection macros to `libcore` is implemented."><title>cpufeatures - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cpufeatures" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../cpufeatures/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../cpufeatures/index.html"><img src="https://raw.githubusercontent.com/RustCrypto/media/6ee8e381/logo.svg" alt="logo"></a><h2><a href="../cpufeatures/index.html">cpufeatures</a><span class="version">0.2.14</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">cpufeatures</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/cpufeatures/lib.rs.html#1-220">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crate provides macros for runtime CPU feature detection. It’s intended
+as a stopgap until Rust <a href="https://github.com/rust-lang/rfcs/pull/2725">RFC 2725</a> adding first-class target feature detection
+macros to <code>libcore</code> is implemented.</p>
+<h2 id="supported-target-architectures"><a class="doc-anchor" href="#supported-target-architectures">§</a>Supported target architectures</h2>
+<p>*NOTE: target features with an asterisk are unstable (nightly-only) and
+subject to change to match upstream name changes in the Rust standard
+library.</p>
+<h3 id="aarch64"><a class="doc-anchor" href="#aarch64">§</a><code>aarch64</code></h3>
+<p>Linux, iOS, and macOS/ARM only (ARM64 does not support OS-independent feature detection)</p>
+<p>Target features:</p>
+<ul>
+<li><code>aes</code>*</li>
+<li><code>sha2</code>*</li>
+<li><code>sha3</code>*</li>
+</ul>
+<p>Linux only</p>
+<ul>
+<li><code>sm4</code>*</li>
+</ul>
+<h3 id="loongarch64"><a class="doc-anchor" href="#loongarch64">§</a><code>loongarch64</code></h3>
+<p>Linux only (LoongArch64 does not support OS-independent feature detection)</p>
+<p>Target features:</p>
+<ul>
+<li><code>lam</code>*</li>
+<li><code>ual</code>*</li>
+<li><code>fpu</code>*</li>
+<li><code>lsx</code>*</li>
+<li><code>lasx</code>*</li>
+<li><code>crc32</code>*</li>
+<li><code>complex</code>*</li>
+<li><code>crypto</code>*</li>
+<li><code>lvz</code>*</li>
+<li><code>lbt.x86</code>*</li>
+<li><code>lbt.arm</code>*</li>
+<li><code>lbt.mips</code>*</li>
+<li><code>ptw</code>*</li>
+</ul>
+<h3 id="x86x86_64"><a class="doc-anchor" href="#x86x86_64">§</a><code>x86</code>/<code>x86_64</code></h3>
+<p>OS independent and <code>no_std</code>-friendly</p>
+<p>Target features:</p>
+<ul>
+<li><code>adx</code></li>
+<li><code>aes</code></li>
+<li><code>avx</code></li>
+<li><code>avx2</code></li>
+<li><code>avx512bw</code>*</li>
+<li><code>avx512cd</code>*</li>
+<li><code>avx512dq</code>*</li>
+<li><code>avx512er</code>*</li>
+<li><code>avx512f</code>*</li>
+<li><code>avx512ifma</code>*</li>
+<li><code>avx512pf</code>*</li>
+<li><code>avx512vl</code>*</li>
+<li><code>bmi1</code></li>
+<li><code>bmi2</code></li>
+<li><code>fma</code>,</li>
+<li><code>mmx</code></li>
+<li><code>pclmulqdq</code></li>
+<li><code>popcnt</code></li>
+<li><code>rdrand</code></li>
+<li><code>rdseed</code></li>
+<li><code>sgx</code></li>
+<li><code>sha</code></li>
+<li><code>sse</code></li>
+<li><code>sse2</code></li>
+<li><code>sse3</code></li>
+<li><code>sse4.1</code></li>
+<li><code>sse4.2</code></li>
+<li><code>ssse3</code></li>
+</ul>
+<p>If you would like detection support for a target feature which is not on
+this list, please <a href="https://github.com/RustCrypto/utils/issues/new?title=cpufeatures:%20requesting%20support%20for%20CHANGEME%20target%20feature">open a GitHub issue</a>.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// This macro creates `cpuid_aes_sha` module
+</span><span class="macro">cpufeatures::new!</span>(cpuid_aes_sha, <span class="string">"aes"</span>, <span class="string">"sha"</span>);
+
+<span class="comment">// `token` is a Zero Sized Type (ZST) value, which guarantees
+// that underlying static storage got properly initialized,
+// which allows to omit initialization branch
+</span><span class="kw">let </span>token: cpuid_aes_sha::InitToken = cpuid_aes_sha::init();
+
+<span class="kw">if </span>token.get() {
+    <span class="macro">println!</span>(<span class="string">"CPU supports both SHA and AES extensions"</span>);
+} <span class="kw">else </span>{
+    <span class="macro">println!</span>(<span class="string">"SHA and AES extensions are not supported"</span>);
+}
+
+<span class="comment">// If stored value needed only once you can get stored value
+// omitting the token
+</span><span class="kw">let </span>val = cpuid_aes_sha::get();
+<span class="macro">assert_eq!</span>(val, token.get());
+
+<span class="comment">// Additionally you can get both token and value
+</span><span class="kw">let </span>(token, val) = cpuid_aes_sha::init_get();
+<span class="macro">assert_eq!</span>(val, token.get());</code></pre></div>
+<p>Note that if all tested target features are enabled via compiler options
+(e.g. by using <code>RUSTFLAGS</code>), the <code>get</code> method will always return <code>true</code>
+and <code>init</code> will not use CPUID instruction. Such behavior allows
+compiler to completely eliminate fallback code.</p>
+<p>After first call macro caches result and returns it in subsequent
+calls, thus runtime overhead for them is minimal.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.new.html" title="macro cpufeatures::new">new</a></div><div class="desc docblock-short">Create module with CPU feature detection code.</div></li></ul></section></div></main></body></html>

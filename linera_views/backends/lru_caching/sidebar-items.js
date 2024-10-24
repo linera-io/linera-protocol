@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TEST_CACHE_SIZE"],"struct":["LruCachingStore"],"type":["LruCachingMemoryStore"]};

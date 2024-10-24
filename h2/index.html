@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An asynchronous, HTTP/2 server and client implementation."><title>h2 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="h2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../h2/index.html">h2</a><span class="version">0.4.6</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">h2</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/h2/lib.rs.html#1-162">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An asynchronous, HTTP/2 server and client implementation.</p>
+<p>This library implements the <a href="https://http2.github.io/">HTTP/2</a> specification. The implementation is
+asynchronous, using <a href="https://docs.rs/futures/">futures</a> as the basis for the API. The implementation
+is also decoupled from TCP or TLS details. The user must handle ALPN and
+HTTP/1.1 upgrades themselves.</p>
+<h2 id="getting-started"><a class="doc-anchor" href="#getting-started">§</a>Getting started</h2>
+<p>Add the following to your <code>Cargo.toml</code> file:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+h2 = &quot;0.4&quot;
+</code></pre></div><h2 id="layout-1"><a class="doc-anchor" href="#layout-1">§</a>Layout</h2>
+<p>The crate is split into <a href="client/index.html"><code>client</code></a> and <a href="server/index.html"><code>server</code></a> modules. Types that are
+common to both clients and servers are located at the root of the crate.</p>
+<p>See module level documentation for more details on how to use <code>h2</code>.</p>
+<h2 id="handshake"><a class="doc-anchor" href="#handshake">§</a>Handshake</h2>
+<p>Both the client and the server require a connection to already be in a state
+ready to start the HTTP/2 handshake. This library does not provide
+facilities to do this.</p>
+<p>There are three ways to reach an appropriate state to start the HTTP/2
+handshake.</p>
+<ul>
+<li>Opening an HTTP/1.1 connection and performing an <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Protocol_upgrade_mechanism">upgrade</a>.</li>
+<li>Opening a connection with TLS and use ALPN to negotiate the protocol.</li>
+<li>Open a connection with prior knowledge, i.e. both the client and the
+server assume that the connection is immediately ready to start the
+HTTP/2 handshake once opened.</li>
+</ul>
+<p>Once the connection is ready to start the HTTP/2 handshake, it can be
+passed to <a href="server/fn.handshake.html"><code>server::handshake</code></a> or <a href="client/fn.handshake.html"><code>client::handshake</code></a>. At this point, the
+library will start the handshake process, which consists of:</p>
+<ul>
+<li>The client sends the connection preface (a predefined sequence of 24
+octets).</li>
+<li>Both the client and the server sending a SETTINGS frame.</li>
+</ul>
+<p>See the <a href="http://httpwg.org/specs/rfc7540.html#starting">Starting HTTP/2</a> in the specification for more details.</p>
+<h2 id="flow-control"><a class="doc-anchor" href="#flow-control">§</a>Flow control</h2>
+<p><a href="http://httpwg.org/specs/rfc7540.html#FlowControl">Flow control</a> is a fundamental feature of HTTP/2. The <code>h2</code> library
+exposes flow control to the user.</p>
+<p>An HTTP/2 client or server may not send unlimited data to the peer. When a
+stream is initiated, both the client and the server are provided with an
+initial window size for that stream.  A window size is the number of bytes
+the endpoint can send to the peer. At any point in time, the peer may
+increase this window size by sending a <code>WINDOW_UPDATE</code> frame. Once a client
+or server has sent data filling the window for a stream, no further data may
+be sent on that stream until the peer increases the window.</p>
+<p>There is also a <strong>connection level</strong> window governing data sent across all
+streams.</p>
+<p>Managing flow control for inbound data is done through <a href="struct.FlowControl.html"><code>FlowControl</code></a>.
+Managing flow control for outbound data is done through <a href="struct.SendStream.html"><code>SendStream</code></a>. See
+the struct level documentation for those two types for more details.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="client/index.html" title="mod h2::client">client</a></div><div class="desc docblock-short">Client implementation of the HTTP/2 protocol.</div></li><li><div class="item-name"><a class="mod" href="ext/index.html" title="mod h2::ext">ext</a></div><div class="desc docblock-short">Extensions specific to the HTTP/2 protocol.</div></li><li><div class="item-name"><a class="mod" href="server/index.html" title="mod h2::server">server</a></div><div class="desc docblock-short">Server implementation of the HTTP/2 protocol.</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Error.html" title="struct h2::Error">Error</a></div><div class="desc docblock-short">Represents HTTP/2 operation errors.</div></li><li><div class="item-name"><a class="struct" href="struct.FlowControl.html" title="struct h2::FlowControl">FlowControl</a></div><div class="desc docblock-short">A handle to release window capacity to a remote stream.</div></li><li><div class="item-name"><a class="struct" href="struct.Ping.html" title="struct h2::Ping">Ping</a></div><div class="desc docblock-short">Sent via <a href="struct.PingPong.html"><code>PingPong</code></a> to send a PING frame to a peer.</div></li><li><div class="item-name"><a class="struct" href="struct.PingPong.html" title="struct h2::PingPong">PingPong</a></div><div class="desc docblock-short">A handle to send and receive PING frames with the peer.</div></li><li><div class="item-name"><a class="struct" href="struct.Pong.html" title="struct h2::Pong">Pong</a></div><div class="desc docblock-short">Received via <a href="struct.PingPong.html"><code>PingPong</code></a> when a peer acknowledges a <a href="struct.Ping.html"><code>Ping</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.Reason.html" title="struct h2::Reason">Reason</a></div><div class="desc docblock-short">HTTP/2 error codes.</div></li><li><div class="item-name"><a class="struct" href="struct.RecvStream.html" title="struct h2::RecvStream">RecvStream</a></div><div class="desc docblock-short">Receives the body stream and trailers from the remote peer.</div></li><li><div class="item-name"><a class="struct" href="struct.SendStream.html" title="struct h2::SendStream">SendStream</a></div><div class="desc docblock-short">Sends the body stream and trailers to the remote peer.</div></li><li><div class="item-name"><a class="struct" href="struct.StreamId.html" title="struct h2::StreamId">StreamId</a></div><div class="desc docblock-short">A stream identifier, as described in <a href="https://tools.ietf.org/html/rfc7540#section-5.1.1">Section 5.1.1</a> of RFC 7540.</div></li></ul></section></div></main></body></html>

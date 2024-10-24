@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Alloy"><title>linera_alloy_core - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="linera_alloy_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="icon" href="https://raw.githubusercontent.com/alloy-rs/core/main/assets/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../linera_alloy_core/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../linera_alloy_core/index.html"><img src="https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg" alt="logo"></a><h2><a href="../linera_alloy_core/index.html">linera_alloy_core</a><span class="version">0.7.4</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">linera_alloy_core</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/linera_alloy_core/lib.rs.html#1-56">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="alloy"><a class="doc-anchor" href="#alloy">§</a>Alloy</h2>
+<p>Core libraries at the root of the Rust Ethereum ecosystem.</p>
+<p>Alloy is a rewrite of <a href="https://github.com/gakonst/ethers-rs"><code>ethers-rs</code></a> from the ground up, with exciting new
+features, high performance, and excellent docs.</p>
+<p><a href="https://github.com/gakonst/ethers-rs"><code>ethers-rs</code></a> will continue to be maintained until we have achieved
+feature-parity in Alloy. No action is currently needed from devs.</p>
+<p><a href="https://github.com/alloy-rs/core/actions?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/alloy-rs/core/ci.yml?branch=main&amp;style=for-the-badge" alt="Build Status" /></a>
+<a href="https://t.me/ethers_rs"><img src="https://img.shields.io/endpoint?color=neon&amp;style=for-the-badge&amp;url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Fethers_rs" alt="Telegram chat" /></a></p>
+<h3 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h3>
+<p>This repository contains the following crates:</p>
+<ul>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/core"><code>linera-alloy-core</code></a>: Meta-crate for the entire project</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/primitives"><code>linera-alloy-primitives</code></a> - Primitive integer and byte types</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/sol-types"><code>linera-alloy-sol-types</code></a> - Compile-time <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> implementations</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/sol-macro"><code>linera-alloy-sol-macro</code></a> - The <a href="https://docs.rs/linera-alloy-sol-macro/latest/linera_alloy_sol_macro/macro.sol.html"><code>sol!</code></a> procedural macro</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/dyn-abi"><code>linera-alloy-dyn-abi</code></a> - Run-time <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> implementations</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/json-abi"><code>linera-alloy-json-abi</code></a> - Full Ethereum <a href="https://docs.soliditylang.org/en/latest/abi-spec.html#json">JSON-ABI</a> implementation</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/sol-type-parser"><code>linera-alloy-sol-type-parser</code></a> - A simple parser for Solidity type strings</li>
+<li><a href="https://github.com/alloy-rs/core/tree/main/crates/linera-alloy-syn-solidity"><code>linera-alloy-syn-solidity</code></a> - <a href="https://github.com/dtolnay/syn"><code>syn</code></a>-powered Solidity parser</li>
+</ul>
+<h3 id="supported-rust-versions"><a class="doc-anchor" href="#supported-rust-versions">§</a>Supported Rust Versions</h3><!--
+When updating this, also update:
+- clippy.toml
+- Cargo.toml
+- .github/workflows/ci.yml
+-->
+<p>Alloy will keep a rolling MSRV (minimum supported rust version) policy of <strong>at
+least</strong> 6 months. When increasing the MSRV, the new Rust version must have been
+released at least six months ago. The current MSRV is 1.65.0.</p>
+<p>Note that the MSRV is not increased automatically, and only as part of a minor
+release.</p>
+<h3 id="contributing"><a class="doc-anchor" href="#contributing">§</a>Contributing</h3>
+<p>Thanks for your help improving the project! We are so happy to have you! We have
+<a href="./CONTRIBUTING.md">a contributing guide</a> to help you get involved in the
+Alloy project.</p>
+<p>Pull requests will not be merged unless CI passes, so please ensure that your
+contribution follows the linting rules and passes clippy.</p>
+<h3 id="wasm-support"><a class="doc-anchor" href="#wasm-support">§</a>WASM support</h3>
+<p>We provide full support for all the <code>wasm*-*</code> targets. If a crate does not
+build on a WASM target, please <a href="https://github.com/alloy-rs/core/issues/new/choose">open an issue</a>.</p>
+<p>When building for the <code>wasm32-unknown-unknown</code> target and the <code>"getrandom"</code>
+feature is enabled, compilation for the <code>getrandom</code> crate will fail. This is
+expected: see <a href="https://docs.rs/getrandom/#webassembly-support">their documentation</a> for more details.</p>
+<p>To fix this, either disable the <code>"getrandom"</code> feature on <code>linera-alloy-core</code> or add
+<code>getrandom</code> to your dependencies with the <code>"js"</code> feature enabled:</p>
+<div class="example-wrap"><pre class="language-toml"><code>getrandom = { version = &quot;0.2&quot;, features = [&quot;js&quot;] }
+</code></pre></div>
+<p>There is currently no plan to provide an official JS/TS-accessible library
+interface, as we believe <a href="https://viem.sh">viem</a> or <a href="https://docs.ethers.io/v6/">ethers.js</a> serve that need very well.</p>
+<h3 id="note-on-no_std"><a class="doc-anchor" href="#note-on-no_std">§</a>Note on <code>no_std</code></h3>
+<p>All crates in this workspace should support <code>no_std</code> environments, with the
+<code>alloc</code> crate. If you find a crate that does not support <code>no_std</code>, please
+<a href="https://github.com/alloy-rs/core/issues/new/choose">open an issue</a>.</p>
+<h3 id="credits"><a class="doc-anchor" href="#credits">§</a>Credits</h3>
+<p>None of these crates would have been possible without the great work done in:</p>
+<ul>
+<li><a href="https://github.com/ethers-io/ethers.js/"><code>ethers.js</code></a></li>
+<li><a href="https://github.com/tomusdrw/rust-web3/"><code>rust-web3</code></a></li>
+<li><a href="https://github.com/recmo/uint"><code>ruint</code></a></li>
+<li><a href="https://github.com/rust-ethereum/ethabi"><code>ethabi</code></a></li>
+<li><a href="https://github.com/gnosis/ethcontract-rs/"><code>ethcontract-rs</code></a></li>
+<li><a href="https://github.com/althea-net/guac_rs/"><code>guac_rs</code></a></li>
+</ul>
+<h5 id="license"><a class="doc-anchor" href="#license">§</a>License</h5><sup>
+Licensed under either of <a href="LICENSE-APACHE">Apache License, Version
+2.0</a> or <a href="LICENSE-MIT">MIT license</a> at your option.
+</sup>
+<br>
+<sub>
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in these crates by you, as defined in the Apache-2.0 license,
+shall be dual licensed as above, without any additional terms or conditions.
+</sub></div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.hex"><code>pub use primitives::<a class="mod" href="primitives/hex/index.html" title="mod linera_alloy_core::primitives::hex">hex</a>;</code></div></li><li><div class="item-name" id="reexport.hex-1"><code>pub use primitives::<a class="macro" href="primitives/hex_literal/macro.hex.html" title="macro linera_alloy_core::primitives::hex_literal::hex">hex</a>;</code></div></li><li><div class="item-name" id="reexport.uint"><code>pub use primitives::uint;</code></div></li><li><div class="item-name" id="reexport.sol"><code>pub use sol_types::<a class="macro" href="sol_types/macro.sol.html" title="macro linera_alloy_core::sol_types::sol">sol</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="dyn_abi/index.html" title="mod linera_alloy_core::dyn_abi">dyn_abi</a></div><div class="desc docblock-short">linera-alloy-dyn-abi</div></li><li><div class="item-name"><a class="mod" href="json_abi/index.html" title="mod linera_alloy_core::json_abi">json_abi</a></div><div class="desc docblock-short">linera-alloy-json-abi</div></li><li><div class="item-name"><a class="mod" href="primitives/index.html" title="mod linera_alloy_core::primitives">primitives</a></div><div class="desc docblock-short">linera-alloy-primitives</div></li><li><div class="item-name"><a class="mod" href="sol_types/index.html" title="mod linera_alloy_core::sol_types">sol_types</a></div><div class="desc docblock-short">Solidity type modeling and <a href="https://docs.soliditylang.org/en/latest/abi-spec.html">ABI</a> and <a href="https://eips.ethereum.org/EIPS/eip-712">EIP-712</a> codec implementation.</div></li></ul></section></div></main></body></html>

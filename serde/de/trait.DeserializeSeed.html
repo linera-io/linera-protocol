@@ -1,0 +1,138 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`DeserializeSeed` is the stateful form of the `Deserialize` trait. If you ever find yourself looking for a way to pass data into a `Deserialize` impl, this trait is the way to do it."><title>DeserializeSeed in serde::de - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../serde/index.html">serde</a><span class="version">1.0.210</span></h2></div><h2 class="location"><a href="#">DeserializeSeed</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Value">Value</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.deserialize">deserialize</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-DeserializeSeed%3C'de%3E-for-PhantomData%3CT%3E">PhantomData&lt;T&gt;</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In serde::de</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">serde</a>::<wbr><a href="index.html">de</a>::<wbr><a class="trait" href="#">DeserializeSeed</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/serde/de/mod.rs.html#778-787">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait DeserializeSeed&lt;'de&gt;: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    type <a href="#associatedtype.Value" class="associatedtype">Value</a>;
+
+    // Required method
+    fn <a href="#tymethod.deserialize" class="fn">deserialize</a>&lt;D&gt;(self, deserializer: D) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.DeserializeSeed.html#associatedtype.Value" title="type serde::de::DeserializeSeed::Value">Value</a>, D::<a class="associatedtype" href="../trait.Deserializer.html#associatedtype.Error" title="type serde::Deserializer::Error">Error</a>&gt;
+       <span class="where">where D: <a class="trait" href="../trait.Deserializer.html" title="trait serde::Deserializer">Deserializer</a>&lt;'de&gt;</span>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>DeserializeSeed</code> is the stateful form of the <code>Deserialize</code> trait. If you
+ever find yourself looking for a way to pass data into a <code>Deserialize</code> impl,
+this trait is the way to do it.</p>
+<p>As one example of stateful deserialization consider deserializing a JSON
+array into an existing buffer. Using the <code>Deserialize</code> trait we could
+deserialize a JSON array into a <code>Vec&lt;T&gt;</code> but it would be a freshly allocated
+<code>Vec&lt;T&gt;</code>; there is no way for <code>Deserialize</code> to reuse a previously allocated
+buffer. Using <code>DeserializeSeed</code> instead makes this possible as in the
+example code below.</p>
+<p>The canonical API for stateless deserialization looks like this:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>func&lt;<span class="lifetime">'de</span>, T: Deserialize&lt;<span class="lifetime">'de</span>&gt;&gt;() -&gt; <span class="prelude-ty">Result</span>&lt;T, Error&gt;</code></pre></div>
+<p>Adjusting an API like this to support stateful deserialization is a matter
+of accepting a seed as input:</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>func_seed&lt;<span class="lifetime">'de</span>, T: DeserializeSeed&lt;<span class="lifetime">'de</span>&gt;&gt;(seed: T) -&gt; <span class="prelude-ty">Result</span>&lt;T::Value, Error&gt;</code></pre></div>
+<p>In practice the majority of deserialization is stateless. An API expecting a
+seed can be appeased by passing <code>std::marker::PhantomData</code> as a seed in the
+case of stateless deserialization.</p>
+<h2 id="lifetime"><a class="doc-anchor" href="#lifetime">§</a>Lifetime</h2>
+<p>The <code>'de</code> lifetime of this trait is the lifetime of data that may be
+borrowed by <code>Self::Value</code> when deserialized. See the page <a href="https://serde.rs/lifetimes.html">Understanding
+deserializer lifetimes</a> for a more detailed explanation of these lifetimes.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Suppose we have JSON that looks like <code>[[1, 2], [3, 4, 5], [6]]</code> and we need
+to deserialize it into a flat representation like <code>vec![1, 2, 3, 4, 5, 6]</code>.
+Allocating a brand new <code>Vec&lt;T&gt;</code> for each subarray would be slow. Instead we
+would like to allocate a single <code>Vec&lt;T&gt;</code> and then deserialize each subarray
+into it. This requires stateful deserialization using the <code>DeserializeSeed</code>
+trait.</p>
+
+<div class="example-wrap edition"><a href="#" class="tooltip" title="This example runs with edition 2021">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::de::{Deserialize, DeserializeSeed, Deserializer, SeqAccess, Visitor};
+<span class="kw">use </span>std::fmt;
+<span class="kw">use </span>std::marker::PhantomData;
+
+<span class="comment">// A DeserializeSeed implementation that uses stateful deserialization to
+// append array elements onto the end of an existing vector. The preexisting
+// state ("seed") in this case is the Vec&lt;T&gt;. The `deserialize` method of
+// `ExtendVec` will be traversing the inner arrays of the JSON input and
+// appending each integer into the existing Vec.
+</span><span class="kw">struct </span>ExtendVec&lt;<span class="lifetime">'a</span>, T: <span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Vec&lt;T&gt;);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>, <span class="lifetime">'a</span>, T&gt; DeserializeSeed&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>ExtendVec&lt;<span class="lifetime">'a</span>, T&gt;
+<span class="kw">where
+    </span>T: Deserialize&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="comment">// The return type of the `deserialize` method. This implementation
+    // appends onto an existing vector but does not create any new data
+    // structure, so the return type is ().
+    </span><span class="kw">type </span>Value = ();
+
+    <span class="kw">fn </span>deserialize&lt;D&gt;(<span class="self">self</span>, deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Value, D::Error&gt;
+    <span class="kw">where
+        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+    {
+        <span class="comment">// Visitor implementation that will walk an inner array of the JSON
+        // input.
+        </span><span class="kw">struct </span>ExtendVecVisitor&lt;<span class="lifetime">'a</span>, T: <span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Vec&lt;T&gt;);
+
+        <span class="kw">impl</span>&lt;<span class="lifetime">'de</span>, <span class="lifetime">'a</span>, T&gt; Visitor&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>ExtendVecVisitor&lt;<span class="lifetime">'a</span>, T&gt;
+        <span class="kw">where
+            </span>T: Deserialize&lt;<span class="lifetime">'de</span>&gt;,
+        {
+            <span class="kw">type </span>Value = ();
+
+            <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+                <span class="macro">write!</span>(formatter, <span class="string">"an array of integers"</span>)
+            }
+
+            <span class="kw">fn </span>visit_seq&lt;A&gt;(<span class="self">self</span>, <span class="kw-2">mut </span>seq: A) -&gt; <span class="prelude-ty">Result</span>&lt;(), A::Error&gt;
+            <span class="kw">where
+                </span>A: SeqAccess&lt;<span class="lifetime">'de</span>&gt;,
+            {
+                <span class="comment">// Decrease the number of reallocations if there are many elements
+                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(size_hint) = seq.size_hint() {
+                    <span class="self">self</span>.<span class="number">0</span>.reserve(size_hint);
+                }
+
+                <span class="comment">// Visit each element in the inner array and push it onto
+                // the existing vector.
+                </span><span class="kw">while let </span><span class="prelude-val">Some</span>(elem) = seq.next_element()<span class="question-mark">? </span>{
+                    <span class="self">self</span>.<span class="number">0</span>.push(elem);
+                }
+                <span class="prelude-val">Ok</span>(())
+            }
+        }
+
+        deserializer.deserialize_seq(ExtendVecVisitor(<span class="self">self</span>.<span class="number">0</span>))
+    }
+}
+
+<span class="comment">// Visitor implementation that will walk the outer array of the JSON input.
+</span><span class="kw">struct </span>FlattenedVecVisitor&lt;T&gt;(PhantomData&lt;T&gt;);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>, T&gt; Visitor&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>FlattenedVecVisitor&lt;T&gt;
+<span class="kw">where
+    </span>T: Deserialize&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="comment">// This Visitor constructs a single Vec&lt;T&gt; to hold the flattened
+    // contents of the inner arrays.
+    </span><span class="kw">type </span>Value = Vec&lt;T&gt;;
+
+    <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+        <span class="macro">write!</span>(formatter, <span class="string">"an array of arrays"</span>)
+    }
+
+    <span class="kw">fn </span>visit_seq&lt;A&gt;(<span class="self">self</span>, <span class="kw-2">mut </span>seq: A) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;T&gt;, A::Error&gt;
+    <span class="kw">where
+        </span>A: SeqAccess&lt;<span class="lifetime">'de</span>&gt;,
+    {
+        <span class="comment">// Create a single Vec to hold the flattened contents.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>vec = Vec::new();
+
+        <span class="comment">// Each iteration through this loop is one inner array.
+        </span><span class="kw">while let </span><span class="prelude-val">Some</span>(()) = seq.next_element_seed(ExtendVec(<span class="kw-2">&amp;mut </span>vec))<span class="question-mark">? </span>{
+            <span class="comment">// Nothing to do; inner array has been appended into `vec`.
+        </span>}
+
+        <span class="comment">// Return the finished vec.
+        </span><span class="prelude-val">Ok</span>(vec)
+    }
+}
+
+<span class="kw">let </span>visitor = FlattenedVecVisitor(PhantomData);
+<span class="kw">let </span>flattened: Vec&lt;u64&gt; = deserializer.deserialize_seq(visitor)<span class="question-mark">?</span>;</code></pre></div>
+</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Value" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#780">source</a><h4 class="code-header">type <a href="#associatedtype.Value" class="associatedtype">Value</a></h4></section></summary><div class="docblock"><p>The type produced by using this seed.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.deserialize" class="method"><a class="src rightside" href="../../src/serde/de/mod.rs.html#784-786">source</a><h4 class="code-header">fn <a href="#tymethod.deserialize" class="fn">deserialize</a>&lt;D&gt;(self, deserializer: D) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="trait.DeserializeSeed.html#associatedtype.Value" title="type serde::de::DeserializeSeed::Value">Value</a>, D::<a class="associatedtype" href="../trait.Deserializer.html#associatedtype.Error" title="type serde::Deserializer::Error">Error</a>&gt;<div class="where">where
+    D: <a class="trait" href="../trait.Deserializer.html" title="trait serde::Deserializer">Deserializer</a>&lt;'de&gt;,</div></h4></section></summary><div class="docblock"><p>Equivalent to the more common <code>Deserialize::deserialize</code> method, except
+with some initial piece of data (the seed) passed in.</p>
+</div></details></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.81.0/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-DeserializeSeed%3C'de%3E-for-PhantomData%3CT%3E" class="impl"><a class="src rightside" href="../../src/serde/de/mod.rs.html#789-802">source</a><a href="#impl-DeserializeSeed%3C'de%3E-for-PhantomData%3CT%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'de, T&gt; <a class="trait" href="trait.DeserializeSeed.html" title="trait serde::de::DeserializeSeed">DeserializeSeed</a>&lt;'de&gt; for <a class="struct" href="https://doc.rust-lang.org/1.81.0/core/marker/struct.PhantomData.html" title="struct core::marker::PhantomData">PhantomData</a>&lt;T&gt;<div class="where">where
+    T: <a class="trait" href="../trait.Deserialize.html" title="trait serde::Deserialize">Deserialize</a>&lt;'de&gt;,</div></h3></section></summary><div class="impl-items"><section id="associatedtype.Value-1" class="associatedtype trait-impl"><a href="#associatedtype.Value-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Value" class="associatedtype">Value</a> = T</h4></section><section id="method.deserialize" class="method trait-impl"><a class="src rightside" href="../../src/serde/de/mod.rs.html#796-801">source</a><a href="#method.deserialize" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.deserialize" class="fn">deserialize</a>&lt;D&gt;(self, deserializer: D) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.81.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, D::<a class="associatedtype" href="../trait.Deserializer.html#associatedtype.Error" title="type serde::Deserializer::Error">Error</a>&gt;<div class="where">where
+    D: <a class="trait" href="../trait.Deserializer.html" title="trait serde::Deserializer">Deserializer</a>&lt;'de&gt;,</div></h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/serde/de/trait.DeserializeSeed.js" data-ignore-extern-crates="core" async></script></section></div></main></body></html>

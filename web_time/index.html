@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Description"><title>web_time - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="web_time" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../web_time/index.html">web_time</a><span class="version">1.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#constants">Constants</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">web_time</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/web_time/lib.rs.html#1-144">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="description"><a class="doc-anchor" href="#description">§</a>Description</h2>
+<p>Complete drop-in replacement for <a href="https://doc.rust-lang.org/stable/std/time/"><code>std::time</code></a> that works in browsers.</p>
+<p>Currently <a href="https://doc.rust-lang.org/std/time/struct.Instant.html#method.now"><code>Instant::now()</code></a> and <a href="https://doc.rust-lang.org/std/time/struct.SystemTime.html#method.now"><code>SystemTime::now()</code></a> will simply panic
+when using the <code>wasm32-unknown-unknown</code> target. This implementation uses
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Performance/now"><code>Performance.now()</code></a> for <a href="https://doc.rust-lang.org/std/time/struct.Instant.html"><code>Instant</code></a> and <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/now"><code>Date.now()</code></a> for <a href="https://doc.rust-lang.org/std/time/struct.SystemTime.html"><code>SystemTime</code></a>
+to offer a drop-in replacement that works in browsers.</p>
+<p>At the same time the library will simply re-export <a href="https://doc.rust-lang.org/stable/std/time/"><code>std::time</code></a> when not
+using the <code>wasm32-unknown-unknown</code> target and will not pull in any
+dependencies.</p>
+<p>Additionally, if compiled with <code>target-feature = "atomics"</code> it will
+synchronize the timestamps to account for different context’s, like web
+workers. See <a href="https://developer.mozilla.org/en-US/docs/Web/API/Performance/timeOrigin"><code>Performance.timeOrigin</code></a> for more information.</p>
+<p>Using <code>-Ctarget-feature=+nontrapping-fptoint</code> will improve the performance
+of <a href="https://doc.rust-lang.org/std/time/struct.Instant.html#method.now"><code>Instant::now()</code></a> and <a href="https://doc.rust-lang.org/std/time/struct.SystemTime.html#method.now"><code>SystemTime::now()</code></a>, but the vast majority of
+the time is still spent going through JS.</p>
+<h2 id="target"><a class="doc-anchor" href="#target">§</a>Target</h2>
+<p>This library specifically targets browsers, that support
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Performance/now"><code>Performance.now()</code></a>, with the <code>wasm32-unknown-unknown</code> target. Emscripten
+is not supported. WASI doesn’t require support as it has it’s own native API
+to deal with <a href="https://doc.rust-lang.org/stable/std/time/"><code>std::time</code></a>.</p>
+<p>Furthermore it depends on <a href="https://crates.io/crates/wasm-bindgen"><code>wasm-bindgen</code></a>, which is required. This library
+will continue to depend on it until a viable alternative presents itself, in
+which case multiple ecosystems could be supported.</p>
+<h2 id="note"><a class="doc-anchor" href="#note">§</a>Note</h2><h3 id="ticking-during-sleep"><a class="doc-anchor" href="#ticking-during-sleep">§</a>Ticking during sleep</h3>
+<p>Currently a known bug is affecting browsers on operating system other then
+Windows. This bug prevents <a href="https://doc.rust-lang.org/std/time/struct.Instant.html"><code>Instant</code></a> from continuing to tick when the
+context is asleep. This doesn’t necessarily conflict with Rusts requirements
+of <a href="https://doc.rust-lang.org/std/time/struct.Instant.html"><code>Instant</code></a>, but might still be unexpected.</p>
+<p>See <a href="https://developer.mozilla.org/en-US/docs/Web/API/Performance/now#ticking_during_sleep">the MDN documentation on this</a> for more information.</p>
+<h3 id="context-support"><a class="doc-anchor" href="#context-support">§</a>Context support</h3>
+<p>The implementation of <a href="https://doc.rust-lang.org/std/time/struct.Instant.html#method.now"><code>Instant::now()</code></a> relies on the availability of the
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/performance_property"><code>Performance</code> object</a>, a lack thereof will cause a panic. This can happen
+if called from a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Worklet">worklet</a>.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>You can simply import the types you need:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>web_time::{Instant, SystemTime};
+
+<span class="kw">let </span>now = Instant::now();
+<span class="kw">let </span>time = SystemTime::now();</code></pre></div>
+<h2 id="features"><a class="doc-anchor" href="#features">§</a>Features</h2><h3 id="serde"><a class="doc-anchor" href="#serde">§</a><code>serde</code></h3>
+<p>Implements <a href="https://docs.rs/serde/1/serde/trait.Deserialize.html"><code>serde::Deserialize</code></a> and <a href="https://docs.rs/serde/1/serde/trait.Serialize.html"><code>serde::Serialize</code></a> for
+<a href="https://doc.rust-lang.org/std/time/struct.SystemTime.html"><code>SystemTime</code></a>.</p>
+<h2 id="msrv"><a class="doc-anchor" href="#msrv">§</a>MSRV</h2>
+<p>As this library heavily relies on <a href="https://crates.io/crates/wasm-bindgen"><code>wasm-bindgen</code></a> the MSRV depends on it.
+At the point of time this was written the MSRV is 1.60.</p>
+<h2 id="alternatives"><a class="doc-anchor" href="#alternatives">§</a>Alternatives</h2>
+<p><a href="https://crates.io/crates/instant">instant</a> <a href="https://crates.io/crates/instant"><img src="https://img.shields.io/crates/v/instant.svg" alt="Crates.io" /></a> is a popular alternative! However the API it implements doesn’t match <a href="https://doc.rust-lang.org/stable/std/time/"><code>std::time</code></a> exactly.</p>
+<h2 id="contributing"><a class="doc-anchor" href="#contributing">§</a>Contributing</h2>
+<p>See the <a href="https://github.com/daxpedda/web-time/blob/v1.1.0/CONTRIBUTING.md">CONTRIBUTING</a> file for details.</p>
+<h2 id="attribution"><a class="doc-anchor" href="#attribution">§</a>Attribution</h2>
+<p>Inspiration was taken from the <a href="https://github.com/sebcrozet/instant/tree/v0.1.12">instant</a> project.</p>
+<p>Additional insight was taken from the <a href="https://github.com/time-rs/time/tree/v0.3.20">time</a> project.</p>
+<h2 id="changelog"><a class="doc-anchor" href="#changelog">§</a>Changelog</h2>
+<p>See the <a href="https://github.com/daxpedda/web-time/blob/v1.1.0/CHANGELOG.md">CHANGELOG</a> file for details.</p>
+<h2 id="license"><a class="doc-anchor" href="#license">§</a>License</h2>
+<p>Licensed under either of</p>
+<ul>
+<li>Apache License, Version 2.0 (<a href="https://github.com/daxpedda/web-time/blob/v1.1.0/LICENSE-APACHE">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a>)</li>
+<li>MIT license (<a href="https://github.com/daxpedda/web-time/blob/v1.1.0/LICENSE-MIT">LICENSE-MIT</a> or <a href="http://opensource.org/licenses/MIT">http://opensource.org/licenses/MIT</a>)</li>
+</ul>
+<p>at your option.</p>
+<h3 id="copyright"><a class="doc-anchor" href="#copyright">§</a>Copyright</h3>
+<p>A majority of the code and documentation was taken from <a href="https://doc.rust-lang.org/stable/std/time/"><code>std::time</code></a>. For
+license information see <a href="https://github.com/rust-lang/rust/tree/1.68.1#license">#License</a>.</p>
+<h3 id="contribution"><a class="doc-anchor" href="#contribution">§</a>Contribution</h3>
+<p>Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Duration.html" title="struct web_time::Duration">Duration</a></div><div class="desc docblock-short">A <code>Duration</code> type to represent a span of time, typically used for system
+timeouts.</div></li><li><div class="item-name"><a class="struct" href="struct.Instant.html" title="struct web_time::Instant">Instant</a></div><div class="desc docblock-short">A measurement of a monotonically nondecreasing clock.
+Opaque and useful only with <a href="struct.Duration.html" title="struct web_time::Duration"><code>Duration</code></a>.</div></li><li><div class="item-name"><a class="struct" href="struct.SystemTime.html" title="struct web_time::SystemTime">SystemTime</a></div><div class="desc docblock-short">A measurement of the system clock, useful for talking to
+external entities like the file system or other processes.</div></li><li><div class="item-name"><a class="struct" href="struct.SystemTimeError.html" title="struct web_time::SystemTimeError">SystemTimeError</a></div><div class="desc docblock-short">An error returned from the <code>duration_since</code> and <code>elapsed</code> methods on
+<code>SystemTime</code>, used to learn how far in the opposite direction a system time
+lies.</div></li><li><div class="item-name"><a class="struct" href="struct.TryFromFloatSecsError.html" title="struct web_time::TryFromFloatSecsError">TryFromFloatSecsError</a></div><div class="desc docblock-short">An error which can be returned when converting a floating-point value of seconds
+into a <a href="struct.Duration.html" title="struct web_time::Duration"><code>Duration</code></a>.</div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.UNIX_EPOCH.html" title="constant web_time::UNIX_EPOCH">UNIX_EPOCH</a></div><div class="desc docblock-short">An anchor in time which can be used to create new <code>SystemTime</code> instances or
+learn about where in time a <code>SystemTime</code> lies.</div></li></ul></section></div></main></body></html>

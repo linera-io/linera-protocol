@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a parser from a function which takes a function that are given the actual parser. Though convoluted this makes it possible to hide the concrete parser type without `Box` or losing the full information about the parser as is the case of `parser`."><title>opaque in combine::parser::combinator - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="combine" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../combine/index.html">combine</a><span class="version">3.8.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In combine::parser::combinator</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">combine</a>::<wbr><a href="../index.html">parser</a>::<wbr><a href="index.html">combinator</a>::<wbr><a class="fn" href="#">opaque</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/combine/parser/combinator.rs.html#1265-1272">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn opaque&lt;F, I, O, S&gt;(f: F) -&gt; <a class="struct" href="struct.Opaque.html" title="struct combine::parser::combinator::Opaque">Opaque</a>&lt;F, I, O, S&gt;<div class="where">where
+    I: <a class="trait" href="../../trait.Stream.html" title="trait combine::Stream">Stream</a>,
+    S: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>,
+    F: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;mut dyn <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/ops/function/trait.FnMut.html" title="trait core::ops::function::FnMut">FnMut</a>(&amp;mut dyn <a class="trait" href="../../trait.Parser.html" title="trait combine::Parser">Parser</a>&lt;Input = I, Output = O, PartialState = S&gt;)),</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a parser from a function which takes a function that are given the actual parser.
+Though convoluted this makes it possible to hide the concrete parser type without <code>Box</code> or
+losing the full information about the parser as is the case of <a href="../function/fn.parser.html"><code>parser</code></a>.</p>
+<p>Since this hides the type this can also be useful for writing mutually recursive <code>impl Parser</code>
+parsers to break the otherwise arbitrarily large type that rustc creates internally.</p>
+<p>If you need a more general version (that does not need trait objects) try the <a href="../../macro.parser.html"><code>parser!</code></a>
+macro.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>
+
+<span class="attr">#[derive(PartialEq, Debug)]
+</span><span class="kw">enum </span>Expr {
+    Number(i64),
+    Pair(Box&lt;Expr&gt;, Box&lt;Expr&gt;),
+}
+
+<span class="kw">fn </span>expr&lt;I&gt;() -&gt; FnOpaque&lt;I, Expr&gt;
+<span class="kw">where
+    </span>I: Stream&lt;Item = char&gt;,
+    I::Error: ParseError&lt;I::Item, I::Range, I::Position&gt;,
+{
+    <span class="macro">opaque!</span>(
+        <span class="comment">// `no_partial` disables partial parsing and replaces the partial state with `()`,
+        // letting us avoid naming that type
+        </span>no_partial(choice((
+            from_str(many1::&lt;String, <span class="kw">_</span>&gt;(digit()))
+                .map(Expr::Number),
+            (char(<span class="string">'('</span>), expr(), char(<span class="string">','</span>), expr(), char(<span class="string">')'</span>))
+                .map(|(<span class="kw">_</span>, l, <span class="kw">_</span>, r, <span class="kw">_</span>)| Expr::Pair(Box::new(l), Box::new(r)))
+        ))),
+    )
+}
+
+<span class="macro">assert_eq!</span>(
+    expr().easy_parse(<span class="string">"123"</span>),
+    <span class="prelude-val">Ok</span>((Expr::Number(<span class="number">123</span>), <span class="string">""</span>))
+);
+</code></pre></div>
+</div></details></section></div></main></body></html>

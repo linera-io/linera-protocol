@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_test_memory_context"],"struct":["ViewContext"],"trait":["Context"],"type":["MemoryContext"]};

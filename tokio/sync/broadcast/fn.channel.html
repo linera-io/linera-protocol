@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Create a bounded, multi-producer, multi-consumer channel where each sent value is broadcasted to all active receivers."><title>channel in tokio::sync::broadcast - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="tokio" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../tokio/index.html">tokio</a><span class="version">1.40.0</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In tokio::sync::broadcast</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">tokio</a>::<wbr><a href="../index.html">sync</a>::<wbr><a href="index.html">broadcast</a>::<wbr><a class="fn" href="#">channel</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/tokio/sync/broadcast.rs.html#459-467">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn channel&lt;T: <a class="trait" href="https://doc.rust-lang.org/1.81.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>&gt;(capacity: <a class="primitive" href="https://doc.rust-lang.org/1.81.0/std/primitive.usize.html">usize</a>) -&gt; (<a class="struct" href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender">Sender</a>&lt;T&gt;, <a class="struct" href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver">Receiver</a>&lt;T&gt;)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Create a bounded, multi-producer, multi-consumer channel where each sent
+value is broadcasted to all active receivers.</p>
+<p><strong>Note:</strong> The actual capacity may be greater than the provided <code>capacity</code>.</p>
+<p>All data sent on <a href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender"><code>Sender</code></a> will become available on every active
+<a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> in the same order as it was sent.</p>
+<p>The <code>Sender</code> can be cloned to <code>send</code> to the same channel from multiple
+points in the process or it can be used concurrently from an <code>Arc</code>. New
+<code>Receiver</code> handles are created by calling <a href="struct.Sender.html#method.subscribe" title="method tokio::sync::broadcast::Sender::subscribe"><code>Sender::subscribe</code></a>.</p>
+<p>If all <a href="struct.Receiver.html" title="struct tokio::sync::broadcast::Receiver"><code>Receiver</code></a> handles are dropped, the <code>send</code> method will return a
+<a href="error/struct.SendError.html" title="struct tokio::sync::broadcast::error::SendError"><code>SendError</code></a>. Similarly, if all <a href="struct.Sender.html" title="struct tokio::sync::broadcast::Sender"><code>Sender</code></a> handles are dropped, the <a href="struct.Receiver.html#method.recv" title="method tokio::sync::broadcast::Receiver::recv"><code>recv</code></a>
+method will return a <a href="error/enum.RecvError.html" title="enum tokio::sync::broadcast::error::RecvError"><code>RecvError</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::broadcast;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx1) = broadcast::channel(<span class="number">16</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>rx2 = tx.subscribe();
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">assert_eq!</span>(rx1.recv().<span class="kw">await</span>.unwrap(), <span class="number">10</span>);
+        <span class="macro">assert_eq!</span>(rx1.recv().<span class="kw">await</span>.unwrap(), <span class="number">20</span>);
+    });
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="macro">assert_eq!</span>(rx2.recv().<span class="kw">await</span>.unwrap(), <span class="number">10</span>);
+        <span class="macro">assert_eq!</span>(rx2.recv().<span class="kw">await</span>.unwrap(), <span class="number">20</span>);
+    });
+
+    tx.send(<span class="number">10</span>).unwrap();
+    tx.send(<span class="number">20</span>).unwrap();
+}</code></pre></div>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This will panic if <code>capacity</code> is equal to <code>0</code> or larger
+than <code>usize::MAX / 2</code>.</p>
+</div></details></section></div></main></body></html>
