@@ -10,7 +10,7 @@ use crate::{client::Client, grpc::GrpcNodeProvider};
 
 /// A general node provider which delegates node provision to the underlying
 /// node provider according to the `ValidatorPublicNetworkConfig`.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct NodeProvider {
     grpc: GrpcNodeProvider,
     #[cfg(with_simple_network)]

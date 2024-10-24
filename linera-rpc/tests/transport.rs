@@ -11,23 +11,20 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 async fn client() {
     use linera_base::time::Duration;
     use linera_core::node::ValidatorNode as _;
-    use linera_rpc::config::*;
-
-    let network_config = ValidatorPublicNetworkPreConfig {
-        protocol: NetworkProtocol::Grpc(TlsConfig::ClearText),
-        host: "127.0.0.1".into(),
-        port: 9000,
+    use linera_rpc::grpc::{
+        transport::{create_channel, Options},
+        GrpcClient,
     };
 
-    let node_options = linera_rpc::node_provider::NodeOptions {
-        send_timeout: Duration::from_millis(100),
-        recv_timeout: Duration::from_millis(100),
-        retry_delay: Duration::from_millis(100),
-        max_retries: 5,
+    let retry_delay = Duration::from_millis(100);
+    let max_retries = 5;
+    let address = "127.0.0.1:9000".to_string();
+    let options = Options {
+        connect_timeout: Some(Duration::from_millis(100)),
+        timeout: Some(Duration::from_millis(100)),
     };
-
-    let _ = linera_rpc::grpc::GrpcClient::new(network_config, node_options)
-        .unwrap()
+    let channel = create_channel(address.clone(), &options).unwrap();
+    let _ = GrpcClient::new(address, channel, retry_delay, max_retries)
         .get_version_info()
         .await
         .unwrap();
