@@ -24,7 +24,7 @@ impl RemoteNetTestingConfig {
         Self {
             faucet: Faucet::new(faucet_url.unwrap_or_else(|| {
                 env::var("LINERA_FAUCET_URL")
-                    .unwrap_or_else(|_| "https://faucet.devnet.linera.net".to_string())
+                    .unwrap_or_else(|_| "https://faucet.devnet.linera.net".to_owned())
             })),
         }
     }
