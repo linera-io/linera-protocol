@@ -22,12 +22,10 @@ pub struct RemoteNetTestingConfig {
 impl RemoteNetTestingConfig {
     pub fn new(faucet_url: Option<String>) -> Self {
         Self {
-            faucet: Faucet::new(
-                faucet_url.unwrap_or(
-                    env::var("LINERA_FAUCET_URL")
-                        .unwrap_or("https://faucet.devnet.linera.net".to_string()),
-                ),
-            ),
+            faucet: Faucet::new(faucet_url.unwrap_or_else(|| {
+                env::var("LINERA_FAUCET_URL")
+                    .unwrap_or("https://faucet.devnet.linera.net".to_string())
+            })),
         }
     }
 }
