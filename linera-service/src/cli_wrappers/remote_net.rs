@@ -20,6 +20,13 @@ pub struct RemoteNetTestingConfig {
 }
 
 impl RemoteNetTestingConfig {
+    /// Creates a new [`RemoteNetTestingConfig`] for running tests with an external Linera
+    /// network.
+    ///
+    /// The `faucet_url` is used to connect to the network and obtain its configuration,
+    /// as well as to create microchains used for testing. If the parameter is [`None`],
+    /// then it falls back to the URL specified in the `LINERA_FAUCET_URL` environment
+    /// variable, or the default devnet faucet URL.
     pub fn new(faucet_url: Option<String>) -> Self {
         Self {
             faucet: Faucet::new(faucet_url.unwrap_or_else(|| {
