@@ -38,6 +38,7 @@ aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
+criterion = { workspace = true, features = ["async_tokio"] }
 futures.workspace = true
 generic-array.workspace = true
 hex = { workspace = true, optional = true }
@@ -67,7 +68,6 @@ web-sys = { workspace = true, features = ["console"] }
 wasm-bindgen-test.workspace = true
 
 [dev-dependencies]
-criterion = { workspace = true, features = ["async_tokio"] }
 linera-views = { path = ".", features = ["test"] }
 rand.workspace = true
 test-case.workspace = true

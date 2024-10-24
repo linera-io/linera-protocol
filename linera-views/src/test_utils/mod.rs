@@ -3,6 +3,9 @@
 
 pub mod test_views;
 
+/// Functions for computing the performance of stores.
+pub mod performance;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt::Debug,
