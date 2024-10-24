@@ -955,9 +955,6 @@ where
             );
         }
         if self.state().has_other_owners(&info.manager.ownership) {
-            let mutex = self.state().client_mutex();
-            let _guard = mutex.lock_owned().await;
-
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
             // This is a best-effort that depends on network conditions.
@@ -1233,7 +1230,7 @@ where
                 // `advance_with_local` might have drained the whole `block_batch`.
                 // In that case, move to the next chain batch, but remember to wait for
                 // the messages to be delivered to the inboxes.
-                other_sender_chains.push((chain_id, last_height));
+                other_sender_chains.push(chain_id);
                 continue;
             };
             let batch_size = last_height.saturating_sub(first_height).0 + 1;
@@ -1396,17 +1393,17 @@ where
                 return;
             }
         }
-        for (chain_id, height) in other_sender_chains {
+        for chain_id in other_sender_chains {
+            // Certificates for this chain were omitted from `certificates` because they were
+            // already processed locally. If they were processed in a concurrent task, it is not
+            // guaranteed that their cross-chain messages were already handled.
             if let Err(error) = self
                 .client
                 .local_node
-                .wait_for_outgoing_messages(chain_id, height)
+                .retry_pending_cross_chain_requests(chain_id)
                 .await
             {
-                error!(
-                    "Failed trying to wait for outgoing messages from {chain_id} \
-                    up to {height}: {error}"
-                );
+                error!("Failed to retry outgoing messages from {chain_id}: {error}");
             }
         }
         // Update tracker.
@@ -3236,16 +3233,11 @@ where
         &self,
         remote_node: RemoteNode<P::Node>,
     ) -> Result<(), ChainClientError> {
-        let mutex = self.state().client_mutex();
-        let _guard = mutex.lock_owned().await;
-
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
         let received_certificates = self
             .synchronize_received_certificates_from_validator(chain_id, &remote_node)
             .await?;
-
-        drop(_guard);
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
         self.receive_certificates_from_validator(received_certificates)
@@ -3287,7 +3279,7 @@ struct ReceivedCertificatesFromValidator {
     /// The downloaded certificates. The signatures were already checked and they are ready
     /// to be processed.
     certificates: Vec<Certificate>,
-    /// Sender chains that were already up to date locally. We need to wait for their messages
-    /// to be delivered, at least up to the given block height.
-    other_sender_chains: Vec<(ChainId, BlockHeight)>,
+    /// Sender chains that were already up to date locally. We need to ensure their messages
+    /// are delivered.
+    other_sender_chains: Vec<ChainId>,
 }
