@@ -15,9 +15,9 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
         HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
     },
-    manager,
+    manager, ChainError,
 };
-use linera_execution::{ChannelSubscription, Query, Response};
+use linera_execution::{ChannelSubscription, ExecutionError, Query, Response};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::View;
 #[cfg(with_testing)]
@@ -180,6 +180,7 @@ where
             .expect("chain is active");
         check_block_epoch(epoch, block)?;
         let maximum_blob_size = committee.policy().maximum_blob_size;
+        let maximum_bytecode_size = committee.policy().maximum_bytecode_size;
         // Check the authentication of the block.
         let public_key = self
             .0
@@ -219,6 +220,14 @@ where
                 BlobContent::Data(bytes) => bytes.len(),
                 BlobContent::ContractBytecode(compressed_bytecode)
                 | BlobContent::ServiceBytecode(compressed_bytecode) => {
+                    compressed_bytecode
+                        .decompress(maximum_bytecode_size)
+                        .map_err(|error| {
+                            ChainError::ExecutionError(
+                                ExecutionError::from(error),
+                                linera_chain::ChainExecutionContext::Block,
+                            )
+                        })?;
                     compressed_bytecode.compressed_bytes.len()
                 }
             };

@@ -911,6 +911,10 @@ input ResourceControlPolicy {
 	"""
 	maximumExecutedBlockSize: Int!
 	"""
+	The maximum size of decompressed contract or service bytecode, in bytes.
+	"""
+	maximumBytecodeSize: Int!
+	"""
 	The maximum size of a blob.
 	"""
 	maximumBlobSize: Int!

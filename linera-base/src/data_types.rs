@@ -37,6 +37,7 @@ use crate::{
         ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
         UserApplicationId,
     },
+    limited_writer::LimitedWriter,
     time::{Duration, SystemTime},
 };
 
@@ -861,14 +862,12 @@ impl fmt::Debug for Bytecode {
 #[derive(Error, Debug)]
 pub enum DecompressionError {
     /// Compressed bytecode is invalid, and could not be decompressed.
-    #[cfg(not(target_arch = "wasm32"))]
     #[error("Bytecode could not be decompressed")]
-    InvalidCompressedBytecode(#[source] io::Error),
+    InvalidCompressedBytecode(#[from] io::Error),
 
-    /// Compressed bytecode is invalid, and could not be decompressed.
-    #[cfg(target_arch = "wasm32")]
-    #[error("Bytecode could not be decompressed")]
-    InvalidCompressedBytecode(#[from] ruzstd::frame_decoder::FrameDecoderError),
+    /// Decompressed bytecode is too large.
+    #[error("Decompressed bytecode too large.")]
+    BytecodeTooLarge,
 }
 
 /// A compressed WebAssembly module's bytecode.
@@ -883,33 +882,53 @@ pub struct CompressedBytecode {
 impl CompressedBytecode {
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
+    pub fn decompress(&self, limit: u64) -> Result<Bytecode, DecompressionError> {
         #[cfg(with_metrics)]
         let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
-        let bytes = zstd::stream::decode_all(&*self.compressed_bytes)
-            .map_err(DecompressionError::InvalidCompressedBytecode)?;
+
+        let mut decoder = zstd::stream::Decoder::new(&*self.compressed_bytes)?;
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+        let mut bytes = Vec::new();
+        let mut writer = LimitedWriter::new(&mut bytes, limit);
+        io::copy(&mut decoder, &mut writer).map_err(|error| {
+            if error.kind() == io::ErrorKind::Other
+                && error.to_string().contains("Data exceeds the allowed limit")
+            {
+                DecompressionError::BytecodeTooLarge
+            } else {
+                DecompressionError::InvalidCompressedBytecode(error)
+            }
+        })?;
 
         Ok(Bytecode { bytes })
     }
 
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     #[cfg(target_arch = "wasm32")]
-    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
-        use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
+    pub fn decompress(&self, limit: u64) -> Result<Bytecode, DecompressionError> {
+        use ruzstd::streaming_decoder::StreamingDecoder;
 
         #[cfg(with_metrics)]
         let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
 
         let compressed_bytes = &*self.compressed_bytes;
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
         let mut bytes = Vec::new();
-        let mut decoder = StreamingDecoder::new(compressed_bytes)?;
+        let mut writer = LimitedWriter::new(&mut bytes, limit);
+        let mut decoder = StreamingDecoder::new(compressed_bytes).map_err(io::Error::other)?;
 
         // Decode multiple frames, if present
         // (https://github.com/KillingSpark/zstd-rs/issues/57)
         while !decoder.get_ref().is_empty() {
-            decoder
-                .read_to_end(&mut bytes)
-                .expect("Reading from a slice in memory should not result in IO errors");
+            io::copy(&mut decoder, &mut writer).map_err(|error| {
+                if error.kind() == io::ErrorKind::Other
+                    && error.to_string().contains("Data exceeds the allowed limit")
+                {
+                    DecompressionError::BytecodeTooLarge
+                } else {
+                    DecompressionError::InvalidCompressedBytecode(error)
+                }
+            })?;
         }
 
         Ok(Bytecode { bytes })

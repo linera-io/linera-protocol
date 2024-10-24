@@ -276,11 +276,13 @@ pub trait ExecutionRuntimeContext {
 
     async fn get_user_contract(
         &self,
+        limit: u64,
         description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError>;
 
     async fn get_user_service(
         &self,
+        limit: u64,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
@@ -929,6 +931,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn get_user_contract(
         &self,
+        _limit: u64,
         description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let application_id = description.into();
@@ -943,6 +946,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn get_user_service(
         &self,
+        _limit: u64,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let application_id = description.into();

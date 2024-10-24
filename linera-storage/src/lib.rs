@@ -267,6 +267,7 @@ pub trait Storage: Sized {
     #[cfg(with_wasm_runtime)]
     async fn load_contract(
         &self,
+        limit: u64,
         application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         let Some(wasm_runtime) = self.wasm_runtime() else {
@@ -280,9 +281,10 @@ pub trait Storage: Sized {
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.inner_bytes(),
         };
-        let contract_bytecode =
-            linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
-                .await??;
+        let contract_bytecode = linera_base::task::spawn_blocking(move || {
+            compressed_contract_bytecode.decompress(limit)
+        })
+        .await??;
         Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
             .await?
             .into())
@@ -292,6 +294,7 @@ pub trait Storage: Sized {
     #[allow(clippy::diverging_sub_expression)]
     async fn load_contract(
         &self,
+        _limit: u64,
         _application_description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         panic!(
@@ -306,6 +309,7 @@ pub trait Storage: Sized {
     #[cfg(with_wasm_runtime)]
     async fn load_service(
         &self,
+        limit: u64,
         application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         let Some(wasm_runtime) = self.wasm_runtime() else {
@@ -319,9 +323,10 @@ pub trait Storage: Sized {
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.inner_bytes(),
         };
-        let service_bytecode =
-            linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
-                .await??;
+        let service_bytecode = linera_base::task::spawn_blocking(move || {
+            compressed_service_bytecode.decompress(limit)
+        })
+        .await??;
         Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
             .await?
             .into())
@@ -331,6 +336,7 @@ pub trait Storage: Sized {
     #[allow(clippy::diverging_sub_expression)]
     async fn load_service(
         &self,
+        _limit: u64,
         _application_description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         panic!(
@@ -373,12 +379,13 @@ where
 
     async fn get_user_contract(
         &self,
+        limit: u64,
         description: &UserApplicationDescription,
     ) -> Result<UserContractCode, ExecutionError> {
         match self.user_contracts.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
-                let contract = self.storage.load_contract(description).await?;
+                let contract = self.storage.load_contract(limit, description).await?;
                 entry.insert(contract.clone());
                 Ok(contract)
             }
@@ -387,12 +394,13 @@ where
 
     async fn get_user_service(
         &self,
+        limit: u64,
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError> {
         match self.user_services.entry(description.into()) {
             Entry::Occupied(entry) => Ok(entry.get().clone()),
             Entry::Vacant(entry) => {
-                let service = self.storage.load_service(description).await?;
+                let service = self.storage.load_service(limit, description).await?;
                 entry.insert(service.clone());
                 Ok(service)
             }
