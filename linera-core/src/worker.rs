@@ -212,6 +212,8 @@ pub enum WorkerError {
     FullChainWorkerCache,
     #[error("Failed to join spawned worker task")]
     JoinError,
+    #[error("Blob exceeds size limit")]
+    BlobTooLarge,
 }
 
 impl From<linera_chain::ChainError> for WorkerError {

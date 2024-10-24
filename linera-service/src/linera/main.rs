@@ -528,6 +528,7 @@ impl Runnable for Job {
                                     message_byte,
                                     maximum_fuel_per_block,
                                     maximum_executed_block_size,
+                                    maximum_blob_size,
                                     maximum_bytes_read_per_block,
                                     maximum_bytes_written_per_block,
                                 } => {
@@ -572,6 +573,9 @@ impl Runnable for Job {
                                     {
                                         policy.maximum_executed_block_size =
                                             maximum_executed_block_size;
+                                    }
+                                    if let Some(maximum_blob_size) = maximum_blob_size {
+                                        policy.maximum_blob_size = maximum_blob_size;
                                     }
                                     if let Some(maximum_bytes_read_per_block) =
                                         maximum_bytes_read_per_block
@@ -1326,6 +1330,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             message_byte_price,
             maximum_fuel_per_block,
             maximum_executed_block_size,
+            maximum_blob_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
             testing_prng_seed,
@@ -1338,6 +1343,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
             let maximum_bytes_written_per_block =
                 maximum_bytes_written_per_block.unwrap_or(u64::MAX);
             let maximum_executed_block_size = maximum_executed_block_size.unwrap_or(u64::MAX);
+            let maximum_blob_size = maximum_blob_size.unwrap_or(u64::MAX);
             let policy = ResourceControlPolicy {
                 block: *block_price,
                 fuel_unit: *fuel_unit_price,
@@ -1352,6 +1358,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 message: *message_price,
                 maximum_fuel_per_block,
                 maximum_executed_block_size,
+                maximum_blob_size,
                 maximum_bytes_read_per_block,
                 maximum_bytes_written_per_block,
             };
