@@ -79,15 +79,15 @@ jobs:
     - name: Run the storage-service instance and the storage-service tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
+        cargo test --features test-storage-service,unstable-oracles -- storage_service --nocapture
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,test-storage-service,unstable-oracles
     - name: Run the benchmark test
       run: |
         cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
-        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
+        cargo test --locked -p linera-service --features benchmark,test-storage-service benchmark
     - name: Run the validators
       run: |
         cargo build --features storage-service
@@ -105,7 +105,7 @@ jobs:
         cargo run --bin wit-generator -- -c
     - name: Run the remote-net tests
       run: |
-        cargo test -p linera-service remote_net_grpc --features remote-net
+        cargo test -p linera-service remote_net_grpc --features test-remote-net
     - name: Run all tests using the default features
       run: |
         cargo test --features unstable-oracles --locked

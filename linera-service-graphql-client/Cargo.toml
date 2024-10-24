@@ -14,9 +14,13 @@ version.workspace = true
 [features]
 default = ["rocksdb"]
 rocksdb = ["linera-service/rocksdb"]
+test-rocksdb = ["rocksdb"]
 dynamodb = ["linera-service/dynamodb"]
+test-dynamodb = ["dynamodb"]
 scylladb = ["linera-service/scylladb"]
+test-scylladb = ["scylladb"]
 storage-service = ["linera-service/storage-service"]
+test-storage-service = ["storage-service"]
 
 [dependencies]
 graphql_client = { version = "0.13", features = [ "reqwest-rustls" ] }

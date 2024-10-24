@@ -5,13 +5,13 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use async_trait::async_trait;
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 use linera_views::rocks_db::RocksDbStore;
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
-#[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
+#[cfg(any(with_test_scylladb, with_test_rocksdb, with_test_dynamodb))]
 use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{
     batch::{
@@ -148,13 +148,13 @@ impl StateStorage for LruMemoryStorage {
     }
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 pub struct RocksDbTestStorage {
     store: RocksDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[async_trait]
 impl StateStorage for RocksDbTestStorage {
     type Context = ViewContext<usize, RocksDbStore>;
@@ -177,13 +177,13 @@ impl StateStorage for RocksDbTestStorage {
     }
 }
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 pub struct ScyllaDbTestStorage {
     store: ScyllaDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 #[async_trait]
 impl StateStorage for ScyllaDbTestStorage {
     type Context = ViewContext<usize, ScyllaDbStore>;
@@ -206,13 +206,13 @@ impl StateStorage for ScyllaDbTestStorage {
     }
 }
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 pub struct DynamoDbTestStorage {
     store: DynamoDbStore,
     accessed_chains: BTreeSet<usize>,
 }
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 #[async_trait]
 impl StateStorage for DynamoDbTestStorage {
     type Context = ViewContext<usize, DynamoDbStore>;
@@ -705,7 +705,7 @@ async fn test_views_in_key_value_store_view_memory() -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[cfg(test)]
 async fn test_views_in_rocks_db_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with rocks_db", config);
@@ -720,7 +720,7 @@ async fn test_views_in_rocks_db_param(config: &TestConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[tokio::test]
 async fn test_views_in_rocks_db() -> Result<()> {
     for config in TestConfig::samples() {
@@ -729,7 +729,7 @@ async fn test_views_in_rocks_db() -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 #[cfg(test)]
 async fn test_views_in_scylla_db_param(config: &TestConfig) -> Result<()> {
     tracing::warn!("Testing config {:?} with scylla_db", config);
@@ -744,7 +744,7 @@ async fn test_views_in_scylla_db_param(config: &TestConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_scylladb)]
+#[cfg(with_test_scylladb)]
 #[tokio::test]
 async fn test_views_in_scylla_db() -> Result<()> {
     for config in TestConfig::samples() {
@@ -753,7 +753,7 @@ async fn test_views_in_scylla_db() -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_dynamodb)]
+#[cfg(with_test_dynamodb)]
 #[tokio::test]
 async fn test_views_in_dynamo_db() -> Result<()> {
     let mut store = DynamoDbTestStorage::new().await;
@@ -767,7 +767,7 @@ async fn test_views_in_dynamo_db() -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[cfg(test)]
 async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
 where
@@ -808,7 +808,7 @@ where
     Ok(())
 }
 
-#[cfg(with_rocksdb)]
+#[cfg(with_test_rocksdb)]
 #[tokio::test]
 async fn test_store_rollback() -> Result<()> {
     let mut store = MemoryTestStorage::new().await;
@@ -1185,8 +1185,8 @@ where
     Ok(())
 }
 
+#[cfg(with_test_dynamodb)]
 #[tokio::test]
-#[cfg(with_dynamodb)]
 async fn check_large_write_dynamo_db() -> Result<()> {
     // By writing 1000 elements we seriously check the Amazon journaling
     // writing system.

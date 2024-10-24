@@ -27,12 +27,12 @@ use linera_execution::{
     ExecutionRuntimeContext, ExecutionStateView, ResourceControlPolicy, WasmRuntime,
 };
 use linera_storage::{ChainRuntimeContext, DbStorage, Storage, TestClock};
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+#[cfg(with_test_storage_service)]
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     context::Context, memory::MemoryStore, random::generate_test_namespace,
@@ -1006,7 +1006,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+#[cfg(with_test_storage_service)]
 #[derive(Default)]
 pub struct ServiceStorageBuilder {
     namespace: String,
@@ -1015,7 +1015,7 @@ pub struct ServiceStorageBuilder {
     clock: TestClock,
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+#[cfg(with_test_storage_service)]
 impl ServiceStorageBuilder {
     /// Creates a `ServiceStorage`.
     pub async fn new() -> Self {
@@ -1031,7 +1031,7 @@ impl ServiceStorageBuilder {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+#[cfg(with_test_storage_service)]
 #[async_trait]
 impl StorageBuilder for ServiceStorageBuilder {
     type Storage = DbStorage<ServiceStoreClient, TestClock>;
@@ -1059,7 +1059,7 @@ impl StorageBuilder for ServiceStorageBuilder {
     }
 }
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[derive(Default)]
 pub struct DynamoDbStorageBuilder {
     namespace: String,
@@ -1068,7 +1068,7 @@ pub struct DynamoDbStorageBuilder {
     clock: TestClock,
 }
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 impl DynamoDbStorageBuilder {
     /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
@@ -1081,7 +1081,7 @@ impl DynamoDbStorageBuilder {
     }
 }
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[async_trait]
 impl StorageBuilder for DynamoDbStorageBuilder {
     type Storage = DbStorage<DynamoDbStore, TestClock>;
@@ -1109,7 +1109,7 @@ impl StorageBuilder for DynamoDbStorageBuilder {
     }
 }
 
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[derive(Default)]
 pub struct ScyllaDbStorageBuilder {
     namespace: String,
@@ -1118,7 +1118,7 @@ pub struct ScyllaDbStorageBuilder {
     clock: TestClock,
 }
 
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 impl ScyllaDbStorageBuilder {
     /// Creates a [`ScyllaDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
     /// applications.
@@ -1131,7 +1131,7 @@ impl ScyllaDbStorageBuilder {
     }
 }
 
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[async_trait]
 impl StorageBuilder for ScyllaDbStorageBuilder {
     type Storage = DbStorage<ScyllaDbStore, TestClock>;

@@ -33,13 +33,13 @@ use linera_execution::{
 use serde_json::json;
 use test_case::test_case;
 
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 use crate::client::client_tests::DynamoDbStorageBuilder;
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 use crate::client::client_tests::RocksDbStorageBuilder;
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 use crate::client::client_tests::ScyllaDbStorageBuilder;
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 use crate::client::client_tests::ServiceStorageBuilder;
 use crate::client::client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder};
 
@@ -51,7 +51,7 @@ async fn test_memory_create_application(wasm_runtime: WasmRuntime) -> anyhow::Re
 }
 
 #[ignore]
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -60,7 +60,7 @@ async fn test_service_create_application(wasm_runtime: WasmRuntime) -> anyhow::R
 }
 
 #[ignore]
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -69,7 +69,7 @@ async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -78,7 +78,7 @@ async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> anyhow:
 }
 
 #[ignore]
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -162,7 +162,7 @@ async fn test_memory_run_application_with_dependency(
 }
 
 #[ignore]
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -176,7 +176,7 @@ async fn test_service_run_application_with_dependency(
 }
 
 #[ignore]
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -190,7 +190,7 @@ async fn test_rocks_db_run_application_with_dependency(
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -204,7 +204,7 @@ async fn test_dynamo_db_run_application_with_dependency(
 }
 
 #[ignore]
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -460,7 +460,7 @@ async fn test_memory_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::R
 }
 
 #[ignore]
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -469,7 +469,7 @@ async fn test_service_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::
 }
 
 #[ignore]
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -478,7 +478,7 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow:
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -487,7 +487,7 @@ async fn test_dynamo_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow
 }
 
 #[ignore]
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -677,7 +677,7 @@ async fn test_memory_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow:
 }
 
 #[ignore]
-#[cfg(feature = "storage-service")]
+#[cfg(with_test_storage_service)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -687,7 +687,7 @@ async fn test_service_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyhow
 }
 
 #[ignore]
-#[cfg(feature = "rocksdb")]
+#[cfg(with_test_rocksdb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -697,7 +697,7 @@ async fn test_rocks_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyho
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
+#[cfg(with_test_dynamodb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
@@ -706,7 +706,7 @@ async fn test_dynamo_db_user_pub_sub_channels(wasm_runtime: WasmRuntime) -> anyh
 }
 
 #[ignore]
-#[cfg(feature = "scylladb")]
+#[cfg(with_test_scylladb)]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]

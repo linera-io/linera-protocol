@@ -28,9 +28,13 @@ test = [
     "tokio/parking_lot",
 ]
 rocksdb = ["linera-views/rocksdb"]
+test-rocksdb = ["rocksdb"]
 dynamodb = ["linera-views/dynamodb"]
+test-dynamodb = ["dynamodb"]
 scylladb = ["linera-views/scylladb"]
+test-scylladb = ["scylladb"]
 storage-service = ["linera-storage-service"]
+test-storage-service = ["storage-service"]
 unstable-oracles = []
 metrics = [
     "prometheus",

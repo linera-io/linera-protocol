@@ -14,14 +14,14 @@ use linera_service::{
     },
     util::listen_for_shutdown_signals,
 };
-#[cfg(feature = "storage-service")]
+#[cfg(with_storage_service)]
 use linera_storage_service::{
     child::{StorageService, StorageServiceGuard},
     common::get_service_storage_binary,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-#[cfg(feature = "kubernetes")]
+#[cfg(with_kubernetes)]
 use {
     linera_service::cli_wrappers::local_kubernetes_net::LocalKubernetesNetConfig,
     std::path::PathBuf,
@@ -30,14 +30,14 @@ use {
 struct StorageConfigProvider {
     /// The StorageConfig and the namespace
     pub storage: StorageConfigNamespace,
-    #[cfg(feature = "storage-service")]
+    #[cfg(with_storage_service)]
     _service_guard: Option<StorageServiceGuard>,
 }
 
 impl StorageConfigProvider {
     pub async fn new(storage: &Option<String>) -> anyhow::Result<StorageConfigProvider> {
         match storage {
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             None => {
                 let service_endpoint = linera_base::port::get_free_endpoint().await?;
                 let binary = get_service_storage_binary().await?.display().to_string();
@@ -57,11 +57,11 @@ impl StorageConfigProvider {
                     _service_guard,
                 })
             }
-            #[cfg(not(feature = "storage-service"))]
+            #[cfg(not(with_storage_service))]
             None => {
                 panic!("When storage is not selected, the storage-service needs to be enabled");
             }
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             Some(storage) => {
                 let storage = StorageConfigNamespace::from_str(storage)?;
                 Ok(StorageConfigProvider {
@@ -69,7 +69,7 @@ impl StorageConfigProvider {
                     _service_guard: None,
                 })
             }
-            #[cfg(not(feature = "storage-service"))]
+            #[cfg(not(with_storage_service))]
             Some(storage) => {
                 let storage = StorageConfigNamespace::from_str(storage)?;
                 Ok(StorageConfigProvider { storage })
@@ -88,20 +88,20 @@ impl StorageConfigProvider {
     pub fn database(&self) -> anyhow::Result<Database> {
         match self.storage.storage_config {
             StorageConfig::Memory => anyhow::bail!("Not possible to work with memory"),
-            #[cfg(feature = "rocksdb")]
+            #[cfg(with_rocksdb)]
             StorageConfig::RocksDb { .. } => anyhow::bail!("Not possible to work with RocksDB"),
-            #[cfg(feature = "storage-service")]
+            #[cfg(with_storage_service)]
             StorageConfig::Service { .. } => Ok(Database::Service),
-            #[cfg(feature = "dynamodb")]
+            #[cfg(with_dynamodb)]
             StorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
-            #[cfg(feature = "scylladb")]
+            #[cfg(with_scylladb)]
             StorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
         }
     }
 }
 
 #[expect(clippy::too_many_arguments)]
-#[cfg(feature = "kubernetes")]
+#[cfg(with_kubernetes)]
 pub async fn handle_net_up_kubernetes(
     extra_wallets: Option<usize>,
     num_other_initial_chains: u32,
