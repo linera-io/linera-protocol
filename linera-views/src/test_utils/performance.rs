@@ -7,10 +7,11 @@ use std::{
 };
 
 use criterion::black_box;
+
 use crate::{
     batch::Batch,
-    test_utils::{add_prefix, get_random_key_values2},
     store::LocalKeyValueStore,
+    test_utils::{add_prefix, get_random_key_values2},
 };
 
 // We generate about 2000 keys of length 11 with a key of length 10000
@@ -85,7 +86,7 @@ where
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
         store.write_batch(batch).await.unwrap();
-	let keys = key_values
+        let keys = key_values
             .into_iter()
             .map(|(key, _)| key)
             .collect::<Vec<_>>();
@@ -156,7 +157,7 @@ where
                 .find_key_values_by_prefix(PREFIX_SEARCH)
                 .await
                 .unwrap(),
-	);
+        );
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -247,7 +248,7 @@ where
             batch.put_key_value_bytes(key_value.0.clone(), key_value.1.clone());
         }
 
-	let measurement = Instant::now();
+        let measurement = Instant::now();
         store.write_batch(batch).await.unwrap();
         total_time += measurement.elapsed();
 
@@ -256,4 +257,3 @@ where
 
     total_time
 }
-

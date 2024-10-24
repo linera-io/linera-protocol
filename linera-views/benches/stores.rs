@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_views::test_utils::performance::{performance_contains_key, performance_contains_keys, performance_find_keys_by_prefix, performance_find_key_values_by_prefix, performance_read_value_bytes, performance_read_multi_values_bytes, performance_write_batch};
-use linera_views::store::{TestKeyValueStore as _};
-
 use criterion::{criterion_group, criterion_main, Criterion};
 #[cfg(with_dynamodb)]
 use linera_views::dynamo_db::DynamoDbStore;
@@ -11,7 +8,15 @@ use linera_views::dynamo_db::DynamoDbStore;
 use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
-use linera_views::memory::MemoryStore;
+use linera_views::{
+    memory::MemoryStore,
+    store::TestKeyValueStore as _,
+    test_utils::performance::{
+        performance_contains_key, performance_contains_keys, performance_find_key_values_by_prefix,
+        performance_find_keys_by_prefix, performance_read_multi_values_bytes,
+        performance_read_value_bytes, performance_write_batch,
+    },
+};
 use tokio::runtime::Runtime;
 
 fn bench_contains_key(criterion: &mut Criterion) {
