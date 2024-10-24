@@ -389,12 +389,24 @@ pub enum SystemExecutionError {
     #[error("Chain is not active yet.")]
     InactiveChain,
 
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
     #[error("Oracle response mismatch")]
     OracleResponseMismatch,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+}
+
+impl SystemExecutionError {
+    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            SystemExecutionError::BlobsNotFound(blob_ids)
+            | SystemExecutionError::ViewError(ViewError::BlobsNotFound(blob_ids)) => {
+                Some(blob_ids.clone())
+            }
+            _ => None,
+        }
+    }
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -966,15 +978,11 @@ where
         Ok(messages)
     }
 
-    pub async fn read_blob_content(
-        &mut self,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, SystemExecutionError> {
+    pub async fn read_blob_content(&mut self, blob_id: BlobId) -> Result<BlobContent, ViewError> {
         self.context()
             .extra()
             .get_blob(blob_id)
             .await
-            .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))
             .map(Into::into)
     }
 
@@ -985,7 +993,7 @@ where
         if self.context().extra().contains_blob(blob_id).await? {
             Ok(())
         } else {
-            Err(SystemExecutionError::BlobNotFoundOnRead(blob_id))
+            Err(SystemExecutionError::BlobsNotFound(vec![blob_id]))
         }
     }
 
@@ -996,25 +1004,35 @@ where
     ) -> Result<(), SystemExecutionError> {
         let contract_bytecode_blob_id =
             BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
-        ensure!(
-            self.context()
-                .extra()
-                .contains_blob(contract_bytecode_blob_id)
-                .await?,
-            SystemExecutionError::BlobNotFoundOnRead(contract_bytecode_blob_id)
-        );
-        txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
+
+        let mut missing_blobs = Vec::new();
+        if !self
+            .context()
+            .extra()
+            .contains_blob(contract_bytecode_blob_id)
+            .await?
+        {
+            missing_blobs.push(contract_bytecode_blob_id);
+        }
+
         let service_bytecode_blob_id =
             BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
-        ensure!(
-            self.context()
-                .extra()
-                .contains_blob(service_bytecode_blob_id)
-                .await?,
-            SystemExecutionError::BlobNotFoundOnRead(service_bytecode_blob_id)
-        );
-        txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
-        Ok(())
+        if !self
+            .context()
+            .extra()
+            .contains_blob(service_bytecode_blob_id)
+            .await?
+        {
+            missing_blobs.push(service_bytecode_blob_id);
+        }
+
+        if missing_blobs.is_empty() {
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
+            Ok(())
+        } else {
+            Err(SystemExecutionError::BlobsNotFound(missing_blobs))
+        }
     }
 }
 

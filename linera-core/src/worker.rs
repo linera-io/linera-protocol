@@ -204,7 +204,7 @@ pub enum WorkerError {
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
-    #[error("The following blobs are missing: {0:?}.")]
+    #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
@@ -212,6 +212,16 @@ pub enum WorkerError {
     FullChainWorkerCache,
     #[error("Failed to join spawned worker task")]
     JoinError,
+}
+
+impl WorkerError {
+    pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
+        match self {
+            WorkerError::BlobsNotFound(blob_ids) => Some(blob_ids.clone()),
+            WorkerError::ChainError(error) => error.get_blobs_not_found(),
+            _ => None,
+        }
+    }
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
