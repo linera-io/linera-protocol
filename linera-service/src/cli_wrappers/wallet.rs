@@ -182,6 +182,8 @@ impl ClientWrapper {
             message_byte,
             maximum_fuel_per_block,
             maximum_executed_block_size,
+            maximum_blob_size,
+            maximum_bytecode_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
         } = policy;
@@ -212,6 +214,11 @@ impl ClientWrapper {
             .args([
                 "--maximum-executed-block-size",
                 &maximum_executed_block_size.to_string(),
+            ])
+            .args(["--maximum-blob-size", &maximum_blob_size.to_string()])
+            .args([
+                "--maximum-bytecode-size",
+                &maximum_bytecode_size.to_string(),
             ])
             .args([
                 "--maximum-bytes-read-per-block",
