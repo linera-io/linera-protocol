@@ -96,7 +96,7 @@ jobs:
         cargo run --bin wit-generator -- -c
     - name: Run the remote-net tests
       run: |
-        cargo test -p linera-service remote_net_grpc --features remote-net
+        cargo test -p linera-service remote_net_grpc --features test-remote-net
     - name: Run all tests using the default features
       run: |
         cargo test --features unstable-oracles --locked

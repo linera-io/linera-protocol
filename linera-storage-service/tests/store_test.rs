@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(feature = "storage-service")]
+#![cfg(feature = "test-storage-service")]
 
 use anyhow::Result;
 use linera_storage_service::client::{create_service_test_store, ServiceStoreClient};
