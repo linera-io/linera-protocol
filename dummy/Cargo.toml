@@ -1,0 +1,14 @@
+[package]
+name = "dummy"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+linera-base = { path = "../linera-base" }
+linera-core = {path = "../linera-core" }
+linera-rpc = { path = "../linera-rpc" }
+tokio.workspace = true

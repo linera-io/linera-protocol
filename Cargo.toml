@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = [ "dummy",
     "linera-base",
     "linera-chain",
     "linera-client",

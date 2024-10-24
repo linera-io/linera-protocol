@@ -219,7 +219,7 @@ impl ValidatorNode for GrpcClient {
         let max_retries = self.max_retries;
         let mut retry_count = 0;
         let subscription_request = SubscriptionRequest {
-            chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
+            chain_ids: chains.into_iter().map(|chain| { let c = chain.into(); println!("{:?}", c); c}).collect(),
         };
         let mut client = self.client.clone();
 
