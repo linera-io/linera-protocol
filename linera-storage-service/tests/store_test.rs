@@ -4,9 +4,10 @@
 #![cfg(feature = "storage-service")]
 
 use anyhow::Result;
-use linera_storage_service::client::{ServiceStoreClientInternal, ServiceStoreClient};
+use linera_storage_service::client::{ServiceStoreClient, ServiceStoreClientInternal};
 use linera_views::{
     batch::Batch,
+    store::TestKeyValueStore as _,
     test_utils::{
         admin_test, get_random_byte_vector, get_random_test_scenarios, run_reads,
         run_test_batch_from_blank, run_writes_from_blank, run_writes_from_state,

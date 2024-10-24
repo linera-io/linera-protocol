@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{criterion_group, criterion_main, Criterion};
-
 use linera_storage_service::client::ServiceStoreClient;
 use linera_views::{
     store::TestKeyValueStore as _,
@@ -79,9 +78,5 @@ fn bench_storage_service(criterion: &mut Criterion) {
     });
 }
 
-
-criterion_group!(
-    benches,
-    bench_storage_service,
-);
+criterion_group!(benches, bench_storage_service,);
 criterion_main!(benches);

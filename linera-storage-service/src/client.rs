@@ -7,6 +7,8 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
+#[cfg(with_testing)]
+use linera_views::store::TestKeyValueStore;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingStore,
@@ -15,8 +17,6 @@ use linera_views::{
         WritableKeyValueStore,
     },
 };
-#[cfg(with_testing)]
-use linera_views::store::TestKeyValueStore;
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
