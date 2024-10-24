@@ -6,14 +6,18 @@ use std::str::FromStr as _;
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::GrpcClient;
-use crate::{config::ValidatorPublicNetworkConfig, node_provider::NodeOptions};
+use crate::{config::ValidatorPublicNetworkConfig, grpc::pool::GrpcConnectionPool, node_provider::NodeOptions};
 
-#[derive(Copy, Clone)]
-pub struct GrpcNodeProvider(NodeOptions);
+#[derive(Clone)]
+pub struct GrpcNodeProvider {
+    pool: GrpcConnectionPool,
+    options: NodeOptions,
+}
 
 impl GrpcNodeProvider {
     pub fn new(options: NodeOptions) -> Self {
-        Self(options)
+        let pool = GrpcConnectionPool::default();
+        Self{ pool, options }
     }
 }
 
@@ -27,7 +31,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             }
         })?;
 
-        let client = GrpcClient::new(network, self.0).map_err(|e| NodeError::GrpcError {
+        let client = GrpcClient::new(network, self.options).map_err(|e| NodeError::GrpcError {
             error: format!(
                 "could not initialize gRPC client for address {} : {}",
                 address, e
