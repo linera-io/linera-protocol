@@ -333,22 +333,6 @@ where
         info
     }
 
-    /// Returns only after the outbox of the given chain does not contain any entries up to
-    /// `height` anymore.
-    #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn wait_for_outgoing_messages(
-        &self,
-        chain_id: ChainId,
-        height: BlockHeight,
-    ) -> Result<(), LocalNodeError> {
-        // TODO(#2692): Implement this, once #2689 is merged.
-        warn!(
-            "Not waiting for outgoing messages from {chain_id:.8} up to height {height}: \
-            not implemented yet."
-        );
-        Ok(())
-    }
-
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
