@@ -41,7 +41,10 @@ use crate::client::client_tests::RocksDbStorageBuilder;
 use crate::client::client_tests::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::client::client_tests::ServiceStorageBuilder;
-use crate::client::client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder};
+use crate::client::{
+    client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
+    ChainClientError,
+};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -90,9 +93,22 @@ async fn run_test_create_application<B>(storage_builder: B) -> anyhow::Result<()
 where
     B: StorageBuilder,
 {
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
+    let service_bytecode = Bytecode::load_from_file(service_path).await?;
+    let contract_compressed_len = contract_bytecode.compress().compressed_bytes.len();
+    let service_compressed_len = service_bytecode.compress().compressed_bytes.len();
+
+    let mut policy = ResourceControlPolicy::all_categories();
+    policy.maximum_bytecode_size = contract_bytecode
+        .bytes
+        .len()
+        .max(service_bytecode.bytes.len()) as u64;
+    policy.maximum_blob_size = contract_compressed_len.max(service_compressed_len) as u64;
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
-        .with_policy(ResourceControlPolicy::all_categories());
+        .with_policy(policy.clone());
     let publisher = builder
         .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
         .await?;
@@ -100,14 +116,8 @@ where
         .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
         .await?;
 
-    let (contract_path, service_path) =
-        linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
-
     let (bytecode_id, _cert) = publisher
-        .publish_bytecode(
-            Bytecode::load_from_file(contract_path).await?,
-            Bytecode::load_from_file(service_path).await?,
-        )
+        .publish_bytecode(contract_bytecode, service_bytecode)
         .await
         .unwrap()
         .unwrap();
@@ -147,6 +157,18 @@ where
     // Creating the application used fuel because of the `instantiate` call.
     let balance_after_init = creator.local_balance().await?;
     assert!(balance_after_init < balance_after_messaging);
+
+    let large_bytecode = Bytecode::new(vec![0; policy.maximum_bytecode_size as usize + 1]);
+    let small_bytecode = Bytecode::new(vec![]);
+    // Publishing bytecode that exceeds the limit fails.
+    let result = publisher
+        .publish_bytecode(large_bytecode.clone(), small_bytecode.clone())
+        .await;
+    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    let result = publisher
+        .publish_bytecode(small_bytecode, large_bytecode)
+        .await;
+    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
 
     Ok(())
 }
