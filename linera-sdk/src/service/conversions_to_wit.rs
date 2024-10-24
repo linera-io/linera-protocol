@@ -6,6 +6,7 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
+    http,
     identifiers::{ApplicationId, BytecodeId, ChainId, MessageId, Owner},
 };
 
@@ -84,6 +85,33 @@ impl From<MessageId> for wit_system_api::MessageId {
             chain_id: message_id.chain_id.into(),
             height: message_id.height.into(),
             index: message_id.index,
+        }
+    }
+}
+
+impl From<http::Request> for wit_system_api::Request {
+    fn from(request: http::Request) -> Self {
+        wit_system_api::Request {
+            method: request.method.into(),
+            url: request.url,
+            headers: request.headers,
+            body: request.body,
+        }
+    }
+}
+
+impl From<http::Method> for wit_system_api::Method {
+    fn from(method: http::Method) -> Self {
+        match method {
+            http::Method::Get => wit_system_api::Method::Get,
+            http::Method::Post => wit_system_api::Method::Post,
+            http::Method::Put => wit_system_api::Method::Put,
+            http::Method::Delete => wit_system_api::Method::Delete,
+            http::Method::Head => wit_system_api::Method::Head,
+            http::Method::Options => wit_system_api::Method::Options,
+            http::Method::Connect => wit_system_api::Method::Connect,
+            http::Method::Patch => wit_system_api::Method::Patch,
+            http::Method::Trace => wit_system_api::Method::Trace,
         }
     }
 }
