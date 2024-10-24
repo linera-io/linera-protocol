@@ -67,10 +67,20 @@ pub(crate) static SCYLLA_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
 pub(crate) static VALUE_SPLITTING_METRICS: LazyLock<KeyValueStoreMetrics> =
     LazyLock::new(|| KeyValueStoreMetrics::new("value splitting".to_string()));
 
-/// The metrics for the "lru caching"
-#[cfg(any(with_rocksdb, with_dynamodb, with_scylladb))]
-pub(crate) static LRU_CACHING_METRICS: LazyLock<KeyValueStoreMetrics> =
-    LazyLock::new(|| KeyValueStoreMetrics::new("lru caching".to_string()));
+/// The metrics for the "cached rocks db"
+#[cfg(with_rocksdb)]
+pub(crate) static CACHED_ROCKS_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("cached rocks db".to_string()));
+
+/// The metrics for the "cached dynamo db"
+#[cfg(with_dynamodb)]
+pub(crate) static CACHED_DYNAMO_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("cached dynamo db".to_string()));
+
+/// The metrics for the "cached scylla db"
+#[cfg(with_scylladb)]
+pub(crate) static CACHED_SCYLLA_DB_METRICS: LazyLock<KeyValueStoreMetrics> =
+    LazyLock::new(|| KeyValueStoreMetrics::new("cached scylla db".to_string()));
 
 impl KeyValueStoreMetrics {
     /// Creation of a named Metered counter.

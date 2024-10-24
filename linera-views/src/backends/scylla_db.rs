@@ -30,19 +30,19 @@ use scylla::{
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
+use crate::metering::{MeteredStore, CACHED_SCYLLA_DB_METRICS, SCYLLA_DB_METRICS};
 use crate::{
     batch::{Batch, UnorderedBatch},
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::LruCachingStore,
+    lru_caching::{CachingStore, StorageCachePolicy},
     store::{
         AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
+use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
 
 /// The client for ScyllaDb.
 /// * The session allows to pass queries
@@ -386,7 +386,7 @@ pub struct ScyllaDbStoreInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
-    cache_size: usize,
+    storage_cache_policy: StorageCachePolicy,
     root_key: Vec<u8>,
 }
 
@@ -575,13 +575,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = config.common_config.storage_cache_policy.clone();
         let root_key = get_big_root_key(root_key);
         Ok(Self {
             store,
             semaphore,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             root_key,
         })
     }
@@ -590,13 +590,13 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
+        let storage_cache_policy = self.storage_cache_policy.clone();
         let root_key = get_big_root_key(root_key);
         Ok(Self {
             store,
             semaphore,
             max_stream_queries,
-            cache_size,
+            storage_cache_policy,
             root_key,
         })
     }
@@ -769,10 +769,9 @@ impl ScyllaDbStoreInternal {
 #[derive(Clone)]
 pub struct ScyllaDbStore {
     #[cfg(with_metrics)]
-    store:
-        MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
+    store: MeteredStore<CachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
     #[cfg(not(with_metrics))]
-    store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
+    store: CachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
 }
 
 /// The type for building a new ScyllaDB Key Value Store
@@ -856,15 +855,21 @@ impl AdminKeyValueStore for ScyllaDbStore {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, ScyllaDbStoreError> {
-        let cache_size = config.common_config.cache_size;
+        let storage_cache_policy = &config.common_config.storage_cache_policy;
         let simple_store = ScyllaDbStoreInternal::connect(config, namespace, root_key).await?;
-        Ok(ScyllaDbStore::from_inner(simple_store, cache_size))
+        Ok(ScyllaDbStore::from_inner(
+            simple_store,
+            storage_cache_policy,
+        ))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ScyllaDbStoreError> {
         let simple_store = self.inner().clone_with_root_key(root_key)?;
-        let cache_size = self.inner().cache_size;
-        Ok(ScyllaDbStore::from_inner(simple_store, cache_size))
+        let storage_cache_policy = &self.inner().storage_cache_policy;
+        Ok(ScyllaDbStore::from_inner(
+            simple_store,
+            storage_cache_policy,
+        ))
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreError> {
@@ -895,7 +900,7 @@ impl TestKeyValueStore for ScyllaDbStore {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
-            cache_size: TEST_CACHE_SIZE,
+            storage_cache_policy: DEFAULT_STORAGE_CACHE_POLICY,
         };
         Ok(ScyllaDbStoreConfig { uri, common_config })
     }
@@ -912,13 +917,16 @@ impl ScyllaDbStore {
         &self.store.store.store
     }
 
-    fn from_inner(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> ScyllaDbStore {
+    fn from_inner(
+        simple_store: ScyllaDbStoreInternal,
+        storage_cache_policy: &StorageCachePolicy,
+    ) -> ScyllaDbStore {
         let store = JournalingKeyValueStore::new(simple_store);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
+        let store = CachingStore::new(store, storage_cache_policy.clone());
         #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
+        let store = MeteredStore::new(&CACHED_SCYLLA_DB_METRICS, store);
         Self { store }
     }
 }
