@@ -77,12 +77,10 @@ where
                 #[cfg(with_metrics)]
                 let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
                 let description = self.system.registry.describe_application(id).await?;
-                let (_, committee) = self.system.current_committee().unwrap(); // TODO
-                let limit = committee.policy().maximum_bytecode_size;
                 let code = self
                     .context()
                     .extra()
-                    .get_user_contract(limit, &description)
+                    .get_user_contract(&description)
                     .await?;
                 callback.respond((code, description));
             }
@@ -91,12 +89,10 @@ where
                 #[cfg(with_metrics)]
                 let _latency = LOAD_SERVICE_LATENCY.measure_latency();
                 let description = self.system.registry.describe_application(id).await?;
-                let (_, committee) = self.system.current_committee().unwrap(); // TODO
-                let limit = committee.policy().maximum_bytecode_size;
                 let code = self
                     .context()
                     .extra()
-                    .get_user_service(limit, &description)
+                    .get_user_service(&description)
                     .await?;
                 callback.respond((code, description));
             }
