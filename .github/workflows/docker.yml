@@ -49,11 +49,13 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Update aio-max-nr
         # run: echo 1048576 > /proc/sys/fs/aio-max-nr
       - name: Build client binary
         run: |
           cargo install --path linera-service --bin linera --bin linera-server --debug
+      # TODO(#2709): Remove this step once this workflow runs in a custom runner
       - name: Patch Docker compose file to run ScyllaDB in developer mode
         run: |
           sed -i -e '/SCYLLA_AUTO_CONF/{N;s/command:/  SCYLLA_ENABLE_EXPERIMENTAL: 1/p;N;N;N;N;d}' \
@@ -62,6 +64,7 @@ jobs:
         run: |
           cd docker
           ./compose.sh
+      # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Setup upterm session
         # uses: lhotari/action-upterm@v1
       - name: Sync
