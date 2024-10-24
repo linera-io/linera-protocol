@@ -359,7 +359,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     let project_dir = tmp_dir.path().join("init-test");
 
     client
-        .project_publish(project_dir, vec![], None, &())
+        .project_publish(project_dir, vec![], None, &0)
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 

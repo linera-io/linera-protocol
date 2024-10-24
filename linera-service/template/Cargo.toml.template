@@ -5,7 +5,14 @@ edition = "2021"
 
 [dependencies]
 async-graphql = {{ version = "=7.0.2", default-features = false }}
+serde = {{ version = "1.0", features = ["derive"] }}
 {linera_sdk_dep}
+serde_json = {{ version = "1.0" }}
+futures = {{ version = "0.3 "}}
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+{linera_sdk_testing_dep}
+tokio = {{ version = "1.40", features = ["rt", "sync"] }}
 
 [dev-dependencies]
 {linera_sdk_dev_dep}
