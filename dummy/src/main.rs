@@ -10,6 +10,8 @@ use linera_core::node::ValidatorNode;
 
 #[tokio::main]
 async fn main() {
+    linera_base::tracing::init();
+
     let network = ValidatorPublicNetworkConfig {
         host: "validator-5.testnet-boole.linera.net".to_string(),
         port: 443,
@@ -19,7 +21,7 @@ async fn main() {
         send_timeout: Duration::from_millis(4000),
         recv_timeout: Duration::from_millis(4000),
         retry_delay: Duration::from_millis(4000),
-        max_retries: 10,
+        max_retries: 0,
     };
     let client = GrpcClient::new(network, options).unwrap();
     let my_chain: linera_base::identifiers::ChainId = "9eb222e81c6ca9ea7986b2b1266e8ccb89035d510888fbd0a3e28e1702cfcd7e".parse().unwrap();
