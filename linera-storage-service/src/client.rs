@@ -16,7 +16,7 @@ use linera_views::{
     },
 };
 #[cfg(with_testing)]
-use linera_views::{random::generate_test_namespace, store::TestKeyValueStore};
+use linera_views::store::TestKeyValueStore;
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
 
@@ -538,15 +538,6 @@ pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), Servic
     let store = ServiceStoreClientInternal::connect(&config, namespace, root_key).await?;
     let _value = store.read_value_bytes(&[42]).await?;
     Ok(())
-}
-
-/// Creates a test store with an endpoint. The namespace is random.
-#[cfg(with_testing)]
-pub async fn create_service_test_store() -> Result<ServiceStoreClientInternal, ServiceStoreError> {
-    let config = ServiceStoreClientInternal::new_test_config().await?;
-    let namespace = generate_test_namespace();
-    let root_key = &[];
-    ServiceStoreClientInternal::connect(&config, &namespace, root_key).await
 }
 
 #[derive(Clone)]
