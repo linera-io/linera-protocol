@@ -16,8 +16,7 @@ use linera_core::{
     worker::Notification,
 };
 use linera_version::VersionInfo;
-use tonic::{Code, IntoRequest, Request, Status};
-use tonic::transport::Channel;
+use tonic::{transport::Channel, Code, IntoRequest, Request, Status};
 use tracing::{debug, error, info, instrument};
 #[cfg(not(web))]
 use {

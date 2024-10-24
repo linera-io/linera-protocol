@@ -1,12 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_core::node::{NodeError, ValidatorNodeProvider};
 use linera_base::time::Duration;
+use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::GrpcClient;
-use crate::{grpc::pool::GrpcConnectionPool, node_provider::NodeOptions};
-use crate::grpc::transport::Options;
+use crate::{
+    grpc::{pool::GrpcConnectionPool, transport::Options},
+    node_provider::NodeOptions,
+};
 
 #[derive(Clone)]
 pub struct GrpcNodeProvider {
@@ -21,7 +23,11 @@ impl GrpcNodeProvider {
         let retry_delay = options.retry_delay;
         let max_retries = options.max_retries;
         let pool = GrpcConnectionPool::new(transport_options);
-        Self{ pool, retry_delay, max_retries }
+        Self {
+            pool,
+            retry_delay,
+            max_retries,
+        }
     }
 }
 
@@ -30,10 +36,18 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
         let address = address.to_string();
-        let channel = self.pool.channel(address.clone()).map_err(
-            |error| NodeError::GrpcError { error: format!("error creating channel: {}", error) }
-        )?;
+        let channel = self
+            .pool
+            .channel(address.clone())
+            .map_err(|error| NodeError::GrpcError {
+                error: format!("error creating channel: {}", error),
+            })?;
 
-        Ok(GrpcClient::from_address_channel(address.to_string(), channel, self.retry_delay, self.max_retries))
+        Ok(GrpcClient::from_address_channel(
+            address.to_string(),
+            channel,
+            self.retry_delay,
+            self.max_retries,
+        ))
     }
 }

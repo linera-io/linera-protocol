@@ -15,7 +15,10 @@ pub struct GrpcConnectionPool {
 
 impl GrpcConnectionPool {
     pub fn new(options: transport::Options) -> Self {
-        Self { options, channels: DashMap::default() }
+        Self {
+            options,
+            channels: DashMap::default(),
+        }
     }
 
     pub fn with_connect_timeout(mut self, connect_timeout: impl Into<Option<Duration>>) -> Self {
