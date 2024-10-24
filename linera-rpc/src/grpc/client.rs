@@ -17,6 +17,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
+use tonic::transport::Channel;
 use tracing::{debug, error, info, instrument};
 #[cfg(not(web))]
 use {
@@ -63,6 +64,23 @@ impl GrpcClient {
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
         })
+    }
+
+    pub fn from_address_channel(
+        address: String,
+        channel: Channel,
+        retry_delay: Duration,
+        max_retries: u32,
+    ) -> Self {
+        let client = ValidatorNodeClient::new(channel)
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
+        Self {
+            address,
+            client,
+            retry_delay,
+            max_retries,
+        }
     }
 
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
