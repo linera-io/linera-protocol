@@ -32,7 +32,7 @@ impl RemoteNetTestingConfig {
             faucet: Faucet::new(
                 faucet_url
                     .or_else(|| env::var("LINERA_FAUCET_URL").ok())
-                    .unwrap_or_else(|| "https://faucet.devnet.linera.net".to_owned()),
+                    .expect("Missing `LINERA_FAUCET_URL` environment variable"),
             ),
         }
     }
