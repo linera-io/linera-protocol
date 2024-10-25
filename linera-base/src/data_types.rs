@@ -910,6 +910,8 @@ impl CompressedBytecode {
         let mut writer = LimitedWriter::new(io::sink(), limit);
         let mut decoder = ruzstd::streaming_decoder::StreamingDecoder::new(compressed_bytes)
             .map_err(io::Error::other)?;
+
+        // TODO(#2710): Decode multiple frames, if present
         match io::copy(&mut decoder, &mut writer) {
             Ok(_) => Ok(true),
             Err(error) => {
@@ -930,8 +932,7 @@ impl CompressedBytecode {
         let mut bytes = Vec::new();
         let mut decoder = StreamingDecoder::new(compressed_bytes).map_err(io::Error::other)?;
 
-        // Decode multiple frames, if present
-        // (https://github.com/KillingSpark/zstd-rs/issues/57)
+        // TODO(#2710): Decode multiple frames, if present
         while !decoder.get_ref().is_empty() {
             decoder
                 .read_to_end(&mut bytes)
