@@ -29,10 +29,10 @@ impl RemoteNetTestingConfig {
     /// variable, or the default devnet faucet URL.
     pub fn new(faucet_url: Option<String>) -> Self {
         Self {
-            faucet: Faucet::new(faucet_url.unwrap_or_else(|| {
-                env::var("LINERA_FAUCET_URL")
-                    .unwrap_or_else(|_| "https://faucet.devnet.linera.net".to_owned())
-            })),
+            faucet: Faucet::new(faucet_url
+                .or_else(|| env::var("LINERA_FAUCET_URL"))
+                .unwrap_or_else(|_| "https://faucet.devnet.linera.net".to_owned())
+            )),
         }
     }
 }
