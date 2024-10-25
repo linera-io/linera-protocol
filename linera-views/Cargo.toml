@@ -38,7 +38,6 @@ aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
-criterion = { workspace = true, features = ["async_tokio"] }
 futures.workspace = true
 generic-array.workspace = true
 hex = { workspace = true, optional = true }
@@ -58,6 +57,9 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
 trait-variant.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
 
 [target.wasm32-unknown-unknown.dependencies]
 indexed_db_futures = { workspace = true, optional = true }
