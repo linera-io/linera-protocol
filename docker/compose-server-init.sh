@@ -13,7 +13,6 @@ while true; do
       --storage scylladb:tcp:scylla:9042 \
       --genesis /config/genesis.json; then
       echo "Initialization successful."
-      touch /shared/init_done
       exit 0
     else
       echo "Initialization failed, retrying in 5 seconds..."

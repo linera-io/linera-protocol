@@ -20,7 +20,9 @@ services:
     command: [ "./compose-proxy-entrypoint.sh" ]
     volumes:
       - .:/config
-      - linera-shared:/shared
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
   shard:
     image: linera
     deploy:
@@ -28,16 +30,15 @@ services:
     command: [ "./compose-server-entrypoint.sh" ]
     volumes:
       - .:/config
-      - linera-shared:/shared
     depends_on:
-      - shard-init
+      shard-init:
+        condition: service_completed_successfully
   shard-init:
     image: linera
     container_name: shard-init
     command: [ "./compose-server-init.sh" ]
     volumes:
       - .:/config
-      - linera-shared:/shared
     depends_on:
       - scylla
 
@@ -64,5 +65,4 @@ services:
 volumes:
   linera-scylla-data:
     driver: local
-  linera-shared: # used for cross-container comms.
   grafana-storage:
