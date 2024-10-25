@@ -1859,15 +1859,26 @@ where
                 continue;
             }
 
-            blobs.push(
-                self.storage_client()
-                    .read_blob(blob_id)
-                    .await
-                    .map_err(|_| LocalNodeError::CannotReadLocalBlob {
-                        chain_id: self.chain_id,
-                        blob_id,
-                    })?,
-            );
+            let maybe_blob = {
+                let chain_state_view = self.chain_state_view().await?;
+                chain_state_view
+                    .manager
+                    .get()
+                    .pending_blobs
+                    .get(&blob_id)
+                    .cloned()
+            };
+
+            if let Some(blob) = maybe_blob {
+                self.client.local_node.cache_recent_blob(&blob).await;
+                blobs.push(blob);
+                continue;
+            }
+
+            return Err(LocalNodeError::CannotReadLocalBlob {
+                chain_id: self.chain_id,
+                blob_id,
+            });
         }
         Ok(blobs)
     }
