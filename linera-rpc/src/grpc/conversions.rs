@@ -137,14 +137,18 @@ impl TryFrom<Notification> for api::Notification {
     }
 }
 
-impl TryFrom<api::Notification> for Notification {
+impl TryFrom<api::Notification> for Option<Notification> {
     type Error = GrpcProtoConversionError;
 
     fn try_from(notification: api::Notification) -> Result<Self, Self::Error> {
-        Ok(Self {
-            chain_id: try_proto_convert(notification.chain_id)?,
-            reason: bincode::deserialize(&notification.reason)?,
-        })
+        if notification.chain_id.is_none() && notification.reason.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(Notification {
+                chain_id: try_proto_convert(notification.chain_id)?,
+                reason: bincode::deserialize(&notification.reason)?,
+            }))
+        }
     }
 }
 
@@ -858,6 +862,13 @@ pub mod tests {
                 hash: CryptoHash::new(&Foo("".into())),
             },
         };
-        round_trip_check::<_, api::Notification>(notification);
+        let message = api::Notification::try_from(notification.clone()).unwrap();
+        assert_eq!(
+            Some(notification),
+            Option::<Notification>::try_from(message).unwrap()
+        );
+
+        let ack = api::Notification::default();
+        assert_eq!(None, Option::<Notification>::try_from(ack).unwrap());
     }
 }

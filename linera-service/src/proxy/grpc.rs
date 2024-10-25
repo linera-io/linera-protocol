@@ -404,7 +404,12 @@ where
             .into_iter()
             .map(ChainId::try_from)
             .collect::<Result<Vec<ChainId>, _>>()?;
-        let rx = self.0.notifier.subscribe(chain_ids);
+        // The empty notification seems to be needed in some cases to force
+        // completion of HTTP2 headers.
+        let rx = self
+            .0
+            .notifier
+            .subscribe_with_ack(chain_ids, Ok(Notification::default()));
         Ok(Response::new(UnboundedReceiverStream::new(rx)))
     }
 

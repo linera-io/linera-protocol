@@ -16,7 +16,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 #[cfg(not(web))]
 use {
     super::GrpcProtoConversionError,
@@ -258,7 +258,7 @@ impl ValidatorNode for GrpcClient {
         // terminates after unexpected or fatal errors.
         let notification_stream = endlessly_retrying_notification_stream
             .map(|result| {
-                Notification::try_from(result?).map_err(|err| {
+                Option::<Notification>::try_from(result?).map_err(|err| {
                     let message = format!("Could not deserialize notification: {}", err);
                     tonic::Status::new(Code::Internal, message)
                 })
@@ -278,7 +278,16 @@ impl ValidatorNode for GrpcClient {
                     true
                 })
             })
-            .filter_map(|result| future::ready(result.ok()));
+            .filter_map(|result| {
+                future::ready(match result {
+                    Ok(notification @ Some(_)) => notification,
+                    Ok(None) => None,
+                    Err(err) => {
+                        warn!("{}", err);
+                        None
+                    }
+                })
+            });
 
         Ok(Box::pin(notification_stream))
     }
