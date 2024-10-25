@@ -406,8 +406,8 @@ where
             .into_iter()
             .map(ChainId::try_from)
             .collect::<Result<Vec<ChainId>, _>>()?;
-        // The empty Notification seems to be needed in some configuration to force
-        // completion of http2 headers.
+        // The empty notification seems to be needed in some cases to force
+        // completion of HTTP2 headers.
         let rx = self
             .0
             .notifier
