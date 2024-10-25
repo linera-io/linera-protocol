@@ -15,9 +15,9 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
         HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
     },
-    manager, ChainError,
+    manager,
 };
-use linera_execution::{ChannelSubscription, ExecutionError, Query, Response};
+use linera_execution::{ChannelSubscription, Query, Response};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::View;
 #[cfg(with_testing)]
@@ -216,23 +216,19 @@ where
             self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
         }
         for blob in self.0.get_blobs(block.published_blob_ids()).await? {
-            let size = match blob.content() {
+            let blob_size = match blob.content() {
                 BlobContent::Data(bytes) => bytes.len(),
                 BlobContent::ContractBytecode(compressed_bytecode)
                 | BlobContent::ServiceBytecode(compressed_bytecode) => {
-                    compressed_bytecode
-                        .decompress(maximum_bytecode_size)
-                        .map_err(|error| {
-                            ChainError::ExecutionError(
-                                ExecutionError::from(error),
-                                linera_chain::ChainExecutionContext::Block,
-                            )
-                        })?;
+                    ensure!(
+                        compressed_bytecode.decompressed_size_at_most(maximum_bytecode_size)?,
+                        WorkerError::BytecodeTooLarge
+                    );
                     compressed_bytecode.compressed_bytes.len()
                 }
             };
             ensure!(
-                u64::try_from(size)
+                u64::try_from(blob_size)
                     .ok()
                     .is_some_and(|size| size <= maximum_blob_size),
                 WorkerError::BlobTooLarge

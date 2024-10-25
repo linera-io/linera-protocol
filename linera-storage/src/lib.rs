@@ -280,10 +280,9 @@ pub trait Storage: Sized {
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.inner_bytes(),
         };
-        let contract_bytecode = linera_base::task::spawn_blocking(move || {
-            compressed_contract_bytecode.decompress(u64::MAX)
-        })
-        .await??;
+        let contract_bytecode =
+            linera_base::task::spawn_blocking(move || compressed_contract_bytecode.decompress())
+                .await??;
         Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
             .await?
             .into())
@@ -320,10 +319,9 @@ pub trait Storage: Sized {
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.inner_bytes(),
         };
-        let service_bytecode = linera_base::task::spawn_blocking(move || {
-            compressed_service_bytecode.decompress(u64::MAX)
-        })
-        .await??;
+        let service_bytecode =
+            linera_base::task::spawn_blocking(move || compressed_service_bytecode.decompress())
+                .await??;
         Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
             .await?
             .into())

@@ -3,7 +3,13 @@
 
 use std::io::{self, Write};
 
+use thiserror::Error;
+
 use crate::ensure;
+
+#[derive(Error, Debug)]
+#[error("Writer limit exceeded")]
+pub struct LimitedWriterError;
 
 /// Custom writer that enforces a byte limit.
 pub struct LimitedWriter<W: Write> {
@@ -30,7 +36,7 @@ impl<W: Write> Write for LimitedWriter<W> {
             self.limit
                 .checked_sub(self.written)
                 .is_some_and(|remaining| buf.len() <= remaining),
-            io::Error::other("Data exceeds the allowed limit")
+            io::Error::other(LimitedWriterError)
         );
         // Forward to the inner writer.
         let n = self.inner.write(buf)?;
@@ -53,6 +59,10 @@ mod tests {
         let mut writer = LimitedWriter::new(&mut out_buffer, 5);
         assert_eq!(writer.write(b"foo").unwrap(), 3);
         assert_eq!(writer.write(b"ba").unwrap(), 2);
-        assert!(writer.write(b"r").is_err());
+        assert!(writer
+            .write(b"r")
+            .unwrap_err()
+            .downcast::<LimitedWriterError>()
+            .is_ok());
     }
 }

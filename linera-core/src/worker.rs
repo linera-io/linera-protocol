@@ -14,7 +14,9 @@ use std::{
 use linera_base::crypto::PublicKey;
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
-    data_types::{ArithmeticError, Blob, BlockHeight, Round, UserApplicationDescription},
+    data_types::{
+        ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
+    },
     doc_scalar,
     identifiers::{BlobId, ChainId, Owner, UserApplicationId},
     time::timer::{sleep, timeout},
@@ -214,6 +216,10 @@ pub enum WorkerError {
     JoinError,
     #[error("Blob exceeds size limit")]
     BlobTooLarge,
+    #[error("Bytecode exceeds size limit")]
+    BytecodeTooLarge,
+    #[error(transparent)]
+    Decompression(#[from] DecompressionError),
 }
 
 impl From<linera_chain::ChainError> for WorkerError {
