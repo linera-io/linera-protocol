@@ -147,13 +147,13 @@ impl TryFrom<api::Notification> for Option<Notification> {
     type Error = GrpcProtoConversionError;
 
     fn try_from(notification: api::Notification) -> Result<Self, Self::Error> {
-        if let Some(chain_id) = notification.chain_id {
+        if notification.chain_id.is_none() && notification.reason.is_empty() {
+            Ok(None)
+        } else {
             Ok(Some(Notification {
-                chain_id: chain_id.try_into()?,
+                chain_id: try_proto_convert(notification.chain_id)?,
                 reason: bincode::deserialize(&notification.reason)?,
             }))
-        } else {
-            Ok(None)
         }
     }
 }
