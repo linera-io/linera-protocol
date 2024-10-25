@@ -259,7 +259,7 @@ impl ValidatorNode for GrpcClient {
         // terminates after unexpected or fatal errors.
         let notification_stream = endlessly_retrying_notification_stream
             .map(|result| {
-                Notification::try_from(result?).map_err(|err| {
+                Option::<Notification>::try_from(result?).map_err(|err| {
                     let message = format!("Could not deserialize notification: {}", err);
                     tonic::Status::new(Code::Internal, message)
                 })
@@ -279,7 +279,13 @@ impl ValidatorNode for GrpcClient {
                     true
                 })
             })
-            .filter_map(|result| future::ready(result.ok()));
+            .filter_map(|result| {
+                future::ready(if let Ok(Some(notification)) = result {
+                    Some(notification)
+                } else {
+                    None
+                })
+            });
 
         Ok(Box::pin(notification_stream))
     }

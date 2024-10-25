@@ -37,6 +37,19 @@ impl<N> ChannelNotifier<N> {
         }
         rx
     }
+
+    /// Creates a subscription given a collection of ChainIds and a sender to the client.
+    /// Immediately posts a first notification as a ACK.
+    pub fn subscribe_with_ack(&self, chain_ids: Vec<ChainId>, ack: N) -> UnboundedReceiver<N> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        for id in chain_ids {
+            let mut senders = self.inner.entry(id).or_default();
+            senders.push(tx.clone());
+        }
+        tx.send(ack)
+            .expect("pushing to a new channel should succeed");
+        rx
+    }
 }
 
 impl<N> ChannelNotifier<N>
