@@ -28,7 +28,7 @@ impl<N> Default for ChannelNotifier<N> {
 }
 
 impl<N> ChannelNotifier<N> {
-    fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &tokio::sync::mpsc::UnboundedSender<N>) {
+    fn add_sender(&self, chain_ids: Vec<ChainId>, sender: &UnboundedSender<N>) {
         for id in chain_ids {
             let mut senders = self.inner.entry(id).or_default();
             senders.push(sender.clone());
