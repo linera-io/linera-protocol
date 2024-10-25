@@ -17,7 +17,7 @@ use linera_core::{
 };
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 #[cfg(not(web))]
 use {
     super::GrpcProtoConversionError,
@@ -280,10 +280,13 @@ impl ValidatorNode for GrpcClient {
                 })
             })
             .filter_map(|result| {
-                future::ready(if let Ok(Some(notification)) = result {
-                    Some(notification)
-                } else {
-                    None
+                future::ready(match result {
+                    Ok(notification @ Some(_)) => notification,
+                    Ok(None) => None,
+                    Err(err) => {
+                        warn!("{}", err);
+                        None
+                    }
                 })
             });
 
