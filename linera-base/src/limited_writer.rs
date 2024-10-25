@@ -25,13 +25,12 @@ impl<W: Write> LimitedWriter<W> {
 impl<W: Write> Write for LimitedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         // Calculate the number of bytes we can write without exceeding the limit.
-        let remaining = self.limit.checked_sub(self.written).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Data exceeds the allowed limit")
-        })?;
-        // Ensure the new data still fits.
+        // Fail if the buffer doesn't fit.
         ensure!(
-            buf.len() <= remaining,
-            io::Error::new(io::ErrorKind::Other, "Data exceeds the allowed limit",)
+            self.limit
+                .checked_sub(self.written)
+                .is_some_and(|remaining| buf.len() <= remaining),
+            io::Error::other("Data exceeds the allowed limit")
         );
         // Forward to the inner writer.
         let n = self.inner.write(buf)?;
@@ -41,5 +40,19 @@ impl<W: Write> Write for LimitedWriter<W> {
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner.flush()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_limited_writer() {
+        let mut out_buffer = Vec::new();
+        let mut writer = LimitedWriter::new(&mut out_buffer, 5);
+        assert_eq!(writer.write(b"foo").unwrap(), 3);
+        assert_eq!(writer.write(b"ba").unwrap(), 2);
+        assert!(writer.write(b"r").is_err());
     }
 }
