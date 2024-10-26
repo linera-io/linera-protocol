@@ -2867,9 +2867,10 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Use the faucet directly to initialize many chains
     for _ in 0..chain_count {
-        faucet_client
+        let (_, new_chain_id) = faucet_client
             .open_chain(faucet_chain, None, Amount::ONE)
             .await?;
+        faucet_client.forget_chain(new_chain_id).await?;
     }
 
     let amount = Amount::ONE;
