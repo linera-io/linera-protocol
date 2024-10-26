@@ -6,7 +6,7 @@
 use std::borrow::Cow;
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
+    data_types::{ArithmeticError, BlobContent, Timestamp, UserApplicationDescription},
     ensure,
     identifiers::{GenericApplicationId, UserApplicationId},
 };
@@ -28,6 +28,7 @@ use {
 
 use super::{check_block_epoch, ChainWorkerState};
 use crate::{
+    client::{MAXIMUM_BLOB_SIZE, MAXIMUM_BYTECODE_SIZE},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     worker::WorkerError,
 };
@@ -212,6 +213,25 @@ where
             .await?;
         for blob in blobs {
             self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
+        }
+        for blob in self.0.get_blobs(block.published_blob_ids()).await? {
+            let blob_size = match blob.content() {
+                BlobContent::Data(bytes) => bytes.len(),
+                BlobContent::ContractBytecode(compressed_bytecode)
+                | BlobContent::ServiceBytecode(compressed_bytecode) => {
+                    ensure!(
+                        compressed_bytecode.decompressed_size_at_most(MAXIMUM_BYTECODE_SIZE)?,
+                        WorkerError::BytecodeTooLarge
+                    );
+                    compressed_bytecode.compressed_bytes.len()
+                }
+            };
+            ensure!(
+                u64::try_from(blob_size)
+                    .ok()
+                    .is_some_and(|size| size <= MAXIMUM_BLOB_SIZE),
+                WorkerError::BlobTooLarge
+            )
         }
 
         let local_time = self.0.storage.clock().current_time();
