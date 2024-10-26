@@ -37,6 +37,7 @@ use crate::{
         ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
         UserApplicationId,
     },
+    limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
 };
 
@@ -861,14 +862,8 @@ impl fmt::Debug for Bytecode {
 #[derive(Error, Debug)]
 pub enum DecompressionError {
     /// Compressed bytecode is invalid, and could not be decompressed.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[error("Bytecode could not be decompressed")]
-    InvalidCompressedBytecode(#[source] io::Error),
-
-    /// Compressed bytecode is invalid, and could not be decompressed.
-    #[cfg(target_arch = "wasm32")]
-    #[error("Bytecode could not be decompressed")]
-    InvalidCompressedBytecode(#[from] ruzstd::frame_decoder::FrameDecoderError),
+    #[error("Bytecode could not be decompressed: {0}")]
+    InvalidCompressedBytecode(#[from] io::Error),
 }
 
 /// A compressed WebAssembly module's bytecode.
@@ -880,20 +875,53 @@ pub struct CompressedBytecode {
     pub compressed_bytes: Vec<u8>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl CompressedBytecode {
-    /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
-        #[cfg(with_metrics)]
-        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
-        let bytes = zstd::stream::decode_all(&*self.compressed_bytes)
-            .map_err(DecompressionError::InvalidCompressedBytecode)?;
-
-        Ok(Bytecode { bytes })
+    /// Returns `true` if the decompressed size does not exceed the limit.
+    pub fn decompressed_size_at_most(&self, limit: u64) -> Result<bool, DecompressionError> {
+        let mut decoder = zstd::stream::Decoder::new(&*self.compressed_bytes)?;
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+        let mut writer = LimitedWriter::new(io::sink(), limit);
+        match io::copy(&mut decoder, &mut writer) {
+            Ok(_) => Ok(true),
+            Err(error) => {
+                error.downcast::<LimitedWriterError>()?;
+                Ok(false)
+            }
+        }
     }
 
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
-    #[cfg(target_arch = "wasm32")]
+    pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
+        #[cfg(with_metrics)]
+        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
+        let bytes = zstd::stream::decode_all(&*self.compressed_bytes)?;
+
+        Ok(Bytecode { bytes })
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl CompressedBytecode {
+    /// Returns `true` if the decompressed size does not exceed the limit.
+    pub fn decompressed_size_at_most(&self, limit: u64) -> Result<bool, DecompressionError> {
+        let compressed_bytes = &*self.compressed_bytes;
+        let limit = usize::try_from(limit).unwrap_or(usize::MAX);
+        let mut writer = LimitedWriter::new(io::sink(), limit);
+        let mut decoder = ruzstd::streaming_decoder::StreamingDecoder::new(compressed_bytes)
+            .map_err(io::Error::other)?;
+
+        // TODO(#2710): Decode multiple frames, if present
+        match io::copy(&mut decoder, &mut writer) {
+            Ok(_) => Ok(true),
+            Err(error) => {
+                error.downcast::<LimitedWriterError>()?;
+                Ok(false)
+            }
+        }
+    }
+
+    /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
         use ruzstd::{io::Read, streaming_decoder::StreamingDecoder};
 
@@ -902,10 +930,9 @@ impl CompressedBytecode {
 
         let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();
-        let mut decoder = StreamingDecoder::new(compressed_bytes)?;
+        let mut decoder = StreamingDecoder::new(compressed_bytes).map_err(io::Error::other)?;
 
-        // Decode multiple frames, if present
-        // (https://github.com/KillingSpark/zstd-rs/issues/57)
+        // TODO(#2710): Decode multiple frames, if present
         while !decoder.get_ref().is_empty() {
             decoder
                 .read_to_end(&mut bytes)

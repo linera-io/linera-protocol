@@ -2413,7 +2413,15 @@ async fn test_propose_block_with_messages_and_blobs<B>(storage_builder: B) -> an
 where
     B: StorageBuilder,
 {
-    let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
+    let blob_bytes = b"blob".to_vec();
+    let large_blob_bytes = b"blob+".to_vec();
+    let policy = ResourceControlPolicy {
+        maximum_blob_size: blob_bytes.len() as u64,
+        ..ResourceControlPolicy::default()
+    };
+    let mut builder = TestBuilder::new(storage_builder, 4, 0)
+        .await?
+        .with_policy(policy.clone());
     let description1 = ChainDescription::Root(1);
     let description2 = ChainDescription::Root(2);
     let description3 = ChainDescription::Root(3);
@@ -2426,7 +2434,6 @@ where
     builder.set_fault_type([3], FaultType::Offline).await;
 
     // Publish a blob on chain 1.
-    let blob_bytes = b"blob".to_vec();
     let blob_id = BlobId::new(
         CryptoHash::new(&BlobBytes(blob_bytes.clone())),
         BlobType::Data,
@@ -2457,6 +2464,9 @@ where
     let executed_block = certificate.value().executed_block().unwrap();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
+
+    let result = client1.publish_data_blob(large_blob_bytes).await;
+    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
 
     Ok(())
 }

@@ -517,9 +517,18 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_fuel_per_block: Option<u64>,
 
-        /// Set the maximum size of an executed block.
+        /// Set the maximum size of an executed block, in bytes.
         #[arg(long)]
         maximum_executed_block_size: Option<u64>,
+
+        /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
+        /// in bytes.
+        #[arg(long)]
+        maximum_blob_size: Option<u64>,
+
+        /// Set the maximum size of decompressed contract or service bytecode, in bytes.
+        #[arg(long)]
+        maximum_bytecode_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]
@@ -634,6 +643,15 @@ pub enum ClientCommand {
         /// Set the maximum size of an executed block.
         #[arg(long)]
         maximum_executed_block_size: Option<u64>,
+
+        /// Set the maximum size of decompressed contract or service bytecode, in bytes.
+        #[arg(long)]
+        maximum_bytecode_size: Option<u64>,
+
+        /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
+        /// in bytes.
+        #[arg(long)]
+        maximum_blob_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]
