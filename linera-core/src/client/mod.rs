@@ -83,6 +83,11 @@ mod chain_state;
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
 
+/// The maximum size of a data or bytecode blob, in bytes.
+pub(crate) const MAXIMUM_BLOB_SIZE: u64 = 3 * 1024 * 1024;
+/// The maximum size of decompressed bytecode, in bytes.
+pub(crate) const MAXIMUM_BYTECODE_SIZE: u64 = 30 * 1024 * 1024;
+
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;

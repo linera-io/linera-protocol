@@ -41,7 +41,7 @@ use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
         BlanketMessagePolicy, ChainClient, ChainClientError, ClientOutcome, MessageAction,
-        MessagePolicy,
+        MessagePolicy, MAXIMUM_BLOB_SIZE,
     },
     local_node::LocalNodeError,
     node::{
@@ -2559,6 +2559,12 @@ where
     let executed_block = certificate.value().executed_block().unwrap();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
+
+    let large_blob_bytes = vec![0; MAXIMUM_BLOB_SIZE as usize + 1];
+    let result = client1
+        .publish_data_blob(BlobContent::new(large_blob_bytes))
+        .await;
+    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
 
     Ok(())
 }
