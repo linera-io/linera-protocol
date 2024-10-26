@@ -4,6 +4,7 @@
 pub mod test_views;
 
 /// Functions for computing the performance of stores.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod performance;
 
 use std::{
