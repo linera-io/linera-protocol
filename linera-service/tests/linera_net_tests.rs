@@ -33,7 +33,10 @@ use linera_base::{
 };
 use linera_chain::data_types::{Medium, Origin};
 use linera_core::worker::{Notification, Reason};
-use linera_sdk::{base::BlockHeight, DataBlobHash};
+use linera_sdk::{
+    base::{BlockHeight, PublicKey},
+    DataBlobHash,
+};
 #[cfg(any(
     feature = "dynamodb",
     feature = "scylladb",
@@ -2867,10 +2870,9 @@ async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -
 
     // Use the faucet directly to initialize many chains
     for _ in 0..chain_count {
-        let (_, new_chain_id) = faucet_client
-            .open_chain(faucet_chain, None, Amount::ONE)
+        faucet_client
+            .open_chain(faucet_chain, Some(PublicKey::test_key(1)), Amount::ONE)
             .await?;
-        faucet_client.forget_chain(new_chain_id).await?;
     }
 
     let amount = Amount::ONE;
