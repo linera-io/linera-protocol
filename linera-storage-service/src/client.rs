@@ -64,7 +64,7 @@ pub struct ServiceStoreClientInternal {
     max_stream_queries: usize,
     cache_size: usize,
     namespace: Vec<u8>,
-    root_key: Vec<u8>,
+    start_key: Vec<u8>,
 }
 
 impl WithError for ServiceStoreClientInternal {
@@ -82,8 +82,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ServiceStoreError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
-        let mut full_key = self.namespace.clone();
-        full_key.extend(&self.root_key);
+        let mut full_key = self.start_key.clone();
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
         let request = tonic::Request::new(query);
@@ -106,8 +105,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, ServiceStoreError> {
         ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
-        let mut full_key = self.namespace.clone();
-        full_key.extend(&self.root_key);
+        let mut full_key = self.start_key.clone();
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
         let request = tonic::Request::new(query);
@@ -124,8 +122,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let mut full_keys = Vec::new();
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
-            let mut full_key = self.namespace.clone();
-            full_key.extend(&self.root_key);
+            let mut full_key = self.start_key.clone();
             full_key.extend(&key);
             full_keys.push(full_key);
         }
@@ -147,8 +144,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         let mut full_keys = Vec::new();
         for key in keys {
             ensure!(key.len() <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
-            let mut full_key = self.namespace.clone();
-            full_key.extend(&self.root_key);
+            let mut full_key = self.start_key.clone();
             full_key.extend(&key);
             full_keys.push(full_key);
         }
@@ -180,8 +176,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             key_prefix.len() <= MAX_KEY_SIZE,
             ServiceStoreError::KeyTooLong
         );
-        let mut full_key_prefix = self.namespace.clone();
-        full_key_prefix.extend(&self.root_key);
+        let mut full_key_prefix = self.start_key.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeysByPrefix {
             key_prefix: full_key_prefix,
@@ -212,8 +207,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             key_prefix.len() <= MAX_KEY_SIZE,
             ServiceStoreError::KeyTooLong
         );
-        let mut full_key_prefix = self.namespace.clone();
-        full_key_prefix.extend(&self.root_key);
+        let mut full_key_prefix = self.start_key.clone();
         full_key_prefix.extend(key_prefix);
         let query = RequestFindKeyValuesByPrefix {
             key_prefix: full_key_prefix,
@@ -250,13 +244,14 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
         }
         let mut statements = Vec::new();
         let mut chunk_size = 0;
+        let root_key_len = self.start_key.len() - self.namespace.len();
         for operation in batch.operations {
             let (key_len, value_len) = match &operation {
                 WriteOperation::Delete { key } => (key.len(), 0),
                 WriteOperation::Put { key, value } => (key.len(), value.len()),
                 WriteOperation::DeletePrefix { key_prefix } => (key_prefix.len(), 0),
             };
-            let operation_size = key_len + value_len + self.root_key.len();
+            let operation_size = key_len + value_len + root_key_len;
             ensure!(key_len <= MAX_KEY_SIZE, ServiceStoreError::KeyTooLong);
             if operation_size + chunk_size < MAX_PAYLOAD_SIZE {
                 let statement = self.get_statement(operation);
@@ -271,8 +266,7 @@ impl WritableKeyValueStore for ServiceStoreClientInternal {
                         // Only the put can go over the limit
                         unreachable!();
                     };
-                    let mut full_key = self.namespace.clone();
-                    full_key.extend(&self.root_key);
+                    let mut full_key = self.start_key.clone();
                     full_key.extend(key);
                     let value_chunks = value
                         .chunks(MAX_PAYLOAD_SIZE)
@@ -337,14 +331,12 @@ impl ServiceStoreClientInternal {
     fn get_statement(&self, operation: WriteOperation) -> Statement {
         let operation = match operation {
             WriteOperation::Delete { key } => {
-                let mut full_key = self.namespace.clone();
-                full_key.extend(&self.root_key);
+                let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 Operation::Delete(full_key)
             }
             WriteOperation::Put { key, value } => {
-                let mut full_key = self.namespace.clone();
-                full_key.extend(&self.root_key);
+                let mut full_key = self.start_key.clone();
                 full_key.extend(key);
                 Operation::Put(KeyValue {
                     key: full_key,
@@ -352,8 +344,7 @@ impl ServiceStoreClientInternal {
                 })
             }
             WriteOperation::DeletePrefix { key_prefix } => {
-                let mut full_key_prefix = self.namespace.clone();
-                full_key_prefix.extend(&self.root_key);
+                let mut full_key_prefix = self.start_key.clone();
                 full_key_prefix.extend(key_prefix);
                 Operation::DeletePrefix(full_key_prefix)
             }
@@ -402,14 +393,15 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let max_stream_queries = config.common_config.max_stream_queries;
         let cache_size = config.common_config.cache_size;
         let namespace = Self::namespace_as_vec(namespace)?;
-        let root_key = root_key.to_vec();
+        let mut start_key = namespace.clone();
+        start_key.extend(root_key);
         Ok(Self {
             channel,
             semaphore,
             max_stream_queries,
             cache_size,
             namespace,
-            root_key,
+            start_key,
         })
     }
 
@@ -419,14 +411,15 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let max_stream_queries = self.max_stream_queries;
         let cache_size = self.cache_size;
         let namespace = self.namespace.clone();
-        let root_key = root_key.to_vec();
+        let mut start_key = namespace.clone();
+        start_key.extend(root_key);
         Ok(Self {
             channel,
             semaphore,
             max_stream_queries,
             cache_size,
             namespace,
-            root_key,
+            start_key,
         })
     }
 
@@ -503,7 +496,7 @@ impl TestKeyValueStore for ServiceStoreClientInternal {
 /// Creates the `CommonStoreConfig` for the `ServiceStoreClientInternal`.
 pub fn create_service_store_common_config() -> CommonStoreConfig {
     let max_stream_queries = 100;
-    let cache_size = 10; // unused
+    let cache_size = linera_views::lru_caching::TEST_CACHE_SIZE;
     CommonStoreConfig {
         max_concurrent_queries: None,
         max_stream_queries,
