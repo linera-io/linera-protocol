@@ -296,7 +296,7 @@ pub trait Storage: Sized {
                 contract_blob
                     .into_inner_contract_bytecode()
                     .expect("Contract Bytecode Blob is of the wrong Blob type!")
-                    .try_into()?,
+                    .decompress()?,
                 wasm_runtime,
             )
             .await?,
@@ -335,7 +335,7 @@ pub trait Storage: Sized {
                 service_blob
                     .into_inner_service_bytecode()
                     .expect("Service Bytecode Blob is of the wrong Blob type!")
-                    .try_into()?,
+                    .decompress()?,
                 wasm_runtime,
             )
             .await?,
