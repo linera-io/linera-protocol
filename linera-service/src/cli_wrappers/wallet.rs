@@ -709,6 +709,16 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera wallet forget-chain CHAIN_ID`.
+    pub async fn forget_chain(&self, chain_id: ChainId) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .args(["wallet", "forget-chain"])
+            .arg(chain_id.to_string());
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     pub async fn retry_pending_block(
         &self,
         chain_id: Option<ChainId>,
