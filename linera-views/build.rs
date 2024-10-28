@@ -4,9 +4,8 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
         web: { all(target_arch = "wasm32", feature = "web") },
-        with_testing: { all(not(target_arch = "wasm32"), any(test, feature = "test")) },
+        with_testing: { any(test, feature = "test") },
         with_metrics: { all(not(target_arch = "wasm32"), feature = "metrics") },
-
         with_dynamodb: { all(not(target_arch = "wasm32"), feature = "dynamodb") },
         with_indexeddb: { all(web, feature = "indexeddb") },
         with_rocksdb: { all(not(target_arch = "wasm32"), feature = "rocksdb") },
