@@ -48,14 +48,14 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
                 return Err(NodeError::CannotResolveValidatorAddress {
                     address: address.to_string(),
                 });
-            },
+            }
         };
-        let channel = self
-            .pool
-            .channel(http_address.clone())
-            .map_err(|error| NodeError::GrpcError {
-                error: format!("error creating channel: {}", error),
-            })?;
+        let channel =
+            self.pool
+                .channel(http_address.clone())
+                .map_err(|error| NodeError::GrpcError {
+                    error: format!("error creating channel: {}", error),
+                })?;
 
         Ok(GrpcClient::new(
             http_address,
