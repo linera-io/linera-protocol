@@ -630,17 +630,17 @@ fn generate_shard_configs(
 
     for i in 1u16..=num_shards.into() {
         let index = format!("{i:0len$}", len = len);
-        let host = host.clone().replace(&pattern, &index);
+        let host = host.clone().replacen(&pattern, &index, 1);
         let port = port
             .clone()
-            .replace(&pattern, &index)
+            .replacen(&pattern, &index, 1)
             .parse()
             .context("Failed to decode port into an integers")?;
-        let metrics_host = metrics_host.clone().replace(&pattern, &index);
+        let metrics_host = metrics_host.clone().replacen(&pattern, &index, 1);
         let metrics_port = metrics_port
             .clone()
             .map(|port| {
-                port.replace(&pattern, &index)
+                port.replacen(&pattern, &index, 1)
                     .parse()
                     .context("Failed to decode metrics port into an integers")
             })
