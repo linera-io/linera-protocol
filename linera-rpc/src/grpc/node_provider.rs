@@ -35,16 +35,30 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
     type Node = GrpcClient;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let address = address.to_string();
+        let parts = address.split(':').collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return Err(NodeError::CannotResolveValidatorAddress {
+                address: address.to_string(),
+            });
+        }
+        let http_address = match parts[0] {
+            "grpc" => format!("http://{}:{}", parts[1], parts[2]),
+            "grpcs" => format!("https://{}:{}", parts[1], parts[2]),
+            _ => {
+                return Err(NodeError::CannotResolveValidatorAddress {
+                    address: address.to_string(),
+                });
+            },
+        };
         let channel = self
             .pool
-            .channel(address.clone())
+            .channel(http_address.clone())
             .map_err(|error| NodeError::GrpcError {
                 error: format!("error creating channel: {}", error),
             })?;
 
         Ok(GrpcClient::new(
-            address.to_string(),
+            http_address,
             channel,
             self.retry_delay,
             self.max_retries,
