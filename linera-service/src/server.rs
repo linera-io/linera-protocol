@@ -6,7 +6,7 @@
 
 use std::{
     borrow::Cow,
-    num::NonZeroUsize,
+    num::{NonZeroU16, NonZeroUsize},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -395,6 +395,40 @@ enum ServerCommand {
         #[arg(long, default_value = "1000")]
         cache_size: usize,
     },
+
+    /// Replaces the configurations of the shards by following the given template.
+    #[command(name = "edit-shards")]
+    EditShards {
+        /// Path to the file containing the server configuration of this Linera validator.
+        #[arg(long = "server")]
+        server_config_path: PathBuf,
+
+        /// The number N of shard configs to generate, possibly starting with zeroes. If
+        /// `N` was written using `D` digits, we will replace the string `"%" * D` (`%`
+        /// repeated D times) by the shard number.
+        #[arg(long)]
+        num_shards: String,
+
+        /// The host of the validator (IP address or hostname), possibly containing `%`
+        /// for digits of the shard number.
+        #[arg(long)]
+        host: String,
+
+        /// The port of the main endpoint, possibly containing `%` for digits of the shard
+        /// number.
+        #[arg(long)]
+        port: String,
+
+        /// The host for the metrics endpoint, possibly containing `%` for digits of the
+        /// shard number.
+        #[arg(long)]
+        metrics_host: String,
+
+        /// The port for the metrics endpoint, possibly containing `%` for digits of the
+        /// shard number.
+        #[arg(long)]
+        metrics_port: Option<String>,
+    },
 }
 
 fn main() {
@@ -430,7 +464,7 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
             ..
         } => {
             let server_config: ValidatorServerConfig =
-                util::read_json(server_config_path).expect("Fail to read server config");
+                util::read_json(server_config_path).expect("Failed to read server config");
             let name = &server_config.validator.name;
 
             if let Some(shard) = shard {
@@ -440,7 +474,9 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
             }
             .into()
         }
-        ServerCommand::Generate { .. } | ServerCommand::Initialize { .. } => "server".into(),
+        ServerCommand::Generate { .. }
+        | ServerCommand::Initialize { .. }
+        | ServerCommand::EditShards { .. } => "server".into(),
     }
 }
 
@@ -462,9 +498,9 @@ async fn run(options: ServerOptions) {
             cache_size,
         } => {
             let genesis_config: GenesisConfig =
-                util::read_json(&genesis_config_path).expect("Fail to read initial chain config");
+                util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let server_config: ValidatorServerConfig =
-                util::read_json(&server_config_path).expect("Fail to read server config");
+                util::read_json(&server_config_path).expect("Failed to read server config");
 
             #[cfg(feature = "rocksdb")]
             if server_config.internal_network.shards.len() > 1
@@ -544,7 +580,7 @@ async fn run(options: ServerOptions) {
             cache_size,
         } => {
             let genesis_config: GenesisConfig =
-                util::read_json(&genesis_config_path).expect("Fail to read initial chain config");
+                util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,
@@ -557,6 +593,50 @@ async fn run(options: ServerOptions) {
             full_initialize_storage(full_storage_config, &genesis_config)
                 .await
                 .unwrap();
+        }
+
+        ServerCommand::EditShards {
+            server_config_path,
+            num_shards,
+            host,
+            port,
+            metrics_host,
+            metrics_port,
+        } => {
+            let mut server_config: ValidatorServerConfig =
+                util::read_json(&server_config_path).expect("Failed to read server config");
+            let mut shards = Vec::new();
+            let len = num_shards.len();
+            let num_shards = num_shards
+                .parse::<NonZeroU16>()
+                .expect("Failed to parse the number of shards");
+            let pattern = "%".repeat(len);
+
+            for i in 1u16..=num_shards.into() {
+                let index = format!("{i:0len$}", len = len);
+                let host = host.clone().replace(&pattern, &index);
+                let port = port
+                    .clone()
+                    .replace(&pattern, &index)
+                    .parse()
+                    .expect("Failed to decode port into an integers");
+                let metrics_host = metrics_host.clone().replace(&pattern, &index);
+                let metrics_port = metrics_port.clone().map(|port| {
+                    port.replace(&pattern, &index)
+                        .parse()
+                        .expect("Failed to decode metrics port into an integers")
+                });
+                let shard = ShardConfig {
+                    host,
+                    port,
+                    metrics_host,
+                    metrics_port,
+                };
+                shards.push(shard);
+            }
+            server_config.internal_network.shards = shards;
+            util::write_json(&server_config_path, &server_config)
+                .expect("Failed to write updated server config");
         }
     }
 }
