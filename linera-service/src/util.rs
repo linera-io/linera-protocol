@@ -61,16 +61,6 @@ pub fn read_json<T: serde::de::DeserializeOwned>(
     Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
 }
 
-pub fn write_json<T: serde::Serialize>(
-    path: impl Into<std::path::PathBuf>,
-    value: &T,
-) -> anyhow::Result<()> {
-    Ok(serde_json::to_writer_pretty(
-        fs_err::File::create(path)?,
-        value,
-    )?)
-}
-
 #[cfg(with_testing)]
 use {
     std::io::Write,

@@ -557,17 +557,16 @@ async fn run(options: ServerOptions) {
                 config_validators.push(Persist::into_value(server).validator);
             }
             if let Some(committee) = committee {
-                Persist::persist(
-                    &mut persistent::File::new(
-                        &committee,
-                        CommitteeConfig {
-                            validators: config_validators,
-                        },
-                    )
-                    .expect("Unable to open committee configuration"),
+                let mut config = persistent::File::new(
+                    &committee,
+                    CommitteeConfig {
+                        validators: config_validators,
+                    },
                 )
-                .await
-                .expect("Unable to write committee description");
+                .expect("Unable to open committee configuration");
+                Persist::persist(&mut config)
+                    .await
+                    .expect("Unable to write committee description");
                 info!("Wrote committee config {}", committee.to_str().unwrap());
             }
         }
@@ -603,12 +602,14 @@ async fn run(options: ServerOptions) {
             metrics_host,
             metrics_port,
         } => {
-            let mut server_config: ValidatorServerConfig =
-                util::read_json(&server_config_path).expect("Failed to read server config");
+            let mut server_config =
+                persistent::File::<ValidatorServerConfig>::read(&server_config_path)
+                    .expect("Failed to read server config");
             let shards = generate_shard_configs(num_shards, host, port, metrics_host, metrics_port)
                 .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
-            util::write_json(&server_config_path, &server_config)
+            Persist::persist(&mut server_config)
+                .await
                 .expect("Failed to write updated server config");
         }
     }
