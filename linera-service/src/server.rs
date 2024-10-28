@@ -481,8 +481,6 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
 }
 
 async fn run(options: ServerOptions) {
-    linera_version::VERSION_INFO.log();
-
     match options.command {
         ServerCommand::Run {
             server_config_path,
@@ -497,6 +495,8 @@ async fn run(options: ServerOptions) {
             max_stream_queries,
             cache_size,
         } => {
+            linera_version::VERSION_INFO.log();
+
             let genesis_config: GenesisConfig =
                 util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let server_config: ValidatorServerConfig =
