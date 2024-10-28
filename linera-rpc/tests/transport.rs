@@ -18,7 +18,7 @@ async fn client() {
 
     let retry_delay = Duration::from_millis(100);
     let max_retries = 5;
-    let address = "127.0.0.1:9000".to_string();
+    let address = "http://127.0.0.1:9000".to_string();
     let options = Options {
         connect_timeout: Some(Duration::from_millis(100)),
         timeout: Some(Duration::from_millis(100)),
