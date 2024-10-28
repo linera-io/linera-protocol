@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::crypto::{CryptoRng, KeyPair};
@@ -605,40 +605,55 @@ async fn run(options: ServerOptions) {
         } => {
             let mut server_config: ValidatorServerConfig =
                 util::read_json(&server_config_path).expect("Failed to read server config");
-            let mut shards = Vec::new();
-            let len = num_shards.len();
-            let num_shards = num_shards
-                .parse::<NonZeroU16>()
-                .expect("Failed to parse the number of shards");
-            let pattern = "%".repeat(len);
-
-            for i in 1u16..=num_shards.into() {
-                let index = format!("{i:0len$}", len = len);
-                let host = host.clone().replace(&pattern, &index);
-                let port = port
-                    .clone()
-                    .replace(&pattern, &index)
-                    .parse()
-                    .expect("Failed to decode port into an integers");
-                let metrics_host = metrics_host.clone().replace(&pattern, &index);
-                let metrics_port = metrics_port.clone().map(|port| {
-                    port.replace(&pattern, &index)
-                        .parse()
-                        .expect("Failed to decode metrics port into an integers")
-                });
-                let shard = ShardConfig {
-                    host,
-                    port,
-                    metrics_host,
-                    metrics_port,
-                };
-                shards.push(shard);
-            }
+            let shards = generate_shard_configs(num_shards, host, port, metrics_host, metrics_port)
+                .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
             util::write_json(&server_config_path, &server_config)
                 .expect("Failed to write updated server config");
         }
     }
+}
+
+fn generate_shard_configs(
+    num_shards: String,
+    host: String,
+    port: String,
+    metrics_host: String,
+    metrics_port: Option<String>,
+) -> anyhow::Result<Vec<ShardConfig>> {
+    let mut shards = Vec::new();
+    let len = num_shards.len();
+    let num_shards = num_shards
+        .parse::<NonZeroU16>()
+        .context("Failed to parse the number of shards")?;
+    let pattern = "%".repeat(len);
+
+    for i in 1u16..=num_shards.into() {
+        let index = format!("{i:0len$}", len = len);
+        let host = host.clone().replace(&pattern, &index);
+        let port = port
+            .clone()
+            .replace(&pattern, &index)
+            .parse()
+            .context("Failed to decode port into an integers")?;
+        let metrics_host = metrics_host.clone().replace(&pattern, &index);
+        let metrics_port = metrics_port
+            .clone()
+            .map(|port| {
+                port.replace(&pattern, &index)
+                    .parse()
+                    .context("Failed to decode metrics port into an integers")
+            })
+            .transpose()?;
+        let shard = ShardConfig {
+            host,
+            port,
+            metrics_host,
+            metrics_port,
+        };
+        shards.push(shard);
+    }
+    Ok(shards)
 }
 
 #[cfg(test)]
@@ -701,5 +716,42 @@ mod test {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn test_generate_shard_configs() {
+        assert_eq!(
+            generate_shard_configs(
+                "02".into(),
+                "host%%".into(),
+                "10%%".into(),
+                "metrics_host%%".into(),
+                Some("11%%".into())
+            )
+            .unwrap(),
+            vec![
+                ShardConfig {
+                    host: "host01".into(),
+                    port: 1001,
+                    metrics_host: "metrics_host01".into(),
+                    metrics_port: Some(1101),
+                },
+                ShardConfig {
+                    host: "host02".into(),
+                    port: 1002,
+                    metrics_host: "metrics_host02".into(),
+                    metrics_port: Some(1102),
+                },
+            ],
+        );
+
+        assert!(generate_shard_configs(
+            "2".into(),
+            "host%%".into(),
+            "10%%".into(),
+            "metrics_host%%".into(),
+            Some("11%%".into())
+        )
+        .is_err());
     }
 }
