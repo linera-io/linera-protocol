@@ -16,7 +16,7 @@ use linera_core::{
     worker::Notification,
 };
 use linera_version::VersionInfo;
-use tonic::{transport::Channel, Code, IntoRequest, Request, Status};
+use tonic::{Code, IntoRequest, Request, Status};
 use tracing::{debug, error, info, instrument, warn};
 #[cfg(not(web))]
 use {
@@ -42,7 +42,12 @@ pub struct GrpcClient {
 }
 
 impl GrpcClient {
-    pub fn new(address: String, channel: Channel, retry_delay: Duration, max_retries: u32) -> Self {
+    pub fn new(
+        address: String,
+        channel: transport::Channel,
+        retry_delay: Duration,
+        max_retries: u32,
+    ) -> Self {
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);

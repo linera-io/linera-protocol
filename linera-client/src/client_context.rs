@@ -22,7 +22,10 @@ use linera_core::{
     join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
 };
-use linera_rpc::node_provider::{NodeOptions, NodeProvider};
+use linera_rpc::{
+    grpc::transport::create_channel,
+    node_provider::{NodeOptions, NodeProvider},
+};
 use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
@@ -888,9 +891,15 @@ where
                         self.recv_timeout,
                     ))
                 }
-                NetworkProtocol::Grpc { .. } => Box::new(
-                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
-                ),
+                NetworkProtocol::Grpc { .. } => {
+                    let node_options = self.make_node_options();
+                    let options = (&node_options).into();
+                    let address = config.network.http_address();
+                    let channel = create_channel(address.clone(), &options).unwrap();
+                    let retry_relay = node_options.send_timeout;
+                    let max_retries = node_options.max_retries;
+                    Box::new(GrpcClient::new(address, channel, retry_relay, max_retries))
+                }
             };
 
             validator_clients.push(client);
