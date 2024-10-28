@@ -898,16 +898,16 @@ where
             LocalNodeError::InactiveChain(self.chain_id)
         );
         let state = self.state();
-        let mut identities = manager
+        let mut our_identities = manager
             .ownership
             .all_owners()
             .chain(&manager.leader)
             .filter(|owner| state.known_key_pairs().contains_key(owner));
-        let Some(identity) = identities.next() else {
+        let Some(identity) = our_identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
         ensure!(
-            identities.all(|id| id == identity),
+            our_identities.all(|id| id == identity),
             ChainClientError::FoundMultipleKeysForChain(self.chain_id)
         );
         Ok(*identity)
@@ -938,12 +938,30 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        // Verify that our local storage contains enough history compared to the
-        // expected block height. Otherwise, download the missing history from the
-        // network.
-        let next_block_height = self.next_block_height();
+        let mut info = self.sync_until(self.next_block_height()).await?;
+
+        // If, during sync above, we've learned about new owners we need to check if the chain
+        // has been extended beyoned `self.next_block_height()`.
+        if self.state().has_other_owners(&info.manager.ownership) {
+            // For chains with any owner other than ourselves, we could be missing recent
+            // certificates created by other owners. Further synchronize blocks from the network.
+            // This is a best-effort that depends on network conditions.
+            let nodes = self.validator_nodes().await?;
+            info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
+        }
+        self.update_from_info(&info);
+        Ok(info)
+    }
+
+    // Verify that our local storage contains enough history compared to the
+    // expected block height. Otherwise, download the missing history from the
+    // network.
+    async fn sync_until(
+        &self,
+        next_block_height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         let nodes = self.validator_nodes().await?;
-        let mut info = self
+        let info = self
             .client
             .download_certificates(&nodes, self.chain_id, next_block_height)
             .await?;
@@ -954,14 +972,6 @@ where
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
-        if self.state().has_other_owners(&info.manager.ownership) {
-            // For chains with any owner other than ourselves, we could be missing recent
-            // certificates created by other owners. Further synchronize blocks from the network.
-            // This is a best-effort that depends on network conditions.
-            let nodes = self.validator_nodes().await?;
-            info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
-        }
-        self.update_from_info(&info);
         Ok(info)
     }
 
@@ -1776,6 +1786,7 @@ where
     /// Attempts to execute the block locally. If any incoming message execution fails, that
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
+    // TODO: Measure how failing messages affect the execution times.
     #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
@@ -2027,14 +2038,14 @@ where
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
                         height = %certificate.value().height(),
                         "Another block was committed; retrying."
                     );
-                }
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
             };
         }
@@ -2066,10 +2077,10 @@ where
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
-            ClientOutcome::Committed(None) => {}
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
+            ClientOutcome::Committed(None) => {}
         }
         let incoming_bundles = self.pending_message_bundles().await?;
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
@@ -2080,6 +2091,7 @@ where
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
+                // How could this have happened? We took the exclusive lock.
                 Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
             // Should be unreachable: We did set a pending block.
@@ -2479,12 +2491,7 @@ where
                 "Conflicting proposal in the current round.",
             ));
         };
-        let can_propose = match round {
-            Round::Fast => manager.ownership.super_owners.contains_key(&identity),
-            Round::MultiLeader(_) => true,
-            Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
-        };
-        if can_propose {
+        if manager.can_propose(&identity, round) {
             let certificate = self.propose_block(block.clone(), round, manager).await?;
             Ok(ClientOutcome::Committed(Some(certificate)))
         } else {
