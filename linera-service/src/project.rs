@@ -40,6 +40,9 @@ impl Project {
         debug!("Creating the source directory");
         let source_directory = Self::create_source_directory(&root)?;
 
+        debug!("Creating the tests directory");
+        let test_directory = Self::create_test_directory(&root)?;
+
         debug!("Initializing git repository");
         Self::initialize_git_repository(&root)?;
 
@@ -60,6 +63,9 @@ impl Project {
 
         debug!("writing service.rs");
         Self::create_service_file(&source_directory, name)?;
+
+        debug!("writing single_chain.rs");
+        Self::create_test_file(&test_directory, name)?;
 
         Ok(Self { root })
     }
@@ -113,6 +119,12 @@ impl Project {
         Ok(source_directory)
     }
 
+    fn create_test_directory(project_root: &Path) -> Result<PathBuf> {
+        let test_directory = project_root.join("tests");
+        fs_err::create_dir(&test_directory)?;
+        Ok(test_directory)
+    }
+
     fn initialize_git_repository(project_root: &Path) -> Result<()> {
         let output = Command::new("git")
             .args([
@@ -148,6 +160,7 @@ impl Project {
             contract_binary_name = contract_binary_name,
             service_binary_name = service_binary_name,
             linera_sdk_dep = linera_sdk_dep,
+            linera_sdk_testing_dep = linera_sdk_dev_dep,
             linera_sdk_dev_dep = linera_sdk_dev_dep,
         );
         Self::write_string_to_file(&toml_path, &toml_contents)
@@ -202,6 +215,17 @@ impl Project {
         Self::write_string_to_file(&service_path, &service_contents)
     }
 
+    fn create_test_file(test_directory: &Path, name: &str) -> Result<()> {
+        let project_name = name.to_case(Case::Pascal);
+        let test_path = test_directory.join("single_chain.rs");
+        let test_contents = format!(
+            include_str!("../template/tests/single_chain.rs.template"),
+            project_name = name.replace('-', "_"),
+            project_abi = project_name,
+        );
+        Self::write_string_to_file(&test_path, &test_contents)
+    }
+
     fn write_string_to_file(path: &Path, content: &str) -> Result<()> {
         let mut file = File::create(path)?;
         file.write_all(content.as_bytes())?;
@@ -237,7 +261,7 @@ impl Project {
         let version = env!("CARGO_PKG_VERSION");
         let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);
         let linera_sdk_dev_dep = format!(
-            "linera-sdk = {{ version = \"{}\", features = [\"test\"] }}",
+            "linera-sdk = {{ version = \"{}\", features = [\"test\", \"wasmer\"] }}",
             version
         );
         (linera_sdk_dep, linera_sdk_dev_dep)
