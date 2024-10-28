@@ -347,23 +347,22 @@ where
         content: &BlobContent,
         policy: &ResourceControlPolicy,
     ) -> Result<(), WorkerError> {
-        let blob_size = match content {
-            BlobContent::Data(bytes) => bytes.len(),
+        ensure!(
+            u64::try_from(content.size())
+                .ok()
+                .is_some_and(|size| size <= policy.maximum_blob_size),
+            WorkerError::BlobTooLarge
+        );
+        match content {
             BlobContent::ContractBytecode(compressed_bytecode)
             | BlobContent::ServiceBytecode(compressed_bytecode) => {
                 ensure!(
                     compressed_bytecode.decompressed_size_at_most(policy.maximum_bytecode_size)?,
                     WorkerError::BytecodeTooLarge
                 );
-                compressed_bytecode.compressed_bytes.len()
             }
-        };
-        ensure!(
-            u64::try_from(blob_size)
-                .ok()
-                .is_some_and(|size| size <= policy.maximum_blob_size),
-            WorkerError::BlobTooLarge
-        );
+            BlobContent::Data(_) => {}
+        }
         Ok(())
     }
 }
