@@ -41,7 +41,10 @@ use crate::client::client_tests::RocksDbStorageBuilder;
 use crate::client::client_tests::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::client::client_tests::ServiceStorageBuilder;
-use crate::client::client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder};
+use crate::client::{
+    client_tests::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
+    ChainClientError, MAXIMUM_BYTECODE_SIZE,
+};
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -147,6 +150,18 @@ where
     // Creating the application used fuel because of the `instantiate` call.
     let balance_after_init = creator.local_balance().await?;
     assert!(balance_after_init < balance_after_messaging);
+
+    let large_bytecode = Bytecode::new(vec![0; MAXIMUM_BYTECODE_SIZE as usize + 1]);
+    let small_bytecode = Bytecode::new(vec![]);
+    // Publishing bytecode that exceeds the limit fails.
+    let result = publisher
+        .publish_bytecode(large_bytecode.clone(), small_bytecode.clone())
+        .await;
+    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    let result = publisher
+        .publish_bytecode(small_bytecode, large_bytecode)
+        .await;
+    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
 
     Ok(())
 }

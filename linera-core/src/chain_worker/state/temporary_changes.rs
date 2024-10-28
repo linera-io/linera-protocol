@@ -3,10 +3,10 @@
 
 //! Operations that don't persist any changes to the chain state.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeSet};
 
 use linera_base::{
-    data_types::{ArithmeticError, Timestamp, UserApplicationDescription},
+    data_types::{ArithmeticError, BlobContent, Timestamp, UserApplicationDescription},
     ensure,
     identifiers::{GenericApplicationId, UserApplicationId},
 };
@@ -28,6 +28,7 @@ use {
 
 use super::{check_block_epoch, ChainWorkerState};
 use crate::{
+    client::{MAXIMUM_BLOB_SIZE, MAXIMUM_BYTECODE_SIZE},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     worker::WorkerError,
 };
@@ -207,11 +208,19 @@ where
         self.0.chain.remove_bundles_from_inboxes(block).await?;
         // Verify that all required bytecode hashed certificate values and blobs are available, and no
         // unrelated ones provided.
+        let published_blob_ids = block.published_blob_ids();
         self.0
-            .check_no_missing_blobs(block.published_blob_ids(), blobs)
+            .check_no_missing_blobs(published_blob_ids.clone(), blobs)
             .await?;
         for blob in blobs {
+            Self::check_blob_size(blob.content())?;
             self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
+        }
+        let checked_blobs = blobs.iter().map(|blob| blob.id()).collect::<BTreeSet<_>>();
+        for blob in self.0.get_blobs(published_blob_ids).await? {
+            if !checked_blobs.contains(&blob.id()) {
+                Self::check_blob_size(blob.content())?;
+            }
         }
 
         let local_time = self.0.storage.clock().current_time();
@@ -332,6 +341,26 @@ where
             info.manager.add_values(chain.manager.get());
         }
         Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
+    }
+
+    fn check_blob_size(content: &BlobContent) -> Result<(), WorkerError> {
+        ensure!(
+            u64::try_from(content.size())
+                .ok()
+                .is_some_and(|size| size <= MAXIMUM_BLOB_SIZE),
+            WorkerError::BlobTooLarge
+        );
+        match content {
+            BlobContent::ContractBytecode(compressed_bytecode)
+            | BlobContent::ServiceBytecode(compressed_bytecode) => {
+                ensure!(
+                    compressed_bytecode.decompressed_size_at_most(MAXIMUM_BYTECODE_SIZE)?,
+                    WorkerError::BytecodeTooLarge
+                );
+            }
+            BlobContent::Data(_) => {}
+        }
+        Ok(())
     }
 }
 
