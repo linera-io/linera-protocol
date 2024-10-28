@@ -21,7 +21,7 @@ use crate::data_types::ChainInfo;
 
 /// The state of our interaction with a particular chain: how far we have synchronized it and
 /// whether we are currently attempting to propose a new block.
-pub struct ChainState {
+pub struct ChainClientState {
     /// Latest block hash, if any.
     block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
@@ -48,7 +48,7 @@ pub struct ChainState {
     client_mutex: Arc<Mutex<()>>,
 }
 
-impl ChainState {
+impl ChainClientState {
     pub fn new(
         known_key_pairs: Vec<KeyPair>,
         block_hash: Option<CryptoHash>,
@@ -56,12 +56,12 @@ impl ChainState {
         next_block_height: BlockHeight,
         pending_block: Option<Block>,
         pending_blobs: BTreeMap<BlobId, Blob>,
-    ) -> ChainState {
+    ) -> ChainClientState {
         let known_key_pairs = known_key_pairs
             .into_iter()
             .map(|kp| (Owner::from(kp.public()), kp))
             .collect();
-        let mut state = ChainState {
+        let mut state = ChainClientState {
             known_key_pairs,
             block_hash,
             timestamp,

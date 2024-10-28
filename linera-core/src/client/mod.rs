@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use chain_state::ChainState;
+use chain_client_state::ChainClientState;
 use dashmap::{
     mapref::one::{MappedRef as DashMapMappedRef, Ref as DashMapRef, RefMut as DashMapRefMut},
     DashMap,
@@ -78,7 +78,7 @@ use crate::{
     worker::{Notification, Reason, WorkerError, WorkerState},
 };
 
-mod chain_state;
+mod chain_client_state;
 #[cfg(test)]
 #[path = "../unit_tests/client_tests.rs"]
 mod client_tests;
@@ -182,7 +182,7 @@ where
     /// to retrieve it.
     storage: Storage,
     /// Chain state for the managed chains.
-    chains: DashMap<ChainId, ChainState>,
+    chains: DashMap<ChainId, ChainClientState>,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
@@ -260,7 +260,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         // If the entry already exists we assume that the entry is more up to date than
         // the arguments: If they were read from the wallet file, they might be stale.
         if let dashmap::mapref::entry::Entry::Vacant(e) = self.chains.entry(chain_id) {
-            e.insert(ChainState::new(
+            e.insert(ChainClientState::new(
                 known_key_pairs,
                 block_hash,
                 timestamp,
@@ -582,12 +582,12 @@ impl<T: DerefMut> DerefMut for Unsend<T> {
 
 pub type ChainGuard<'a, T> = Unsend<DashMapRef<'a, ChainId, T>>;
 pub type ChainGuardMut<'a, T> = Unsend<DashMapRefMut<'a, ChainId, T>>;
-pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainState, T>>;
+pub type ChainGuardMapped<'a, T> = Unsend<DashMapMappedRef<'a, ChainId, ChainClientState, T>>;
 
 impl<P: 'static, S: Storage> ChainClient<P, S> {
     /// Gets a shared reference to the chain's state.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn state(&self) -> ChainGuard<ChainState> {
+    pub fn state(&self) -> ChainGuard<ChainClientState> {
         Unsend::new(
             self.client
                 .chains
@@ -599,7 +599,7 @@ impl<P: 'static, S: Storage> ChainClient<P, S> {
     /// Gets a mutable reference to the state.
     /// Beware: this will block any other reference to any chain's state!
     #[tracing::instrument(level = "trace", skip(self))]
-    fn state_mut(&self) -> ChainGuardMut<ChainState> {
+    fn state_mut(&self) -> ChainGuardMut<ChainClientState> {
         Unsend::new(
             self.client
                 .chains
