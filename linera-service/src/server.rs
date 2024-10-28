@@ -404,8 +404,8 @@ enum ServerCommand {
         server_config_path: PathBuf,
 
         /// The number N of shard configs to generate, possibly starting with zeroes. If
-        /// `N` was written using `D` digits, we will replace the string `"%" * D` (`%`
-        /// repeated D times) by the shard number.
+        /// `N` was written using `D` digits, we will replace the first occurrence of the
+        /// string `"%" * D` (`%` repeated D times) by the shard number.
         #[arg(long)]
         num_shards: String,
 
@@ -629,16 +629,15 @@ fn generate_shard_configs(
     let pattern = "%".repeat(len);
 
     for i in 1u16..=num_shards.into() {
-        let index = format!("{i:0len$}", len = len);
-        let host = host.clone().replacen(&pattern, &index, 1);
+        let index = format!("{i:0len$}");
+        let host = host.replacen(&pattern, &index, 1);
         let port = port
-            .clone()
             .replacen(&pattern, &index, 1)
             .parse()
             .context("Failed to decode port into an integers")?;
-        let metrics_host = metrics_host.clone().replacen(&pattern, &index, 1);
+        let metrics_host = metrics_host.replacen(&pattern, &index, 1);
         let metrics_port = metrics_port
-            .clone()
+            .as_ref()
             .map(|port| {
                 port.replacen(&pattern, &index, 1)
                     .parse()
