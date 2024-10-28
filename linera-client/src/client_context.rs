@@ -22,10 +22,7 @@ use linera_core::{
     join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
 };
-use linera_rpc::{
-    grpc::transport::create_channel,
-    node_provider::{NodeOptions, NodeProvider},
-};
+use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage;
 use thiserror_context::Context;
 use tracing::{debug, info};
@@ -45,8 +42,11 @@ use {
         Operation,
     },
     linera_rpc::{
-        config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
-        simple::SimpleMassClient, RpcMessage,
+        config::NetworkProtocol,
+        grpc::{transport::create_channel, GrpcClient},
+        mass_client::MassClient,
+        simple::SimpleMassClient,
+        RpcMessage,
     },
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
