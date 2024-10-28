@@ -220,7 +220,7 @@ impl Project {
         let test_path = test_directory.join("single_chain.rs");
         let test_contents = format!(
             include_str!("../template/tests/single_chain.rs.template"),
-            project_name = project_name.to_lowercase(),
+            project_name = name.replace('-', "_"),
             project_abi = project_name,
         );
         Self::write_string_to_file(&test_path, &test_contents)

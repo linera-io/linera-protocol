@@ -8,7 +8,7 @@
 use {project_name}::Operation;
 use linera_sdk::test::TestValidator;
 
-/// Test setting a counter and testing its coherency across microchains.
+/// Tests setting and incrementing a counter
 ///
 /// Creates the application on a `chain`, initializing it with a 10 then add 10 and obtain 20.
 /// which is then checked.
