@@ -12,9 +12,16 @@ This module provides web files to run a block explorer from Linera service node 
 npm install
 ```
 and then
-```
+```bash
 npm run full
 ```
+
+Then, to serve the web application on a local server, run:
+```bash
+npm run serve
+```
+
+The URL to access the Block Explorer will be printed.
 
 ## Contributing
 
