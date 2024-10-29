@@ -817,11 +817,6 @@ where
                 owner,
                 recipient,
             } => {
-                ensure!(
-                    context.authenticated_signer == Some(owner),
-                    SystemExecutionError::UnauthenticatedClaimOwner
-                );
-
                 self.debit(Some(&AccountOwner::User(owner)), amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
