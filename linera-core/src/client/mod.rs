@@ -1178,14 +1178,18 @@ where
 
         // Obtain the chain heights we already have from the local node.
         let futures = remote_node_chains_view
-            .keys()
-            .map(|sender_chain_id| async move {
-                let query = ChainInfoQuery::new(*sender_chain_id);
+            .into_iter()
+            .map(|(sender_chain_id, remote_height)| async move {
+                let query = ChainInfoQuery::new(sender_chain_id);
                 let local_response = self.local_query(query).await?;
-                Ok::<_, NodeError>(local_response.info.next_block_height)
+                Ok::<_, NodeError>((
+                    sender_chain_id,
+                    remote_height,
+                    local_response.info.next_block_height,
+                ))
             })
             .collect::<Vec<_>>();
-        let local_next_heights = stream::iter(futures)
+        let heights = stream::iter(futures)
             .buffer_unordered(chain_worker_limit)
             .try_collect::<Vec<_>>()
             .await?;
@@ -1193,46 +1197,42 @@ where
         // We keep track of the height we've successfully downloaded and checked, per chain.
         let mut downloaded_heights = BTreeMap::new();
 
-        let certificate_hashes = future::try_join_all(
-            remote_node_chains_view
-                .into_iter()
-                .zip(local_next_heights)
-                .filter_map(|((sender_chain_id, remote_height), local_next)| {
-                    if let Ok(height) = local_next.try_sub_one() {
-                        downloaded_heights.insert(sender_chain_id, height);
+        let certificate_hashes = future::try_join_all(heights.into_iter().filter_map(
+            |(sender_chain_id, remote_height, local_next)| {
+                if let Ok(height) = local_next.try_sub_one() {
+                    downloaded_heights.insert(sender_chain_id, height);
+                }
+
+                // Find the first and last block height in the batch that we need.
+                if local_next > remote_height {
+                    // Our highest, locally-known block is higher than any block height
+                    // from the current batch. Skip this batch, but remember to wait for
+                    // the messages to be delivered to the inboxes.
+                    other_sender_chains.push(sender_chain_id);
+                    return None;
+                }
+
+                // Find the hashes of the blocks we need.
+                Some(async move {
+                    let batch_size = remote_height.saturating_sub(local_next).0.saturating_add(1);
+                    let block_batch_range = BlockHeightRange::multi(local_next, batch_size);
+                    let query = ChainInfoQuery::new(sender_chain_id)
+                        .with_sent_certificate_hashes_in_range(block_batch_range.clone());
+                    let remote_response = remote_node.handle_chain_info_query(query).await?;
+                    let hashes = remote_response.requested_sent_certificate_hashes;
+
+                    if hashes.len() as u64 != batch_size {
+                        error!(
+                            block_range = ?block_batch_range,
+                            received_num = hashes.len(),
+                            "Validator sent invalid number of certificate hashes."
+                        );
+                        return Err(NodeError::InvalidChainInfoResponse);
                     }
-
-                    // Find the first and last block height in the batch that we need.
-                    if local_next > remote_height {
-                        // Our highest, locally-known block is higher than any block height
-                        // from the current batch. Skip this batch, but remember to wait for
-                        // the messages to be delivered to the inboxes.
-                        other_sender_chains.push(sender_chain_id);
-                        return None;
-                    }
-
-                    // Find the hashes of the blocks we need.
-                    Some(async move {
-                        let batch_size =
-                            remote_height.saturating_sub(local_next).0.saturating_add(1);
-                        let block_batch_range = BlockHeightRange::multi(local_next, batch_size);
-                        let query = ChainInfoQuery::new(sender_chain_id)
-                            .with_sent_certificate_hashes_in_range(block_batch_range.clone());
-                        let remote_response = remote_node.handle_chain_info_query(query).await?;
-                        let hashes = remote_response.requested_sent_certificate_hashes;
-
-                        if hashes.len() as u64 != batch_size {
-                            error!(
-                                block_range = ?block_batch_range,
-                                received_num = hashes.len(),
-                                "Validator sent invalid number of certificate hashes."
-                            );
-                            return Err(NodeError::InvalidChainInfoResponse);
-                        }
-                        Ok(hashes)
-                    })
-                }),
-        )
+                    Ok(hashes)
+                })
+            },
+        ))
         .await?
         .into_iter()
         .flatten()
