@@ -354,6 +354,9 @@ impl AdminKeyValueStore for MemoryStore {
         let mut memory_stores = MEMORY_STORES
             .lock()
             .expect("MEMORY_STORES lock should not be poisoned");
+        if memory_stores.sync_exists(namespace) {
+            return Err(MemoryStoreError::AlreadyExist);
+        }
         memory_stores.sync_create(namespace);
         Ok(())
     }
@@ -391,6 +394,10 @@ pub fn create_test_memory_store() -> MemoryStore {
 /// The error type for [`MemoryStore`].
 #[derive(Error, Debug)]
 pub enum MemoryStoreError {
+    /// Already existing table
+    #[error("Store already exist during a create operation")]
+    AlreadyExist,
+
     /// Serialization error with BCS.
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
