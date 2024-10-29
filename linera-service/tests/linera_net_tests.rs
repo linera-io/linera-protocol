@@ -3058,29 +3058,25 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
     // Make sure all incoming messages are processed, and get both chains' heights.
     let mut next_height1 = {
         let node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
-        node_service1.process_inbox(&chain_id1).await.unwrap();
+        node_service1.process_inbox(&chain_id1).await?;
         let mut chain = node_service1
             .query_node(&format!(
                 "query {{ chain(chainId: \"{chain_id1}\") {{ tipState {{ nextBlockHeight }} }} }}"
             ))
-            .await
-            .unwrap();
-        serde_json::from_value::<BlockHeight>(chain["chain"]["tipState"]["nextBlockHeight"].take())
-            .unwrap()
+            .await?;
+        serde_json::from_value::<BlockHeight>(chain["chain"]["tipState"]["nextBlockHeight"].take())?
     };
     let mut next_height2 = {
-        node_service2.process_inbox(&chain_id2).await.unwrap();
+        node_service2.process_inbox(&chain_id2).await?;
         let mut chain = node_service2
             .query_node(&format!(
                 "query {{ chain(chainId: \"{chain_id2}\") {{ tipState {{ nextBlockHeight }} }} }}"
             ))
-            .await
-            .unwrap();
-        serde_json::from_value::<BlockHeight>(chain["chain"]["tipState"]["nextBlockHeight"].take())
-            .unwrap()
+            .await?;
+        serde_json::from_value::<BlockHeight>(chain["chain"]["tipState"]["nextBlockHeight"].take())?
     };
 
-    let mut notifications2 = Box::pin(node_service2.notifications(chain_id2).await.unwrap());
+    let mut notifications2 = Box::pin(node_service2.notifications(chain_id2).await?);
     let mut block_duration = Duration::ZERO;
     let mut message_duration = Duration::ZERO;
 
@@ -3089,8 +3085,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         let start_time = Instant::now();
         client1
             .transfer(Amount::from_attos(1), chain_id1, chain_id2)
-            .await
-            .unwrap();
+            .await?;
         let mut got_message = false;
 
         // Wait until chain 2 created a block receiving the tokens.
@@ -3099,8 +3094,11 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
             let duration = timeout.duration_since(Instant::now());
             let sleep = Box::pin(linera_base::time::timer::sleep(duration));
             let reason = match future::select(notifications2.next(), sleep).await {
-                Either::Right(((), _)) | Either::Left((None, _)) => {
+                Either::Left((None, _)) => {
                     panic!("Failed to receive notification about transfer #{i}.");
+                }
+                Either::Right(((), _)) => {
+                    panic!("Timeout to receive notification about transfer #{i}.");
                 }
                 Either::Left((Some(Err(error)), _)) => {
                     panic!("Error waiting for notification about transfer #{i}: {error}");
@@ -3117,7 +3115,10 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                     assert_eq!(height, next_height1);
                     assert_eq!(origin.sender, chain_id1);
                     assert_eq!(origin.medium, Medium::Direct);
-                    assert!(!got_message, "Duplicate message notification");
+                    assert!(
+                        !got_message,
+                        "Duplicate message notification about transfer #{i}"
+                    );
                     got_message = true;
                     next_height1.0 += 1;
                     if i >= WARMUP_ITERATIONS {
@@ -3126,14 +3127,19 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                 }
                 Reason::NewBlock { height, hash } => {
                     assert_eq!(height, next_height2);
-                    assert!(got_message, "Missing message notification");
+                    assert!(
+                        got_message,
+                        "Missing message notification about transfer #{i}"
+                    );
                     next_height2.0 += 1;
                     if i >= WARMUP_ITERATIONS {
                         block_duration += start_time.elapsed();
                     }
                     break hash;
                 }
-                reason @ Reason::NewRound { .. } => panic!("Unexpected notification {reason:?}"),
+                reason @ Reason::NewRound { .. } => {
+                    panic!("Unexpected notification about transfer #{i} {reason:?}")
+                }
             }
         };
 
@@ -3146,15 +3152,14 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
                     }} }} }} }} \
                 }} }}"
             ))
-            .await
-            .unwrap();
+            .await?;
         let mut bundle =
             block2["block"]["value"]["executedBlock"]["block"]["incomingBundles"][0].take();
-        let origin = serde_json::from_value::<Origin>(bundle["origin"].take()).unwrap();
+        let origin = serde_json::from_value::<Origin>(bundle["origin"].take())?;
         assert_eq!(origin.sender, chain_id1);
         assert_eq!(origin.medium, Medium::Direct);
         let sender_height =
-            serde_json::from_value::<BlockHeight>(bundle["bundle"]["height"].take()).unwrap();
+            serde_json::from_value::<BlockHeight>(bundle["bundle"]["height"].take())?;
         assert_eq!(sender_height + BlockHeight(1), next_height1);
     }
 
