@@ -381,9 +381,16 @@ where
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`.
-    fn track_newly_created_chains(&self, block: &ExecutedBlock) {
+    fn track_newly_created_chains(&self, executed_block: &ExecutedBlock) {
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
-            let messages = block.messages().iter().flatten();
+            if !tracked_chains
+                .read()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`")
+                .contains(&executed_block.block.chain_id)
+            {
+                return;
+            }
+            let messages = executed_block.messages().iter().flatten();
             let open_chain_message_indices =
                 messages
                     .enumerate()
@@ -392,7 +399,7 @@ where
                         _ => None,
                     });
             let open_chain_message_ids =
-                open_chain_message_indices.map(|index| block.message_id(index as u32));
+                open_chain_message_indices.map(|index| executed_block.message_id(index as u32));
             let new_chain_ids = open_chain_message_ids.map(ChainId::child);
 
             tracked_chains
