@@ -1658,6 +1658,7 @@ async fn test_close_chain() {
     assert!(view.system.closed.get());
 }
 
+/// Creates a dummy [`OperationContext`] to use in tests.
 fn make_operation_context() -> OperationContext {
     OperationContext {
         chain_id: ChainId::root(0),
