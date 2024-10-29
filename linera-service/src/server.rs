@@ -6,12 +6,12 @@
 
 use std::{
     borrow::Cow,
-    num::NonZeroUsize,
+    num::{NonZeroU16, NonZeroUsize},
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::crypto::{CryptoRng, KeyPair};
@@ -395,6 +395,40 @@ enum ServerCommand {
         #[arg(long, default_value = "1000")]
         cache_size: usize,
     },
+
+    /// Replaces the configurations of the shards by following the given template.
+    #[command(name = "edit-shards")]
+    EditShards {
+        /// Path to the file containing the server configuration of this Linera validator.
+        #[arg(long = "server")]
+        server_config_path: PathBuf,
+
+        /// The number N of shard configs to generate, possibly starting with zeroes. If
+        /// `N` was written using `D` digits, we will replace the first occurrence of the
+        /// string `"%" * D` (`%` repeated D times) by the shard number.
+        #[arg(long)]
+        num_shards: String,
+
+        /// The host of the validator (IP address or hostname), possibly containing `%`
+        /// for digits of the shard number.
+        #[arg(long)]
+        host: String,
+
+        /// The port of the main endpoint, possibly containing `%` for digits of the shard
+        /// number.
+        #[arg(long)]
+        port: String,
+
+        /// The host for the metrics endpoint, possibly containing `%` for digits of the
+        /// shard number.
+        #[arg(long)]
+        metrics_host: String,
+
+        /// The port for the metrics endpoint, possibly containing `%` for digits of the
+        /// shard number.
+        #[arg(long)]
+        metrics_port: Option<String>,
+    },
 }
 
 fn main() {
@@ -430,7 +464,7 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
             ..
         } => {
             let server_config: ValidatorServerConfig =
-                util::read_json(server_config_path).expect("Fail to read server config");
+                util::read_json(server_config_path).expect("Failed to read server config");
             let name = &server_config.validator.name;
 
             if let Some(shard) = shard {
@@ -440,13 +474,13 @@ fn log_file_name_for(command: &ServerCommand) -> Cow<'static, str> {
             }
             .into()
         }
-        ServerCommand::Generate { .. } | ServerCommand::Initialize { .. } => "server".into(),
+        ServerCommand::Generate { .. }
+        | ServerCommand::Initialize { .. }
+        | ServerCommand::EditShards { .. } => "server".into(),
     }
 }
 
 async fn run(options: ServerOptions) {
-    linera_version::VERSION_INFO.log();
-
     match options.command {
         ServerCommand::Run {
             server_config_path,
@@ -461,10 +495,12 @@ async fn run(options: ServerOptions) {
             max_stream_queries,
             cache_size,
         } => {
+            linera_version::VERSION_INFO.log();
+
             let genesis_config: GenesisConfig =
-                util::read_json(&genesis_config_path).expect("Fail to read initial chain config");
+                util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let server_config: ValidatorServerConfig =
-                util::read_json(&server_config_path).expect("Fail to read server config");
+                util::read_json(&server_config_path).expect("Failed to read server config");
 
             #[cfg(feature = "rocksdb")]
             if server_config.internal_network.shards.len() > 1
@@ -521,17 +557,16 @@ async fn run(options: ServerOptions) {
                 config_validators.push(Persist::into_value(server).validator);
             }
             if let Some(committee) = committee {
-                Persist::persist(
-                    &mut persistent::File::new(
-                        &committee,
-                        CommitteeConfig {
-                            validators: config_validators,
-                        },
-                    )
-                    .expect("Unable to open committee configuration"),
+                let mut config = persistent::File::new(
+                    &committee,
+                    CommitteeConfig {
+                        validators: config_validators,
+                    },
                 )
-                .await
-                .expect("Unable to write committee description");
+                .expect("Unable to open committee configuration");
+                Persist::persist(&mut config)
+                    .await
+                    .expect("Unable to write committee description");
                 info!("Wrote committee config {}", committee.to_str().unwrap());
             }
         }
@@ -544,7 +579,7 @@ async fn run(options: ServerOptions) {
             cache_size,
         } => {
             let genesis_config: GenesisConfig =
-                util::read_json(&genesis_config_path).expect("Fail to read initial chain config");
+                util::read_json(&genesis_config_path).expect("Failed to read initial chain config");
             let common_config = CommonStoreConfig {
                 max_concurrent_queries,
                 max_stream_queries,
@@ -558,7 +593,67 @@ async fn run(options: ServerOptions) {
                 .await
                 .unwrap();
         }
+
+        ServerCommand::EditShards {
+            server_config_path,
+            num_shards,
+            host,
+            port,
+            metrics_host,
+            metrics_port,
+        } => {
+            let mut server_config =
+                persistent::File::<ValidatorServerConfig>::read(&server_config_path)
+                    .expect("Failed to read server config");
+            let shards = generate_shard_configs(num_shards, host, port, metrics_host, metrics_port)
+                .expect("Failed to generate shard configs");
+            server_config.internal_network.shards = shards;
+            Persist::persist(&mut server_config)
+                .await
+                .expect("Failed to write updated server config");
+        }
     }
+}
+
+fn generate_shard_configs(
+    num_shards: String,
+    host: String,
+    port: String,
+    metrics_host: String,
+    metrics_port: Option<String>,
+) -> anyhow::Result<Vec<ShardConfig>> {
+    let mut shards = Vec::new();
+    let len = num_shards.len();
+    let num_shards = num_shards
+        .parse::<NonZeroU16>()
+        .context("Failed to parse the number of shards")?;
+    let pattern = "%".repeat(len);
+
+    for i in 1u16..=num_shards.into() {
+        let index = format!("{i:0len$}");
+        let host = host.replacen(&pattern, &index, 1);
+        let port = port
+            .replacen(&pattern, &index, 1)
+            .parse()
+            .context("Failed to decode port into an integers")?;
+        let metrics_host = metrics_host.replacen(&pattern, &index, 1);
+        let metrics_port = metrics_port
+            .as_ref()
+            .map(|port| {
+                port.replacen(&pattern, &index, 1)
+                    .parse()
+                    .context("Failed to decode metrics port into an integers")
+            })
+            .transpose()?;
+        let shard = ShardConfig {
+            host,
+            port,
+            metrics_host,
+            metrics_port,
+        };
+        shards.push(shard);
+    }
+    Ok(shards)
 }
 
 #[cfg(test)]
@@ -621,5 +716,42 @@ mod test {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn test_generate_shard_configs() {
+        assert_eq!(
+            generate_shard_configs(
+                "02".into(),
+                "host%%".into(),
+                "10%%".into(),
+                "metrics_host%%".into(),
+                Some("11%%".into())
+            )
+            .unwrap(),
+            vec![
+                ShardConfig {
+                    host: "host01".into(),
+                    port: 1001,
+                    metrics_host: "metrics_host01".into(),
+                    metrics_port: Some(1101),
+                },
+                ShardConfig {
+                    host: "host02".into(),
+                    port: 1002,
+                    metrics_host: "metrics_host02".into(),
+                    metrics_port: Some(1102),
+                },
+            ],
+        );
+
+        assert!(generate_shard_configs(
+            "2".into(),
+            "host%%".into(),
+            "10%%".into(),
+            "metrics_host%%".into(),
+            Some("11%%".into())
+        )
+        .is_err());
     }
 }
