@@ -648,6 +648,7 @@ where
         S::create(&config, &namespace)
             .await
             .expect("first creation of a namespace");
+        // Creating a namespace two times should returns an error
         assert!(S::create(&config, &namespace).await.is_err());
     }
     let prefix = generate_test_namespace();
