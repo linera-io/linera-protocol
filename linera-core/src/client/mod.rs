@@ -19,6 +19,7 @@ use dashmap::{
 use futures::{
     future::{self, try_join_all, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
+    TryStreamExt as _,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::data_types::Bytecode;
@@ -39,9 +40,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
-        HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
-        PostedMessage,
+        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
+        IncomingBundle, LiteCertificate, LiteVote, MessageAction, PostedMessage,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -164,6 +164,9 @@ mod metrics {
     });
 }
 
+/// The number of chain workers that can be in memory at the same time.
+const CHAIN_WORKER_LIMIT: usize = 100;
+
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>
 where
@@ -209,7 +212,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             name.into(),
             storage.clone(),
             tracked_chains.clone(),
-            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            NonZeroUsize::new(CHAIN_WORKER_LIMIT).expect("Chain worker limit should not be zero"),
         )
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
@@ -430,54 +433,6 @@ where
             admin_id: self.admin_id,
             options: self.options.clone(),
         }
-    }
-}
-
-/// Tracks which `(ChainId, BlockHeight)` pairs have been successfully downloaded.
-struct MultichainTracker {
-    // Starting tracker index.
-    tracker: u64,
-    // Tracks the highest block height processed for each chain.
-    highest_seen: BTreeMap<ChainId, BlockHeight>,
-}
-
-impl MultichainTracker {
-    fn new(init: u64) -> Self {
-        Self {
-            tracker: init,
-            highest_seen: BTreeMap::new(),
-        }
-    }
-
-    /// Pushes a new `(ChainId, BlockHeight)` pair to the tracker.
-    /// Replaces previous entry if the new height is higher.
-    fn push(&mut self, chain_id: ChainId, height: BlockHeight) {
-        self.highest_seen
-            .entry(chain_id)
-            .and_modify(|h| *h = std::cmp::max(*h, height))
-            .or_insert(height);
-    }
-
-    /// Returns an index of the last processed certificate in the original remote_node_received_log.
-    ///
-    /// Goes through the original `remote_node_received_log` and checks which of the certificates have been received.
-    /// Upon finding the first entry that has not been processed, it stops and returns the index of the last processed certificate.
-    fn finalize<'a>(
-        &mut self,
-        remote_node_received_log: impl IntoIterator<Item = &'a ChainAndHeight>,
-    ) -> u64 {
-        for ChainAndHeight { chain_id, height } in remote_node_received_log {
-            if let Some(highest_processed) = self.highest_seen.get(chain_id) {
-                if height <= highest_processed {
-                    self.tracker += 1;
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-        self.tracker
     }
 }
 
@@ -1192,8 +1147,9 @@ where
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<P::Node>,
+        chain_worker_limit: usize,
     ) -> Result<ReceivedCertificatesFromValidator, NodeError> {
-        let tracker = self
+        let mut tracker = self
             .state()
             .received_certificate_trackers()
             .get(&remote_node.name)
@@ -1203,13 +1159,13 @@ where
             .known_committees()
             .await
             .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+
         // Retrieve newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
-        let mut tracker = MultichainTracker::new(tracker);
         let mut other_sender_chains = Vec::new();
-        let remote_log = info.requested_received_log.clone();
-        let remote_node_chains_view = info.requested_received_log.into_iter().fold(
+        let remote_log = info.requested_received_log;
+        let remote_node_chains_view = remote_log.iter().fold(
             BTreeMap::<ChainId, Vec<BlockHeight>>::new(),
             |mut chain_to_info, entry| {
                 chain_to_info
@@ -1220,124 +1176,133 @@ where
             },
         );
 
-        // Collect all certificates that have been successfully processed.
-        let mut certificates: Vec<Certificate> = Vec::new();
+        // Obtain the chain heights we already have from the local node.
+        let futures = remote_node_chains_view
+            .keys()
+            .map(|sender_chain_id| async move {
+                let query = ChainInfoQuery::new(*sender_chain_id);
+                let local_response = self.local_query(query).await?;
+                Ok::<_, NodeError>(local_response.info.next_block_height)
+            })
+            .collect::<Vec<_>>();
+        let local_next_heights = stream::iter(futures)
+            .buffer_unordered(chain_worker_limit)
+            .try_collect::<Vec<_>>()
+            .await?;
 
-        for (chain_id, mut block_batch) in remote_node_chains_view {
-            block_batch.sort();
+        // We keep track of the height we've successfully downloaded and checked, per chain.
+        let mut downloaded_heights = BTreeMap::new();
 
-            let Some(last_height) = block_batch.last().copied() else {
-                continue;
-            };
-
-            self.advance_with_local(chain_id, &mut block_batch, &mut tracker)
-                .await?;
-
-            let Some(first_height) = block_batch.first().copied() else {
-                // `advance_with_local` might have drained the whole `block_batch`.
-                // In that case, move to the next chain batch, but remember to wait for
-                // the messages to be delivered to the inboxes.
-                other_sender_chains.push(chain_id);
-                continue;
-            };
-            let batch_size = last_height.saturating_sub(first_height).0 + 1;
-            let block_batch_range = BlockHeightRange::multi(first_height, batch_size);
-            let query = ChainInfoQuery::new(chain_id)
-                .with_sent_certificate_hashes_in_range(block_batch_range.clone());
-
-            let remote_response = remote_node.handle_chain_info_query(query).await?;
-
-            let certificate_hashes =
-                match remote_response.requested_sent_certificate_hashes.as_slice() {
-                    hashes if hashes.len() as u64 != block_batch_range.limit.unwrap() => {
-                        error!(
-                            block_range = ?block_batch_range,
-                            received_num = hashes.len(),
-                            "Validator sent invalid number of certificate hashes."
-                        );
-                        return Err(NodeError::InvalidChainInfoResponse);
+        let certificate_hashes = future::try_join_all(
+            remote_node_chains_view
+                .into_iter()
+                .zip(local_next_heights)
+                .filter_map(|((sender_chain_id, mut block_batch), local_next)| {
+                    if let Ok(height) = local_next.try_sub_one() {
+                        downloaded_heights.insert(sender_chain_id, height);
                     }
-                    hashes => hashes.to_vec(),
-                };
 
-            let remote_certificates = remote_node
-                .node
-                .download_certificates(certificate_hashes)
-                .await?;
+                    // Find the first and last block height in the batch that we need.
+                    block_batch.sort();
+                    let (first_height, last_height) =
+                        match block_batch.iter().find(|b| **b >= local_next) {
+                            None => {
+                                // Our highest, locally-known block is higher than any block height
+                                // from the current batch. Skip this batch, but remember to wait for
+                                // the messages to be delivered to the inboxes.
+                                other_sender_chains.push(sender_chain_id);
+                                return None;
+                            }
+                            Some(first_height) => {
+                                // Blocks with height lower than block_batch[index] are already
+                                // known. Skip processing them.
+                                (*first_height, *block_batch.last()?)
+                            }
+                        };
 
-            for certificate in remote_certificates {
-                match self
-                    .check_certificate(max_epoch, &committees, &certificate)
-                    .await?
-                {
-                    HandleCertificateResult::FutureEpoch => {
-                        warn!(
-                            "Postponing received certificate from {:.8} at height {} \
-                            from future epoch {}",
-                            chain_id,
-                            certificate.value().height(),
-                            certificate.value().epoch()
-                        );
-                        // Stop the synchronization here. Do not increment the tracker further so
-                        // that this certificate can still be downloaded later, once our committee
-                        // is updated.
-                    }
-                    HandleCertificateResult::OldEpoch => {
-                        tracker.push(chain_id, certificate.value().height());
-                        // This epoch is not recognized any more. Let's skip the certificate.
-                        // If a higher block with a recognized epoch comes up later from the
-                        // same chain, the call to `receive_certificate` below will download
-                        // the skipped certificate again.
-                        warn!(
-                            "Skipping received certificate from past epoch {:?}",
-                            certificate.value().epoch()
-                        );
-                    }
-                    HandleCertificateResult::New => {
-                        tracker.push(chain_id, certificate.value().height());
-                        certificates.push(certificate);
-                    }
+                    // Find the hashes of the blocks we need.
+                    Some(async move {
+                        let batch_size = last_height.saturating_sub(first_height).0 + 1;
+                        let block_batch_range = BlockHeightRange::multi(first_height, batch_size);
+                        let query = ChainInfoQuery::new(sender_chain_id)
+                            .with_sent_certificate_hashes_in_range(block_batch_range.clone());
+                        let remote_response = remote_node.handle_chain_info_query(query).await?;
+                        let hashes = remote_response.requested_sent_certificate_hashes;
+
+                        if hashes.len() as u64 != batch_size {
+                            error!(
+                                block_range = ?block_batch_range,
+                                received_num = hashes.len(),
+                                "Validator sent invalid number of certificate hashes."
+                            );
+                            return Err(NodeError::InvalidChainInfoResponse);
+                        }
+                        Ok(hashes)
+                    })
+                }),
+        )
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
+
+        // Download the block certificates.
+        let remote_certificates = remote_node
+            .node
+            .download_certificates(certificate_hashes)
+            .await?;
+
+        // Check the signatures and keep only the ones that are valid.
+        let mut certificates = Vec::new();
+        for certificate in remote_certificates {
+            let sender_chain_id = certificate.value().chain_id();
+            let height = certificate.value().height();
+            let epoch = certificate.value().epoch();
+            match self
+                .check_certificate(max_epoch, &committees, &certificate)
+                .await?
+            {
+                HandleCertificateResult::FutureEpoch => {
+                    warn!(
+                        "Postponing received certificate from {sender_chain_id:.8} at height \
+                         {height} from future epoch {epoch}"
+                    );
+                    // Do not process this certificate now. It can still be
+                    // downloaded later, once our committee is updated.
+                }
+                HandleCertificateResult::OldEpoch => {
+                    // This epoch is not recognized any more. Let's skip the certificate.
+                    // If a higher block with a recognized epoch comes up later from the
+                    // same chain, the call to `receive_certificate` below will download
+                    // the skipped certificate again.
+                    warn!("Skipping received certificate from past epoch {epoch:?}");
+                }
+                HandleCertificateResult::New => {
+                    downloaded_heights
+                        .entry(sender_chain_id)
+                        .and_modify(|h| *h = height.max(*h))
+                        .or_insert(height);
+                    certificates.push(certificate);
                 }
             }
         }
+
+        // Increase the tracker up to the first position we haven't downloaded.
+        for entry in remote_log {
+            if downloaded_heights
+                .get(&entry.chain_id)
+                .is_some_and(|h| *h >= entry.height)
+            {
+                tracker += 1;
+            }
+        }
+
         Ok(ReceivedCertificatesFromValidator {
             name: remote_node.name,
-            tracker: tracker.finalize(&remote_log),
+            tracker,
             certificates,
             other_sender_chains,
         })
-    }
-
-    /// Uses local information (about already-processed blocks) to advance the `block_batch` to a
-    /// place where only new blocks are left.
-    async fn advance_with_local(
-        &self,
-        chain_id: ChainId,
-        block_batch: &mut Vec<BlockHeight>,
-        tracker: &mut MultichainTracker,
-    ) -> Result<(), NodeError> {
-        let local_response = self.local_query(ChainInfoQuery::new(chain_id)).await?;
-        let local_next = local_response.info.next_block_height;
-
-        // Record highest block height known locally for this chain.
-        if let Ok(highest_seen) = local_next.try_sub_one() {
-            tracker.push(chain_id, highest_seen);
-        }
-
-        // Find the first block in the batch that is higher than the highest block known locally.
-        match block_batch.iter().position(|b| b >= &local_next) {
-            None => {
-                // Our highest, locally-known block is higher than any block height from the
-                // current batch. Move to the next chain batch.
-                block_batch.clear();
-            }
-            Some(index) => {
-                // Blocks with height lower than block_batch[index] are already known.
-                // Skip processing them.
-                let _ = block_batch.drain(0..index);
-            }
-        }
-        Ok(())
     }
 
     async fn local_query(&self, query: ChainInfoQuery) -> Result<ChainInfoResponse, NodeError> {
@@ -1438,7 +1403,9 @@ where
         // Synchronize the state of the admin chain from the network.
         self.synchronize_chain_state(&nodes, self.admin_id).await?;
         let client = self.clone();
-        // Proceed to downloading received certificates.
+        // Proceed to downloading received certificates. Split the available chain workers so that
+        // the tasks don't use more than the limit in total.
+        let chain_worker_limit = (CHAIN_WORKER_LIMIT / local_committee.validators().len()).max(1);
         let result = communicate_with_quorum(
             &nodes,
             &local_committee,
@@ -1447,7 +1414,11 @@ where
                 let client = client.clone();
                 Box::pin(async move {
                     client
-                        .synchronize_received_certificates_from_validator(chain_id, &remote_node)
+                        .synchronize_received_certificates_from_validator(
+                            chain_id,
+                            &remote_node,
+                            chain_worker_limit,
+                        )
                         .await
                 })
             },
@@ -3254,7 +3225,11 @@ where
         let chain_id = self.chain_id;
         // Proceed to downloading received certificates.
         let received_certificates = self
-            .synchronize_received_certificates_from_validator(chain_id, &remote_node)
+            .synchronize_received_certificates_from_validator(
+                chain_id,
+                &remote_node,
+                CHAIN_WORKER_LIMIT,
+            )
             .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
