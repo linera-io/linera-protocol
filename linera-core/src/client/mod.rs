@@ -439,6 +439,7 @@ struct MultichainTracker {
     tracker: u64,
     // Tracks the highest block height processed for each chain.
     highest_seen: BTreeMap<ChainId, BlockHeight>,
+    other_sender_chains: Vec<ChainId>,
 }
 
 impl MultichainTracker {
@@ -446,6 +447,7 @@ impl MultichainTracker {
         Self {
             tracker: init,
             highest_seen: BTreeMap::new(),
+            other_sender_chains: Vec::new(),
         }
     }
 
@@ -463,13 +465,14 @@ impl MultichainTracker {
     /// Goes through the original `remote_node_received_log` and checks which of the certificates have been received.
     /// Upon finding the first entry that has not been processed, it stops and returns the index of the last processed certificate.
     fn finalize<'a>(
-        &mut self,
+        &self,
         remote_node_received_log: impl IntoIterator<Item = &'a ChainAndHeight>,
     ) -> u64 {
+        let mut seen = 0;
         for ChainAndHeight { chain_id, height } in remote_node_received_log {
             if let Some(highest_processed) = self.highest_seen.get(chain_id) {
                 if height <= highest_processed {
-                    self.tracker += 1;
+                    seen += 1;
                 } else {
                     break;
                 }
@@ -477,7 +480,7 @@ impl MultichainTracker {
                 break;
             }
         }
-        self.tracker
+        seen + self.tracker
     }
 }
 
@@ -1193,7 +1196,7 @@ where
         chain_id: ChainId,
         remote_node: &RemoteNode<P::Node>,
     ) -> Result<ReceivedCertificatesFromValidator, NodeError> {
-        let tracker = self
+        let init_tracker = self
             .state()
             .received_certificate_trackers()
             .get(&remote_node.name)
@@ -1204,10 +1207,9 @@ where
             .await
             .map_err(|_| NodeError::InvalidChainInfoResponse)?;
         // Retrieve newly received certificates from this validator.
-        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
+        let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(init_tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
-        let mut tracker = MultichainTracker::new(tracker);
-        let mut other_sender_chains = Vec::new();
+        let tracker = Arc::new(RwLock::new(MultichainTracker::new(init_tracker)));
         let remote_log = info.requested_received_log.clone();
         let remote_node_chains_view = info.requested_received_log.into_iter().fold(
             BTreeMap::<ChainId, Vec<BlockHeight>>::new(),
@@ -1221,91 +1223,124 @@ where
         );
 
         // Collect all certificates that have been successfully processed.
-        let mut certificates: Vec<Certificate> = Vec::new();
+        let certificates = try_join_all(remote_node_chains_view.into_iter().map(
+            |(chain_id, block_batch)| {
+                self.process_batch(
+                    remote_node,
+                    &committees,
+                    max_epoch,
+                    Arc::clone(&tracker),
+                    chain_id,
+                    block_batch,
+                )
+            },
+        ))
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
 
-        for (chain_id, mut block_batch) in remote_node_chains_view {
-            block_batch.sort();
+        let new_tracker = tracker.write().expect("No lock poison").finalize(&remote_log);
+        let other_sender_chains = tracker.read().expect("No lock poison").other_sender_chains.clone();
 
-            let Some(last_height) = block_batch.last().copied() else {
-                continue;
-            };
-
-            self.advance_with_local(chain_id, &mut block_batch, &mut tracker)
-                .await?;
-
-            let Some(first_height) = block_batch.first().copied() else {
-                // `advance_with_local` might have drained the whole `block_batch`.
-                // In that case, move to the next chain batch, but remember to wait for
-                // the messages to be delivered to the inboxes.
-                other_sender_chains.push(chain_id);
-                continue;
-            };
-            let batch_size = last_height.saturating_sub(first_height).0 + 1;
-            let block_batch_range = BlockHeightRange::multi(first_height, batch_size);
-            let query = ChainInfoQuery::new(chain_id)
-                .with_sent_certificate_hashes_in_range(block_batch_range.clone());
-
-            let remote_response = remote_node.handle_chain_info_query(query).await?;
-
-            let certificate_hashes =
-                match remote_response.requested_sent_certificate_hashes.as_slice() {
-                    hashes if hashes.len() as u64 != block_batch_range.limit.unwrap() => {
-                        error!(
-                            block_range = ?block_batch_range,
-                            received_num = hashes.len(),
-                            "Validator sent invalid number of certificate hashes."
-                        );
-                        return Err(NodeError::InvalidChainInfoResponse);
-                    }
-                    hashes => hashes.to_vec(),
-                };
-
-            let remote_certificates = remote_node
-                .node
-                .download_certificates(certificate_hashes)
-                .await?;
-
-            for certificate in remote_certificates {
-                match self
-                    .check_certificate(max_epoch, &committees, &certificate)
-                    .await?
-                {
-                    HandleCertificateResult::FutureEpoch => {
-                        warn!(
-                            "Postponing received certificate from {:.8} at height {} \
-                            from future epoch {}",
-                            chain_id,
-                            certificate.value().height(),
-                            certificate.value().epoch()
-                        );
-                        // Stop the synchronization here. Do not increment the tracker further so
-                        // that this certificate can still be downloaded later, once our committee
-                        // is updated.
-                    }
-                    HandleCertificateResult::OldEpoch => {
-                        tracker.push(chain_id, certificate.value().height());
-                        // This epoch is not recognized any more. Let's skip the certificate.
-                        // If a higher block with a recognized epoch comes up later from the
-                        // same chain, the call to `receive_certificate` below will download
-                        // the skipped certificate again.
-                        warn!(
-                            "Skipping received certificate from past epoch {:?}",
-                            certificate.value().epoch()
-                        );
-                    }
-                    HandleCertificateResult::New => {
-                        tracker.push(chain_id, certificate.value().height());
-                        certificates.push(certificate);
-                    }
-                }
-            }
-        }
         Ok(ReceivedCertificatesFromValidator {
             name: remote_node.name,
-            tracker: tracker.finalize(&remote_log),
+            tracker: new_tracker,
             certificates,
             other_sender_chains,
         })
+    }
+
+    async fn process_batch(
+        &self,
+        remote_node: &RemoteNode<P::Node>,
+        committees: &BTreeMap<Epoch, Committee>,
+        max_epoch: Epoch, // Latest trusted epoch.
+        tracker: Arc<RwLock<MultichainTracker>>,
+        chain_id: ChainId,
+        mut block_batch: Vec<BlockHeight>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        block_batch.sort();
+
+        self.advance_with_local(chain_id, &mut block_batch, &tracker)
+            .await?;
+
+        let Some(first_height) = block_batch.first().copied() else {
+            // `advance_with_local` might have drained the whole `block_batch`.
+            // In that case, move to the next chain batch, but remember to wait for
+            // the messages to be delivered to the inboxes.
+            tracker.write().expect("No lock poison").other_sender_chains.push(chain_id);
+            return Ok(Vec::new());
+        };
+
+        let Some(last_height) = block_batch.last().copied() else {
+            return Ok(Vec::new());
+        };
+
+        let batch_size = last_height.saturating_sub(first_height).0 + 1;
+        let block_batch_range = BlockHeightRange::multi(first_height, batch_size);
+        let query = ChainInfoQuery::new(chain_id)
+            .with_sent_certificate_hashes_in_range(block_batch_range.clone());
+
+        let remote_response = remote_node.handle_chain_info_query(query).await?;
+
+        let certificate_hashes = match remote_response.requested_sent_certificate_hashes.as_slice()
+        {
+            hashes if hashes.len() as u64 != block_batch_range.limit.unwrap() => {
+                error!(
+                    block_range = ?block_batch_range,
+                    received_num = hashes.len(),
+                    "Validator sent invalid number of certificate hashes."
+                );
+                return Err(NodeError::InvalidChainInfoResponse);
+            }
+            hashes => hashes.to_vec(),
+        };
+
+        let remote_certificates = remote_node
+            .node
+            .download_certificates(certificate_hashes)
+            .await?;
+
+        let mut certificates = Vec::new();
+
+        for certificate in remote_certificates {
+            match self
+                .check_certificate(max_epoch, committees, &certificate)
+                .await?
+            {
+                HandleCertificateResult::FutureEpoch => {
+                    warn!("Postponing received certificate from {:.8} at height {} from future epoch {}",
+                              chain_id, certificate.value().height(), certificate.value().epoch());
+                    // Stop the synchronization here. Do not increment the tracker further so
+                    // that this certificate can still be downloaded later, once our committee
+                    // is updated.
+                }
+                HandleCertificateResult::OldEpoch => {
+                    tracker
+                        .write()
+                        .expect("No lock poison")
+                        .push(chain_id, certificate.value().height());
+                    // This epoch is not recognized any more. Let's skip the certificate.
+                    // If a higher block with a recognized epoch comes up later from the
+                    // same chain, the call to `receive_certificate` below will download
+                    // the skipped certificate again.
+                    warn!(
+                        "Skipping received certificate from past epoch {:?}",
+                        certificate.value().epoch()
+                    );
+                }
+                HandleCertificateResult::New => {
+                    tracker
+                        .write()
+                        .expect("No lock poison")
+                        .push(chain_id, certificate.value().height());
+                    certificates.push(certificate);
+                }
+            }
+        }
+
+        Ok(certificates)
     }
 
     /// Uses local information (about already-processed blocks) to advance the `block_batch` to a
@@ -1314,14 +1349,14 @@ where
         &self,
         chain_id: ChainId,
         block_batch: &mut Vec<BlockHeight>,
-        tracker: &mut MultichainTracker,
+        tracker: &Arc<RwLock<MultichainTracker>>,
     ) -> Result<(), NodeError> {
         let local_response = self.local_query(ChainInfoQuery::new(chain_id)).await?;
         let local_next = local_response.info.next_block_height;
 
         // Record highest block height known locally for this chain.
         if let Ok(highest_seen) = local_next.try_sub_one() {
-            tracker.push(chain_id, highest_seen);
+            tracker.write().expect("No lock poison").push(chain_id, highest_seen);
         }
 
         // Find the first block in the batch that is higher than the highest block known locally.
