@@ -11,7 +11,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainDescription, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -154,7 +154,7 @@ impl SystemExecutionState {
         for (owner, balance) in balances {
             view.system
                 .balances
-                .insert(&owner, balance)
+                .insert(&AccountOwner::User(owner), balance)
                 .expect("insertion of balances should not fail");
         }
         view.system.timestamp.set(timestamp);

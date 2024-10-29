@@ -14,11 +14,9 @@ use std::{env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use common::INTEGRATION_TEST_GUARD;
-#[cfg(feature = "benchmark")]
-use linera_base::identifiers::AccountOwner;
 use linera_base::{
     data_types::Amount,
-    identifiers::{Account, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_service::{
     cli_wrappers::{
@@ -185,7 +183,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         net.remove_validator(i)?;
     }
 
-    let recipient = Owner::from(KeyPair::generate().public());
+    let recipient = AccountOwner::User(Owner::from(KeyPair::generate().public()));
     client
         .transfer_with_accounts(
             Amount::from_tokens(5),

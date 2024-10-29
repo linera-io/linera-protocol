@@ -13,7 +13,7 @@ use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, Mea
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
     hex_debug, hex_vec_debug,
-    identifiers::{Account, BlobId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -107,7 +107,12 @@ where
             }
 
             OwnerBalance { owner, callback } => {
-                let balance = self.system.balances.get(&owner).await?.unwrap_or_default();
+                let balance = self
+                    .system
+                    .balances
+                    .get(&AccountOwner::User(owner))
+                    .await?
+                    .unwrap_or_default();
                 callback.respond(balance);
             }
 
@@ -120,12 +125,28 @@ where
                         Ok(())
                     })
                     .await?;
-                callback.respond(balances);
+                callback.respond(
+                    balances
+                        .into_iter()
+                        .filter_map(|(owner, balance)| match owner {
+                            AccountOwner::User(user) => Some((user, balance)),
+                            AccountOwner::Application(_) => None,
+                        })
+                        .collect(),
+                );
             }
 
             BalanceOwners { callback } => {
                 let owners = self.system.balances.indices().await?;
-                callback.respond(owners);
+                callback.respond(
+                    owners
+                        .into_iter()
+                        .filter_map(|owner| match owner {
+                            AccountOwner::User(user) => Some(user),
+                            AccountOwner::Application(_) => None,
+                        })
+                        .collect(),
+                );
             }
 
             Transfer {

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use linera_base::{
     data_types::{Amount, Timestamp},
     doc_scalar,
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId},
     ownership::ChainOwnership,
 };
 use linera_views::{context::Context, map_view::MapView};
@@ -94,7 +94,7 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "balances"))]
-    async fn _balances(&self) -> &MapView<C, Owner, Amount> {
+    async fn _balances(&self) -> &MapView<C, AccountOwner, Amount> {
         &self.balances
     }
 

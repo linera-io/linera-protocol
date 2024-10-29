@@ -10,7 +10,7 @@ use std::{sync::Arc, vec};
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
     test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
@@ -124,7 +124,8 @@ async fn test_fee_consumption(
     let (application_id, application) = state.register_mock_application().await?;
     let mut view = state.into_view().await;
 
-    let owner = Owner::from(PublicKey::test_key(0));
+    let signer = Owner::from(PublicKey::test_key(0));
+    let owner = AccountOwner::User(signer);
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
         view.system.balances.insert(&owner, owner_balance)?;
@@ -159,7 +160,7 @@ async fn test_fee_consumption(
         });
 
     let authenticated_signer = if owner_balance.is_some() {
-        Some(owner)
+        Some(signer)
     } else {
         None
     };

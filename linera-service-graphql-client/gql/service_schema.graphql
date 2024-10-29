@@ -4,6 +4,11 @@ An account
 scalar Account
 
 """
+An owner of an account.
+"""
+scalar AccountOwner
+
+"""
 A non-negative amount of tokens.
 """
 scalar Amount
@@ -351,6 +356,14 @@ scalar Destination
 """
 A GraphQL-visible map item, complete with key.
 """
+type Entry_AccountOwner_Amount_aaf96548 {
+	key: AccountOwner!
+	value: Amount
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
 type Entry_ChannelFullName_ChannelStateView_ef52a064 {
 	key: ChannelFullName!
 	value: ChannelStateView!
@@ -362,14 +375,6 @@ A GraphQL-visible map item, complete with key.
 type Entry_Origin_InboxStateView_c4db01d6 {
 	key: Origin!
 	value: InboxStateView!
-}
-
-"""
-A GraphQL-visible map item, complete with key.
-"""
-type Entry_Owner_Amount_202623bd {
-	key: Owner!
-	value: Amount
 }
 
 """
@@ -497,6 +502,10 @@ type LogView_CryptoHash_5f6ab77f {
 	entries(start: Int, end: Int): [CryptoHash!]!
 }
 
+input MapFilters_AccountOwner_d6668c53 {
+	keys: [AccountOwner!]
+}
+
 input MapFilters_ChannelFullName_3b59bf69 {
 	keys: [ChannelFullName!]
 }
@@ -505,12 +514,12 @@ input MapFilters_Origin_742d451b {
 	keys: [Origin!]
 }
 
-input MapFilters_Owner_6898ce22 {
-	keys: [Owner!]
-}
-
 input MapFilters_Target_7aac1e1c {
 	keys: [Target!]
+}
+
+input MapInput_AccountOwner_d6668c53 {
+	filters: MapFilters_AccountOwner_d6668c53
 }
 
 input MapInput_ChannelFullName_3b59bf69 {
@@ -521,18 +530,14 @@ input MapInput_Origin_742d451b {
 	filters: MapFilters_Origin_742d451b
 }
 
-input MapInput_Owner_6898ce22 {
-	filters: MapFilters_Owner_6898ce22
-}
-
 input MapInput_Target_7aac1e1c {
 	filters: MapFilters_Target_7aac1e1c
 }
 
-type MapView_Owner_Amount_ef5edbab {
-	keys(count: Int): [Owner!]!
-	entry(key: Owner!): Entry_Owner_Amount_202623bd!
-	entries(input: MapInput_Owner_6898ce22): [Entry_Owner_Amount_202623bd!]!
+type MapView_AccountOwner_Amount_11ef1379 {
+	keys(count: Int): [AccountOwner!]!
+	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
 }
 
 """
@@ -981,7 +986,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
-	balances: MapView_Owner_Amount_ef5edbab!
+	balances: MapView_AccountOwner_Amount_11ef1379!
 	timestamp: Timestamp!
 }
 

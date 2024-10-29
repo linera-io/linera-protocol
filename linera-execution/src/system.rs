@@ -23,7 +23,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
+        Account, AccountOwner, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId,
+        Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -86,7 +87,7 @@ pub struct SystemExecutionStateView<C> {
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: HashedMapView<C, Owner, Amount>,
+    pub balances: HashedMapView<C, AccountOwner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
@@ -700,7 +701,8 @@ where
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectTransferAmount
         );
-        self.debit(owner.as_ref(), amount).await?;
+        self.debit(owner.map(AccountOwner::User).as_ref(), amount)
+            .await?;
         match recipient {
             Recipient::Account(account) => {
                 let message = RawOutgoingMessage {
@@ -754,7 +756,7 @@ where
     /// Debits an [`Amount`] of tokens from an account's balance.
     async fn debit(
         &mut self,
-        account: Option<&Owner>,
+        account: Option<&AccountOwner>,
         amount: Amount,
     ) -> Result<(), SystemExecutionError> {
         let balance = if let Some(owner) = account {
@@ -802,7 +804,10 @@ where
                         self.balance.set(new_balance);
                     }
                     Some(owner) => {
-                        let balance = self.balances.get_mut_or_default(&owner).await?;
+                        let balance = self
+                            .balances
+                            .get_mut_or_default(&AccountOwner::User(owner))
+                            .await?;
                         *balance = balance.saturating_add(amount);
                     }
                 }
@@ -817,7 +822,7 @@ where
                     SystemExecutionError::UnauthenticatedClaimOwner
                 );
 
-                self.debit(Some(&owner), amount).await?;
+                self.debit(Some(&AccountOwner::User(owner)), amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
