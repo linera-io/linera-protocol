@@ -70,8 +70,7 @@ impl GrpcClient {
         match status.code() {
             Code::DeadlineExceeded | Code::Aborted | Code::Unavailable | Code::Unknown => {
                 info!(
-                    "gRPC request to {address} interrupted: {}; retrying",
-                    status
+                    "gRPC request to {address} interrupted: {status}; retrying"
                 );
                 true
             }
