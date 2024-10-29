@@ -394,8 +394,8 @@ pub fn create_test_memory_store() -> MemoryStore {
 /// The error type for [`MemoryStore`].
 #[derive(Error, Debug)]
 pub enum MemoryStoreError {
-    /// Already existing table
-    #[error("Store already exist during a create operation")]
+    /// Store already exists during a create operation
+    #[error("Store already exists during a create operation")]
     AlreadyExist,
 
     /// Serialization error with BCS.

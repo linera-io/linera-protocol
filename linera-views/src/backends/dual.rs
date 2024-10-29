@@ -360,8 +360,8 @@ where
 /// The error type for [`DualStore`].
 #[derive(Error, Debug)]
 pub enum DualStoreError<E1, E2> {
-    /// Already existing table
-    #[error("Both stores already exist which is not allowed")]
+    /// Store already exists during a create operation
+    #[error("Store already exists during a create operation")]
     AlreadyExist,
 
     /// Serialization error with BCS.
