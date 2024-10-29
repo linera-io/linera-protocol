@@ -150,20 +150,16 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
     ) -> Result<Self, Error> {
         let lock = Lock::new(open_options().read(true).open(path)?)?;
         let mut reader = io::BufReader::new(&lock.0);
-        let dirty;
-
-        let value = if reader.fill_buf()?.is_empty() {
-            dirty = Dirty::new(true);
-            value()?
-        } else {
-            dirty = Dirty::new(false);
-            serde_json::from_reader(reader)?
-        };
+        let file_is_empty = reader.fill_buf()?.is_empty();
 
         Ok(Self {
-            value,
+            value: if file_is_empty {
+                value()?
+            } else {
+                serde_json::from_reader(reader)?
+            },
+            dirty: Dirty::new(file_is_empty),
             path: path.into(),
-            dirty,
             _lock: lock,
         })
     }
