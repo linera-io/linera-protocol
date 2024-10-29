@@ -1166,12 +1166,12 @@ where
         let mut other_sender_chains = Vec::new();
         let remote_log = info.requested_received_log;
         let remote_node_chains_view = remote_log.iter().fold(
-            BTreeMap::<ChainId, Vec<BlockHeight>>::new(),
+            BTreeMap::<ChainId, BlockHeight>::new(),
             |mut chain_to_info, entry| {
                 chain_to_info
                     .entry(entry.chain_id)
-                    .or_default()
-                    .push(entry.height);
+                    .and_modify(|h| *h = entry.height.max(*h))
+                    .or_insert(entry.height);
                 chain_to_info
             },
         );
@@ -1197,33 +1197,25 @@ where
             remote_node_chains_view
                 .into_iter()
                 .zip(local_next_heights)
-                .filter_map(|((sender_chain_id, mut block_batch), local_next)| {
+                .filter_map(|((sender_chain_id, remote_height), local_next)| {
                     if let Ok(height) = local_next.try_sub_one() {
                         downloaded_heights.insert(sender_chain_id, height);
                     }
 
                     // Find the first and last block height in the batch that we need.
-                    block_batch.sort();
-                    let (first_height, last_height) =
-                        match block_batch.iter().find(|b| **b >= local_next) {
-                            None => {
-                                // Our highest, locally-known block is higher than any block height
-                                // from the current batch. Skip this batch, but remember to wait for
-                                // the messages to be delivered to the inboxes.
-                                other_sender_chains.push(sender_chain_id);
-                                return None;
-                            }
-                            Some(first_height) => {
-                                // Blocks with height lower than block_batch[index] are already
-                                // known. Skip processing them.
-                                (*first_height, *block_batch.last()?)
-                            }
-                        };
+                    if local_next > remote_height {
+                        // Our highest, locally-known block is higher than any block height
+                        // from the current batch. Skip this batch, but remember to wait for
+                        // the messages to be delivered to the inboxes.
+                        other_sender_chains.push(sender_chain_id);
+                        return None;
+                    }
 
                     // Find the hashes of the blocks we need.
                     Some(async move {
-                        let batch_size = last_height.saturating_sub(first_height).0 + 1;
-                        let block_batch_range = BlockHeightRange::multi(first_height, batch_size);
+                        let batch_size =
+                            remote_height.saturating_sub(local_next).0.saturating_add(1);
+                        let block_batch_range = BlockHeightRange::multi(local_next, batch_size);
                         let query = ChainInfoQuery::new(sender_chain_id)
                             .with_sent_certificate_hashes_in_range(block_batch_range.clone());
                         let remote_response = remote_node.handle_chain_info_query(query).await?;
