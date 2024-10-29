@@ -80,10 +80,7 @@ impl GrpcClient {
             | Code::NotFound
             | Code::AlreadyExists
             | Code::ResourceExhausted => {
-                error!(
-                    "Unexpected gRPC status received from {address}: {}; retrying",
-                    status
-                );
+                error!("gRPC request to {address} interrupted: {status}; retrying");
                 true
             }
             Code::InvalidArgument
