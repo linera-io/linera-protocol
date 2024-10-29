@@ -618,7 +618,7 @@ enum ReceiveCertificateMode {
     AlreadyChecked,
 }
 
-enum HandleCertificateResult {
+enum CheckCertificateResult {
     OldEpoch,
     New,
     FutureEpoch,
@@ -1254,7 +1254,7 @@ where
                 .check_certificate(max_epoch, &committees, &certificate)
                 .await?
             {
-                HandleCertificateResult::FutureEpoch => {
+                CheckCertificateResult::FutureEpoch => {
                     warn!(
                         "Postponing received certificate from {sender_chain_id:.8} at height \
                          {height} from future epoch {epoch}"
@@ -1262,14 +1262,14 @@ where
                     // Do not process this certificate now. It can still be
                     // downloaded later, once our committee is updated.
                 }
-                HandleCertificateResult::OldEpoch => {
+                CheckCertificateResult::OldEpoch => {
                     // This epoch is not recognized any more. Let's skip the certificate.
                     // If a higher block with a recognized epoch comes up later from the
                     // same chain, the call to `receive_certificate` below will download
                     // the skipped certificate again.
                     warn!("Skipping received certificate from past epoch {epoch:?}");
                 }
-                HandleCertificateResult::New => {
+                CheckCertificateResult::New => {
                     downloaded_heights
                         .entry(sender_chain_id)
                         .and_modify(|h| *h = height.max(*h))
@@ -1312,7 +1312,7 @@ where
         highest_known_epoch: Epoch,
         committees: &BTreeMap<Epoch, Committee>,
         incoming_certificate: &Certificate,
-    ) -> Result<HandleCertificateResult, NodeError> {
+    ) -> Result<CheckCertificateResult, NodeError> {
         let CertificateValue::ConfirmedBlock { executed_block, .. } = incoming_certificate.value()
         else {
             return Err(NodeError::InvalidChainInfoResponse);
@@ -1320,16 +1320,16 @@ where
         let block = &executed_block.block;
         // Check that certificates are valid w.r.t one of our trusted committees.
         if block.epoch > highest_known_epoch {
-            return Ok(HandleCertificateResult::FutureEpoch);
+            return Ok(CheckCertificateResult::FutureEpoch);
         }
         if let Some(known_committee) = committees.get(&block.epoch) {
             // This epoch is recognized by our chain. Let's verify the
             // certificate.
             let _ = incoming_certificate.check(known_committee)?;
-            Ok(HandleCertificateResult::New)
+            Ok(CheckCertificateResult::New)
         } else {
             // We don't accept a certificate from a committee that was retired.
-            Ok(HandleCertificateResult::OldEpoch)
+            Ok(CheckCertificateResult::OldEpoch)
         }
     }
 
