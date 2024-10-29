@@ -38,7 +38,7 @@ async fn test_storage_service_writes_from_state() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_storage_service_admin() -> Result<()> {
+async fn admin_test_storage_service() -> Result<()> {
     admin_test::<ServiceStoreClient>().await;
     Ok(())
 }

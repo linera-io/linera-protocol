@@ -528,8 +528,8 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
-    /// Already existing table
-    #[error("Store already exist during a create operation")]
+    /// Store already exists during a create operation
+    #[error("Store already exists during a create operation")]
     AlreadyExist,
 
     /// Tokio join error in RocksDb.
