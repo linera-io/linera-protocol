@@ -28,16 +28,6 @@ use linera_execution::{
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 
-fn make_operation_context() -> OperationContext {
-    OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: Some(0),
-        authenticated_signer: None,
-        authenticated_caller_id: None,
-    }
-}
-
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
     let mut state = SystemExecutionState::default();
@@ -1666,4 +1656,14 @@ async fn test_close_chain() {
     .await
     .unwrap();
     assert!(view.system.closed.get());
+}
+
+fn make_operation_context() -> OperationContext {
+    OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: Some(0),
+        authenticated_signer: None,
+        authenticated_caller_id: None,
+    }
 }
