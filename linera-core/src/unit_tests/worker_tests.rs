@@ -20,8 +20,8 @@ use linera_base::{
     crypto::{CryptoHash, *},
     data_types::*,
     identifiers::{
-        Account, ChainDescription, ChainId, ChannelName, Destination, GenericApplicationId,
-        MessageId, Owner,
+        Account, AccountOwner, ChainDescription, ChainId, ChannelName, Destination,
+        GenericApplicationId, MessageId, Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -314,8 +314,8 @@ where
                 account.chain_id,
                 MessageKind::Tracked,
                 SystemMessage::Credit {
-                    source,
-                    target: account.owner,
+                    source: source.map(AccountOwner::User),
+                    target: account.owner.map(AccountOwner::User),
                     amount,
                 },
             )]);
@@ -2165,7 +2165,7 @@ where
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
                     source: None,
-                    target: Some(sender),
+                    target: Some(AccountOwner::User(sender)),
                     amount: Amount::from_tokens(5),
                 })
                 .to_posted(0, MessageKind::Tracked)],
@@ -2245,8 +2245,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: Some(sender),
-                        target: Some(recipient),
+                        source: Some(AccountOwner::User(sender)),
+                        target: Some(AccountOwner::User(recipient)),
                         amount: Amount::from_tokens(3),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2261,8 +2261,8 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![Message::System(SystemMessage::Credit {
-                        source: Some(sender),
-                        target: Some(recipient),
+                        source: Some(AccountOwner::User(sender)),
+                        target: Some(AccountOwner::User(recipient)),
                         amount: Amount::from_tokens(2),
                     })
                     .to_posted(0, MessageKind::Tracked)],
@@ -2303,8 +2303,8 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![Message::System(SystemMessage::Credit {
-                    source: Some(sender),
-                    target: Some(recipient),
+                    source: Some(AccountOwner::User(sender)),
+                    target: Some(AccountOwner::User(recipient)),
                     amount: Amount::from_tokens(3),
                 })
                 .to_posted(0, MessageKind::Bouncing)],

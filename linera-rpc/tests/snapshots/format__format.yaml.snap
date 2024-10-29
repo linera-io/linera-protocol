@@ -889,17 +889,17 @@ SystemMessage:
         STRUCT:
           - target:
               OPTION:
-                TYPENAME: Owner
+                TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
           - source:
               OPTION:
-                TYPENAME: Owner
+                TYPENAME: AccountOwner
     1:
       Withdraw:
         STRUCT:
           - owner:
-              TYPENAME: Owner
+              TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
           - recipient:

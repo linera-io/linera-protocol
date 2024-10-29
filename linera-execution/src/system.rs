@@ -209,16 +209,16 @@ pub enum SystemMessage {
     /// bouncing, in which case `source` is credited instead.
     Credit {
         #[debug(skip_if = Option::is_none)]
-        target: Option<Owner>,
+        target: Option<AccountOwner>,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
     /// the recipient. The message must be properly authenticated. Receiver chains may
     /// refuse it depending on their configuration.
     Withdraw {
-        owner: Owner,
+        owner: AccountOwner,
         amount: Amount,
         recipient: Recipient,
     },
@@ -712,8 +712,8 @@ where
                     kind: MessageKind::Tracked,
                     message: SystemMessage::Credit {
                         amount,
-                        source: owner,
-                        target: account.owner,
+                        source: owner.map(AccountOwner::User),
+                        target: account.owner.map(AccountOwner::User),
                     },
                 };
 
@@ -747,7 +747,7 @@ where
             kind: MessageKind::Simple,
             message: SystemMessage::Withdraw {
                 amount,
-                owner,
+                owner: AccountOwner::User(owner),
                 recipient,
             },
         })
@@ -804,10 +804,7 @@ where
                         self.balance.set(new_balance);
                     }
                     Some(owner) => {
-                        let balance = self
-                            .balances
-                            .get_mut_or_default(&AccountOwner::User(owner))
-                            .await?;
+                        let balance = self.balances.get_mut_or_default(&owner).await?;
                         *balance = balance.saturating_add(amount);
                     }
                 }
@@ -817,7 +814,7 @@ where
                 owner,
                 recipient,
             } => {
-                self.debit(Some(&AccountOwner::User(owner)), amount).await?;
+                self.debit(Some(&owner), amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
@@ -828,7 +825,7 @@ where
                             message: SystemMessage::Credit {
                                 amount,
                                 source: Some(owner),
-                                target: account.owner,
+                                target: account.owner.map(AccountOwner::User),
                             },
                         };
                         outcome.messages.push(message);
