@@ -512,32 +512,14 @@ pub struct LiteValue {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 struct ValueHashAndRound(CryptoHash, Round);
 
+/// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct VoteBlueprint<T> {
-    pub value: T,
+pub struct Vote {
+    pub value: HashedCertificateValue,
     pub round: Round,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
-
-/// A vote on a statement from a validator.
-pub type Vote = VoteBlueprint<HashedCertificateValue>;
-
-/// A vote on a statement from a validator, represented as a `LiteValue`.
-pub type LiteVote = VoteBlueprint<LiteValue>;
-
-#[cfg(with_testing)]
-impl std::cmp::PartialEq for LiteVote {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-            && self.round == other.round
-            && self.validator == other.validator
-            && self.signature == other.signature
-    }
-}
-
-#[cfg(with_testing)]
-impl std::cmp::Eq for LiteVote {}
 
 impl Vote {
     /// Use signing key to create a signed object.
@@ -566,6 +548,16 @@ impl Vote {
     pub fn value(&self) -> &CertificateValue {
         self.value.inner()
     }
+}
+
+/// A vote on a statement from a validator, represented as a `LiteValue`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct LiteVote {
+    pub value: LiteValue,
+    pub round: Round,
+    pub validator: ValidatorName,
+    pub signature: Signature,
 }
 
 impl LiteVote {
