@@ -22,9 +22,10 @@ use linera_execution::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageContext, MessageKind,
-    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
+    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemExecutionError,
+    SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 
@@ -1656,6 +1657,69 @@ async fn test_close_chain() {
     .await
     .unwrap();
     assert!(view.system.closed.get());
+}
+
+/// Tests if an application can't transfer the tokens in the chain's balance while executing
+/// messages from a sender that's not an owner of the receiving chain.
+#[tokio::test]
+async fn test_unauthorized_message_sender_cant_spend_receiving_chain_balance() -> anyhow::Result<()>
+{
+    let amount = Amount::ONE;
+
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balance: amount,
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let (application_id, application, _, _) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+
+    let victim_chain_account = None;
+    let attacker_chain_id = ChainId::root(2);
+    let recipient = Account {
+        chain_id: attacker_chain_id,
+        owner: None,
+    };
+
+    application.expect_call(ExpectedCall::execute_message(
+        move |runtime, _context, _operation| {
+            runtime.transfer(victim_chain_account, recipient, amount)?;
+            Ok(())
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = make_message_context(None);
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+
+    let result = view
+        .execute_message(
+            context,
+            Timestamp::from(0),
+            Message::User {
+                application_id,
+                bytes: vec![],
+            },
+            None,
+            &mut txn_tracker,
+            &mut controller,
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(ExecutionError::SystemError(
+            SystemExecutionError::UnauthenticatedTransferOwner
+        ))
+    ));
+
+    Ok(())
 }
 
 /// Creates a dummy [`OperationContext`] to use in tests.
