@@ -176,6 +176,8 @@ pub enum ExecutionError {
     InvalidBytecodeId(BytecodeId),
     #[error("Owner is None")]
     OwnerIsNone,
+    #[error("Unauthorized attempt to transfer tokens")]
+    UnauthorizedTransfer(#[from] authenticated_account::UnauthorizedError),
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
     #[error("Failed to make network reqwest")]
