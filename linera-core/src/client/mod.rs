@@ -40,8 +40,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue,
-        IncomingBundle, LiteCertificate, LiteVote, MessageAction, PostedMessage,
+        Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
+        HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
+        PostedMessage,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -1160,77 +1161,41 @@ where
             .await
             .map_err(|_| NodeError::InvalidChainInfoResponse)?;
 
-        // Retrieve newly received certificates from this validator.
+        // Retrieve the list of newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
         let info = remote_node.handle_chain_info_query(query).await?;
-        let mut other_sender_chains = Vec::new();
         let remote_log = info.requested_received_log;
-        let remote_node_chains_view = remote_log.iter().fold(
-            BTreeMap::<ChainId, BlockHeight>::new(),
-            |mut chain_to_info, entry| {
-                chain_to_info
-                    .entry(entry.chain_id)
-                    .and_modify(|h| *h = entry.height.max(*h))
-                    .or_insert(entry.height);
-                chain_to_info
-            },
-        );
+        let remote_max_heights = Self::max_height_per_chain(&remote_log);
 
-        // Obtain the chain heights we already have from the local node.
-        let futures = remote_node_chains_view
-            .into_iter()
-            .map(|(sender_chain_id, remote_height)| async move {
-                let query = ChainInfoQuery::new(sender_chain_id);
-                let local_response = self.local_query(query).await?;
-                Ok::<_, NodeError>((
-                    sender_chain_id,
-                    remote_height,
-                    local_response.info.next_block_height,
-                ))
-            })
-            .collect::<Vec<_>>();
-        let heights = stream::iter(futures)
-            .buffer_unordered(chain_worker_limit)
-            .try_collect::<Vec<_>>()
+        // Obtain the next block height we need in the local node, for each chain.
+        let local_next_heights = self
+            .local_next_block_heights(remote_max_heights.keys(), chain_worker_limit)
             .await?;
 
         // We keep track of the height we've successfully downloaded and checked, per chain.
         let mut downloaded_heights = BTreeMap::new();
+        // And we make a list of chains we already fully have locally. We need to make sure to
+        // put all their sent messages into the inbox.
+        let mut other_sender_chains = Vec::new();
 
-        let certificate_hashes = future::try_join_all(heights.into_iter().filter_map(
-            |(sender_chain_id, remote_height, local_next)| {
+        let certificate_hashes = future::try_join_all(remote_max_heights.into_iter().filter_map(
+            |(sender_chain_id, remote_height)| {
+                let local_next = *local_next_heights.get(&sender_chain_id)?;
                 if let Ok(height) = local_next.try_sub_one() {
                     downloaded_heights.insert(sender_chain_id, height);
                 }
 
-                // Find the first and last block height in the batch that we need.
-                if local_next > remote_height {
+                let Some(diff) = remote_height.0.checked_sub(local_next.0) else {
                     // Our highest, locally-known block is higher than any block height
                     // from the current batch. Skip this batch, but remember to wait for
                     // the messages to be delivered to the inboxes.
                     other_sender_chains.push(sender_chain_id);
                     return None;
-                }
+                };
 
                 // Find the hashes of the blocks we need.
-                Some(async move {
-                    let batch_size = remote_height.saturating_sub(local_next).0.saturating_add(1);
-                    let block_batch_range = BlockHeightRange::multi(local_next, batch_size);
-                    let query = ChainInfoQuery::new(sender_chain_id)
-                        .with_sent_certificate_hashes_in_range(block_batch_range.clone());
-                    let remote_response = remote_node.handle_chain_info_query(query).await?;
-                    let hashes = remote_response.requested_sent_certificate_hashes;
-
-                    if hashes.len() as u64 != batch_size {
-                        error!(
-                            block_range = ?block_batch_range,
-                            received_num = hashes.len(),
-                            "Validator sent invalid number of certificate hashes."
-                        );
-                        return Err(NodeError::InvalidChainInfoResponse);
-                    }
-                    Ok(hashes)
-                })
+                let range = BlockHeightRange::multi(local_next, diff.saturating_add(1));
+                Some(remote_node.fetch_sent_certificate_hashes(sender_chain_id, range))
             },
         ))
         .await?
@@ -1250,10 +1215,7 @@ where
             let sender_chain_id = certificate.value().chain_id();
             let height = certificate.value().height();
             let epoch = certificate.value().epoch();
-            match self
-                .check_certificate(max_epoch, &committees, &certificate)
-                .await?
-            {
+            match self.check_certificate(max_epoch, &committees, &certificate)? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
                         "Postponing received certificate from {sender_chain_id:.8} at height \
@@ -1307,7 +1269,11 @@ where
             })
     }
 
-    async fn check_certificate(
+    #[tracing::instrument(
+        level = "trace", skip_all,
+        fields(certificate_hash = ?incoming_certificate.hash()),
+    )]
+    fn check_certificate(
         &self,
         highest_known_epoch: Epoch,
         committees: &BTreeMap<Epoch, Committee>,
@@ -3228,6 +3194,43 @@ where
         self.receive_certificates_from_validator(received_certificates)
             .await;
         Ok(())
+    }
+
+    /// Given a list of chain IDs, returns a map that assigns to each of them the next block
+    /// height, i.e. the lowest block height that we have not processed in the local node yet.
+    ///
+    /// It makes at most `chain_worker_limit` requests to the local node in parallel.
+    async fn local_next_block_heights(
+        &self,
+        chain_ids: impl IntoIterator<Item = &ChainId>,
+        chain_worker_limit: usize,
+    ) -> Result<BTreeMap<ChainId, BlockHeight>, NodeError> {
+        let futures = chain_ids
+            .into_iter()
+            .map(|chain_id| async move {
+                let local_response = self.local_query(ChainInfoQuery::new(*chain_id)).await?;
+                Ok::<_, NodeError>((*chain_id, local_response.info.next_block_height))
+            })
+            .collect::<Vec<_>>();
+        stream::iter(futures)
+            .buffer_unordered(chain_worker_limit)
+            .try_collect()
+            .await
+    }
+
+    /// Given a set of chain ID-block height pairs, returns a map that assigns to each chain ID
+    /// the highest height seen.
+    fn max_height_per_chain(remote_log: &[ChainAndHeight]) -> BTreeMap<ChainId, BlockHeight> {
+        remote_log.iter().fold(
+            BTreeMap::<ChainId, BlockHeight>::new(),
+            |mut chain_to_info, entry| {
+                chain_to_info
+                    .entry(entry.chain_id)
+                    .and_modify(|h| *h = entry.height.max(*h))
+                    .or_insert(entry.height);
+                chain_to_info
+            },
+        )
     }
 }
 
