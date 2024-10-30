@@ -90,7 +90,7 @@ impl GrpcClient {
             | Code::Internal
             | Code::DataLoss
             | Code::Unauthenticated => {
-                error!("Unexpected gRPC status received from {address}: {}", status);
+                error!("Unexpected gRPC status received from {address}: {status}");
                 false
             }
         }
