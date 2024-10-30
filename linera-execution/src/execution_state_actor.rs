@@ -24,9 +24,9 @@ use reqwest::{header::CONTENT_TYPE, Client};
 use crate::{
     system::{OpenChainConfig, Recipient},
     util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    AuthenticatedAccountOwner, ExecutionError, ExecutionRuntimeContext, ExecutionStateView,
+    RawExecutionOutcome, RawOutgoingMessage, SystemExecutionError, SystemMessage,
+    UserApplicationDescription, UserApplicationId, UserContractCode, UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -128,13 +128,13 @@ where
                 source,
                 destination,
                 amount,
-                signer,
                 callback,
             } => {
                 let mut execution_outcome = RawExecutionOutcome::default();
+                let source = source.without_authentication();
                 let message = self
                     .system
-                    .transfer(signer, source, Recipient::Account(destination), amount)
+                    .transfer(source, source, Recipient::Account(destination), amount)
                     .await?;
 
                 if let Some(message) = message {
@@ -354,10 +354,9 @@ pub enum ExecutionRequest {
     },
 
     Transfer {
-        source: Option<Owner>,
+        source: AuthenticatedAccountOwner,
         destination: Account,
         amount: Amount,
-        signer: Option<Owner>,
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
 
@@ -489,14 +488,12 @@ impl Debug for ExecutionRequest {
                 source,
                 destination,
                 amount,
-                signer,
                 ..
             } => formatter
                 .debug_struct("ExecutionRequest::Transfer")
                 .field("source", source)
                 .field("destination", destination)
                 .field("amount", amount)
-                .field("signer", signer)
                 .finish_non_exhaustive(),
 
             ExecutionRequest::Claim {
