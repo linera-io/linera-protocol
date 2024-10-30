@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, vec};
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
@@ -22,8 +22,8 @@ use linera_execution::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageContext, MessageKind,
+    Operation, OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
     ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -1666,5 +1666,22 @@ fn make_operation_context() -> OperationContext {
         index: Some(0),
         authenticated_signer: None,
         authenticated_caller_id: None,
+    }
+}
+
+/// Creates a dummy [`MessageContext`] to use in tests.
+fn make_message_context(authenticated_signer: Option<Owner>) -> MessageContext {
+    MessageContext {
+        chain_id: ChainId::root(0),
+        is_bouncing: false,
+        authenticated_signer,
+        refund_grant_to: None,
+        height: BlockHeight(0),
+        certificate_hash: CryptoHash::test_hash("block receiving a message"),
+        message_id: MessageId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight(0),
+            index: 0,
+        },
     }
 }
