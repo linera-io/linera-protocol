@@ -39,10 +39,10 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
-    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationRegistryView, AuthenticatedAccountOwner, ChannelName, ChannelSubscription,
+    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
+    QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UnauthorizedError,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -347,7 +347,7 @@ pub enum SystemExecutionError {
     #[error("Transfer must have positive amount")]
     IncorrectTransferAmount,
     #[error("Transfer from owned account must be authenticated by the right signer")]
-    UnauthenticatedTransferOwner,
+    UnauthenticatedTransferOwner(#[source] UnauthorizedError),
     #[error("The transferred amount must not exceed the current chain balance: {balance}")]
     InsufficientFunding { balance: Amount },
     #[error("Required execution fees exceeded the total funding available: {balance}")]
@@ -472,6 +472,8 @@ where
                 recipient,
                 ..
             } => {
+                let sender = AuthenticatedAccountOwner::new_in_system_application(&context, owner)
+                    .map_err(SystemExecutionError::UnauthenticatedTransferOwner)?;
                 let message = self
                     .transfer(context.authenticated_signer, owner, recipient, amount)
                     .await?;
@@ -669,10 +671,7 @@ where
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
         if owner.is_some() {
-            ensure!(
-                authenticated_signer == owner,
-                SystemExecutionError::UnauthenticatedTransferOwner
-            );
+            assert!(authenticated_signer == owner);
         }
         ensure!(
             amount > Amount::ZERO,
