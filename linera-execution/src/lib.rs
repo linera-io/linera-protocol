@@ -7,6 +7,7 @@
 #![deny(clippy::large_futures)]
 
 mod applications;
+mod authenticated_account;
 pub mod committee;
 mod execution;
 mod execution_state_actor;
@@ -48,6 +49,7 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
+pub(crate) use self::authenticated_account::{AuthenticatedAccountOwner, UnauthorizedError};
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
 use crate::runtime::ContractSyncRuntime;
