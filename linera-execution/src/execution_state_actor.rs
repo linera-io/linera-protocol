@@ -131,10 +131,9 @@ where
                 callback,
             } => {
                 let mut execution_outcome = RawExecutionOutcome::default();
-                let source = source.without_authentication();
                 let message = self
                     .system
-                    .transfer(source, source, Recipient::Account(destination), amount)
+                    .transfer(source, Recipient::Account(destination), amount)
                     .await?;
 
                 if let Some(message) = message {

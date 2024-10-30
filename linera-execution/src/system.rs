@@ -474,9 +474,7 @@ where
             } => {
                 let sender = AuthenticatedAccountOwner::new_in_system_application(&context, owner)
                     .map_err(SystemExecutionError::UnauthenticatedTransferOwner)?;
-                let message = self
-                    .transfer(context.authenticated_signer, owner, recipient, amount)
-                    .await?;
+                let message = self.transfer(sender, recipient, amount).await?;
 
                 if let Some(message) = message {
                     outcome.messages.push(message)
@@ -665,20 +663,17 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<Owner>,
-        owner: Option<Owner>,
+        sender: AuthenticatedAccountOwner,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        if owner.is_some() {
-            assert!(authenticated_signer == owner);
-        }
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectTransferAmount
         );
-        let balance = match &owner {
-            Some(owner) => self.balances.get_mut_or_default(owner).await?,
+        let sender = sender.without_authentication();
+        let balance = match sender {
+            Some(owner) => self.balances.get_mut_or_default(&owner).await?,
             None => self.balance.get_mut(),
         };
         balance
@@ -693,7 +688,7 @@ where
                     kind: MessageKind::Tracked,
                     message: SystemMessage::Credit {
                         amount,
-                        source: owner,
+                        source: sender,
                         target: account.owner,
                     },
                 };
