@@ -126,6 +126,11 @@ impl PathProvider {
         }
     }
 
+    pub fn table_key(&self) -> String {
+        let table_key = format!("client_db_{}", self.path().display());
+        table_key.replace("/", "_")
+    }
+
     pub fn create_temporary_directory() -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         Ok(PathProvider::TemporaryDirectory { tmp_dir })
