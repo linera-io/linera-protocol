@@ -308,70 +308,88 @@ where
         Ok(())
     }
 
-    /// Returns an error if the block requires a blob we don't have, or if unrelated blobs were provided.
+    /// Returns an error if the block requires a blob we don't have.
+    /// Looks for the blob in: chain manager's pending blobs, recent blobs cache
+    /// and storage.
     async fn check_no_missing_blobs(
         &self,
-        blobs_in_block: HashSet<BlobId>,
-        blobs: &[Blob],
+        required_blob_ids: &HashSet<BlobId>,
     ) -> Result<(), WorkerError> {
-        let missing_blobs = self.get_missing_blobs(blobs_in_block, blobs).await?;
-
-        if missing_blobs.is_empty() {
-            return Ok(());
-        }
-
-        Err(WorkerError::BlobsNotFound(missing_blobs))
-    }
-
-    /// Returns the blobs required by the block that we don't have, or an error if unrelated blobs were provided.
-    async fn get_missing_blobs(
-        &self,
-        mut required_blob_ids: HashSet<BlobId>,
-        blobs: &[Blob],
-    ) -> Result<Vec<BlobId>, WorkerError> {
-        // Find all certificates containing blobs used when executing this block.
-        for blob in blobs {
-            let blob_id = blob.id();
-            ensure!(
-                required_blob_ids.remove(&blob_id),
-                WorkerError::UnneededBlob { blob_id }
-            );
-        }
-
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let blob_ids = self
+        let missing_blob_ids = self
             .recent_blobs
             .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
             .await
             .into_iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
+            .cloned()
             .collect::<Vec<_>>();
-        Ok(self.storage.missing_blobs(blob_ids).await?)
-    }
 
-    /// Returns the blobs requested by their `blob_ids` that are either in pending in the
-    /// chain, in the `recent_blobs` cache or in storage.
-    async fn get_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
-        let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
-            self.recent_blobs.try_get_many(blob_ids).await;
+        let missing_blob_ids = self
+            .storage
+            .missing_blobs(missing_blob_ids.as_slice())
+            .await?;
 
-        let mut blobs = found_blobs.into_values().collect::<Vec<_>>();
-        let mut missing_blobs = Vec::new();
-        for blob_id in not_found_blobs {
-            if let Some(blob) = pending_blobs.get(&blob_id) {
-                blobs.push(blob.clone());
-            } else if let Ok(blob) = self.storage.read_blob(blob_id).await {
-                blobs.push(blob);
-            } else {
-                missing_blobs.push(blob_id);
-            }
+        if missing_blob_ids.is_empty() {
+            return Ok(());
         }
 
-        if missing_blobs.is_empty() {
-            Ok(blobs)
+        Err(WorkerError::BlobsNotFound(missing_blob_ids))
+    }
+
+    /// Returns an error if unrelated blobs were provided.
+    async fn check_for_unneeded_blobs(
+        &self,
+        required_blob_ids: &HashSet<BlobId>,
+        blobs: &[Blob],
+    ) -> Result<(), WorkerError> {
+        // Find all certificates containing blobs used when executing this block.
+        for blob in blobs {
+            let blob_id = blob.id();
+            ensure!(
+                required_blob_ids.contains(&blob_id),
+                WorkerError::UnneededBlob { blob_id }
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Returns the blobs requested by their `blob_ids` that are either in the `recent_blobs`
+    /// cache or in storage.
+    async fn get_blobs(&self, blob_ids: &HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
+            self.recent_blobs.try_get_many(blob_ids.clone()).await;
+
+        let mut found_blobs = found_blobs.into_values().collect::<Vec<_>>();
+        let mut missing_blob_ids = Vec::new();
+        for blob_id in not_found_blobs {
+            if let Ok(blob) = self.storage.read_blob(blob_id).await {
+                found_blobs.push(blob);
+                continue;
+            }
+
+            missing_blob_ids.push(blob_id);
+        }
+
+        if missing_blob_ids.is_empty() {
+            Ok(found_blobs)
         } else {
-            Err(WorkerError::BlobsNotFound(missing_blobs))
+            Err(WorkerError::BlobsNotFound(missing_blob_ids))
+        }
+    }
+
+    /// Returns the blobs requested by their `blob_ids` that are in the `recent_blobs` cache.
+    async fn get_cached_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+        let (found_blobs, missing_blob_ids): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
+            self.recent_blobs.try_get_many(blob_ids).await;
+
+        if missing_blob_ids.is_empty() {
+            Ok(found_blobs.into_values().collect())
+        } else {
+            Err(WorkerError::BlobsNotFound(
+                missing_blob_ids.into_iter().collect(),
+            ))
         }
     }
 
