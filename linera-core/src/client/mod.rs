@@ -41,7 +41,6 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
         HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
-        PostedMessage,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -52,8 +51,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
-    ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, Response, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -356,7 +354,7 @@ impl MessagePolicy {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    fn handle(&self, bundle: &mut IncomingBundle) -> bool {
+    fn must_handle(&self, bundle: &mut IncomingBundle) -> bool {
         if self.is_reject() {
             if bundle.bundle.is_skippable() {
                 return false;
@@ -755,50 +753,39 @@ where
         if info.next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore() {
             return Ok(Vec::new()); // OpenChain is already received, others are ignored.
         }
-        let mut requested_pending_message_bundles = info.requested_pending_message_bundles;
-        let mut pending_message_bundles = vec![];
-        // The first incoming message of any child chain must be `OpenChain`. We must have it in
-        // our inbox, and include it before all other messages.
-        if info.next_block_height == BlockHeight::ZERO
-            && info
-                .description
-                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
-                .is_child()
-        {
-            let Some(index) = requested_pending_message_bundles
-                .iter()
-                .position(|message| {
-                    matches!(
-                        message.bundle.messages.first(),
-                        Some(PostedMessage {
-                            message: Message::System(SystemMessage::OpenChain(_)),
-                            ..
-                        })
-                    )
-                })
-            else {
+
+        let needs_openchain_message = info.needs_opening()?;
+        let mut rearranged = false;
+        let mut pending_message_bundles = info.requested_pending_message_bundles;
+
+        if needs_openchain_message {
+            // The first incoming message of any child chain must be `OpenChain`. We must have it in
+            // our inbox, and include it before all other messages.
+            rearranged = IncomingBundle::put_openchain_at_front(&mut pending_message_bundles);
+            if !rearranged {
                 return Err(LocalNodeError::InactiveChain(self.chain_id).into());
             };
-            let open_chain_bundle = requested_pending_message_bundles.remove(index);
-            pending_message_bundles.push(open_chain_bundle);
         }
+
         if self.options.message_policy.is_ignore() {
-            return Ok(pending_message_bundles); // Ignore messages other than OpenChain.
-        }
-        for mut bundle in requested_pending_message_bundles {
-            if pending_message_bundles.len() >= self.options.max_pending_message_bundles {
-                warn!(
-                    "Limiting block to {} incoming message bundles",
-                    self.options.max_pending_message_bundles
-                );
-                break;
+            // Ignore messages other than OpenChain.
+            if rearranged {
+                return Ok(pending_message_bundles[0..1].to_vec());
+            } else {
+                return Ok(Vec::new());
             }
-            if !self.options.message_policy.handle(&mut bundle) {
-                continue;
-            }
-            pending_message_bundles.push(bundle);
         }
-        Ok(pending_message_bundles)
+
+        Ok(pending_message_bundles
+            .into_iter()
+            .filter_map(|mut bundle| {
+                self.options
+                    .message_policy
+                    .must_handle(&mut bundle)
+                    .then_some(bundle)
+            })
+            .take(self.options.max_pending_message_bundles)
+            .collect())
     }
 
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.

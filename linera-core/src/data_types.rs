@@ -22,7 +22,7 @@ use linera_storage::ChainRuntimeContext;
 use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::client::ChainClientError;
+use crate::{client::ChainClientError, local_node::LocalNodeError};
 
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -177,6 +177,16 @@ pub struct ChainInfo {
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_n`
     pub requested_received_log: Vec<ChainAndHeight>,
+}
+
+impl ChainInfo {
+    pub fn needs_opening(&self) -> Result<bool, LocalNodeError> {
+        Ok(self.next_block_height == BlockHeight::ZERO
+            && self
+                .description
+                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
+                .is_child())
+    }
 }
 
 /// The response to an `ChainInfoQuery`
