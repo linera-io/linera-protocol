@@ -79,18 +79,18 @@ jobs:
     - name: Run the storage-service instance and the storage-service tests
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
-        cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
+        cargo test --features unstable-oracles -- storage_service --skip storage_test_service --nocapture
     - name: Run Ethereum tests
       run: |
         cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,unstable-oracles
     - name: Run the benchmark test
       run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
-        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
+        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark
+        cargo test --locked -p linera-service --features benchmark benchmark
     - name: Run the validators
       run: |
-        cargo build --features storage-service
+        cargo build --bin linera-proxy --bin linera-server
         mkdir /tmp/local-linera-net
         cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
     - name: Compile Wasm test modules for Witty integration tests
@@ -115,7 +115,7 @@ jobs:
     - name: Run Wasm application tests
       run: |
         cd examples
-        cargo test --locked
+        cargo test --locked -- --skip storage_test_service --skip storage_service
     - name: Run Witty integration tests
       run: |
         cargo test -p linera-witty --features wasmer,wasmtime
