@@ -158,12 +158,13 @@ impl GrpcClient {
 
 macro_rules! client_delegate {
     ($self:ident, $handler:ident, $req:ident) => {{
+        let address = $self.address.clone();
         $self
             .delegate(
                 |mut client, req| async move { client.$handler(req).await },
                 $req,
                 stringify!($handler),
-                &$self.address,
+                &address,
             )
             .await
     }};
