@@ -101,7 +101,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
 
 /// The runtime status of an application.
 #[derive(Debug)]
-struct ApplicationStatus {
+pub(crate) struct ApplicationStatus {
     /// The caller application ID, if forwarded during the call.
     caller_id: Option<UserApplicationId>,
     /// The application ID.
@@ -112,6 +112,13 @@ struct ApplicationStatus {
     signer: Option<Owner>,
     /// The current execution outcome of the application.
     outcome: RawExecutionOutcome<Vec<u8>>,
+}
+
+impl ApplicationStatus {
+    /// Returns the authenticated signer for the execution thread, if any.
+    pub fn authenticated_signer(&self) -> Option<Owner> {
+        self.signer
+    }
 }
 
 /// A loaded application instance.
