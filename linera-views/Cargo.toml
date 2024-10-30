@@ -20,7 +20,7 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [features]
 metrics = ["dep:hex", "linera-base/metrics", "linera-views-derive/metrics"]
-test = ["tokio/macros", "criterion"]
+test = ["tokio/macros"]
 web = ["linera-base/web"]
 indexeddb = ["indexed_db_futures", "wasm-bindgen"]
 web-default = ["web", "indexeddb"]
@@ -58,9 +58,6 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tracing.workspace = true
 trait-variant.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-criterion = { workspace = true, optional = true, features = ["async_tokio"] }
-
 [target.wasm32-unknown-unknown.dependencies]
 indexed_db_futures = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
@@ -70,6 +67,7 @@ web-sys = { workspace = true, features = ["console"] }
 wasm-bindgen-test.workspace = true
 
 [dev-dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
 linera-views = { path = ".", features = ["test"] }
 rand.workspace = true
 test-case.workspace = true

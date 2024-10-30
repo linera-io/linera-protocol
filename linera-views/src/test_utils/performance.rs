@@ -6,8 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use criterion::black_box;
-
 use crate::{
     batch::Batch,
     store::LocalKeyValueStore,
@@ -42,9 +40,10 @@ async fn clear_store<S: LocalKeyValueStore>(store: &S) {
 }
 
 /// Compute benchmark of the `contains_key` operation.
-pub async fn performance_contains_key<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
+pub async fn performance_contains_key<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
+    F: Fn(bool) -> bool
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -60,7 +59,7 @@ where
 
         let measurement = Instant::now();
         for key_value in &key_values {
-            black_box(store.contains_key(&key_value.0).await.unwrap());
+            f(store.contains_key(&key_value.0).await.unwrap());
         }
         total_time += measurement.elapsed();
 
@@ -71,9 +70,10 @@ where
 }
 
 /// Compute benchmark of the `contains_keys` operation.
-pub async fn performance_contains_keys<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
+pub async fn performance_contains_keys<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
+    F: Fn(Vec<bool>) -> Vec<bool>,
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -92,7 +92,7 @@ where
             .collect::<Vec<_>>();
 
         let measurement = Instant::now();
-        black_box(store.contains_keys(keys).await.unwrap());
+        f(store.contains_keys(keys).await.unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -102,12 +102,14 @@ where
 }
 
 /// Compute benchmark of the `performance_find_keys_by_prefix` operation.
-pub async fn performance_find_keys_by_prefix<S: LocalKeyValueStore>(
+pub async fn performance_find_keys_by_prefix<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
+    f: F,
 ) -> Duration
 where
     S::Error: Debug,
+    F: Fn(S::Keys) -> S::Keys,
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -122,7 +124,7 @@ where
         store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
-        black_box(store.find_keys_by_prefix(PREFIX_SEARCH).await.unwrap());
+        f(store.find_keys_by_prefix(PREFIX_SEARCH).await.unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -132,12 +134,14 @@ where
 }
 
 /// Compute benchmark of the `performance_find_keys_by_prefix` operation.
-pub async fn performance_find_key_values_by_prefix<S: LocalKeyValueStore>(
+pub async fn performance_find_key_values_by_prefix<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
+    f: F,
 ) -> Duration
 where
     S::Error: Debug,
+    F: Fn(S::KeyValues) -> S::KeyValues,
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -152,7 +156,7 @@ where
         store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
-        black_box(
+        f(
             store
                 .find_key_values_by_prefix(PREFIX_SEARCH)
                 .await
@@ -167,12 +171,14 @@ where
 }
 
 /// Compute benchmark of the `read_value_bytes` operation.
-pub async fn performance_read_value_bytes<S: LocalKeyValueStore>(
+pub async fn performance_read_value_bytes<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
+    f: F,
 ) -> Duration
 where
     S::Error: Debug,
+    F: Fn(Option<Vec<u8>>) -> Option<Vec<u8>>,
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -188,7 +194,7 @@ where
 
         let measurement = Instant::now();
         for (key, _) in &key_values {
-            black_box(store.read_value_bytes(key).await.unwrap());
+            f(store.read_value_bytes(key).await.unwrap());
         }
         total_time += measurement.elapsed();
 
@@ -199,12 +205,14 @@ where
 }
 
 /// Compute benchmark of the `read_multi_values_bytes` operation.
-pub async fn performance_read_multi_values_bytes<S: LocalKeyValueStore>(
+pub async fn performance_read_multi_values_bytes<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
+    f: F,
 ) -> Duration
 where
     S::Error: Debug,
+    F: Fn(Vec<Option<Vec<u8>>>) -> Vec<Option<Vec<u8>>>
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -223,7 +231,7 @@ where
             .collect::<Vec<_>>();
 
         let measurement = Instant::now();
-        black_box(store.read_multi_values_bytes(keys).await.unwrap());
+        f(store.read_multi_values_bytes(keys).await.unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -233,9 +241,10 @@ where
 }
 
 /// Compute benchmark of the `write_batch` operation.
-pub async fn performance_write_batch<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
+pub async fn performance_write_batch<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
+    F: Fn(()) -> (),
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -249,7 +258,7 @@ where
         }
 
         let measurement = Instant::now();
-        store.write_batch(batch).await.unwrap();
+        f(store.write_batch(batch).await.unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_storage_service::client::ServiceStoreClient;
 use linera_views::{
     store::TestKeyValueStore as _,
@@ -19,7 +19,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_contains_key(store, iterations).await
+                performance_contains_key(store, iterations, black_box).await
             })
     });
 
@@ -28,7 +28,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_contains_keys(store, iterations).await
+                performance_contains_keys(store, iterations, black_box).await
             })
     });
 
@@ -37,7 +37,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_find_keys_by_prefix(store, iterations).await
+                performance_find_keys_by_prefix(store, iterations, black_box).await
             })
     });
 
@@ -48,7 +48,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
                 .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
                 .iter_custom(|iterations| async move {
                     let store = ServiceStoreClient::new_test_store().await.unwrap();
-                    performance_find_key_values_by_prefix(store, iterations).await
+                    performance_find_key_values_by_prefix(store, iterations, black_box).await
                 })
         },
     );
@@ -58,7 +58,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_read_value_bytes(store, iterations).await
+                performance_read_value_bytes(store, iterations, black_box).await
             })
     });
 
@@ -67,7 +67,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_read_multi_values_bytes(store, iterations).await
+                performance_read_multi_values_bytes(store, iterations, black_box).await
             })
     });
 
@@ -76,7 +76,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_write_batch(store, iterations).await
+                performance_write_batch(store, iterations, black_box).await
             })
     });
 }
