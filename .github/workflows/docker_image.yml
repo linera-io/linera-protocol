@@ -1,0 +1,60 @@
+name: Docker Image
+
+on:
+  push:
+    branches: [ 'devnet_*', 'testnet_*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+    
+      - name: Authenticate Docker with GCP
+        run: |
+          gcloud auth configure-docker us-docker.pkg.dev
+  
+      - name: Set env variables
+        run: |
+          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> $GITHUB_ENV
+          if [ -n "${{ github.head_ref }}" ]; then
+            echo "BRANCH_NAME=${{ github.head_ref }}" >> $GITHUB_ENV
+          else
+            echo "BRANCH_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
+      - name: Set docker image env variable
+        run: |
+          echo "DOCKER_IMAGE=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera" >> $GITHUB_ENV
+  
+      - name: Build Docker image
+        run: |
+          docker build --build-arg git_commit=${{ env.GIT_COMMIT_LONG }} \
+            -f docker/Dockerfile . \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.BRANCH_NAME }} \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_SHORT }} \
+            -t ${{ env.DOCKER_IMAGE }}:${{ env.GIT_COMMIT_LONG }}
+  
+      - name: Push Docker image to Google Artifact Registry
+        run: |
+          docker push -a ${{ env.DOCKER_IMAGE }}
