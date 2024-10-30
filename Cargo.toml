@@ -168,6 +168,7 @@ wasmtime = { version = "25.0.0", default-features = false, features = ["cranelif
 wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"
+js-sys = "0.3.70"
 web-time = "1.1.0"
 wit-bindgen = "0.24.0"
 zstd = "0.13.2"

@@ -4238,6 +4238,7 @@ dependencies = [
  "derive_more 1.0.0",
  "dyn-clone",
  "futures",
+ "js-sys",
  "linera-base",
  "linera-execution",
  "linera-views",

@@ -20,19 +20,18 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
-#[cfg(with_metrics)]
-use std::sync::LazyLock;
-
 use linera_base::data_types::Bytecode;
-#[cfg(with_metrics)]
-use linera_base::prometheus_util::{self, MeasureLatency};
-#[cfg(with_metrics)]
-use prometheus::HistogramVec;
 use thiserror::Error;
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
+#[cfg(with_metrics)]
+use {
+    linera_base::prometheus_util::{self, MeasureLatency},
+    prometheus::HistogramVec,
+    std::sync::LazyLock,
+};
 
 use self::sanitizer::sanitize;
 pub use self::{
@@ -213,6 +212,66 @@ impl UserServiceModule for WasmServiceModule {
         Ok(instance)
     }
 }
+
+#[cfg(web)]
+const _: () = {
+    use js_sys::wasm_bindgen::JsValue;
+
+    impl TryFrom<JsValue> for WasmServiceModule {
+        type Error = JsValue;
+
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            // XXX: currently `Wasmer` is the only backend enabled on the Web.
+            #[cfg(with_wasmer)]
+            {
+                Ok(Self::Wasmer {
+                    module: value.try_into()?,
+                })
+            }
+
+            #[cfg(not(with_wasmer))]
+            Err(value)
+        }
+    }
+
+    impl From<WasmServiceModule> for JsValue {
+        fn from(module: WasmServiceModule) -> JsValue {
+            match module {
+                #[cfg(with_wasmer)]
+                WasmServiceModule::Wasmer { module } => ::wasmer::Module::clone(&module).into(),
+            }
+        }
+    }
+
+    impl TryFrom<JsValue> for WasmContractModule {
+        type Error = JsValue;
+
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            // XXX: currently `Wasmer` is the only backend enabled on the Web.
+            #[cfg(with_wasmer)]
+            {
+                Ok(Self::Wasmer {
+                    module: value.try_into()?,
+                    engine: Default::default(),
+                })
+            }
+
+            #[cfg(not(with_wasmer))]
+            Err(value)
+        }
+    }
+
+    impl From<WasmContractModule> for JsValue {
+        fn from(module: WasmContractModule) -> JsValue {
+            match module {
+                #[cfg(with_wasmer)]
+                WasmContractModule::Wasmer { module, engine: _ } => {
+                    ::wasmer::Module::clone(&module).into()
+                }
+            }
+        }
+    }
+};
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
 #[cfg(any(with_wasmer, with_wasmtime))]
