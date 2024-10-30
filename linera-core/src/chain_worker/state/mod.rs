@@ -380,10 +380,21 @@ where
         self.recent_blobs.insert(blob).await
     }
 
-    /// Adds any newly created chains to the set of `tracked_chains`.
-    fn track_newly_created_chains(&self, block: &ExecutedBlock) {
+    /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
+    /// also tracked.
+    ///
+    /// Chains that are not tracked are usually processed only because they sent some message
+    /// to one of the tracked chains. In most use cases, their children won't be of interest.
+    fn track_newly_created_chains(&self, executed_block: &ExecutedBlock) {
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
-            let messages = block.messages().iter().flatten();
+            if !tracked_chains
+                .read()
+                .expect("Panics should not happen while holding a lock to `tracked_chains`")
+                .contains(&executed_block.block.chain_id)
+            {
+                return; // The parent chain is not tracked; don't track the child.
+            }
+            let messages = executed_block.messages().iter().flatten();
             let open_chain_message_indices =
                 messages
                     .enumerate()
@@ -392,7 +403,7 @@ where
                         _ => None,
                     });
             let open_chain_message_ids =
-                open_chain_message_indices.map(|index| block.message_id(index as u32));
+                open_chain_message_indices.map(|index| executed_block.message_id(index as u32));
             let new_chain_ids = open_chain_message_ids.map(ChainId::child);
 
             tracked_chains
