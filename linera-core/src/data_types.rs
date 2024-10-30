@@ -180,6 +180,9 @@ pub struct ChainInfo {
 }
 
 impl ChainInfo {
+    /// Returns whether this is a child chain that does not have any blocks yet.
+    ///
+    /// Child chains must receive `OpenChain` as their first incoming message.
     pub fn needs_opening(&self) -> Result<bool, LocalNodeError> {
         Ok(self.next_block_height == BlockHeight::ZERO
             && self

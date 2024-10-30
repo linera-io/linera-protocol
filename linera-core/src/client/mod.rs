@@ -940,8 +940,8 @@ where
         Ok(info)
     }
 
-    // Verify that our local storage contains enough history compared to the
-    // expected block height. Otherwise, download the missing history from the
+    // Verifies that our local storage contains enough history compared to the
+    // expected block height. Otherwise, downloads the missing history from the
     // network.
     async fn sync_until(
         &self,
@@ -2078,7 +2078,6 @@ where
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
             ClientOutcome::Committed(Some(certificate)) => {
-                // How could this have happened? We took the exclusive lock.
                 Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
             // Should be unreachable: We did set a pending block.
