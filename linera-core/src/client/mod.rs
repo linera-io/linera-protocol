@@ -166,7 +166,7 @@ mod metrics {
 }
 
 /// The number of chain workers that can be in memory at the same time.
-const CHAIN_WORKER_LIMIT: usize = 100;
+const CHAIN_WORKER_LIMIT: usize = 20;
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>
