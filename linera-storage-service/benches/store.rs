@@ -76,7 +76,7 @@ fn bench_storage_service(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 let store = ServiceStoreClient::new_test_store().await.unwrap();
-                performance_write_batch(store, iterations, black_box).await
+                performance_write_batch(store, iterations).await
             })
     });
 }

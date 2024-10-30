@@ -247,14 +247,9 @@ where
 }
 
 /// Compute benchmark of the `write_batch` operation.
-pub async fn performance_write_batch<S: LocalKeyValueStore, F>(
-    store: S,
-    iterations: u64,
-    f: F,
-) -> Duration
+pub async fn performance_write_batch<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
 where
     S::Error: Debug,
-    F: Fn(()) -> (),
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -268,7 +263,7 @@ where
         }
 
         let measurement = Instant::now();
-        f(store.write_batch(batch).await.unwrap());
+        store.write_batch(batch).await.unwrap();
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
