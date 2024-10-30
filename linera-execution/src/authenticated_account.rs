@@ -4,7 +4,7 @@
 use linera_base::{ensure, identifiers::Owner};
 use thiserror::Error;
 
-use crate::runtime::ApplicationStatus;
+use crate::{runtime::ApplicationStatus, OperationContext};
 
 /// An account owner that has been successfully authenticated to manage tokens.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -17,6 +17,15 @@ pub enum AuthenticatedAccountOwner {
 }
 
 impl AuthenticatedAccountOwner {
+    /// Creates a new [`AuthenticatedAccountOwner`], if the `owner` can be authenticated by the
+    /// system application's [`OperationContext`].
+    pub(crate) fn new_in_system_application(
+        context: &OperationContext,
+        owner: Option<Owner>,
+    ) -> Result<Self, UnauthorizedError> {
+        Self::new_internal(context.authenticated_signer, owner)
+    }
+
     /// Creates a new [`AuthenticatedAccountOwner`], if the `owner` can be authenticated by the
     /// user application runtime's [`ApplicationStatus`].
     pub(crate) fn new_in_user_application(
