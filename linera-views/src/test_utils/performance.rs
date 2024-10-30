@@ -39,12 +39,8 @@ async fn clear_store<S: LocalKeyValueStore>(store: &S) {
     store.write_batch(batch).await.unwrap();
 }
 
-/// Compute benchmark of the `contains_key` operation.
-pub async fn performance_contains_key<S: LocalKeyValueStore, F>(
-    store: S,
-    iterations: u64,
-    f: F,
-) -> Duration
+/// Benchmarks the `contains_key` operation.
+pub async fn contains_key<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
     F: Fn(bool) -> bool,
@@ -73,12 +69,8 @@ where
     total_time
 }
 
-/// Compute benchmark of the `contains_keys` operation.
-pub async fn performance_contains_keys<S: LocalKeyValueStore, F>(
-    store: S,
-    iterations: u64,
-    f: F,
-) -> Duration
+/// Benchmarks the `contains_keys` operation.
+pub async fn contains_keys<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
     F: Fn(Vec<bool>) -> Vec<bool>,
@@ -109,8 +101,8 @@ where
     total_time
 }
 
-/// Compute benchmark of the `performance_find_keys_by_prefix` operation.
-pub async fn performance_find_keys_by_prefix<S: LocalKeyValueStore, F>(
+/// Benchmarks the `find_keys_by_prefix` operation.
+pub async fn find_keys_by_prefix<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
     f: F,
@@ -141,8 +133,8 @@ where
     total_time
 }
 
-/// Compute benchmark of the `performance_find_keys_by_prefix` operation.
-pub async fn performance_find_key_values_by_prefix<S: LocalKeyValueStore, F>(
+/// Benchmarks the `find_keys_by_prefix` operation.
+pub async fn find_key_values_by_prefix<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
     f: F,
@@ -176,12 +168,8 @@ where
     total_time
 }
 
-/// Compute benchmark of the `read_value_bytes` operation.
-pub async fn performance_read_value_bytes<S: LocalKeyValueStore, F>(
-    store: S,
-    iterations: u64,
-    f: F,
-) -> Duration
+/// Benchmarks the `read_value_bytes` operation.
+pub async fn read_value_bytes<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
 where
     S::Error: Debug,
     F: Fn(Option<Vec<u8>>) -> Option<Vec<u8>>,
@@ -210,8 +198,8 @@ where
     total_time
 }
 
-/// Compute benchmark of the `read_multi_values_bytes` operation.
-pub async fn performance_read_multi_values_bytes<S: LocalKeyValueStore, F>(
+/// Benchmarks the `read_multi_values_bytes` operation.
+pub async fn read_multi_values_bytes<S: LocalKeyValueStore, F>(
     store: S,
     iterations: u64,
     f: F,
@@ -246,8 +234,8 @@ where
     total_time
 }
 
-/// Compute benchmark of the `write_batch` operation.
-pub async fn performance_write_batch<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
+/// Benchmarks the `write_batch` operation.
+pub async fn write_batch<S: LocalKeyValueStore>(store: S, iterations: u64) -> Duration
 where
     S::Error: Debug,
 {
