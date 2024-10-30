@@ -40,10 +40,14 @@ async fn clear_store<S: LocalKeyValueStore>(store: &S) {
 }
 
 /// Compute benchmark of the `contains_key` operation.
-pub async fn performance_contains_key<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
+pub async fn performance_contains_key<S: LocalKeyValueStore, F>(
+    store: S,
+    iterations: u64,
+    f: F,
+) -> Duration
 where
     S::Error: Debug,
-    F: Fn(bool) -> bool
+    F: Fn(bool) -> bool,
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -70,7 +74,11 @@ where
 }
 
 /// Compute benchmark of the `contains_keys` operation.
-pub async fn performance_contains_keys<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
+pub async fn performance_contains_keys<S: LocalKeyValueStore, F>(
+    store: S,
+    iterations: u64,
+    f: F,
+) -> Duration
 where
     S::Error: Debug,
     F: Fn(Vec<bool>) -> Vec<bool>,
@@ -156,12 +164,10 @@ where
         store.write_batch(batch).await.unwrap();
 
         let measurement = Instant::now();
-        f(
-            store
-                .find_key_values_by_prefix(PREFIX_SEARCH)
-                .await
-                .unwrap(),
-        );
+        f(store
+            .find_key_values_by_prefix(PREFIX_SEARCH)
+            .await
+            .unwrap());
         total_time += measurement.elapsed();
 
         clear_store(&store).await;
@@ -212,7 +218,7 @@ pub async fn performance_read_multi_values_bytes<S: LocalKeyValueStore, F>(
 ) -> Duration
 where
     S::Error: Debug,
-    F: Fn(Vec<Option<Vec<u8>>>) -> Vec<Option<Vec<u8>>>
+    F: Fn(Vec<Option<Vec<u8>>>) -> Vec<Option<Vec<u8>>>,
 {
     let mut total_time = Duration::ZERO;
     for _ in 0..iterations {
@@ -241,7 +247,11 @@ where
 }
 
 /// Compute benchmark of the `write_batch` operation.
-pub async fn performance_write_batch<S: LocalKeyValueStore, F>(store: S, iterations: u64, f: F) -> Duration
+pub async fn performance_write_batch<S: LocalKeyValueStore, F>(
+    store: S,
+    iterations: u64,
+    f: F,
+) -> Duration
 where
     S::Error: Debug,
     F: Fn(()) -> (),
