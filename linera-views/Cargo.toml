@@ -68,7 +68,7 @@ wasm-bindgen-test.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
-linera-views = { path = ".", features = ["test"] }
+linera-views = { path = ".", default-features = false, features = ["test"] }
 rand.workspace = true
 test-case.workspace = true
 tokio-test.workspace = true

@@ -42,7 +42,7 @@ serde.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
-linera-storage = { path = ".", features = ["test"] }
+linera-storage = { path = ".", default-features = false, features = ["test"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
