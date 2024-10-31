@@ -3210,9 +3210,7 @@ where
             })
             .filter_map(move |result| async move {
                 if let Err(error) = &result {
-                    warn!(?error, "Could not connect to validator {name}");
-                } else {
-                    info!("Connected to validator {name}");
+                    info!(?error, "Could not connect to validator {name}");
                 }
                 result.ok()
             })
