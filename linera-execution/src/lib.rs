@@ -49,7 +49,9 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
-pub(crate) use self::authenticated_account::{AuthenticatedAccountOwner, UnauthorizedError};
+pub(crate) use self::authenticated_account::{
+    AuthenticatedAccount, AuthenticatedAccountOwner, UnauthorizedError,
+};
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
 use crate::runtime::ContractSyncRuntime;

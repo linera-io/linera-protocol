@@ -1,10 +1,42 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{ensure, identifiers::Owner};
+use linera_base::{
+    ensure,
+    identifiers::{Account, ChainId, Owner},
+};
 use thiserror::Error;
 
 use crate::{runtime::ApplicationStatus, OperationContext};
+
+/// An account that has been successfully authenticated to manage tokens.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AuthenticatedAccount {
+    /// The chain where this account is located.
+    chain_id: ChainId,
+    /// The owner of the account.
+    owner: AuthenticatedAccountOwner,
+}
+
+impl AuthenticatedAccount {
+    /// Returns the [`ChainId`] of the chain that has this account.
+    pub fn chain_id(self) -> ChainId {
+        self.chain_id
+    }
+
+    /// Returns the [`AuthenticatedAccountOwner`] of this account.
+    pub fn owner(self) -> AuthenticatedAccountOwner {
+        self.owner
+    }
+
+    /// Returns the [`Account`] without authentication.
+    pub fn without_authentication(self) -> Account {
+        Account {
+            chain_id: self.chain_id,
+            owner: self.owner.without_authentication(),
+        }
+    }
+}
 
 /// An account owner that has been successfully authenticated to manage tokens.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
