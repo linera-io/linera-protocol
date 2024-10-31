@@ -400,24 +400,18 @@ impl Runnable for Job {
 
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 let chain_client = context.make_chain_client(chain_id)?;
-                info!(
-                    "Querying the validators of the current epoch of chain {}",
-                    chain_id
-                );
-                let time_start = Instant::now();
+                info!("Querying validators about chain {}", chain_id);
                 let result = chain_client.local_committee().await;
                 context.update_and_save_wallet(&chain_client).await?;
                 let committee = result.context("Failed to get local committee")?;
-                let time_total = time_start.elapsed();
-                info!("Validators obtained after {} ms", time_total.as_millis());
-                info!("{:?}", committee.validators());
+                info!(
+                    "Using the local set of validators: {:?}",
+                    committee.validators()
+                );
                 let node_provider = context.make_node_provider();
                 for (name, state) in committee.validators() {
-                    match node_provider
-                        .make_node(&state.network_address)?
-                        .get_version_info()
-                        .await
-                    {
+                    let node = node_provider.make_node(&state.network_address)?;
+                    match node.get_version_info().await {
                         Ok(version_info) => {
                             info!(
                                 "Version information for validator {name:?}:{}",
@@ -425,7 +419,22 @@ impl Runnable for Job {
                             );
                         }
                         Err(e) => {
-                            warn!("Failed to get version information for validator {name:?}:\n{e}")
+                            warn!("Failed to get version information for validator {name:?}:\n{e}");
+                            continue;
+                        }
+                    }
+                    let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
+                    match node.handle_chain_info_query(query).await {
+                        Ok(response) => {
+                            info!(
+                                "Validator {name:?} sees chain {chain_id} at block height {} and epoch {:?}",
+                                response.info.next_block_height,
+                                response.info.epoch,
+                            );
+                        }
+                        Err(e) => {
+                            warn!("Failed to get chain info for validator {name:?} and chain {chain_id}:\n{e}");
+                            continue;
                         }
                     }
                 }
