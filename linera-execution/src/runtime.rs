@@ -1250,7 +1250,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             self.inner().current_application(),
             source,
         )?;
-        let source = source.without_authentication();
         let execution_outcome = self
             .inner()
             .execution_state_sender
@@ -1258,7 +1257,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 source,
                 destination,
                 amount,
-                signer,
                 callback,
             })?
             .recv_response()?
