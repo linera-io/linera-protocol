@@ -210,14 +210,15 @@ where
         // unrelated ones provided.
         let published_blob_ids = block.published_blob_ids();
         self.0
-            .check_no_missing_blobs(published_blob_ids.clone(), blobs)
+            .check_for_unneeded_blobs(&published_blob_ids, blobs)
             .await?;
         for blob in blobs {
             Self::check_blob_size(blob.content())?;
             self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
         }
+
         let checked_blobs = blobs.iter().map(|blob| blob.id()).collect::<BTreeSet<_>>();
-        for blob in self.0.get_blobs(published_blob_ids).await? {
+        for blob in self.0.get_cached_blobs(published_blob_ids).await? {
             if !checked_blobs.contains(&blob.id()) {
                 Self::check_blob_size(blob.content())?;
             }
