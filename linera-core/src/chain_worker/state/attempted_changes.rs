@@ -204,10 +204,16 @@ where
             .recent_hashed_certificate_values
             .insert(Cow::Borrowed(&certificate.value))
             .await;
-        // Verify that all required bytecode hashed certificate values and blobs are available, and no
-        // unrelated ones provided.
+        let required_blob_ids = executed_block.required_blob_ids();
+        // Verify that no unrelated blobs were provided.
         self.state
-            .check_no_missing_blobs(executed_block.required_blob_ids(), blobs)
+            .check_for_unneeded_blobs(&required_blob_ids, blobs)
+            .await?;
+        for blob in blobs {
+            self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
+        }
+        self.state
+            .check_no_missing_blobs(&required_blob_ids)
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
@@ -292,16 +298,16 @@ where
         );
 
         let required_blob_ids = executed_block.required_blob_ids();
-        // Verify that all required bytecode hashed certificate values and blobs are available, and no
-        // unrelated ones provided.
+        // Verify that no unrelated blobs were provided.
         self.state
-            .check_no_missing_blobs(required_blob_ids.clone(), blobs)
+            .check_for_unneeded_blobs(&required_blob_ids, blobs)
             .await?;
+
         for blob in blobs {
             self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
         }
 
-        let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
+        let blobs_in_block = self.state.get_blobs(&required_blob_ids).await?;
         let certificate_hash = certificate.hash();
 
         self.state
