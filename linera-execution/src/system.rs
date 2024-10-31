@@ -39,10 +39,10 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, AuthenticatedAccountOwner, ChannelName, ChannelSubscription,
-    Destination, ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext,
-    QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UnauthorizedError,
-    UserApplicationDescription, UserApplicationId,
+    ApplicationRegistryView, AuthenticatedAccount, AuthenticatedAccountOwner, ChannelName,
+    ChannelSubscription, Destination, ExecutionRuntimeContext, MessageContext, MessageKind,
+    OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    UnauthorizedError, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -355,7 +355,7 @@ pub enum SystemExecutionError {
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
-    UnauthenticatedClaimOwner,
+    UnauthenticatedClaimOwner(#[source] UnauthorizedError),
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
     #[error("Failed to create new committee")]
@@ -486,6 +486,9 @@ where
                 recipient,
                 amount,
             } => {
+                let source =
+                    AuthenticatedAccount::new_in_system_application(&context, target_id, owner)
+                        .map_err(SystemExecutionError::UnauthenticatedClaimOwner)?;
                 let message = self
                     .claim(
                         context.authenticated_signer,
@@ -707,10 +710,7 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
-        ensure!(
-            authenticated_signer.as_ref() == Some(&owner),
-            SystemExecutionError::UnauthenticatedClaimOwner
-        );
+        assert!(authenticated_signer.as_ref() == Some(&owner));
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectClaimAmount
