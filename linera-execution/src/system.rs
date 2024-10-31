@@ -761,9 +761,11 @@ where
                 owner,
                 recipient,
             } => {
-                ensure!(
-                    context.authenticated_signer == Some(owner),
-                    SystemExecutionError::UnauthenticatedClaimOwner
+                assert_eq!(
+                    context.authenticated_signer,
+                    Some(owner),
+                    "Message should be sent after checking the claimer's authentication \
+                    and include the `authenticated_signer`"
                 );
 
                 let balance = self.balances.get_mut_or_default(&owner).await?;
