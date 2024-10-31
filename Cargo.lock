@@ -4595,6 +4595,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "clap",
+ "criterion",
  "linera-base",
  "linera-storage-service",
  "linera-version",
