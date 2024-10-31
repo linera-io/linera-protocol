@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt};
 
 use futures::future;
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
@@ -209,5 +210,32 @@ impl<N: ValidatorNode> RemoteNode<N> {
         found_blobs.extend(self.try_download_blobs(&missing_blobs).await);
 
         Ok(found_blobs)
+    }
+
+    /// Returns the list of certificate hashes on the given chain in the given range of heights.
+    /// Returns an error if the number of hashes does not match the size of the range.
+    #[tracing::instrument(level = "trace")]
+    pub(crate) async fn fetch_sent_certificate_hashes(
+        &self,
+        chain_id: ChainId,
+        range: BlockHeightRange,
+    ) -> Result<Vec<CryptoHash>, NodeError> {
+        let query =
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range.clone());
+        let response = self.handle_chain_info_query(query).await?;
+        let hashes = response.requested_sent_certificate_hashes;
+
+        if range
+            .limit
+            .is_some_and(|limit| hashes.len() as u64 != limit)
+        {
+            warn!(
+                ?range,
+                received_num = hashes.len(),
+                "Validator sent invalid number of certificate hashes."
+            );
+            return Err(NodeError::InvalidChainInfoResponse);
+        }
+        Ok(hashes)
     }
 }
