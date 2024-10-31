@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    panic::{self, PanicInfo},
+    panic::{self, PanicHookInfo},
     sync::Once,
 };
 
@@ -70,6 +70,6 @@ impl Log for ServiceLogger {
 }
 
 /// Logs a panic using the [`log`] API.
-fn log_panic(info: &PanicInfo<'_>) {
+fn log_panic(info: &PanicHookInfo<'_>) {
     log::error!("{info}");
 }
