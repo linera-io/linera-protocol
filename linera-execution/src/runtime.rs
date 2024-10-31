@@ -30,10 +30,10 @@ use crate::{
     execution_state_actor::{ExecutionRequest, ExecutionStateSender},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    AuthenticatedAccountOwner, BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext,
-    MessageContext, OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime,
-    TransactionTracker, UserApplicationDescription, UserApplicationId, UserContractInstance,
-    UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    AuthenticatedAccount, AuthenticatedAccountOwner, BaseRuntime, ContractRuntime, ExecutionError,
+    FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
+    ServiceRuntime, TransactionTracker, UserApplicationDescription, UserApplicationId,
+    UserContractInstance, UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -1246,6 +1246,11 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         amount: Amount,
     ) -> Result<(), ExecutionError> {
         let signer = self.inner().current_application().signer;
+        let source = AuthenticatedAccount::new_in_user_application(
+            self.inner().current_application(),
+            source,
+        )?;
+        let source = source.without_authentication();
         let execution_outcome = self
             .inner()
             .execution_state_sender
