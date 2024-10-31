@@ -100,7 +100,7 @@ impl GrpcClient {
         f: F,
         request: impl TryInto<R> + fmt::Debug + Clone,
         handler: &str,
-        address: &str,
+        address: String,
     ) -> Result<S, NodeError>
     where
         F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> Fut,
@@ -114,7 +114,7 @@ impl GrpcClient {
         })?;
         loop {
             match f(self.client.clone(), Request::new(request_inner.clone())).await {
-                Err(s) if Self::is_retryable(&s, address) && retry_count < self.max_retries => {
+                Err(s) if Self::is_retryable(&s, &address) && retry_count < self.max_retries => {
                     let delay = self.retry_delay.saturating_mul(retry_count);
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
@@ -164,7 +164,7 @@ macro_rules! client_delegate {
                 |mut client, req| async move { client.$handler(req).await },
                 $req,
                 stringify!($handler),
-                &address,
+                address,
             )
             .await
     }};
@@ -228,6 +228,7 @@ impl ValidatorNode for GrpcClient {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
         let mut client = self.client.clone();
+        let address = self.address.clone();
 
         // Make the first connection attempt before returning from this method.
         let mut stream = Some(
@@ -262,7 +263,6 @@ impl ValidatorNode for GrpcClient {
 
         // The stream of `Notification`s that inserts increasing delays after retriable errors, and
         // terminates after unexpected or fatal errors.
-        let address = self.address.clone();
         let notification_stream = endlessly_retrying_notification_stream
             .map(|result| {
                 Option::<Notification>::try_from(result?).map_err(|err| {
