@@ -20,7 +20,6 @@ mod wasmer;
 #[cfg(with_wasmtime)]
 mod wasmtime;
 
-use std::sync::Arc;
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
@@ -80,7 +79,7 @@ pub enum WasmContractModule {
         module: ::wasmer::Module,
     },
     #[cfg(with_wasmtime)]
-    Wasmtime { module: Arc<::wasmtime::Module> },
+    Wasmtime { module: ::wasmtime::Module },
 }
 
 impl WasmContractModule {
@@ -152,9 +151,9 @@ impl UserContractModule for WasmContractModule {
 #[derive(Clone)]
 pub enum WasmServiceModule {
     #[cfg(with_wasmer)]
-    Wasmer { module: Arc<::wasmer::Module> },
+    Wasmer { module: ::wasmer::Module },
     #[cfg(with_wasmtime)]
-    Wasmtime { module: Arc<::wasmtime::Module> },
+    Wasmtime { module: ::wasmtime::Module },
 }
 
 impl WasmServiceModule {
