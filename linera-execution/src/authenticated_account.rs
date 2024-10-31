@@ -19,6 +19,19 @@ pub struct AuthenticatedAccount {
 }
 
 impl AuthenticatedAccount {
+    /// Creates a new [`AuthenticatedAccount`] from an [`Account`]'s elements, if the `owner` can
+    /// be authenticated by the system application's [`OperationContext`].
+    pub(crate) fn new_in_system_application(
+        context: &OperationContext,
+        chain_id: ChainId,
+        owner: Owner,
+    ) -> Result<Self, UnauthorizedError> {
+        Ok(AuthenticatedAccount {
+            chain_id,
+            owner: AuthenticatedAccountOwner::new_in_system_application(context, Some(owner))?,
+        })
+    }
+
     /// Creates a new [`AuthenticatedAccount`] from an [`Account`], if its `owner` can be
     /// authenticated by the user application runtime's [`ApplicationStatus`].
     pub(crate) fn new_in_user_application(
