@@ -155,12 +155,13 @@ where
         };
         let node_provider = NodeProvider::new(node_options);
         let delivery = CrossChainMessageDelivery::new(options.wait_for_outgoing_messages);
-        let chain_ids = wallet.chain_ids();
+        let mut chain_ids = wallet.chain_ids();
         let name = match chain_ids.len() {
             0 => "Client node".to_string(),
             1 => format!("Client node for {:.8}", chain_ids[0]),
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
+        chain_ids.push(wallet.genesis_admin_chain());
         let client = Client::new(
             node_provider,
             storage,
