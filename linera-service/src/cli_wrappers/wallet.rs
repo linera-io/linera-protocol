@@ -49,6 +49,8 @@ fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
         .timeout(Duration::from_secs(30))
         .pool_max_idle_per_host(0)
+        .tcp_keepalive(Duration::from_secs(45))
+        .http2_keep_alive_while_idle(false)
         .build()
         .unwrap()
 }
