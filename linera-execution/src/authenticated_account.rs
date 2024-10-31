@@ -19,6 +19,21 @@ pub struct AuthenticatedAccount {
 }
 
 impl AuthenticatedAccount {
+    /// Creates a new [`AuthenticatedAccount`] from an [`Account`], if its `owner` can be
+    /// authenticated by the user application runtime's [`ApplicationStatus`].
+    pub(crate) fn new_in_user_application(
+        application_status: &ApplicationStatus,
+        account: Account,
+    ) -> Result<Self, UnauthorizedError> {
+        Ok(AuthenticatedAccount {
+            chain_id: account.chain_id,
+            owner: AuthenticatedAccountOwner::new_in_user_application(
+                application_status,
+                account.owner,
+            )?,
+        })
+    }
+
     /// Returns the [`ChainId`] of the chain that has this account.
     pub fn chain_id(self) -> ChainId {
         self.chain_id
