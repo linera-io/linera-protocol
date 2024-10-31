@@ -48,9 +48,8 @@ const CLIENT_SERVICE_ENV: &str = "LINERA_CLIENT_SERVICE_PARAMS";
 fn reqwest_client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
         .timeout(Duration::from_secs(30))
-        .pool_max_idle_per_host(0)
         .tcp_keepalive(Duration::from_secs(45))
-        .http2_keep_alive_while_idle(false)
+        .http2_keep_alive_while_idle(true)
         .build()
         .unwrap()
 }
@@ -1034,9 +1033,17 @@ impl NodeService {
                 .json(&json!({ "query": query }))
                 .send()
                 .await;
-            if matches!(result, Err(ref error) if error.is_timeout()) {
-                warn!("Timeout when sending query {query:?} to the node service");
-                continue;
+            if let Err(error) = &result {
+                if error.is_timeout() {
+                    warn!("Timeout when sending query {query:?} to the node service");
+                    continue;
+                }
+                if error.is_request() {
+                    warn!(
+                        "Request error when sending query {query:?} to the node service: {error}"
+                    );
+                    continue;
+                }
             }
             let response = result.with_context(|| {
                 format!(
