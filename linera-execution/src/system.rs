@@ -489,15 +489,7 @@ where
                 let source =
                     AuthenticatedAccount::new_in_system_application(&context, target_id, owner)
                         .map_err(SystemExecutionError::UnauthenticatedClaimOwner)?;
-                let message = self
-                    .claim(
-                        context.authenticated_signer,
-                        owner,
-                        target_id,
-                        recipient,
-                        amount,
-                    )
-                    .await?;
+                let message = self.claim(source, recipient, amount).await?;
 
                 outcome.messages.push(message)
             }
@@ -704,20 +696,21 @@ where
 
     pub async fn claim(
         &self,
-        authenticated_signer: Option<Owner>,
-        owner: Owner,
-        target_id: ChainId,
+        source: AuthenticatedAccount,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
-        assert!(authenticated_signer.as_ref() == Some(&owner));
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectClaimAmount
         );
+        let owner = source
+            .owner()
+            .without_authentication()
+            .expect("Claims should never authorize access to the shared chain balance");
 
         Ok(RawOutgoingMessage {
-            destination: Destination::Recipient(target_id),
+            destination: Destination::Recipient(source.chain_id()),
             authenticated: true,
             grant: Amount::ZERO,
             kind: MessageKind::Simple,

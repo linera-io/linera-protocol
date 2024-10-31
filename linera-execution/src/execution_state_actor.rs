@@ -149,18 +149,10 @@ where
                 amount,
                 callback,
             } => {
-                let source = source.without_authentication();
-                let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
                 let mut execution_outcome = RawExecutionOutcome::default();
                 let message = self
                     .system
-                    .claim(
-                        Some(owner),
-                        owner,
-                        source.chain_id,
-                        Recipient::Account(destination),
-                        amount,
-                    )
+                    .claim(source, Recipient::Account(destination), amount)
                     .await?;
 
                 execution_outcome.messages.push(message);
