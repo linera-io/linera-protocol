@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -1395,11 +1395,63 @@ where
                 return Err(error.into());
             }
         };
-        for received_certificates in responses {
-            // Process received certificates.
-            self.receive_certificates_from_validator(received_certificates)
-                .await;
+        let response_count = responses.len();
+        let mut other_sender_chains = BTreeSet::new();
+        let mut certificates = BTreeMap::<ChainId, BTreeMap<BlockHeight, Certificate>>::new();
+        for response in responses {
+            other_sender_chains.extend(response.other_sender_chains);
+            // Update the tracker: Even if the validator sent us unsuitable certificates, there is
+            // no need to ask them again.
+            self.state_mut()
+                .update_received_certificate_tracker(response.name, response.tracker);
+            for certificate in response.certificates {
+                certificates
+                    .entry(certificate.value().chain_id())
+                    .or_default()
+                    .insert(certificate.value().height(), certificate);
+            }
         }
+        let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
+        tracing::info!(
+            "Received {certificate_count} certificates from {response_count} validators."
+        );
+
+        let chain_worker_limit = CHAIN_WORKER_LIMIT.saturating_sub(3).max(1);
+
+        // Process the certificates sorted by chain and in ascending order of block height.
+        stream::iter(certificates.into_values().map(|certificates| {
+            let client = self.clone();
+            async move {
+                for certificate in certificates.into_values() {
+                    let hash = certificate.hash();
+                    let mode = ReceiveCertificateMode::AlreadyChecked;
+                    if let Err(e) = client.receive_certificate_internal(certificate, mode).await {
+                        warn!("Received invalid certificate {hash}: {e}");
+                    }
+                }
+            }
+        }))
+        .buffer_unordered(chain_worker_limit)
+        .collect::<Vec<()>>()
+        .await;
+
+        // Certificates for these chains were omitted from `certificates` because they were
+        // already processed locally. If they were processed in a concurrent task, it is not
+        // guaranteed that their cross-chain messages were already handled.
+        stream::iter(other_sender_chains.into_iter().map(|chain_id| {
+            let local_node = self.client.local_node.clone();
+            async move {
+                if let Err(error) = local_node
+                    .retry_pending_cross_chain_requests(chain_id)
+                    .await
+                {
+                    error!("Failed to retry outgoing messages from {chain_id}: {error}");
+                }
+            }
+        }))
+        .buffer_unordered(chain_worker_limit)
+        .collect::<Vec<()>>()
+        .await;
         Ok(())
     }
 
