@@ -106,9 +106,10 @@ jobs:
     - name: Run the remote-net tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net
-    - name: Run all tests using the default features
+    - name: Run all tests using the default features (plus unstable-oracles, except storage-service)
       run: |
-        cargo test --features unstable-oracles --locked
+        # TODO(#2764): Actually link this to the default features
+        cargo test --no-default-features --features fs,macros,wasmer,rocksdb,unstable-oracles --locked
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
