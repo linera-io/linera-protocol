@@ -418,10 +418,22 @@ where
         let mut heights_by_recipient = BTreeMap::<_, BTreeMap<_, _>>::new();
         let mut targets = self.chain.outboxes.indices().await?;
         if let Some(tracked_chains) = self.tracked_chains.as_ref() {
+            let mut publishers = HashSet::new();
+            self.chain
+                .execution_state
+                .system
+                .subscriptions
+                .for_each_index(|subscription| {
+                    publishers.insert(subscription.chain_id);
+                    Ok(())
+                })
+                .await?;
             let tracked_chains = tracked_chains
                 .read()
                 .expect("Panics should not happen while holding a lock to `tracked_chains`");
-            targets.retain(|target| tracked_chains.contains(&target.recipient));
+            targets.retain(|target| {
+                tracked_chains.contains(&target.recipient) || publishers.contains(&target.recipient)
+            });
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
