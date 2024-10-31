@@ -55,13 +55,11 @@ impl<UserData> AsContextMut for EntrypointInstance<UserData> {
 impl<UserData> Instance for EntrypointInstance<UserData> {
     type Runtime = Wasmtime;
     type UserData = UserData;
-    type UserDataReference<'a>
-        = &'a UserData
+    type UserDataReference<'a> = &'a UserData
     where
         Self: 'a,
         UserData: 'a;
-    type UserDataMutReference<'a>
-        = &'a mut UserData
+    type UserDataMutReference<'a> = &'a mut UserData
     where
         Self: 'a,
         UserData: 'a;
@@ -86,13 +84,11 @@ pub type ReentrantInstance<'a, UserData> = Caller<'a, UserData>;
 impl<UserData> Instance for Caller<'_, UserData> {
     type Runtime = Wasmtime;
     type UserData = UserData;
-    type UserDataReference<'a>
-        = &'a UserData
+    type UserDataReference<'a> = &'a UserData
     where
         Self: 'a,
         UserData: 'a;
-    type UserDataMutReference<'a>
-        = &'a mut UserData
+    type UserDataMutReference<'a> = &'a mut UserData
     where
         Self: 'a,
         UserData: 'a;
