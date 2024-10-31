@@ -362,7 +362,7 @@ impl Runnable for Job {
                 );
             }
 
-            QueryValidator { address } => {
+            QueryValidator { address, chain_id } => {
                 use linera_core::node::ValidatorNode as _;
 
                 let node = context.make_node_provider().make_node(&address)?;
@@ -370,7 +370,10 @@ impl Runnable for Job {
                     Ok(version_info)
                         if version_info.is_compatible_with(&linera_version::VERSION_INFO) =>
                     {
-                        info!("Version information for new validator: {}", version_info);
+                        info!(
+                            "Version information for validator {address}: {}",
+                            version_info
+                        );
                     }
                     Ok(version_info) => warn!(
                         "Validator version {} is not compatible with local version {}.",
@@ -378,9 +381,10 @@ impl Runnable for Job {
                         linera_version::VERSION_INFO
                     ),
                     Err(error) => {
-                        warn!("Failed to get version information for new validator:\n{error}")
+                        warn!("Failed to get version information for validator {address}:\n{error}")
                     }
                 }
+
                 let genesis_config_hash = context.wallet().genesis_config().hash();
                 match node.get_genesis_config_hash().await {
                     Ok(hash) if hash == genesis_config_hash => {}
@@ -389,9 +393,25 @@ impl Runnable for Job {
                         hash, genesis_config_hash
                     ),
                     Err(error) => {
-                        warn!("Failed to get genesis config hash for new validator:\n{error}")
+                        warn!("Failed to get genesis config hash for validator {address}:\n{error}")
                     }
                 }
+
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let query = linera_core::data_types::ChainInfoQuery::new(chain_id);
+                match node.handle_chain_info_query(query).await {
+                    Ok(response) => {
+                        info!(
+                            "Validator {address} sees chain {chain_id} at block height {} and epoch {:?}",
+                            response.info.next_block_height,
+                            response.info.epoch,
+                        );
+                    }
+                    Err(e) => {
+                        warn!("Failed to get chain info for validator {address} and chain {chain_id}:\n{e}");
+                    }
+                }
+
                 println!("{}", genesis_config_hash);
             }
 
