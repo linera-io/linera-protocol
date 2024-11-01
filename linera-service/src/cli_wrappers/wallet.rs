@@ -423,7 +423,7 @@ impl ClientWrapper {
         let hash = stdout
             .trim()
             .parse()
-            .context("error while parsing the result of `linera local-balance`")?;
+            .context("error while parsing the result of `linera query-validator`")?;
         Ok(hash)
     }
 
