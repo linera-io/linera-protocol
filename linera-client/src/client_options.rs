@@ -427,13 +427,16 @@ pub enum ClientCommand {
     },
 
     /// Show the version and genesis config hash of a new validator, and print a warning if it is
-    /// incompatible.
+    /// incompatible. Also print some information about the given chain while we are it.
     QueryValidator {
         /// The new validator's address.
         address: String,
+        /// The chain to query. If omitted, query the default chain of the wallet.
+        chain_id: Option<ChainId>,
     },
 
-    /// Show the current set of validators for a chain.
+    /// Show the current set of validators for a chain. Also print some information about
+    /// the given chain while we are it.
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
