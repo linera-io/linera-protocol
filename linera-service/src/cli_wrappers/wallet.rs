@@ -8,6 +8,7 @@ use std::{
     mem,
     path::{Path, PathBuf},
     str::FromStr,
+    sync,
     time::Duration,
 };
 
@@ -54,6 +55,7 @@ fn reqwest_client() -> reqwest::Client {
 
 /// Wrapper to run a Linera client command.
 pub struct ClientWrapper {
+    binary_path: sync::Mutex<Option<PathBuf>>,
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
@@ -76,6 +78,7 @@ impl ClientWrapper {
         );
         let wallet = format!("wallet_{}.json", id);
         Self {
+            binary_path: sync::Mutex::new(None),
             testing_prng_seed,
             storage,
             wallet,
@@ -141,8 +144,7 @@ impl ClientWrapper {
     }
 
     async fn command(&self) -> Result<Command> {
-        let path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
-        let mut command = Command::new(path);
+        let mut command = self.command_binary().await?;
         command
             .current_dir(self.path_provider.path())
             .env(
@@ -159,6 +161,47 @@ impl ClientWrapper {
             .args(["--recv-timeout-ms", "500000"])
             .arg("--wait-for-outgoing-messages");
         Ok(command)
+    }
+
+    /// Returns the [`Command`] instance configured to run the appropriate binary.
+    ///
+    /// The path is resolved once and cached inside `self` for subsequent usages.
+    async fn command_binary(&self) -> Result<Command> {
+        match self.command_with_cached_binary_path() {
+            Some(command) => Ok(command),
+            None => {
+                let resolved_path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
+                let command = Command::new(&resolved_path);
+
+                self.set_cached_binary_path(resolved_path);
+
+                Ok(command)
+            }
+        }
+    }
+
+    /// Returns a [`Command`] instance configured with the cached `binary_path`, if available.
+    fn command_with_cached_binary_path(&self) -> Option<Command> {
+        let binary_path = self.binary_path.lock().unwrap();
+
+        binary_path.as_ref().map(Command::new)
+    }
+
+    /// Sets the cached `binary_path` with the `new_binary_path`.
+    ///
+    /// # Panics
+    ///
+    /// If the cache is already set to a different value. In theory the two threads calling
+    /// `command_binary` can race and resolve the binary path twice, but they should always be the
+    /// same path.
+    fn set_cached_binary_path(&self, new_binary_path: PathBuf) {
+        let mut binary_path = self.binary_path.lock().unwrap();
+
+        if binary_path.is_none() {
+            *binary_path = Some(new_binary_path);
+        } else {
+            assert_eq!(*binary_path, Some(new_binary_path));
+        }
     }
 
     /// Runs `linera create-genesis-config`.
