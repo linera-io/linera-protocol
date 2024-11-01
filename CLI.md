@@ -68,8 +68,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
-* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible
-* `query-validators` — Show the current set of validators for a chain
+* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are it
+* `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are it
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
 * `finalize-committee` — Deprecates all committees except the last one
@@ -332,19 +332,20 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 ## `linera query-validator`
 
-Show the version and genesis config hash of a new validator, and print a warning if it is incompatible
+Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are it
 
-**Usage:** `linera query-validator <ADDRESS>`
+**Usage:** `linera query-validator <ADDRESS> [CHAIN_ID]`
 
 ###### **Arguments:**
 
 * `<ADDRESS>` — The new validator's address
+* `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
 
 
 
 ## `linera query-validators`
 
-Show the current set of validators for a chain
+Show the current set of validators for a chain. Also print some information about the given chain while we are it
 
 **Usage:** `linera query-validators [CHAIN_ID]`
 
