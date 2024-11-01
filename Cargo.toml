@@ -192,7 +192,7 @@ linera-witty = { version = "0.14.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.14.0", path = "./linera-witty-macros" }
 linera-witty-test-modules  = { version = "0.14.0", path = "./linera-witty/test-modules" }
 linera-sdk-derive = { version = "0.14.0", path = "./linera-sdk-derive" }
-linera-service = { version = "0.14.0", path = "./linera-service" }
+linera-service = { version = "0.14.0", path = "./linera-service", default-features = false }
 linera-service-graphql-client = { version = "0.14.0", path = "./linera-service-graphql-client" }
 
 counter = { path = "./examples/counter" }
