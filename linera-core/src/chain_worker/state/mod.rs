@@ -7,7 +7,6 @@ mod attempted_changes;
 mod temporary_changes;
 
 use std::{
-    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::{self, Arc},
 };
@@ -56,7 +55,6 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-    recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -72,7 +70,6 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-        blob_cache: Arc<ValueCache<BlobId, Blob>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -87,7 +84,6 @@ where
             shared_chain_view: None,
             service_runtime_endpoint,
             recent_hashed_certificate_values: certificate_value_cache,
-            recent_blobs: blob_cache,
             tracked_chains,
             delivery_notifier,
             knows_chain_is_active: false,
@@ -309,18 +305,14 @@ where
     }
 
     /// Returns an error if the block requires a blob we don't have.
-    /// Looks for the blob in: chain manager's pending blobs, recent blobs cache
-    /// and storage.
+    /// Looks for the blob in: chain manager's pending blobs and storage.
     async fn check_no_missing_blobs(
         &self,
         required_blob_ids: &HashSet<BlobId>,
     ) -> Result<(), WorkerError> {
         let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let missing_blob_ids = self
-            .recent_blobs
-            .subtract_cached_items_from::<_, Vec<_>>(required_blob_ids, |id| id)
-            .await
-            .into_iter()
+        let missing_blob_ids = required_blob_ids
+            .iter()
             .filter(|blob_id| !pending_blobs.contains_key(blob_id))
             .cloned()
             .collect::<Vec<_>>();
@@ -355,21 +347,21 @@ where
         Ok(())
     }
 
-    /// Returns the blobs requested by their `blob_ids` that are either in the `recent_blobs`
-    /// cache or in storage.
+    /// Returns the blobs requested by their `blob_ids` that are either in the chain manager's
+    /// pending blobs or in storage.
     async fn get_blobs(&self, blob_ids: &HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
-            self.recent_blobs.try_get_many(blob_ids.clone()).await;
+        let pending_blobs = &self.chain.manager.get().pending_blobs;
 
-        let mut found_blobs = found_blobs.into_values().collect::<Vec<_>>();
+        let mut found_blobs = Vec::new();
         let mut missing_blob_ids = Vec::new();
-        for blob_id in not_found_blobs {
-            if let Ok(blob) = self.storage.read_blob(blob_id).await {
+        for blob_id in blob_ids {
+            if let Some(blob) = pending_blobs.get(blob_id) {
+                found_blobs.push(blob.clone());
+            } else if let Ok(blob) = self.storage.read_blob(*blob_id).await {
                 found_blobs.push(blob);
-                continue;
+            } else {
+                missing_blob_ids.push(*blob_id);
             }
-
-            missing_blob_ids.push(blob_id);
         }
 
         if missing_blob_ids.is_empty() {
@@ -377,25 +369,6 @@ where
         } else {
             Err(WorkerError::BlobsNotFound(missing_blob_ids))
         }
-    }
-
-    /// Returns the blobs requested by their `blob_ids` that are in the `recent_blobs` cache.
-    async fn get_cached_blobs(&self, blob_ids: HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
-        let (found_blobs, missing_blob_ids): (HashMap<BlobId, Blob>, HashSet<BlobId>) =
-            self.recent_blobs.try_get_many(blob_ids).await;
-
-        if missing_blob_ids.is_empty() {
-            Ok(found_blobs.into_values().collect())
-        } else {
-            Err(WorkerError::BlobsNotFound(
-                missing_blob_ids.into_iter().collect(),
-            ))
-        }
-    }
-
-    /// Inserts a [`Blob`] into the worker's cache.
-    async fn cache_recent_blob<'a>(&mut self, blob: Cow<'a, Blob>) -> bool {
-        self.recent_blobs.insert(blob).await
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
