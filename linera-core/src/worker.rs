@@ -396,7 +396,7 @@ where
         self.recent_hashed_certificate_values.get(hash).await
     }
 
-    #[instrument(level = "trace", skip(self, blob_id))]
+    #[instrument(level = "trace", skip(self))]
     pub(crate) async fn recent_blob(&self, blob_id: &BlobId) -> Option<Blob> {
         self.recent_blobs.get(blob_id).await
     }

@@ -1415,7 +1415,7 @@ where
 
     /// Verify if a data blob is readable from storage.
     // TODO(#2490): Consider removing or renaming this.
-    #[instrument(level = "trace", skip(hash))]
+    #[instrument(level = "trace")]
     pub async fn read_data_blob(
         &self,
         hash: CryptoHash,
@@ -1771,10 +1771,10 @@ where
 
     /// Tries to read blobs from either the pending blobs or the local node's cache, or
     /// storage
-    #[instrument(level = "trace", skip(blob_ids))]
+    #[instrument(level = "trace")]
     async fn read_local_blobs(
         &self,
-        blob_ids: impl IntoIterator<Item = BlobId>,
+        blob_ids: impl IntoIterator<Item = BlobId> + std::fmt::Debug,
     ) -> Result<Vec<Blob>, LocalNodeError> {
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
