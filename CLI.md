@@ -708,11 +708,15 @@ Show the contents of the wallet
 
 Show the contents of the wallet
 
-**Usage:** `linera wallet show [CHAIN_ID]`
+**Usage:** `linera wallet show [OPTIONS] [CHAIN_ID]`
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to show the metadata
+
+###### **Options:**
+
+* `--short` — Only print a non-formatted list of the wallet's chain IDs
 
 
 
