@@ -305,7 +305,7 @@ impl ValidatorNode for GrpcClient {
         Ok(client_delegate!(self, get_genesis_config_hash, req)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
         Ok(client_delegate!(self, download_blob_content, req)?.try_into()?)
@@ -350,7 +350,7 @@ impl ValidatorNode for GrpcClient {
         Ok(certs_collected)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
         Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)
