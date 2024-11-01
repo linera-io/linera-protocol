@@ -18,6 +18,7 @@ metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []
 wasmer = [
     "dep:wasmer",
+    "wasmer/enable-serde",
     "linera-witty/wasmer",
     "wasm-encoder",
     "wasm-instrument",

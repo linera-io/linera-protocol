@@ -15,6 +15,9 @@ use std::{
     },
 };
 
+#[cfg(web)]
+use js_sys::wasm_bindgen;
+
 use crate::{
     ContractSyncRuntimeHandle, ExecutionError, FinalizeContext, MessageContext, OperationContext,
     QueryContext, ServiceSyncRuntimeHandle, UserContract, UserContractModule, UserService,
@@ -25,6 +28,7 @@ use crate::{
 ///
 /// Should be configured with any expected calls, and can then be used to create a
 /// [`MockApplicationInstance`] that implements [`UserContract`] and [`UserService`].
+#[cfg_attr(web, wasm_bindgen::prelude::wasm_bindgen)]
 #[derive(Clone, Default)]
 pub struct MockApplication {
     expected_calls: Arc<Mutex<VecDeque<ExpectedCall>>>,
