@@ -35,7 +35,7 @@ tracing.workspace = true
 [dev-dependencies]
 assert_matches.workspace = true
 bcs.workspace = true
-linera-chain = { path = ".", features = ["test"] }
+linera-chain = { path = ".", default-features = false, features = ["test"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
