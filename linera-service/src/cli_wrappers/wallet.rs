@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     env,
     marker::PhantomData,
@@ -145,22 +146,32 @@ impl ClientWrapper {
 
     async fn command(&self) -> Result<Command> {
         let mut command = self.command_binary().await?;
-        command
-            .current_dir(self.path_provider.path())
-            .env(
-                "RUST_LOG",
-                std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
-            )
-            .args(["--wallet", &self.wallet])
-            .args(["--storage", &self.storage])
-            .args([
-                "--max-pending-message-bundles",
-                &self.max_pending_message_bundles.to_string(),
-            ])
-            .args(["--send-timeout-ms", "500000"])
-            .args(["--recv-timeout-ms", "500000"])
-            .arg("--wait-for-outgoing-messages");
+        command.current_dir(self.path_provider.path()).env(
+            "RUST_LOG",
+            std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+        );
+        for argument in self.command_arguments() {
+            command.arg(&*argument);
+        }
         Ok(command)
+    }
+
+    /// Returns an iterator over the arguments that should be added to all command invocations.
+    fn command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
+        [
+            "--wallet".into(),
+            self.wallet.as_str().into(),
+            "--storage".into(),
+            self.storage.as_str().into(),
+            "--max-pending-message-bundles".into(),
+            self.max_pending_message_bundles.to_string().into(),
+            "--send-timeout-ms".into(),
+            "500000".into(),
+            "--recv-timeout-ms".into(),
+            "500000".into(),
+            "--wait-for-outgoing-messages".into(),
+        ]
+        .into_iter()
     }
 
     /// Returns the [`Command`] instance configured to run the appropriate binary.
