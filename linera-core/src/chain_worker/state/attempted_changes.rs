@@ -28,7 +28,7 @@ use linera_views::{
     views::{RootView, View},
 };
 use tokio::sync::oneshot;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::{check_block_epoch, ChainWorkerConfig, ChainWorkerState};
 use crate::{
@@ -355,7 +355,7 @@ where
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         self.state.track_newly_created_chains(executed_block);
         let mut actions = self.state.create_network_actions().await?;
-        tracing::trace!(
+        trace!(
             "Processed confirmed block {} on chain {:.8}",
             block_height,
             block.chain_id
@@ -383,7 +383,7 @@ where
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
     /// `height`.
-    #[tracing::instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
+    #[instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
     async fn register_delivery_notifier(
         &mut self,
         height: BlockHeight,

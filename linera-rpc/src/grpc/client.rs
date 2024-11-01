@@ -360,7 +360,7 @@ impl ValidatorNode for GrpcClient {
 #[cfg(not(web))]
 #[async_trait::async_trait]
 impl mass_client::MassClient for GrpcClient {
-    #[tracing::instrument(skip_all, err)]
+    #[instrument(skip_all, err)]
     async fn send(
         &self,
         requests: Vec<RpcMessage>,
