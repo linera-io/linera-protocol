@@ -256,11 +256,11 @@ Close an existing chain.
 
 A closed chain cannot execute operations or accept messages anymore. It can still reject incoming messages, so they bounce back to the sender.
 
-**Usage:** `linera close-chain --from <CHAIN_ID>`
+**Usage:** `linera close-chain <CHAIN_ID>`
 
-###### **Options:**
+###### **Arguments:**
 
-* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
+* `<CHAIN_ID>` — Chain ID (must be one of our chains)
 
 
 

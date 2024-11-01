@@ -369,7 +369,6 @@ pub enum ClientCommand {
     /// It can still reject incoming messages, so they bounce back to the sender.
     CloseChain {
         /// Chain ID (must be one of our chains)
-        #[arg(long = "from")]
         chain_id: ChainId,
     },
 
