@@ -629,7 +629,12 @@ impl<'a> LiteCertificate<'a> {
 
     /// Verifies the certificate.
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
-        check_signatures(&self.value, self.round, &self.signatures, committee)?;
+        check_signatures(
+            self.value.value_hash,
+            self.round,
+            &self.signatures,
+            committee,
+        )?;
         Ok(&self.value)
     }
 
@@ -1255,7 +1260,12 @@ impl Certificate {
         &'a self,
         committee: &Committee,
     ) -> Result<&'a HashedCertificateValue, ChainError> {
-        check_signatures(&self.lite_value(), self.round, &self.signatures, committee)?;
+        check_signatures(
+            self.lite_value().value_hash,
+            self.round,
+            &self.signatures,
+            committee,
+        )?;
         Ok(&self.value)
     }
 
@@ -1344,8 +1354,8 @@ impl Certificate {
 }
 
 /// Verifies certificate signatures.
-fn check_signatures(
-    value: &LiteValue,
+pub(crate) fn check_signatures(
+    value_hash: CryptoHash,
     round: Round,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
@@ -1370,7 +1380,7 @@ fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = ValueHashAndRound(value.value_hash, round);
+    let hash_and_round = ValueHashAndRound(value_hash, round);
     Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
