@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use indexed_db_futures::prelude::*;
+use tracing::instrument;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::wasm_bindgen;
 use web_sys::DomException;
@@ -63,7 +64,7 @@ async fn open_database() -> Result<IdbDatabase, Error> {
 }
 
 impl<T> IndexedDb<T> {
-    #[tracing::instrument(level = "trace", skip(value))]
+    #[instrument(level = "trace", skip(value))]
     pub async fn new(key: &str, value: T) -> Result<Self, Error> {
         Ok(Self {
             key: key.to_owned(),
@@ -75,7 +76,7 @@ impl<T> IndexedDb<T> {
 }
 
 impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub async fn read(key: &str) -> Result<Option<Self>, Error> {
         let database = open_database().await?;
         let tx =
@@ -93,7 +94,7 @@ impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
         }))
     }
 
-    #[tracing::instrument(level = "trace", fields(value = &serde_json::to_string(&value).unwrap()))]
+    #[instrument(level = "trace", fields(value = &serde_json::to_string(&value).unwrap()))]
     pub async fn read_or_create(key: &str, value: T) -> Result<Self, Error>
     where
         T: serde::Serialize,
@@ -111,7 +112,7 @@ impl<T: serde::de::DeserializeOwned> IndexedDb<T> {
 impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
     type Error = Error;
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     fn as_mut(&mut self) -> &mut T {
         *self.dirty = true;
         &mut self.value
@@ -121,7 +122,7 @@ impl<T: serde::Serialize> LocalPersist for IndexedDb<T> {
         self.value
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     async fn persist(&mut self) -> Result<(), Error> {
         let serializer =
             serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);

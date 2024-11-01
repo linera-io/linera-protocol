@@ -47,7 +47,7 @@ use thiserror::Error as ThisError;
 use tokio::sync::OwnedRwLockReadGuard;
 use tokio_stream::StreamExt;
 use tower_http::cors::CorsLayer;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, instrument};
 
 use crate::util;
 
@@ -961,7 +961,7 @@ where
     }
 
     /// Runs the node service.
-    #[tracing::instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
+    #[instrument(name = "node_service", level = "info", skip(self), fields(port = ?self.port))]
     pub async fn run(self) -> Result<(), anyhow::Error> {
         let port = self.port.get();
         let index_handler = axum::routing::get(util::graphiql).post(Self::index_handler);
