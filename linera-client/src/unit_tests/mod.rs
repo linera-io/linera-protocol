@@ -3,4 +3,5 @@
 
 mod chain_listener;
 mod util;
+#[cfg(feature = "fs")]
 mod wallet;

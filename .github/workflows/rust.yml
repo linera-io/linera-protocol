@@ -160,22 +160,22 @@ jobs:
         cd linera-views
         WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --chrome --headless -- --features web-default
 
-  lint:
+  lint-unexpected-chain-load-operations:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    continue-on-error: true
+    timeout-minutes: 2
 
     steps:
     - uses: actions/checkout@v3
-    - name: Clear up some space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Check for unexpected chain load operations
       run: |
         ./scripts/check_chain_loads.sh
+
+  lint-check-copyright-headers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v3
     - name: Build check_copyright_header script
       run: |
         cd ./scripts/check_copyright_header
@@ -184,6 +184,13 @@ jobs:
       run: >
         find linera-* examples -name '*.rs' -a -not -wholename '*/target/*' -print0
         | xargs -0 scripts/target/release/check_copyright_header
+
+  lint-cargo-machete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v3
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -191,22 +198,37 @@ jobs:
     - name: Install cargo-machete
       run: |
         cargo install cargo-machete --locked
-    - name: Install cargo-all-features
+    - name: Check for unused dependencies
       run: |
-        cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked
-    - name: Install cargo-rdme
+        cargo machete
+
+  lint-cargo-fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
       run: |
-        cargo install cargo-rdme --locked
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install cargo-sort
-      run: |
-        RUSTFLAGS='' cargo install cargo-sort --git https://github.com/Twey/cargo-sort/ --tag linera
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Check formatting
       run: |
         cargo fmt -- --check
+
+  lint-cargo-sort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install cargo-sort
+      run: |
+        RUSTFLAGS='' cargo install cargo-sort --git https://github.com/Twey/cargo-sort/ --tag linera
     - name: Check if Cargo.toml files are sorted
       run: |
         cargo sort --check --workspace --grouped
@@ -214,9 +236,20 @@ jobs:
       run: |
         cd examples
         cargo sort --check --workspace --grouped
-    - name: Check for unused dependencies
+
+  lint-check-for-outdated-readme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
       run: |
-        cargo machete
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install cargo-rdme
+      run: |
+        cargo install cargo-rdme --locked
     - name: Check for outdated README.md
       run: |
         (set -e; for I in linera-*; do if [ -d "$I" ]; then echo $I; cargo rdme --check --no-fail-on-warnings -w $I; fi; done)
@@ -227,12 +260,42 @@ jobs:
                 cargo rdme --check --no-fail-on-warnings -w "${dir_name}"
             fi
         done)
+
+  lint-wasm-applications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run Wasm application lints
       run: |
         cd examples
         cargo fmt -- --check
         cargo clippy --all-targets --all-features --target wasm32-unknown-unknown --locked
         cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu --locked
+
+  lint-cargo-clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run clippy
       run: |
         cargo clippy --locked --all-targets --all-features
@@ -242,17 +305,57 @@ jobs:
           -p linera-client \
           -p linera-rpc \
           -p linera-views
+
+  lint-cargo-doc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run cargo doc
       run: |
         cargo doc --locked --all-features
-    - name: Run cargo check-all-features
-      run: |
-        cargo check-all-features
-        cargo check-all-features --all-targets
-    - name: Restore `rust-toolchain.toml` file
-      if: '!cancelled()'
-      run: |
-        ln -sf toolchains/stable/rust-toolchain.toml
+
+  lint-check-linera-service-graphql-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Check linera-service GraphQL schema
       run: |
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql
+
+  lint-check-all-features:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 40
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Put lint toolchain file in place
+      run: |
+        ln -sf toolchains/nightly/rust-toolchain.toml
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install cargo-all-features
+      run: |
+        cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run cargo check-all-features
+      run: |
+        cargo check-all-features --all-targets
