@@ -209,11 +209,12 @@ where
         self.state
             .check_for_unneeded_blobs(&required_blob_ids, blobs)
             .await?;
-        for blob in blobs {
-            self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
-        }
+        let remaining_required_blob_ids = required_blob_ids
+            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .cloned()
+            .collect();
         self.state
-            .check_no_missing_blobs(&required_blob_ids)
+            .check_no_missing_blobs(&remaining_required_blob_ids)
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
@@ -302,12 +303,13 @@ where
         self.state
             .check_for_unneeded_blobs(&required_blob_ids, blobs)
             .await?;
+        let remaining_required_blob_ids = required_blob_ids
+            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .cloned()
+            .collect();
+        let mut blobs_in_block = self.state.get_blobs(&remaining_required_blob_ids).await?;
+        blobs_in_block.extend_from_slice(blobs);
 
-        for blob in blobs {
-            self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
-        }
-
-        let blobs_in_block = self.state.get_blobs(&required_blob_ids).await?;
         let certificate_hash = certificate.hash();
 
         self.state

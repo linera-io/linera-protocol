@@ -10,8 +10,6 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
-use std::borrow::Cow;
-
 use linera_base::{
     crypto::KeyPair,
     data_types::{
@@ -153,12 +151,11 @@ where
     );
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
-    worker
-        .cache_recent_blob(Cow::Borrowed(&contract_blob))
-        .await;
-
     let info = worker
-        .fully_handle_certificate(publish_certificate.clone(), vec![service_blob.clone()])
+        .fully_handle_certificate(
+            publish_certificate.clone(),
+            vec![contract_blob.clone(), service_blob.clone()],
+        )
         .await
         .unwrap()
         .info;

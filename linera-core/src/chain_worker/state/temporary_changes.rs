@@ -3,8 +3,6 @@
 
 //! Operations that don't persist any changes to the chain state.
 
-use std::{borrow::Cow, collections::BTreeSet};
-
 use linera_base::{
     data_types::{ArithmeticError, BlobContent, Timestamp, UserApplicationDescription},
     ensure,
@@ -206,22 +204,21 @@ where
         // legitimately required.
         // Actual execution happens below, after other validity checks.
         self.0.chain.remove_bundles_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values and blobs are available, and no
-        // unrelated ones provided.
+        // Verify that no unrelated blobs were provided.
         let published_blob_ids = block.published_blob_ids();
         self.0
             .check_for_unneeded_blobs(&published_blob_ids, blobs)
             .await?;
+        let missing_published_blob_ids = published_blob_ids
+            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_published_blob_ids.is_empty(),
+            WorkerError::BlobsNotFound(missing_published_blob_ids)
+        );
         for blob in blobs {
             Self::check_blob_size(blob.content())?;
-            self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
-        }
-
-        let checked_blobs = blobs.iter().map(|blob| blob.id()).collect::<BTreeSet<_>>();
-        for blob in self.0.get_cached_blobs(published_blob_ids).await? {
-            if !checked_blobs.contains(&blob.id()) {
-                Self::check_blob_size(blob.content())?;
-            }
         }
 
         let local_time = self.0.storage.clock().current_time();

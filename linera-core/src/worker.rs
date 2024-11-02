@@ -243,8 +243,6 @@ where
     chain_worker_config: ChainWorkerConfig,
     /// Cached hashed certificate values by hash.
     recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-    /// Cached blobs by `BlobId`.
-    recent_blobs: Arc<ValueCache<BlobId, Blob>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -278,7 +276,6 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
-            recent_blobs: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -298,7 +295,6 @@ where
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
             recent_hashed_certificate_values: Arc::new(ValueCache::default()),
-            recent_blobs: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -350,11 +346,6 @@ where
         &self.nickname
     }
 
-    #[instrument(level = "trace", skip(self))]
-    pub fn recent_blobs(&self) -> Arc<ValueCache<BlobId, Blob>> {
-        self.recent_blobs.clone()
-    }
-
     /// Returns the storage client so that it can be manipulated or queried.
     #[instrument(level = "trace", skip(self))]
     #[cfg(not(feature = "test"))]
@@ -394,11 +385,6 @@ where
         hash: &CryptoHash,
     ) -> Option<HashedCertificateValue> {
         self.recent_hashed_certificate_values.get(hash).await
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    pub(crate) async fn recent_blob(&self, blob_id: &BlobId) -> Option<Blob> {
-        self.recent_blobs.get(blob_id).await
     }
 }
 
@@ -583,12 +569,6 @@ where
         self.recent_hashed_certificate_values.insert(value).await
     }
 
-    /// Inserts a [`Blob`] into the worker's cache.
-    #[instrument(level = "trace", skip(self, blob))]
-    pub async fn cache_recent_blob<'a>(&self, blob: Cow<'a, Blob>) -> bool {
-        self.recent_blobs.insert(blob).await
-    }
-
     /// Returns a stored [`Certificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height))]
     #[cfg(with_testing)]
@@ -672,7 +652,6 @@ where
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
                 self.recent_hashed_certificate_values.clone(),
-                self.recent_blobs.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,

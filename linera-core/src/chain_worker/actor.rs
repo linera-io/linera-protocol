@@ -12,7 +12,7 @@ use std::{
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
-    identifiers::{BlobId, ChainId, UserApplicationId},
+    identifiers::{ChainId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -147,7 +147,6 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
-        blob_cache: Arc<ValueCache<BlobId, Blob>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -165,7 +164,6 @@ where
             config,
             storage,
             certificate_value_cache,
-            blob_cache,
             tracked_chains,
             delivery_notifier,
             chain_id,
