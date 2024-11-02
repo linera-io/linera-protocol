@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map, BTreeMap, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     num::NonZeroUsize,
@@ -1301,46 +1301,76 @@ where
         }
     }
 
-    /// Processes the result of [`synchronize_received_certificates_from_validator`] and updates
-    /// the tracker for this validator.
-    #[tracing::instrument(level = "trace", skip(tracker, certificates, other_sender_chains))]
-    async fn receive_certificates_from_validator(
+    /// Processes the results of [`synchronize_received_certificates_from_validator`] and updates
+    /// the trackers for the validators.
+    #[tracing::instrument(level = "trace", skip(received_certificates_batches))]
+    async fn receive_certificates_from_validators(
         &self,
-        ReceivedCertificatesFromValidator {
-            name,
-            tracker,
-            certificates,
-            other_sender_chains,
-        }: ReceivedCertificatesFromValidator,
+        received_certificates_batches: Vec<ReceivedCertificatesFromValidator>,
     ) {
-        for certificate in certificates {
-            let hash = certificate.hash();
-            if let Err(e) = self
-                .receive_certificate_internal(certificate, ReceiveCertificateMode::AlreadyChecked)
-                .await
-            {
-                warn!("Received invalid certificate {hash} from {name}: {e}");
-                // Do not update the validator's tracker in case of error.
-                // Move on to the next validator.
-                return;
+        let validator_count = received_certificates_batches.len();
+        let mut other_sender_chains = BTreeSet::new();
+        let mut certificates = BTreeMap::<ChainId, BTreeMap<BlockHeight, Certificate>>::new();
+        let mut new_trackers = BTreeMap::new();
+        for response in received_certificates_batches {
+            other_sender_chains.extend(response.other_sender_chains);
+            new_trackers.insert(response.name, response.tracker);
+            for certificate in response.certificates {
+                certificates
+                    .entry(certificate.value().chain_id())
+                    .or_default()
+                    .insert(certificate.value().height(), certificate);
             }
         }
-        for chain_id in other_sender_chains {
-            // Certificates for this chain were omitted from `certificates` because they were
-            // already processed locally. If they were processed in a concurrent task, it is not
-            // guaranteed that their cross-chain messages were already handled.
-            if let Err(error) = self
-                .client
-                .local_node
-                .retry_pending_cross_chain_requests(chain_id)
-                .await
-            {
-                error!("Failed to retry outgoing messages from {chain_id}: {error}");
+        let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
+
+        tracing::info!(
+            "Received {certificate_count} certificates from {validator_count} validator(s)."
+        );
+
+        // We would like to use all chain workers, but we need to keep some of them free, because
+        // handling the certificates can trigger messages to other chains, and putting these in
+        // the inbox requires the recipient chain's worker, too.
+        let chain_worker_limit = (CHAIN_WORKER_LIMIT / 2).max(1);
+
+        // Process the certificates sorted by chain and in ascending order of block height.
+        let stream = stream::iter(certificates.into_values().map(|certificates| {
+            let client = self.clone();
+            async move {
+                for certificate in certificates.into_values() {
+                    let hash = certificate.hash();
+                    let mode = ReceiveCertificateMode::AlreadyChecked;
+                    if let Err(e) = client.receive_certificate_internal(certificate, mode).await {
+                        warn!("Received invalid certificate {hash}: {e}");
+                    }
+                }
             }
+        }))
+        .buffer_unordered(chain_worker_limit);
+        stream.for_each(future::ready).await;
+
+        // Certificates for these chains were omitted from `certificates` because they were
+        // already processed locally. If they were processed in a concurrent task, it is not
+        // guaranteed that their cross-chain messages were already handled.
+        let stream = stream::iter(other_sender_chains.into_iter().map(|chain_id| {
+            let local_node = self.client.local_node.clone();
+            async move {
+                if let Err(error) = local_node
+                    .retry_pending_cross_chain_requests(chain_id)
+                    .await
+                {
+                    error!("Failed to retry outgoing messages from {chain_id}: {error}");
+                }
+            }
+        }))
+        .buffer_unordered(chain_worker_limit);
+        stream.for_each(future::ready).await;
+
+        // Update the trackers.
+        let mut state = self.state_mut();
+        for (name, tracker) in new_trackers {
+            state.update_received_certificate_tracker(name, tracker);
         }
-        // Update tracker.
-        self.state_mut()
-            .update_received_certificate_tracker(name, tracker);
     }
 
     /// Attempts to download new received certificates.
@@ -1384,8 +1414,8 @@ where
             },
         )
         .await;
-        let responses = match result {
-            Ok(((), responses)) => responses,
+        let received_certificate_batches = match result {
+            Ok(((), received_certificate_batches)) => received_certificate_batches,
             Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
@@ -1395,11 +1425,8 @@ where
                 return Err(error.into());
             }
         };
-        for received_certificates in responses {
-            // Process received certificates.
-            self.receive_certificates_from_validator(received_certificates)
-                .await;
-        }
+        self.receive_certificates_from_validators(received_certificate_batches)
+            .await;
         Ok(())
     }
 
@@ -3195,7 +3222,7 @@ where
             .await?;
         // Process received certificates. If the client state has changed during the
         // network calls, we should still be fine.
-        self.receive_certificates_from_validator(received_certificates)
+        self.receive_certificates_from_validators(vec![received_certificates])
             .await;
         Ok(())
     }
