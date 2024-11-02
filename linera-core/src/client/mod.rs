@@ -1247,6 +1247,8 @@ where
                 .is_some_and(|h| *h >= entry.height)
             {
                 tracker += 1;
+            } else {
+                break;
             }
         }
 
