@@ -17,6 +17,7 @@ pub mod command;
 pub mod crypto;
 pub mod data_types;
 mod graphql;
+pub mod http;
 pub mod identifiers;
 mod limited_writer;
 pub mod ownership;
