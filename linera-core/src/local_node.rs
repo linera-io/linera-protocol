@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     future::Future,
     sync::Arc,
 };
@@ -33,7 +32,6 @@ use crate::{
     node::{NodeError, ValidatorNode},
     notifier::Notifier,
     remote_node::RemoteNode,
-    value_cache::ValueCache,
     worker::{WorkerError, WorkerState},
 };
 
@@ -247,18 +245,6 @@ where
             return Err(NodeError::InvalidChainInfoResponse);
         }
 
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, Vec<BlobId>) = self
-            .recent_blobs()
-            .await
-            .try_get_many(missing_blob_ids.clone())
-            .await;
-        let found_blob_ids = found_blobs.clone().into_keys().collect::<HashSet<_>>();
-        let mut found_blobs = found_blobs.clone().into_values().collect::<Vec<_>>();
-
-        unique_missing_blob_ids = unique_missing_blob_ids
-            .difference(&found_blob_ids)
-            .copied()
-            .collect::<HashSet<BlobId>>();
         let chain_manager_pending_blobs = self
             .chain_state_view(chain_id)
             .await?
@@ -266,10 +252,11 @@ where
             .get()
             .pending_blobs
             .clone();
-        for blob_id in not_found_blobs {
-            if let Some(blob) = chain_manager_pending_blobs.get(&blob_id).cloned() {
+        let mut found_blobs = Vec::new();
+        for blob_id in missing_blob_ids {
+            if let Some(blob) = chain_manager_pending_blobs.get(blob_id).cloned() {
                 found_blobs.push(blob);
-                unique_missing_blob_ids.remove(&blob_id);
+                unique_missing_blob_ids.remove(blob_id);
             }
         }
 
@@ -377,21 +364,6 @@ where
             .describe_application(chain_id, application_id)
             .await?;
         Ok(response)
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<Blob> {
-        self.node.state.recent_blob(blob_id).await
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    async fn recent_blobs(&self) -> Arc<ValueCache<BlobId, Blob>> {
-        self.node.state.recent_blobs()
-    }
-
-    #[instrument(level = "trace", skip(self, blob), fields(blob_id = ?blob.id()))]
-    pub async fn cache_recent_blob(&self, blob: &Blob) -> bool {
-        self.node.state.cache_recent_blob(Cow::Borrowed(blob)).await
     }
 
     /// Downloads and processes all certificates up to (excluding) the specified height.

@@ -959,17 +959,21 @@ where
         proposal: Box<BlockProposal>,
         value: HashedCertificateValue,
     ) -> Result<Certificate, ChainClientError> {
-        let blob_ids = value
+        let required_blob_ids = value
             .inner()
             .executed_block()
             .expect("The result of executing a proposal is always an executed block")
             .outcome
             .required_blob_ids();
-        let submit_action = CommunicateAction::SubmitBlock { proposal, blob_ids };
+        let proposed_blobs = proposal.blobs.clone();
+        let submit_action = CommunicateAction::SubmitBlock {
+            proposal,
+            blob_ids: required_blob_ids,
+        };
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
-        self.process_certificate(certificate.clone(), vec![])
+        self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
         if certificate.value().is_confirmed() {
             Ok(certificate)
@@ -1778,14 +1782,8 @@ where
     ) -> Result<Vec<Blob>, LocalNodeError> {
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
-            if let Some(blob) = self.client.local_node.recent_blob(&blob_id).await {
-                blobs.push(blob);
-                continue;
-            }
-
             let maybe_blob = self.pending_blobs().get(&blob_id).cloned();
             if let Some(blob) = maybe_blob {
-                self.client.local_node.cache_recent_blob(&blob).await;
                 blobs.push(blob);
                 continue;
             }
@@ -1801,7 +1799,6 @@ where
             };
 
             if let Some(blob) = maybe_blob {
-                self.client.local_node.cache_recent_blob(&blob).await;
                 blobs.push(blob);
                 continue;
             }
@@ -2679,7 +2676,6 @@ where
     /// Adds pending blobs
     pub async fn add_pending_blobs(&self, pending_blobs: impl IntoIterator<Item = Blob>) {
         for blob in pending_blobs {
-            self.client.local_node.cache_recent_blob(&blob).await;
             self.state_mut().insert_pending_blob(blob);
         }
     }
