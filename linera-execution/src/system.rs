@@ -806,10 +806,7 @@ where
                 }
             }
             RemoveCommittee { epoch } => {
-                ensure!(
-                    self.committees.get_mut().remove(&epoch).is_some(),
-                    SystemExecutionError::InvalidCommitteeRemoval
-                );
+                self.committees.get_mut().remove(&epoch);
             }
             RegisterApplications { applications } => {
                 for application in applications {
