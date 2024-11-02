@@ -22,7 +22,9 @@ use linera_base::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{get_node_port, Database, LocalNetConfig, PathProvider, ProcessInbox},
+        local_net::{
+            get_node_port, Database, LocalNet, LocalNetConfig, PathProvider, ProcessInbox,
+        },
         ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     test_name,
@@ -70,7 +72,6 @@ impl Drop for RestoreVarOnDrop {
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     use linera_base::{crypto::KeyPair, identifiers::Owner};
-    use linera_service::cli_wrappers::local_net::LocalNet;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
