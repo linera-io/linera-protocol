@@ -1414,8 +1414,8 @@ where
             },
         )
         .await;
-        let responses = match result {
-            Ok(((), responses)) => responses,
+        let received_certificate_batches = match result {
+            Ok(((), received_certificate_batches)) => received_certificate_batches,
             Err(CommunicationError::Trusted(NodeError::InactiveChain(id))) if id == chain_id => {
                 // The chain is visibly not active (yet or any more) so there is no need
                 // to synchronize received certificates.
@@ -1425,7 +1425,8 @@ where
                 return Err(error.into());
             }
         };
-        self.receive_certificates_from_validators(responses).await;
+        self.receive_certificates_from_validators(received_certificate_batches)
+            .await;
         Ok(())
     }
 
