@@ -31,10 +31,10 @@ use linera_execution::{
     ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
+    bucket_queue_view::BucketQueueView,
     context::Context,
     log_view::LogView,
     map_view::MapView,
-    queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::RegisterView,
     set_view::SetView,
@@ -205,6 +205,13 @@ impl BundleInInbox {
     }
 }
 
+// The number of timestamp in a bucket
+// The `TimestampedBundleInInbox` type contains 4 cryptohashes, 1 blockheight
+// an index, two enums and the ChannelName. Only the ChannelName has an unbounded
+// size but we can expect the size to be reasonably small, so a total size of 100
+// seems reasonable for the storing of the data.
+const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
+
 /// A view accessing the state of a chain.
 #[derive(Debug, RootView, ClonableView, SimpleObject)]
 #[graphql(cache_control(no_cache))]
@@ -239,7 +246,8 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable_bundles: QueueView<C, TimestampedBundleInInbox>,
+    pub unskippable_bundles:
+        BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// The heights of previous blocks that sent messages to the same recipients.
@@ -680,10 +688,10 @@ where
         }
         if !removed_unskippable.is_empty() {
             // Delete all removed bundles from the front of the unskippable queue.
-            let maybe_front = self.unskippable_bundles.front().await?;
+            let maybe_front = self.unskippable_bundles.front();
             if maybe_front.is_some_and(|ts_entry| removed_unskippable.remove(&ts_entry.entry)) {
-                self.unskippable_bundles.delete_front();
-                while let Some(ts_entry) = self.unskippable_bundles.front().await? {
+                self.unskippable_bundles.delete_front().await?;
+                while let Some(ts_entry) = self.unskippable_bundles.front() {
                     if !removed_unskippable.remove(&ts_entry.entry) {
                         if !self
                             .removed_unskippable_bundles
@@ -694,7 +702,7 @@ where
                         }
                         self.removed_unskippable_bundles.remove(&ts_entry.entry)?;
                     }
-                    self.unskippable_bundles.delete_front();
+                    self.unskippable_bundles.delete_front().await?;
                 }
             }
             for entry in removed_unskippable {

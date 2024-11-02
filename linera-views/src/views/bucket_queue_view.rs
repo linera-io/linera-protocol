@@ -126,6 +126,7 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 /// The size `N` has to be chosen by taking into account the size of the type `T`
 /// and the basic size of a block. For example a total size of 100 bytes to 10 KB
 /// seems adequate.
+#[derive(Debug)]
 pub struct BucketQueueView<C, T, const N: usize> {
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
