@@ -866,6 +866,61 @@ pub enum ClientCommand {
     /// Manage a local Linera Network.
     #[command(subcommand)]
     Net(NetCommand),
+
+    /// Operation on the storage.
+    #[command(subcommand)]
+    Storage(DatabaseToolCommand),
+}
+
+#[derive(Clone, clap::Parser)]
+pub enum DatabaseToolCommand {
+    /// Delete all the namespaces of the database
+    #[command(name = "delete_all")]
+    DeleteAll {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Delete a single namespace from the database
+    #[command(name = "delete_namespace")]
+    DeleteNamespace {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Check existence of a namespace in the database
+    #[command(name = "check_existence")]
+    CheckExistence {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Check absence of a namespace in the database
+    #[command(name = "check_absence")]
+    CheckAbsence {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Initialize a namespace in the database
+    #[command(name = "initialize")]
+    Initialize {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// List the namespaces of the database
+    #[command(name = "list_namespaces")]
+    ListNamespaces {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
 }
 
 #[derive(Clone, clap::Parser)]

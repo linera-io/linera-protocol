@@ -5,7 +5,7 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
+use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, process, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -22,10 +22,13 @@ use linera_chain::data_types::CertificateValue;
 use linera_client::{
     chain_listener::ClientContext as _,
     client_context::ClientContext,
-    client_options::{ClientCommand, ClientOptions, NetCommand, ProjectCommand, WalletCommand},
+    client_options::{
+        ClientCommand, ClientOptions, DatabaseToolCommand, NetCommand, ProjectCommand,
+        WalletCommand,
+    },
     config::{CommitteeConfig, GenesisConfig},
     persistent::{self, Persist},
-    storage::Runnable,
+    storage::{Runnable, StorageConfigNamespace},
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
@@ -48,6 +51,7 @@ use linera_service::{
     util, wallet,
 };
 use linera_storage::Storage;
+use linera_views::store::CommonStoreConfig;
 use serde_json::Value;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn, Instrument as _};
@@ -1116,7 +1120,12 @@ impl Runnable for Job {
                     .await??;
             }
 
-            CreateGenesisConfig { .. } | Keygen | Net(_) | Wallet(_) | HelpMarkdown => {
+            CreateGenesisConfig { .. }
+            | Keygen
+            | Net(_)
+            | Storage { .. }
+            | Wallet(_)
+            | HelpMarkdown => {
                 unreachable!()
             }
         }
@@ -1291,11 +1300,20 @@ fn main() -> anyhow::Result<()> {
         span.record("wallet_id", wallet_id);
     }
 
-    runtime
+    let result = runtime
         .enable_all()
         .build()
         .expect("Failed to create Tokio runtime")
-        .block_on(run(&options).instrument(span))
+        .block_on(run(&options).instrument(span));
+
+    let error_code = match result {
+        Ok(code) => code,
+        Err(msg) => {
+            tracing::error!("Error is {:?}", msg);
+            2
+        }
+    };
+    process::exit(error_code);
 }
 
 /// Returns the log file name to use based on the [`ClientCommand`] that will run.
@@ -1335,16 +1353,17 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         ClientCommand::Net { .. } => "net".into(),
         ClientCommand::Project { .. } => "project".into(),
         ClientCommand::Watch { .. } => "watch".into(),
+        ClientCommand::Storage { .. } => "storage".into(),
         ClientCommand::Service { port, .. } => format!("service-{port}").into(),
         ClientCommand::Faucet { .. } => "faucet".into(),
     }
 }
 
-async fn run(options: &ClientOptions) -> anyhow::Result<()> {
+async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
     match &options.command {
         ClientCommand::HelpMarkdown => {
             clap_markdown::print_help_markdown::<ClientOptions>();
-            Ok(())
+            Ok(0)
         }
 
         ClientCommand::CreateGenesisConfig {
@@ -1436,21 +1455,23 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 .mutate(|wallet| wallet.extend(chains))
                 .await?;
             options.initialize_storage().boxed().await?;
-            Ok(())
+            Ok(0)
         }
 
         ClientCommand::Project(project_command) => match project_command {
             ProjectCommand::New { name, linera_root } => {
                 Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref))?;
-                Ok(())
+                Ok(0)
             }
             ProjectCommand::Test { path } => {
                 let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
                 let project = Project::from_existing_project(path)?;
-                Ok(project.test().await?)
+                project.test().await?;
+                Ok(0)
             }
             ProjectCommand::PublishAndCreate { .. } => {
-                options.run_with_storage(Job(options.clone())).await?
+                options.run_with_storage(Job(options.clone())).await??;
+                Ok(0)
             }
         },
 
@@ -1462,7 +1483,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                 .mutate(|w| w.add_unassigned_key_pair(key_pair))
                 .await?;
             println!("{}", public);
-            Ok(())
+            Ok(0)
         }
 
         ClientCommand::Net(net_command) => match net_command {
@@ -1492,7 +1513,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     policy_config.into_policy(),
                 )
                 .boxed()
-                .await
+                .await?;
+                Ok(0)
             }
 
             NetCommand::Up {
@@ -1521,7 +1543,8 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     external_protocol.clone(),
                 )
                 .boxed()
-                .await
+                .await?;
+                Ok(0)
             }
 
             NetCommand::Helper => {
@@ -1531,9 +1554,67 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                        testing with a local Linera network"
                 );
                 println!("{}", include_str!("../../template/linera_net_helper.sh"));
-                Ok(())
+                Ok(0)
             }
         },
+
+        ClientCommand::Storage(command) => {
+            let common_config = CommonStoreConfig::default();
+            match command {
+                DatabaseToolCommand::DeleteAll { storage_config } => {
+                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
+                    let full_storage_config =
+                        storage_config.add_common_config(common_config).await?;
+                    full_storage_config.delete_all().await?;
+                }
+                DatabaseToolCommand::DeleteNamespace { storage_config } => {
+                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
+                    let full_storage_config =
+                        storage_config.add_common_config(common_config).await?;
+                    full_storage_config.delete_namespace().await?;
+                }
+                DatabaseToolCommand::CheckExistence { storage_config } => {
+                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
+                    let full_storage_config =
+                        storage_config.add_common_config(common_config).await?;
+                    let test = full_storage_config.test_existence().await?;
+                    if test {
+                        tracing::info!("The database does exist");
+                        return Ok(0);
+                    } else {
+                        tracing::info!("The database does not exist");
+                        return Ok(1);
+                    }
+                }
+                DatabaseToolCommand::CheckAbsence { storage_config } => {
+                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
+                    let full_storage_config =
+                        storage_config.add_common_config(common_config).await?;
+                    let test = full_storage_config.test_existence().await?;
+                    if test {
+                        tracing::info!("The database does exist");
+                        return Ok(1);
+                    } else {
+                        tracing::info!("The database does not exist");
+                        return Ok(0);
+                    }
+                }
+                DatabaseToolCommand::Initialize { storage_config } => {
+                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
+                    let full_storage_config =
+                        storage_config.add_common_config(common_config).await?;
+                    full_storage_config.initialize().await?;
+                }
+                DatabaseToolCommand::ListNamespaces { storage_config } => {
+                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
+                    let full_storage_config =
+                        storage_config.add_common_config(common_config).await?;
+                    let namespaces = full_storage_config.list_all().await?;
+                    println!("The list of namespaces is {:?}", namespaces);
+                }
+            }
+            Ok(0)
+        }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id, short } => {
@@ -1553,7 +1634,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     .await?
                     .mutate(|w| w.set_default_chain(*chain_id))
                     .await??;
-                Ok(())
+                Ok(0)
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
@@ -1562,7 +1643,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     .await?
                     .mutate(|w| w.forget_keys(chain_id))
                     .await??;
-                Ok(())
+                Ok(0)
             }
 
             WalletCommand::ForgetChain { chain_id } => {
@@ -1571,7 +1652,7 @@ async fn run(options: &ClientOptions) -> anyhow::Result<()> {
                     .await?
                     .mutate(|w| w.forget_chain(chain_id))
                     .await??;
-                Ok(())
+                Ok(0)
             }
 
             WalletCommand::Init {
@@ -1629,10 +1710,13 @@ Make sure to use a Linera client compatible with this network.
                     );
                     options.run_with_storage(Job(options.clone())).await??;
                 }
-                Ok(())
+                Ok(0)
             }
         },
 
-        _ => options.run_with_storage(Job(options.clone())).await?,
+        _ => {
+            options.run_with_storage(Job(options.clone())).await??;
+            Ok(0)
+        }
     }
 }

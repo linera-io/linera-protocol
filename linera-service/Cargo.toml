@@ -149,10 +149,6 @@ test-strategy.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 [[bin]]
-name = "linera-db"
-path = "src/database_tool.rs"
-
-[[bin]]
 name = "linera"
 path = "src/linera/main.rs"
 
