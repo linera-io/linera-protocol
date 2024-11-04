@@ -3219,7 +3219,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate1))
+        Some(Box::new(certificate1.into()))
     );
 
     // Proposing block2 now would fail.
@@ -3236,7 +3236,7 @@ where
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(4));
     let proposal = BlockProposal::new_retry(
         Round::SingleLeader(5),
-        certificate2.clone(),
+        certificate2.clone().into(),
         &key_pairs[1],
         Vec::new(),
     );
@@ -3245,7 +3245,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values.clone()).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(certificate2.into()))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
@@ -3290,7 +3290,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate))
+        Some(Box::new(certificate.into()))
     );
     Ok(())
 }
@@ -3466,7 +3466,7 @@ where
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry(
         Round::MultiLeader(1),
-        certificate2.clone(),
+        certificate2.clone().into(),
         &key_pairs[1],
         Vec::new(),
     );
@@ -3476,7 +3476,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locked,
-        Some(Box::new(certificate2))
+        Some(Box::new(certificate2.into()))
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);

@@ -115,7 +115,7 @@ pub struct ChainManager {
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
-    pub locked: Option<Certificate>,
+    pub locked: Option<ValidatedBlockCertificate>,
     /// Latest leader timeout certificate we have received.
     pub timeout: Option<Certificate>,
     /// Latest vote we have cast, to validate or confirm.
@@ -276,7 +276,7 @@ impl ChainManager {
                     .validated_block_certificate
                     .as_ref()
                     .is_some_and(|cert| locked.round <= cert.round),
-                ChainError::HasLockedBlock(locked.value().height(), locked.round)
+                ChainError::HasLockedBlock(locked.executed_block().block.height, locked.round)
             )
         }
         Ok(Outcome::Accept)
@@ -397,7 +397,7 @@ impl ChainManager {
             {
                 let value = HashedCertificateValue::new_validated(executed_block.clone());
                 if let Some(certificate) = lite_cert.with_value(value) {
-                    self.locked = Some(certificate);
+                    self.locked = Some(certificate.into());
                 }
             }
         }
@@ -431,7 +431,7 @@ impl ChainManager {
             return;
         }
         let confirmed = ConfirmedBlockCertificate::from_validated(validated.clone());
-        self.locked = Some(validated.into());
+        self.locked = Some(validated);
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
@@ -563,7 +563,7 @@ pub struct ChainManagerInfo {
     pub requested_proposed: Option<Box<BlockProposal>>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
-    pub requested_locked: Option<Box<Certificate>>,
+    pub requested_locked: Option<Box<ValidatedBlockCertificate>>,
     /// Latest timeout certificate we have seen.
     pub timeout: Option<Box<Certificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
@@ -620,10 +620,7 @@ impl ChainManagerInfo {
     /// Gets the highest validated block.
     pub fn highest_validated_block(&self) -> Option<&Block> {
         if let Some(certificate) = &self.requested_locked {
-            let block = certificate.value().block();
-            if block.is_some() {
-                return block;
-            }
+            return Some(&certificate.executed_block().block);
         }
 
         if let Some(proposal) = &self.requested_proposed {

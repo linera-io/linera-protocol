@@ -147,6 +147,17 @@ Certificate:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
+CertificateT:
+  STRUCT:
+    - value:
+        TYPENAME: Hashed
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 CertificateValue:
   ENUM:
     0:
@@ -266,7 +277,7 @@ ChainManagerInfo:
           TYPENAME: BlockProposal
     - requested_locked:
         OPTION:
-          TYPENAME: Certificate
+          TYPENAME: CertificateT
     - timeout:
         OPTION:
           TYPENAME: Certificate
@@ -428,6 +439,12 @@ HandleLiteCertRequest:
     - certificate:
         TYPENAME: LiteCertificate
     - wait_for_outgoing_messages: BOOL
+Hashed:
+  STRUCT:
+    - value:
+        TYPENAME: ValidatedBlock
+    - hash:
+        TYPENAME: CryptoHash
 IncomingBundle:
   STRUCT:
     - origin:
@@ -1052,6 +1069,10 @@ UserApplicationDescription:
     - required_application_ids:
         SEQ:
           TYPENAME: ApplicationId
+ValidatedBlock:
+  STRUCT:
+    - executed_block:
+        TYPENAME: ExecutedBlock
 ValidatorName:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey

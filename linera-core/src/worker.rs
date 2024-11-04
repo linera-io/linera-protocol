@@ -762,7 +762,7 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                // Note: This conversion panics if `certifcate` is not a validated block certificate.
+                // Note: This conversion panics if `certificate` is not a validated block certificate.
                 let validated_block_certificate: ValidatedBlockCertificate = certificate.into();
                 let validation_outcomes = self
                     .process_validated_block(validated_block_certificate, &blobs)

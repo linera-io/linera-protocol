@@ -94,8 +94,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let locked = manager.requested_locked.as_ref();
         ensure!(
             proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
-                && locked.map_or(true, |cert| cert.value().is_validated()
-                    && cert.value().chain_id() == chain_id)
+                && locked.map_or(true, |cert| cert.executed_block().block.chain_id
+                    == chain_id)
                 && response.check(&self.name).is_ok(),
             NodeError::InvalidChainInfoResponse
         );

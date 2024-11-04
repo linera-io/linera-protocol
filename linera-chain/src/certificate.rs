@@ -16,6 +16,8 @@ use linera_base::{
     identifiers::BlobId,
 };
 use linera_execution::committee::{Committee, ValidatorName};
+use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::{Deserialize, Deserializer};
 
 use crate::block::{ConfirmedBlock, ValidatedBlock};
 use crate::ChainError;
@@ -63,6 +65,60 @@ impl<T: Debug + BcsHashable> Debug for CertificateT<T> {
     }
 }
 
+impl<T: Serialize> Serialize for CertificateT<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let value = self.value.inner();
+        let hash = self.value.hash();
+        let round = self.round;
+        let signatures = &self.signatures;
+        let mut state = serializer.serialize_struct("Certificate", 4)?;
+        state.serialize_field("value", value)?;
+        state.serialize_field("hash", &hash)?;
+        state.serialize_field("round", &round)?;
+        state.serialize_field("signatures", signatures)?;
+        state.end()
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for CertificateT<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        {
+            #[derive(Debug, Deserialize)]
+            #[serde(rename = "Certificate")]
+            struct CertificateHelper<T2> {
+                value: Hashed<T2>,
+                round: Round,
+                signatures: Vec<(ValidatorName, Signature)>,
+            }
+
+            let helper: CertificateHelper<T> = Deserialize::deserialize(deserializer)?;
+            if !crate::data_types::is_strictly_ordered(&helper.signatures) {
+                Err(serde::de::Error::custom("Vector is not strictly sorted"))
+            } else {
+                Ok(Self {
+                    value: helper.value,
+                    round: helper.round,
+                    signatures: helper.signatures,
+                })
+            }
+        }
+    }
+}
+
+#[cfg(with_testing)]
+impl<T: Eq + PartialEq> Eq for CertificateT<T> {}
+#[cfg(with_testing)]
+impl<T: Eq + PartialEq> PartialEq for CertificateT<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value.hash == other.value.hash
+            && self.round == other.round
+            && self.signatures == other.signatures
+    }
+}
+
 impl From<ConfirmedBlockCertificate> for Certificate {
     fn from(cert: ConfirmedBlockCertificate) -> Certificate {
         let ConfirmedBlockCertificate {
@@ -100,7 +156,44 @@ pub struct Hashed<T> {
     hash: CryptoHash,
 }
 
-impl<T: BcsHashable> Hashed<T> {
+// NOTE: We shouldn't serialize the hash and expect the deserializer to compute it.
+// We implement it this way for backwards-compatibility with the old `Certificate` type.
+// If we were to compute `hash` in the deserializer, we would need to do map `T` to corresponding
+// variants of `CertificateValue` and then compute the hash. This would require a lot of boilerplate
+// and is not possible to do on generic `T` type.
+impl<T: Serialize> Serialize for Hashed<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let Hashed { value, hash } = self;
+        let mut state = serializer.serialize_struct("Hashed", 2)?;
+        state.serialize_field("value", &value)?;
+        state.serialize_field("hash", &hash)?;
+        state.end()
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Hashed<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        {
+            #[derive(Deserialize)]
+            #[serde(rename = "Hashed")]
+            struct HashedHelper<T2> {
+                value: T2,
+                hash: CryptoHash,
+            }
+
+            let helper: HashedHelper<T> = Deserialize::deserialize(deserializer)?;
+            Ok(Self {
+                value: helper.value,
+                hash: helper.hash,
+            })
+        }
+    }
+}
+
+impl<T> Hashed<T> {
     // Note on usage: This method is unsafe because it allows the caller to create a Hashed
     // with a hash that doesn't match the value. This is necessary for the rewrite state when
     // signers sign over old `Certificate` type.
@@ -108,17 +201,10 @@ impl<T: BcsHashable> Hashed<T> {
         Self { value, hash }
     }
 
-    pub fn new(value: T) -> Self {
-        let hash = CryptoHash::new(&value);
-        Self { value, hash }
-    }
-
     pub fn hash(&self) -> CryptoHash {
         self.hash
     }
-}
 
-impl<T> Hashed<T> {
     pub fn inner(&self) -> &T {
         &self.value
     }
@@ -128,7 +214,7 @@ impl<T> Hashed<T> {
     }
 }
 
-impl<T: Debug + BcsHashable> Debug for Hashed<T> {
+impl<T: Debug> Debug for Hashed<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HashedT")
             .field("value", &self.value)
@@ -153,10 +239,7 @@ impl<T: BcsHashable> CertificateT<T> {
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
-        // Not enforcing no duplicates, check the documentation for is_strictly_ordered
-        // It's the responsibility of the caller to make sure signatures has no duplicates
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
-
         Self {
             value: Hashed::unsafe_new(value, old_hash),
             round,
@@ -256,19 +339,21 @@ impl ConfirmedBlockCertificate {
     pub fn from_validated(validated: ValidatedBlockCertificate) -> Self {
         let ValidatedBlockCertificate {
             round,
-            signatures,
             value: Hashed {
                 value: validated_block,
                 ..
             },
+            ..
         } = validated;
+        // To keep the signature checks passing, we need to obtain a hash over the old type.
+        let old_confirmed =  HashedCertificateValue::new_confirmed(validated_block.inner().clone());
         let confirmed = ConfirmedBlock::from_validated(validated_block);
-        let hashed = Hashed::new(confirmed);
+        let hashed = Hashed::unsafe_new(confirmed, old_confirmed.hash());
 
         Self {
             value: hashed,
             round,
-            signatures,
+            signatures: vec![], // Signatures were cast for validated block certificate.
         }
     }
 
