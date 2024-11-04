@@ -287,12 +287,11 @@ where
                         .collect::<Vec<_>>()
                         .await;
                     let local_storage = self.local_node.storage_client();
-
-                    
-                    for blob_id in missing_blob_ids {
-                        let last_used_by_hash =
-                            local_storage.read_blob_state(blob_id).await?.last_used_by;
-                        let certificate = local_storage.read_certificate(last_used_by_hash).await?;
+                    let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
+                    let certificates = local_storage
+                        .read_certificates(blob_states.into_iter().map(|x| x.last_used_by))
+                        .await?;
+                    for certificate in certificates {
                         let block_chain_id = certificate.value().chain_id();
                         let block_height = certificate.value().height();
                         self.send_chain_information(

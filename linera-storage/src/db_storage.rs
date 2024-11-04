@@ -133,6 +133,18 @@ pub static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     .expect("Counter creation should not fail")
 });
 
+/// The metric counting how often blob states are read from storage.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "read_blob_states",
+        "The metric counting how often blob states are read from storage",
+        &[],
+    )
+    .expect("Counter creation should not fail")
+});
+
 /// The metric counting how often a hashed certificate value is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -486,14 +498,23 @@ where
     }
 
     async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError> {
-        let blob_state_keys = blob_ids.iter().map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id))).collect::<Result<_,_>>()?;
-        let maybe_blob_states = self.store.read_multi_values::<BlobState>(blob_state_keys).await?;
+        let blob_state_keys = blob_ids
+            .iter()
+            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
+            .collect::<Result<_, _>>()?;
+        let maybe_blob_states = self
+            .store
+            .read_multi_values::<BlobState>(blob_state_keys)
+            .await?;
         #[cfg(with_metrics)]
         READ_BLOB_STATES_COUNTER.with_label_values(&[]).inc();
         let blob_states = maybe_blob_states
-            .into_iter().zip(blob_ids)
-            .map(|(blob_state,blob_id)| blob_state.ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id)))
-            .collect::<Result<_,_>>()?;
+            .into_iter()
+            .zip(blob_ids)
+            .map(|(blob_state, blob_id)| {
+                blob_state.ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id))
+            })
+            .collect::<Result<_, _>>()?;
         Ok(blob_states)
     }
 
