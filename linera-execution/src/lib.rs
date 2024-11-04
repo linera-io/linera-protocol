@@ -99,7 +99,6 @@ pub type UserContractInstance = Box<dyn UserContract>;
 pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-// TODO: remove `Send` and `Sync` from here
 pub trait UserContractModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
     fn instantiate(
         &self,
