@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-TODO document
- */
+Object-safe conversion traits.
+*/
 
+/// An object-safe version of `std::convert::Into`.
 pub trait DynInto<To> {
+    /// Converts a boxed object into the target type.
     fn into_box(self: Box<Self>) -> To;
 }
 
