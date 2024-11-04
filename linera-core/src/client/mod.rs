@@ -1368,16 +1368,6 @@ where
         })
     }
 
-    async fn local_query(&self, query: ChainInfoQuery) -> Result<ChainInfoResponse, NodeError> {
-        self.client
-            .local_node
-            .handle_chain_info_query(query)
-            .await
-            .map_err(|error| NodeError::LocalNodeQuery {
-                error: error.to_string(),
-            })
-    }
-
     #[instrument(
         level = "trace", skip_all,
         fields(certificate_hash = ?incoming_certificate.hash()),
@@ -3334,14 +3324,17 @@ where
         let futures = chain_ids
             .into_iter()
             .map(|chain_id| async move {
-                let local_response = self.local_query(ChainInfoQuery::new(*chain_id)).await?;
-                Ok::<_, NodeError>((*chain_id, local_response.info.next_block_height))
+                let local_info = self.client.local_node.local_chain_info(*chain_id).await?;
+                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
             })
             .collect::<Vec<_>>();
         stream::iter(futures)
             .buffer_unordered(chain_worker_limit)
             .try_collect()
             .await
+            .map_err(|error| NodeError::LocalNodeQuery {
+                error: error.to_string(),
+            })
     }
 
     /// Given a set of chain ID-block height pairs, returns a map that assigns to each chain ID
