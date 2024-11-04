@@ -357,17 +357,23 @@ where
         for blob_id in blob_ids {
             if let Some(blob) = pending_blobs.get(blob_id) {
                 found_blobs.push(blob.clone());
-            } else if let Ok(blob) = self.storage.read_blob(*blob_id).await {
-                found_blobs.push(blob);
             } else {
                 missing_blob_ids.push(*blob_id);
             }
         }
+        let blobs = self.storage.read_blobs(&missing_blob_ids).await?;
+        let mut not_found_blob_ids = Vec::new();
+        for (blob, blob_id) in blobs.into_iter().zip(missing_blob_ids) {
+            match blob {
+                None => not_found_blob_ids.push(blob_id),
+                Some(blob) => found_blobs.push(blob),
+            }
+        }
 
-        if missing_blob_ids.is_empty() {
+        if not_found_blob_ids.is_empty() {
             Ok(found_blobs)
         } else {
-            Err(WorkerError::BlobsNotFound(missing_blob_ids))
+            Err(WorkerError::BlobsNotFound(not_found_blob_ids))
         }
     }
 
