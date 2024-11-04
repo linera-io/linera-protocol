@@ -515,8 +515,20 @@ where
         };
         let mut targets = self.chain.outboxes.indices().await?;
         {
+            let publishers = self
+                .chain
+                .execution_state
+                .system
+                .subscriptions
+                .indices()
+                .await?
+                .iter()
+                .map(|subscription| subscription.chain_id)
+                .collect::<HashSet<_>>();
             let tracked_chains = tracked_chains.read().unwrap();
-            targets.retain(|target| tracked_chains.contains(&target.recipient));
+            targets.retain(|target| {
+                tracked_chains.contains(&target.recipient) || publishers.contains(&target.recipient)
+            });
         }
         let outboxes = self.chain.outboxes.try_load_entries(&targets).await?;
         for outbox in outboxes {
