@@ -353,21 +353,33 @@ where
         let pending_blobs = &self.chain.manager.get().pending_blobs;
 
         let mut found_blobs = Vec::new();
+        let mut missing_indices = Vec::new();
         let mut missing_blob_ids = Vec::new();
-        for blob_id in blob_ids {
+        for (index, blob_id) in blob_ids.iter().enumerate() {
             if let Some(blob) = pending_blobs.get(blob_id) {
-                found_blobs.push(blob.clone());
-            } else if let Ok(blob) = self.storage.read_blob(*blob_id).await {
-                found_blobs.push(blob);
+                found_blobs.push(Some(blob.clone()));
             } else {
+                found_blobs.push(None);
+                missing_indices.push(index);
                 missing_blob_ids.push(*blob_id);
             }
         }
+        let blobs = self.storage.read_blobs(&missing_blob_ids).await?;
+        let mut not_found_blob_ids = Vec::new();
+        for ((index, blob), blob_id) in missing_indices.iter().zip(blobs).zip(missing_blob_ids) {
+            match blob {
+                None => not_found_blob_ids.push(blob_id),
+                Some(blob) => *found_blobs.get_mut(*index).unwrap() = Some(blob),
+            }
+        }
 
-        if missing_blob_ids.is_empty() {
-            Ok(found_blobs)
+        if not_found_blob_ids.is_empty() {
+            Ok(found_blobs
+                .into_iter()
+                .map(|x| x.unwrap())
+                .collect::<Vec<_>>())
         } else {
-            Err(WorkerError::BlobsNotFound(missing_blob_ids))
+            Err(WorkerError::BlobsNotFound(not_found_blob_ids))
         }
     }
 
