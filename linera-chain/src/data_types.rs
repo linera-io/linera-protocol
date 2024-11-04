@@ -1311,7 +1311,7 @@ impl Certificate {
 }
 
 /// Verifies certificate signatures.
-pub(crate) fn check_signatures(
+fn check_signatures(
     value_hash: CryptoHash,
     round: Round,
     signatures: &[(ValidatorName, Signature)],
