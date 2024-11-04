@@ -1007,10 +1007,7 @@ impl HashedCertificateValue {
     pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
         match &self.value {
             CertificateValue::ValidatedBlock { executed_block } => Some(
-                CertificateValue::ConfirmedBlock {
-                    executed_block: executed_block.clone(),
-                }
-                .into(),
+                HashedCertificateValue::new_confirmed(executed_block.clone()),
             ),
             CertificateValue::ConfirmedBlock { .. } | CertificateValue::Timeout { .. } => None,
         }
@@ -1307,7 +1304,7 @@ impl Certificate {
 }
 
 /// Verifies certificate signatures.
-fn check_signatures(
+pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     round: Round,
     signatures: &[(ValidatorName, Signature)],

@@ -5,6 +5,14 @@
 
 #![deny(clippy::large_futures)]
 
+mod block;
+mod certificate;
+
+pub mod types {
+    pub use super::block::*;
+    pub use super::certificate::*;
+}
+
 mod chain;
 pub mod data_types;
 mod inbox;

@@ -88,6 +88,7 @@ use crate::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
         HashedCertificateValue, LiteVote, ProposalContent, Vote,
     },
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainError,
 };
 
@@ -334,13 +335,16 @@ impl ChainManager {
     }
 
     /// Verifies that we can vote to confirm a validated block.
-    pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
-        let new_block = certificate.value().block();
+    pub fn check_validated_block(
+        &self,
+        certificate: &ValidatedBlockCertificate,
+    ) -> Result<Outcome, ChainError> {
+        let new_block = &certificate.executed_block().block;
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.pending {
             match value.inner() {
                 CertificateValue::ConfirmedBlock { executed_block } => {
-                    if Some(&executed_block.block) == new_block && *round == new_round {
+                    if &executed_block.block == new_block && *round == new_round {
                         return Ok(Outcome::Skip); // We already voted to confirm this block.
                     }
                 }
@@ -416,26 +420,24 @@ impl ChainManager {
     /// Signs a vote to confirm the validated block.
     pub fn create_final_vote(
         &mut self,
-        certificate: Certificate,
+        validated: ValidatedBlockCertificate,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
     ) {
-        let round = certificate.round;
+        let round = validated.round;
         // Validators only change their locked block if the new one is included in a proposal in the
         // current round, or it is itself in the current round.
         if key_pair.is_some() && round < self.current_round {
             return;
         }
-        let Some(value) = certificate.value.validated_to_confirmed() else {
-            // Unreachable: This is only called with validated blocks.
-            error!("Unexpected certificate; expected ValidatedBlock");
-            return;
-        };
-        self.locked = Some(certificate);
+        let confirmed = ConfirmedBlockCertificate::from_validated(validated.clone());
+        self.locked = Some(validated.into());
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
-            let vote = Vote::new(value, round, key_pair);
+            // NOTE: For backwards compatibility, we need to turn `ValidatedBlockCertificate`
+            // back into `Certificate` type so that the vote is cast over hash of the old type.
+            let vote = Vote::new(confirmed.into_inner().into(), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.pending = Some(vote);
         }
