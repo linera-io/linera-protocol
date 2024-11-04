@@ -712,11 +712,17 @@ where
             return Ok(Vec::new()); // OpenChain is already received, others are ignored.
         }
 
-        let needs_openchain_message = info.needs_opening()?;
         let mut rearranged = false;
         let mut pending_message_bundles = info.requested_pending_message_bundles;
 
-        if needs_openchain_message {
+        // The first incoming message of any child chain must be `OpenChain`. We must have it in
+        // our inbox, and include it before all other messages.
+        if info.next_block_height == BlockHeight::ZERO
+            && info
+                .description
+                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
+                .is_child()
+        {
             // The first incoming message of any child chain must be `OpenChain`. We must have it in
             // our inbox, and include it before all other messages.
             rearranged = IncomingBundle::put_openchain_at_front(&mut pending_message_bundles);

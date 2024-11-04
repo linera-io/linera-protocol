@@ -22,7 +22,7 @@ use linera_storage::ChainRuntimeContext;
 use linera_views::context::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::{client::ChainClientError, local_node::LocalNodeError};
+use crate::client::ChainClientError;
 
 /// A range of block heights as used in ChainInfoQuery.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -177,20 +177,6 @@ pub struct ChainInfo {
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_n`
     pub requested_received_log: Vec<ChainAndHeight>,
-}
-
-impl ChainInfo {
-    /// Returns whether this is a child chain that does not have any blocks yet.
-    ///
-    /// Child chains must receive `OpenChain` as their first incoming message.
-    #[allow(clippy::result_large_err)]
-    pub fn needs_opening(&self) -> Result<bool, LocalNodeError> {
-        Ok(self.next_block_height == BlockHeight::ZERO
-            && self
-                .description
-                .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
-                .is_child())
-    }
 }
 
 /// The response to an `ChainInfoQuery`
