@@ -124,7 +124,7 @@ BlockProposal:
         TYPENAME: Owner
     - signature:
         TYPENAME: Signature
-    - blobs:
+    - published_blobs:
         SEQ:
           TYPENAME: BlobContent
     - validated_block_certificate:
@@ -260,10 +260,16 @@ ChainManagerInfo:
     - requested_locked:
         OPTION:
           TYPENAME: ValidatedBlockCertificate
+    - locked_published_blobs:
+        SEQ:
+          TYPENAME: BlobContent
+    - locked_used_blobs:
+        SEQ:
+          TYPENAME: BlobContent
     - timeout:
         OPTION:
           TYPENAME: TimeoutCertificate
-    - pending:
+    - pending_vote:
         OPTION:
           TYPENAME: LiteVote
     - timeout_vote:
@@ -283,12 +289,6 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
-    - pending_blobs:
-        MAP:
-          KEY:
-            TYPENAME: BlobId
-          VALUE:
-            TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -598,7 +598,10 @@ NodeError:
     21:
       DuplicatesInBlobsNotFound: UNIT
     22:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      UnexpectedEntriesInBlobsNotFound:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
     23:
       LocalError:
         STRUCT:

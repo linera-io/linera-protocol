@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
 };
 use linera_execution::committee::ValidatorName;
 use rand::seq::SliceRandom as _;
@@ -208,37 +208,29 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
-    /// Downloads the blobs from the specified validator and returns them, including blobs that
-    /// are still pending in the validator's chain manager. Returns `None` if not all of them
-    /// could be found.
+    /// Checks that the given blobs are present in the provided lists of locked blobs from the
+    /// chain manager. If they're not there, tries to download the missing ones from this validator.
+    /// Returns `None` if not all of them could be found.
     pub(crate) async fn find_missing_blobs(
         &self,
         blob_ids: Vec<BlobId>,
-        chain_id: ChainId,
+        locked_published_blobs: &[Blob],
+        locked_used_blobs: &[Blob],
     ) -> Result<Option<Vec<Blob>>, NodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let info = match self.handle_chain_info_query(query).await {
-            Ok(info) => Some(info),
-            Err(err) => {
-                warn!("Got error from validator {}: {}", self.name, err);
-                return Ok(None);
-            }
-        };
+        let mut missing_blob_ids = blob_ids.into_iter().collect::<HashSet<_>>();
+        let new_found_blobs = locked_published_blobs
+            .iter()
+            .chain(locked_used_blobs.iter())
+            .filter(|blob| missing_blob_ids.contains(&blob.id()))
+            .map(|blob| (blob.id(), blob.clone()))
+            .collect::<HashMap<_, _>>();
+        missing_blob_ids.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
+        let mut found_blobs: Vec<Blob> = new_found_blobs.into_values().collect();
 
-        let mut missing_blobs = blob_ids;
-        let mut found_blobs = if let Some(info) = info {
-            let new_found_blobs = missing_blobs
-                .iter()
-                .filter_map(|blob_id| info.manager.pending_blobs.get(blob_id))
-                .map(|blob| (blob.id(), blob.clone()))
-                .collect::<HashMap<_, _>>();
-            missing_blobs.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
-            new_found_blobs.into_values().collect()
-        } else {
-            Vec::new()
-        };
-
-        if let Some(blobs) = self.try_download_blobs(&missing_blobs).await {
+        if let Some(blobs) = self
+            .try_download_blobs(&missing_blob_ids.into_iter().collect::<Vec<_>>())
+            .await
+        {
             found_blobs.extend(blobs);
             Ok(Some(found_blobs))
         } else {
@@ -300,38 +292,5 @@ impl<N: ValidatorNode> RemoteNode<N> {
             blobs.push(maybe_blob?);
         }
         Some(blobs)
-    }
-
-    /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
-    /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found(
-        &self,
-        certificate: &Certificate,
-        blob_ids: &[BlobId],
-    ) -> Result<(), NodeError> {
-        // Find the missing blobs locally and retry.
-        let required = match certificate.inner() {
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().required_blob_ids(),
-            CertificateValue::ValidatedBlock(validated) => validated.inner().required_blob_ids(),
-            CertificateValue::Timeout(_) => HashSet::new(),
-        };
-        for blob_id in blob_ids {
-            if !required.contains(blob_id) {
-                warn!(
-                    "validator {} requested blob {blob_id:?} but it is not required",
-                    self.name
-                );
-                return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
-            }
-        }
-        let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
-        if blob_ids.len() > unique_missing_blob_ids.len() {
-            warn!(
-                "blobs requested by validator {} contain duplicates",
-                self.name
-            );
-            return Err(NodeError::DuplicatesInBlobsNotFound);
-        }
-        Ok(())
     }
 }

@@ -223,8 +223,8 @@ pub enum NodeError {
     InvalidCertificateForBlob(BlobId),
     #[error("Node returned a BlobsNotFound error with duplicates")]
     DuplicatesInBlobsNotFound,
-    #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
-    UnexpectedEntriesInBlobsNotFound,
+    #[error("Node returned a BlobsNotFound error with unexpected blob IDs: {0:?}")]
+    UnexpectedEntriesInBlobsNotFound(Vec<BlobId>),
     #[error("Local error handling validator response")]
     LocalError { error: String },
 }

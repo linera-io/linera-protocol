@@ -159,7 +159,7 @@ where
                     forced_oracle_responses,
                 },
             owner,
-            blobs,
+            published_blobs,
             validated_block_certificate,
             signature: _,
         } = proposal;
@@ -208,19 +208,19 @@ where
         // legitimately required.
         // Actual execution happens below, after other validity checks.
         self.0.chain.remove_bundles_from_inboxes(block).await?;
-        // Verify that no unrelated blobs were provided.
+        // Verify that no unrelated published blobs were provided.
         let published_blob_ids = block.published_blob_ids();
         self.0
-            .check_for_unneeded_blobs(&published_blob_ids, blobs)?;
+            .check_for_unneeded_or_duplicated_blobs(&published_blob_ids, published_blobs)?;
         let missing_published_blob_ids = published_blob_ids
-            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .difference(&published_blobs.iter().map(|blob| blob.id()).collect())
             .cloned()
             .collect::<Vec<_>>();
         ensure!(
             missing_published_blob_ids.is_empty(),
             WorkerError::BlobsNotFound(missing_published_blob_ids)
         );
-        for blob in blobs {
+        for blob in published_blobs {
             Self::check_blob_size(blob.content(), &policy)?;
         }
 

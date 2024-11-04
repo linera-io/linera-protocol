@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock},
-    types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
+    types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{Query, Response};
@@ -60,8 +60,11 @@ pub enum LocalNodeError {
     #[error("Local node operation failed: {0}")]
     WorkerError(WorkerError),
 
-    #[error("Failed to read blob {blob_id:?} of chain {chain_id:?}")]
-    CannotReadLocalBlob { chain_id: ChainId, blob_id: BlobId },
+    #[error("Failed to read blobs {blob_ids:?} of chain {chain_id:?}")]
+    CannotReadLocalBlobs {
+        chain_id: ChainId,
+        blob_ids: Vec<BlobId>,
+    },
 
     #[error("The local node doesn't have an active chain {0:?}")]
     InactiveChain(ChainId),
@@ -185,44 +188,88 @@ where
     /// Given a list of missing `BlobId`s and a `Certificate` for a block:
     /// - Searches for the blob in different places of the local node: blob cache,
     ///   chain manager's pending blobs, and blob storage.
-    /// - Returns `None` if not all blobs could be found.
+    /// - Returns `Some` for blobs that were found and `None` for the ones still missing.
     pub async fn find_missing_blobs(
         &self,
-        mut missing_blob_ids: Vec<BlobId>,
-        chain_id: ChainId,
-    ) -> Result<Option<Vec<Blob>>, NodeError> {
+        missing_blob_ids: Vec<BlobId>,
+        certificate: &Certificate,
+    ) -> Result<Vec<Option<Blob>>, NodeError> {
         if missing_blob_ids.is_empty() {
-            return Ok(Some(Vec::new()));
+            return Ok(Vec::new());
         }
 
-        let mut chain_manager_pending_blobs = self
-            .chain_state_view(chain_id)
-            .await?
-            .manager
-            .get()
-            .pending_blobs
-            .clone();
-        let mut found_blobs = Vec::new();
-        missing_blob_ids.retain(|blob_id| {
-            if let Some(blob) = chain_manager_pending_blobs.remove(blob_id) {
-                found_blobs.push(blob);
-                false
-            } else {
-                true
+        // Find the missing blobs locally and retry.
+        match certificate.inner() {
+            CertificateValue::ConfirmedBlock(confirmed) => {
+                self.check_missing_blob_ids(
+                    &confirmed.inner().required_blob_ids(),
+                    &missing_blob_ids,
+                )?;
+                let storage = self.storage_client();
+                Ok(storage.read_blobs(&missing_blob_ids).await?)
             }
-        });
+            CertificateValue::ValidatedBlock(validated) => {
+                self.check_missing_blob_ids(
+                    &validated.inner().required_blob_ids(),
+                    &missing_blob_ids,
+                )?;
+                let chain_id = validated.inner().block.chain_id;
+                let chain = self.chain_state_view(chain_id).await?;
+                let manager = chain.manager.get();
+                let locked_blobs = manager
+                    .locked_published_blobs
+                    .iter()
+                    .chain(manager.locked_used_blobs.iter())
+                    .map(|(k, v)| (k, v.clone()))
+                    .collect::<BTreeMap<_, _>>();
 
-        let storage = self.storage_client();
-        let Some(read_blobs) = storage
-            .read_blobs(&missing_blob_ids)
-            .await?
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-        else {
-            return Ok(None);
-        };
-        found_blobs.extend(read_blobs);
-        Ok(Some(found_blobs))
+                Ok(missing_blob_ids
+                    .iter()
+                    .map(|blob_id| locked_blobs.get(blob_id).cloned())
+                    .collect())
+            }
+            CertificateValue::Timeout(_) => {
+                warn!(
+                    "validator requested blobs {:?} but they're not required",
+                    missing_blob_ids
+                );
+                Err(NodeError::UnexpectedEntriesInBlobsNotFound(
+                    missing_blob_ids,
+                ))
+            }
+        }
+    }
+
+    pub fn check_missing_blob_ids(
+        &self,
+        required_blob_ids: &HashSet<BlobId>,
+        missing_blob_ids: &Vec<BlobId>,
+    ) -> Result<(), NodeError> {
+        let mut unexpected_blob_ids = Vec::new();
+        for blob_id in missing_blob_ids {
+            if !required_blob_ids.contains(blob_id) {
+                warn!(
+                    "validator requested blob {:?} but it is not required",
+                    blob_id
+                );
+
+                unexpected_blob_ids.push(*blob_id);
+            }
+        }
+
+        if !unexpected_blob_ids.is_empty() {
+            return Err(NodeError::UnexpectedEntriesInBlobsNotFound(
+                unexpected_blob_ids,
+            ));
+        }
+
+        let unique_missing_blob_ids = missing_blob_ids.iter().cloned().collect::<HashSet<_>>();
+        if missing_blob_ids.len() > unique_missing_blob_ids.len() {
+            warn!("blobs requested by validator contain duplicates");
+            return Err(NodeError::DuplicatesInBlobsNotFound);
+        }
+
+        Ok(())
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its

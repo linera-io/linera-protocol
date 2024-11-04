@@ -165,7 +165,7 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(1), info.timestamp);
     assert_eq!(Some(publish_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending.is_none());
+    assert!(info.manager.pending_vote.is_none());
 
     let mut creator_system_state = SystemExecutionState {
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
@@ -248,7 +248,7 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Timestamp::from(2), info.timestamp);
     assert_eq!(Some(create_certificate.hash()), info.block_hash);
-    assert!(info.manager.pending.is_none());
+    assert!(info.manager.pending_vote.is_none());
 
     // Execute an application operation
     let increment = 5_u64;
@@ -301,6 +301,6 @@ where
     assert_eq!(BlockHeight::from(2), info.next_block_height);
     assert_eq!(Some(run_certificate.hash()), info.block_hash);
     assert_eq!(Timestamp::from(3), info.timestamp);
-    assert!(info.manager.pending.is_none());
+    assert!(info.manager.pending_vote.is_none());
     Ok(())
 }

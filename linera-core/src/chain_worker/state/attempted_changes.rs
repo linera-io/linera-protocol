@@ -133,9 +133,44 @@ where
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
         let manager = self.state.chain.manager.get_mut();
-        manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time);
+
+        let executed_block = outcome.with(proposal.content.block.clone());
+        let maybe_update_locked = manager.validated_block_if_newer_than_locked(
+            proposal.validated_block_certificate.clone(),
+            executed_block.clone(),
+        );
+
+        let used_blobs = if maybe_update_locked.is_some() {
+            let used_blob_ids = executed_block
+                .required_blob_ids()
+                .difference(&proposal.content.block.published_blob_ids())
+                .cloned()
+                .collect::<Vec<_>>();
+            let used_blobs = self.state.storage.read_blobs(&used_blob_ids).await?;
+            let missing_blob_ids = used_blob_ids
+                .iter()
+                .zip(&used_blobs)
+                .filter_map(|(blob_id, blob)| blob.is_none().then_some(*blob_id))
+                .collect::<Vec<_>>();
+            if !missing_blob_ids.is_empty() {
+                return Err(WorkerError::BlobsNotFound(missing_blob_ids));
+            }
+
+            used_blobs.into_iter().flatten().collect()
+        } else {
+            Vec::new()
+        };
+
+        manager.create_vote(
+            proposal,
+            executed_block,
+            self.state.config.key_pair(),
+            local_time,
+            used_blobs,
+            maybe_update_locked,
+        );
         // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some(vote) = manager.pending() {
+        if let Some(vote) = manager.pending_vote() {
             self.state
                 .recent_hashed_certificate_values
                 .insert(Cow::Borrowed(&vote.value))
@@ -201,17 +236,26 @@ where
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
         self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
+            .check_for_unneeded_or_duplicated_blobs(&required_blob_ids, blobs)?;
         let remaining_required_blob_ids = required_blob_ids
             .difference(&blobs.iter().map(|blob| blob.id()).collect())
             .cloned()
             .collect();
-        self.state
-            .check_no_missing_blobs(&remaining_required_blob_ids)
+        let mut validated_blobs = self
+            .state
+            .get_proposed_blobs(&remaining_required_blob_ids)
             .await?;
+        validated_blobs.extend_from_slice(blobs);
+
+        let published_blob_ids = block.published_blob_ids();
+        let (published_blobs, used_blobs) = validated_blobs
+            .into_iter()
+            .partition(|blob| published_blob_ids.contains(&blob.id()));
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
             certificate,
+            published_blobs,
+            used_blobs,
             self.state.config.key_pair(),
             self.state.storage.clock().current_time(),
         );
@@ -292,14 +336,14 @@ where
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
         self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
+            .check_for_unneeded_or_duplicated_blobs(&required_blob_ids, blobs)?;
         let remaining_required_blob_ids = required_blob_ids
             .difference(&blobs.iter().map(|blob| blob.id()).collect())
             .cloned()
             .collect();
         let mut blobs_in_block = self
             .state
-            .get_blobs_and_checks_storage(&remaining_required_blob_ids)
+            .get_proposed_or_locked_blobs_and_check_storage(&remaining_required_blob_ids)
             .await?;
         blobs_in_block.extend_from_slice(blobs);
 

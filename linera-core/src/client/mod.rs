@@ -1094,7 +1094,7 @@ where
             .expect("The result of executing a proposal is always an executed block")
             .outcome
             .required_blob_ids();
-        let proposed_blobs = proposal.blobs.clone();
+        let proposed_blobs = proposal.published_blobs.clone();
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
             blob_ids: required_blob_ids,
@@ -1784,7 +1784,11 @@ where
             {
                 if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
                     if let Some(new_blobs) = remote_node
-                        .find_missing_blobs(blob_ids.clone(), chain_id)
+                        .find_missing_blobs(
+                            blob_ids.clone(),
+                            &info.manager.locked_published_blobs,
+                            &info.manager.locked_used_blobs,
+                        )
                         .await?
                     {
                         blobs = new_blobs;
@@ -1928,13 +1932,13 @@ where
         }
     }
 
-    /// Tries to read blobs from either the pending blobs or the local node's cache, or
-    /// storage
+    /// Tries to read blobs from the chain client's pending blobs.
     #[instrument(level = "trace")]
     async fn read_local_blobs(
         &self,
         blob_ids: impl IntoIterator<Item = BlobId> + std::fmt::Debug,
     ) -> Result<Vec<Blob>, LocalNodeError> {
+        let mut missing_blob_ids = Vec::new();
         let mut blobs = Vec::new();
         for blob_id in blob_ids {
             let maybe_blob = self.pending_blobs().get(&blob_id).cloned();
@@ -1943,26 +1947,16 @@ where
                 continue;
             }
 
-            let maybe_blob = {
-                let chain_state_view = self.chain_state_view().await?;
-                chain_state_view
-                    .manager
-                    .get()
-                    .pending_blobs
-                    .get(&blob_id)
-                    .cloned()
-            };
+            missing_blob_ids.push(blob_id);
+        }
 
-            if let Some(blob) = maybe_blob {
-                blobs.push(blob);
-                continue;
-            }
-
-            return Err(LocalNodeError::CannotReadLocalBlob {
+        if !missing_blob_ids.is_empty() {
+            return Err(LocalNodeError::CannotReadLocalBlobs {
                 chain_id: self.chain_id,
-                blob_id,
+                blob_ids: missing_blob_ids,
             });
         }
+
         Ok(blobs)
     }
 
@@ -2034,17 +2028,22 @@ where
         };
         // Collect the hashed certificate values required for execution.
         let committee = self.local_committee().await?;
-        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
         let proposal = if let Some(cert) = manager.requested_locked {
-            Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
+            Box::new(BlockProposal::new_retry(
+                round,
+                *cert,
+                &key_pair,
+                manager.locked_published_blobs,
+            ))
         } else {
+            let published_blobs = self.read_local_blobs(block.published_blob_ids()).await?;
             Box::new(BlockProposal::new_initial(
                 round,
                 block.clone(),
                 &key_pair,
-                blobs,
+                published_blobs,
             ))
         };
         // Check the final block proposal. This will be cheaper after #1401.

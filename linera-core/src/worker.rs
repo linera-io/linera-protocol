@@ -201,6 +201,8 @@ pub enum WorkerError {
     UnneededValue { value_hash: CryptoHash },
     #[error("An additional blob was provided that is not required: {blob_id}.")]
     UnneededBlob { blob_id: BlobId },
+    #[error("A duplicated blob was provided: {blob_id}.")]
+    DuplicatedBlob { blob_id: BlobId },
     #[error("The certificate in the block proposal is not a ValidatedBlock")]
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]

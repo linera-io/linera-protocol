@@ -292,7 +292,7 @@ pub struct BlockProposal {
     pub owner: Owner,
     pub signature: Signature,
     #[debug(skip_if = Vec::is_empty)]
-    pub blobs: Vec<Blob>,
+    pub published_blobs: Vec<Blob>,
     #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
@@ -736,7 +736,12 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
-    pub fn new_initial(round: Round, block: Block, secret: &KeyPair, blobs: Vec<Blob>) -> Self {
+    pub fn new_initial(
+        round: Round,
+        block: Block,
+        secret: &KeyPair,
+        published_blobs: Vec<Blob>,
+    ) -> Self {
         let content = ProposalContent {
             round,
             block,
@@ -747,7 +752,7 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            blobs,
+            published_blobs,
             validated_block_certificate: None,
         }
     }
@@ -756,7 +761,7 @@ impl BlockProposal {
         round: Round,
         validated_block_certificate: ValidatedBlockCertificate,
         secret: &KeyPair,
-        blobs: Vec<Blob>,
+        published_blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
         let executed_block = validated_block_certificate.into_inner().into_inner();
@@ -770,7 +775,7 @@ impl BlockProposal {
             content,
             owner: secret.public().into(),
             signature,
-            blobs,
+            published_blobs,
             validated_block_certificate: Some(lite_cert),
         }
     }

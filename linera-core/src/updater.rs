@@ -26,7 +26,7 @@ use tracing::error;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery},
-    local_node::LocalNodeClient,
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
 };
@@ -211,21 +211,31 @@ where
             .handle_optimized_certificate(&certificate, delivery)
             .await;
 
-        match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_node
-                    .check_blobs_not_found(&certificate, blob_ids)?;
+        if let Err(NodeError::BlobsNotFound(blob_ids)) = result {
+            self.local_node
+                .check_missing_blob_ids(&certificate.required_blob_ids(), &blob_ids)?;
 
-                let blobs = self
-                    .local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
-                    .await?
-                    .ok_or_else(|| original_err.clone())?;
-                self.remote_node
-                    .handle_certificate(certificate, blobs, delivery)
-                    .await
+            let blobs = self
+                .local_node
+                .find_missing_blobs(blob_ids.clone(), &certificate)
+                .await?;
+            let missing_blob_ids = blobs
+                .iter()
+                .zip(&blob_ids)
+                .filter_map(|(maybe_blob, blob_id)| maybe_blob.is_none().then_some(*blob_id))
+                .collect::<Vec<_>>();
+            if !missing_blob_ids.is_empty() {
+                return Err(NodeError::LocalError {
+                    error: LocalNodeError::BlobsNotFound(missing_blob_ids).to_string(),
+                });
             }
-            _ => result,
+
+            let blobs = blobs.into_iter().flatten().collect();
+            self.remote_node
+                .handle_certificate(certificate, blobs, delivery)
+                .await
+        } else {
+            result
         }
     }
 
@@ -236,7 +246,7 @@ where
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
-        for blob in &proposal.blobs {
+        for blob in &proposal.published_blobs {
             blob_ids.remove(&blob.id()); // Keep only blobs we may need to resend.
         }
         loop {
@@ -397,14 +407,14 @@ where
         let vote = match action {
             CommunicateAction::SubmitBlock { proposal, blob_ids } => {
                 let info = self.send_block_proposal(proposal, blob_ids).await?;
-                info.manager.pending
+                info.manager.pending_vote
             }
             CommunicateAction::FinalizeBlock {
                 certificate,
                 delivery,
             } => {
                 let info = self.send_certificate(certificate, delivery).await?;
-                info.manager.pending
+                info.manager.pending_vote
             }
             CommunicateAction::RequestTimeout { .. } => {
                 let query = ChainInfoQuery::new(chain_id).with_timeout();

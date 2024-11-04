@@ -2,14 +2,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, Signature},
     data_types::Round,
+    identifiers::BlobId,
 };
 use linera_execution::committee::{Committee, ValidatorName};
 
-use super::hashed::Hashed;
+use super::{hashed::Hashed, CertificateValue};
 use crate::ChainError;
 
 /// Generic type representing a certificate for `value` of type `T`.
@@ -92,6 +95,16 @@ impl<T> GenericCertificate<T> {
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         crate::data_types::check_signatures(self.hash(), self.round, &self.signatures, committee)?;
         Ok(())
+    }
+}
+
+impl GenericCertificate<CertificateValue> {
+    pub fn required_blob_ids(&self) -> HashSet<BlobId> {
+        match self.inner() {
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().required_blob_ids(),
+            CertificateValue::ValidatedBlock(validated) => validated.inner().required_blob_ids(),
+            CertificateValue::Timeout(_) => HashSet::new(),
+        }
     }
 }
 

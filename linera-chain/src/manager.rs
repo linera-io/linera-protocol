@@ -85,10 +85,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::Timeout,
-    data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
+    data_types::{Block, BlockProposal, ExecutedBlock, LiteVote, ProposalContent, Vote},
     types::{
-        CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue, TimeoutCertificate,
-        ValidatedBlockCertificate,
+        Certificate, CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue,
+        LiteCertificate, TimeoutCertificate, ValidatedBlockCertificate,
     },
     ChainError,
 };
@@ -121,12 +121,18 @@ pub struct ChainManager {
     /// validator).
     #[debug(skip_if = Option::is_none)]
     pub locked: Option<ValidatedBlockCertificate>,
+    /// These are the published blobs belonging to the locked block.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub locked_published_blobs: BTreeMap<BlobId, Blob>,
+    /// These are the used blobs belonging to the locked block.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub locked_used_blobs: BTreeMap<BlobId, Blob>,
     /// Latest leader timeout certificate we have received.
     #[debug(skip_if = Option::is_none)]
     pub timeout: Option<TimeoutCertificate>,
     /// Latest vote we have cast, to validate or confirm.
     #[debug(skip_if = Option::is_none)]
-    pub pending: Option<Vote<CertificateValue>>,
+    pub pending_vote: Option<Vote<CertificateValue>>,
     /// Latest timeout vote we cast.
     #[debug(skip_if = Option::is_none)]
     pub timeout_vote: Option<Vote<Timeout>>,
@@ -146,9 +152,6 @@ pub struct ChainManager {
     /// The owners that take over in fallback mode.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
-    /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 doc_scalar!(
@@ -210,20 +213,21 @@ impl ChainManager {
             fallback_distribution,
             proposed: None,
             locked: None,
+            locked_published_blobs: BTreeMap::new(),
+            locked_used_blobs: BTreeMap::new(),
             timeout: None,
-            pending: None,
+            pending_vote: None,
             timeout_vote: None,
             fallback_vote: None,
             round_timeout,
             current_round,
             fallback_owners,
-            pending_blobs: BTreeMap::new(),
         })
     }
 
     /// Returns the most recent vote we cast.
-    pub fn pending(&self) -> Option<&Vote<CertificateValue>> {
-        self.pending.as_ref()
+    pub fn pending_vote(&self) -> Option<&Vote<CertificateValue>> {
+        self.pending_vote.as_ref()
     }
 
     /// Verifies the safety of a proposed block with respect to voting rules.
@@ -361,7 +365,7 @@ impl ChainManager {
     ) -> Result<Outcome, ChainError> {
         let new_block = &certificate.executed_block().block;
         let new_round = certificate.round;
-        if let Some(Vote { value, round, .. }) = &self.pending {
+        if let Some(Vote { value, round, .. }) = &self.pending_vote {
             match value.inner() {
                 CertificateValue::ConfirmedBlock(confirmed) => {
                     if &confirmed.inner().block == new_block && *round == new_round {
@@ -394,36 +398,45 @@ impl ChainManager {
         Ok(Outcome::Accept)
     }
 
+    /// If the validated block certificate is more recent, returns that certificate
+    /// so that the locked block can be updated.
+    pub fn validated_block_if_newer_than_locked(
+        &self,
+        validated_block_certificate: Option<LiteCertificate<'static>>,
+        executed_block: ExecutedBlock,
+    ) -> Option<Certificate> {
+        let lite_cert = validated_block_certificate?;
+        if self
+            .locked
+            .as_ref()
+            .map_or(true, |locked| locked.round < lite_cert.round)
+        {
+            let value = HashedCertificateValue::new_validated(executed_block);
+            return lite_cert.with_value(value);
+        }
+
+        None
+    }
+
     /// Signs a vote to validate the proposed block.
     pub fn create_vote(
         &mut self,
         proposal: BlockProposal,
-        outcome: BlockExecutionOutcome,
+        executed_block: ExecutedBlock,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
+        used_blobs: Vec<Blob>,
+        maybe_update_locked: Option<Certificate>,
     ) {
+        let proposal_content = proposal.content.clone();
+        let published_blobs = proposal.published_blobs.clone();
         // Record the proposed block, so it can be supplied to clients that request it.
-        self.proposed = Some(proposal.clone());
+        self.update_proposed(proposal);
         self.update_current_round(local_time);
-        let ProposalContent { block, round, .. } = proposal.content;
-        let executed_block = outcome.with(block);
+        let ProposalContent { round, .. } = proposal_content;
 
-        // If the validated block certificate is more recent, update our locked block.
-        if let Some(lite_cert) = proposal.validated_block_certificate {
-            if self
-                .locked
-                .as_ref()
-                .map_or(true, |locked| locked.round < lite_cert.round)
-            {
-                let value = HashedCertificateValue::new_validated(executed_block.clone());
-                if let Some(certificate) = lite_cert.with_value(value) {
-                    self.locked = Some(certificate.into());
-                }
-            }
-        }
-
-        for blob in proposal.blobs {
-            self.pending_blobs.insert(blob.id(), blob);
+        if let Some(certificate) = maybe_update_locked {
+            self.update_locked(certificate.into(), published_blobs, used_blobs);
         }
 
         if let Some(key_pair) = key_pair {
@@ -433,7 +446,7 @@ impl ChainManager {
             } else {
                 HashedCertificateValue::new_validated(executed_block)
             };
-            self.pending = Some(Vote::new(value, round, key_pair));
+            self.pending_vote = Some(Vote::new(value, round, key_pair));
         }
     }
 
@@ -441,6 +454,8 @@ impl ChainManager {
     pub fn create_final_vote(
         &mut self,
         validated: ValidatedBlockCertificate,
+        published_blobs: Vec<Blob>,
+        used_blobs: Vec<Blob>,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
     ) {
@@ -451,7 +466,7 @@ impl ChainManager {
             return;
         }
         let confirmed = ConfirmedBlockCertificate::from_validated(validated.clone());
-        self.locked = Some(validated);
+        self.update_locked(validated, published_blobs, used_blobs);
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
@@ -459,7 +474,7 @@ impl ChainManager {
             // back into `Certificate` type so that the vote is cast over hash of the old type.
             let vote = Vote::new(confirmed.into_inner().into(), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
-            self.pending = Some(vote);
+            self.pending_vote = Some(vote);
         }
     }
 
@@ -570,6 +585,40 @@ impl ChainManager {
     fn is_super(&self, owner: &Owner) -> bool {
         self.ownership.super_owners.contains_key(owner)
     }
+
+    fn update_locked(
+        &mut self,
+        new_locked: ValidatedBlockCertificate,
+        published_blobs: Vec<Blob>,
+        used_blobs: Vec<Blob>,
+    ) {
+        self.locked = Some(new_locked);
+        self.locked_published_blobs = published_blobs
+            .into_iter()
+            .map(|blob| (blob.id(), blob))
+            .collect();
+        self.locked_used_blobs = used_blobs
+            .into_iter()
+            .map(|blob| (blob.id(), blob))
+            .collect();
+    }
+
+    fn update_proposed(&mut self, new_proposed: BlockProposal) {
+        self.proposed = Some(new_proposed);
+    }
+
+    pub fn proposed_blobs(&self) -> BTreeMap<BlobId, Blob> {
+        self.proposed
+            .as_ref()
+            .map(|proposed| {
+                proposed
+                    .published_blobs
+                    .iter()
+                    .map(|blob| (blob.id(), blob.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 /// Chain manager information that is included in `ChainInfo` sent to clients.
@@ -585,12 +634,18 @@ pub struct ChainManagerInfo {
     /// validator).
     #[debug(skip_if = Option::is_none)]
     pub requested_locked: Option<Box<ValidatedBlockCertificate>>,
+    /// Published blobs belonging to the locked block.
+    #[debug(skip_if = Vec::is_empty)]
+    pub locked_published_blobs: Vec<Blob>,
+    /// Used blobs belonging to the locked block.
+    #[debug(skip_if = Vec::is_empty)]
+    pub locked_used_blobs: Vec<Blob>,
     /// Latest timeout certificate we have seen.
     #[debug(skip_if = Option::is_none)]
     pub timeout: Option<Box<TimeoutCertificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
     #[debug(skip_if = Option::is_none)]
-    pub pending: Option<LiteVote>,
+    pub pending_vote: Option<LiteVote>,
     /// Latest timeout vote we cast.
     #[debug(skip_if = Option::is_none)]
     pub timeout_vote: Option<LiteVote>,
@@ -609,9 +664,6 @@ pub struct ChainManagerInfo {
     /// The timestamp when the current round times out.
     #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
-    /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 impl From<&ChainManager> for ChainManagerInfo {
@@ -621,15 +673,16 @@ impl From<&ChainManager> for ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
+            locked_published_blobs: Vec::new(),
+            locked_used_blobs: Vec::new(),
             timeout: manager.timeout.clone().map(Box::new),
-            pending: manager.pending.as_ref().map(|vote| vote.lite()),
+            pending_vote: manager.pending_vote.as_ref().map(|vote| vote.lite()),
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
             fallback_vote: manager.fallback_vote.as_ref().map(Vote::lite),
             requested_pending_value: None,
             current_round,
             leader: manager.round_leader(current_round).cloned(),
             round_timeout: manager.round_timeout,
-            pending_blobs: BTreeMap::new(),
         }
     }
 }
@@ -640,10 +693,11 @@ impl ChainManagerInfo {
         self.requested_proposed = manager.proposed.clone().map(Box::new);
         self.requested_locked = manager.locked.clone().map(Box::new);
         self.requested_pending_value = manager
-            .pending
+            .pending_vote
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
-        self.pending_blobs = manager.pending_blobs.clone();
+        self.locked_published_blobs = manager.locked_published_blobs.values().cloned().collect();
+        self.locked_used_blobs = manager.locked_used_blobs.values().cloned().collect();
     }
 
     /// Gets the highest validated block.

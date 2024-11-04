@@ -33,15 +33,15 @@ pub struct ChainClientState {
     ///
     /// This is always at the same height as `next_block_height`.
     pending_block: Option<Block>,
+    /// This contains blobs belonging to our `pending_block` that may not even have
+    /// been processed by (i.e. been proposed to) our own local chain manager yet.
+    pending_blobs: BTreeMap<BlobId, Blob>,
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
     /// For each validator, up to which index we have synchronized their
     /// [`ChainStateView::received_log`].
     received_certificate_trackers: HashMap<ValidatorName, u64>,
-    /// This contains blobs belonging to our `pending_block` that may not even have
-    /// been processed by (i.e. been proposed to) our own local chain manager yet.
-    pending_blobs: BTreeMap<BlobId, Blob>,
 
     /// A mutex that is held whilst we are performing operations that should not be
     /// attempted by multiple clients at the same time.

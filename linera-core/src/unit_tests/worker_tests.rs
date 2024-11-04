@@ -446,7 +446,7 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().pending_vote().is_none());
     Ok(())
 }
 
@@ -495,7 +495,7 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().pending_vote().is_none());
     Ok(())
 }
 
@@ -607,7 +607,7 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().pending_vote().is_none());
     Ok(())
 }
 
@@ -656,7 +656,7 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().pending_vote().is_none());
 
     drop(chain);
     worker
@@ -664,7 +664,7 @@ where
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_some());
+    assert!(chain.manager.get().pending_vote().is_some());
     drop(chain);
     worker
         .handle_certificate(certificate0, vec![], None)
@@ -672,7 +672,7 @@ where
     worker.handle_block_proposal(block_proposal1).await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_some());
+    assert!(chain.manager.get().pending_vote().is_some());
     drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
@@ -1082,7 +1082,7 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().pending_vote().is_none());
     Ok(())
 }
 
@@ -1114,9 +1114,9 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    let pending_value = chain.manager.get().pending().unwrap().lite();
+    let pending_value = chain.manager.get().pending_vote().unwrap().lite();
     assert_eq!(
-        chain_info_response.info.manager.pending.unwrap(),
+        chain_info_response.info.manager.pending_vote.unwrap(),
         pending_value
     );
     Ok(())
@@ -1847,7 +1847,7 @@ where
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
-    assert!(info.manager.pending.is_none());
+    assert!(info.manager.pending_vote.is_none());
     assert_eq!(
         worker
             .query_application(ChainId::root(1), Query::System(SystemQuery))
@@ -1973,7 +1973,7 @@ where
     assert_eq!(Amount::ZERO, info.chain_balance);
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
-    assert!(info.manager.pending.is_none());
+    assert!(info.manager.pending_vote.is_none());
     Ok(())
 }
 
@@ -3212,12 +3212,12 @@ where
     let value1 = HashedCertificateValue::new_validated(executed_block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
-    let vote = response.info.manager.pending.clone().unwrap();
+    let vote = response.info.manager.pending_vote.clone().unwrap();
     let certificate1 = vote.with_value(value1.clone()).unwrap().into_certificate();
     let (response, _) = worker
         .handle_certificate(certificate1.clone(), vec![], None)
         .await?;
-    let vote = response.info.manager.pending.as_ref().unwrap();
+    let vote = response.info.manager.pending_vote.as_ref().unwrap();
     let value = HashedCertificateValue::new_confirmed(executed_block1.clone());
     assert_eq!(vote.value, value.lite());
 
@@ -3278,7 +3278,7 @@ where
         response.info.manager.requested_locked,
         Some(Box::new(certificate2.into()))
     );
-    let vote = response.info.manager.pending.as_ref().unwrap();
+    let vote = response.info.manager.pending_vote.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::SingleLeader(5));
 
@@ -3460,7 +3460,7 @@ where
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
     let value1 = HashedCertificateValue::new_confirmed(executed_block1);
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
-    let vote = response.info.manager.pending.as_ref().unwrap();
+    let vote = response.info.manager.pending_vote.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
 
     // Set the clock to the end of the round.
@@ -3512,7 +3512,7 @@ where
         response.info.manager.requested_locked,
         Some(Box::new(certificate2.into()))
     );
-    let vote = response.info.manager.pending.as_ref().unwrap();
+    let vote = response.info.manager.pending_vote.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::MultiLeader(1));
     Ok(())

@@ -306,39 +306,95 @@ where
     }
 
     /// Returns an error if the block requires a blob we don't have.
-    /// Looks for the blob in: chain manager's pending blobs and storage.
-    async fn check_no_missing_blobs(
+    /// Looks for the blob in: chain manager's proposed blobs and storage.
+    async fn get_proposed_blobs(
         &self,
-        required_blob_ids: &HashSet<BlobId>,
-    ) -> Result<(), WorkerError> {
-        let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let missing_blob_ids = required_blob_ids
-            .iter()
-            .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .cloned()
-            .collect::<Vec<_>>();
+        blob_ids: &HashSet<BlobId>,
+    ) -> Result<Vec<Blob>, WorkerError> {
+        let proposed_blobs = self.chain.manager.get().proposed_blobs();
+        let (mut found_blobs, missing_blob_ids) = self.get_found_and_missing_blobs(
+            blob_ids,
+            &proposed_blobs,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+        );
 
-        let missing_blob_ids = self
-            .storage
-            .missing_blobs(missing_blob_ids.as_slice())
-            .await?;
+        let blobs = self.storage.read_blobs(&missing_blob_ids).await?;
+        let missing_blob_ids: Vec<_> = missing_blob_ids
+            .into_iter()
+            .zip(&blobs)
+            .filter_map(|(blob_id, blob)| blob.is_none().then_some(blob_id))
+            .collect();
+        found_blobs.extend(blobs.into_iter().flatten());
 
         if missing_blob_ids.is_empty() {
-            return Ok(());
+            Ok(found_blobs)
+        } else {
+            Err(WorkerError::BlobsNotFound(missing_blob_ids))
         }
-
-        Err(WorkerError::BlobsNotFound(missing_blob_ids))
     }
 
-    /// Returns an error if unrelated blobs were provided.
-    fn check_for_unneeded_blobs(
+    /// Returns the blobs requested by their `blob_ids` that are in the chain manager's
+    /// proposed or locked blobs and checks that they are otherwise in storage.
+    async fn get_proposed_or_locked_blobs_and_check_storage(
+        &self,
+        blob_ids: &HashSet<BlobId>,
+    ) -> Result<Vec<Blob>, WorkerError> {
+        let manager = self.chain.manager.get();
+
+        let locked_published_blobs = &manager.locked_published_blobs;
+        let locked_used_blobs = &manager.locked_used_blobs;
+        let proposed_blobs = &manager.proposed_blobs();
+        let (found_blobs, missing_blob_ids) = self.get_found_and_missing_blobs(
+            blob_ids,
+            proposed_blobs,
+            locked_published_blobs,
+            locked_used_blobs,
+        );
+
+        let not_found_blob_ids = self.storage.missing_blobs(&missing_blob_ids).await?;
+        if not_found_blob_ids.is_empty() {
+            Ok(found_blobs)
+        } else {
+            Err(WorkerError::BlobsNotFound(not_found_blob_ids))
+        }
+    }
+
+    fn get_found_and_missing_blobs(
+        &self,
+        blob_ids: &HashSet<BlobId>,
+        proposed_blobs: &BTreeMap<BlobId, Blob>,
+        locked_published_blobs: &BTreeMap<BlobId, Blob>,
+        locked_used_blobs: &BTreeMap<BlobId, Blob>,
+    ) -> (Vec<Blob>, Vec<BlobId>) {
+        let mut found_blobs = Vec::new();
+        let mut missing_blob_ids = Vec::new();
+        for blob_id in blob_ids {
+            match proposed_blobs
+                .get(blob_id)
+                .or_else(|| locked_published_blobs.get(blob_id))
+                .or_else(|| locked_used_blobs.get(blob_id))
+            {
+                Some(blob) => found_blobs.push(blob.clone()),
+                None => missing_blob_ids.push(*blob_id),
+            }
+        }
+        (found_blobs, missing_blob_ids)
+    }
+
+    /// Returns an error if unrelated or duplicated blobs were provided.
+    fn check_for_unneeded_or_duplicated_blobs(
         &self,
         required_blob_ids: &HashSet<BlobId>,
         blobs: &[Blob],
     ) -> Result<(), WorkerError> {
-        // Find all certificates containing blobs used when executing this block.
+        let mut seen_blob_ids = HashSet::new();
         for blob in blobs {
             let blob_id = blob.id();
+            ensure!(
+                seen_blob_ids.insert(blob_id),
+                WorkerError::DuplicatedBlob { blob_id }
+            );
             ensure!(
                 required_blob_ids.contains(&blob_id),
                 WorkerError::UnneededBlob { blob_id }
@@ -346,32 +402,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Returns the blobs requested by their `blob_ids` that are in the chain manager's pending blobs
-    /// and checks that they are otherwise in storage.
-    async fn get_blobs_and_checks_storage(
-        &self,
-        blob_ids: &HashSet<BlobId>,
-    ) -> Result<Vec<Blob>, WorkerError> {
-        let pending_blobs = &self.chain.manager.get().pending_blobs;
-
-        let mut found_blobs = Vec::new();
-        let mut missing_blob_ids = Vec::new();
-        for blob_id in blob_ids {
-            if let Some(blob) = pending_blobs.get(blob_id) {
-                found_blobs.push(blob.clone());
-            } else {
-                missing_blob_ids.push(*blob_id);
-            }
-        }
-        let not_found_blob_ids = self.storage.missing_blobs(&missing_blob_ids).await?;
-
-        if not_found_blob_ids.is_empty() {
-            Ok(found_blobs)
-        } else {
-            Err(WorkerError::BlobsNotFound(not_found_blob_ids))
-        }
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
