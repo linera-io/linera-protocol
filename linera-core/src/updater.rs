@@ -287,6 +287,8 @@ where
                         .collect::<Vec<_>>()
                         .await;
                     let local_storage = self.local_node.storage_client();
+
+                    
                     for blob_id in missing_blob_ids {
                         let last_used_by_hash =
                             local_storage.read_blob_state(blob_id).await?.last_used_by;

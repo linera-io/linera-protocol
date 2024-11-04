@@ -485,6 +485,18 @@ where
         Ok(blob_state)
     }
 
+    async fn read_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobState>, ViewError> {
+        let blob_state_keys = blob_ids.iter().map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id))).collect::<Result<_,_>>()?;
+        let maybe_blob_states = self.store.read_multi_values::<BlobState>(blob_state_keys).await?;
+        #[cfg(with_metrics)]
+        READ_BLOB_STATES_COUNTER.with_label_values(&[]).inc();
+        let blob_states = maybe_blob_states
+            .into_iter().zip(blob_ids)
+            .map(|(blob_state,blob_id)| blob_state.ok_or_else(|| ViewError::not_found("blob state for blob ID", blob_id)))
+            .collect::<Result<_,_>>()?;
+        Ok(blob_states)
+    }
+
     async fn read_hashed_certificate_values_downward(
         &self,
         from: CryptoHash,
