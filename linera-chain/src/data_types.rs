@@ -196,63 +196,8 @@ impl IncomingBundle {
             return false;
         };
 
-        Self::put_front_and_shift(bundles, index);
+        bundles[0..=index].rotate_right(1);
         true
-    }
-
-    // Puts element at `pos` index at the front of the vector and shifts all other elements to the right.
-    //
-    // Panics if `pos` is out of bounds.
-    fn put_front_and_shift<I: Clone>(v: &mut [I], pos: usize) {
-        if v.is_empty() {
-            return;
-        }
-        v[0..=pos].rotate_right(1);
-    }
-}
-
-#[cfg(test)]
-mod bundle_shift {
-    #[test]
-    fn put_front_and_shift() {
-        let mut empty: Vec<usize> = vec![];
-        super::IncomingBundle::put_front_and_shift(&mut empty, 1);
-
-        let mut single: Vec<u32> = vec![1];
-        super::IncomingBundle::put_front_and_shift(&mut single, 0);
-        assert_eq!(single, vec![1]);
-
-        let mut two: Vec<u32> = vec![1, 2];
-        super::IncomingBundle::put_front_and_shift(&mut two, 1);
-        assert_eq!(two, vec![2, 1]);
-
-        let mut three: Vec<u32> = vec![1, 2, 3];
-        super::IncomingBundle::put_front_and_shift(&mut three, 2);
-        assert_eq!(three, vec![3, 1, 2]);
-
-        let mut noop: Vec<u32> = vec![1, 2, 3];
-        super::IncomingBundle::put_front_and_shift(&mut noop, 0);
-        assert_eq!(noop, vec![1, 2, 3]);
-
-        // Moving the first element to front
-        let mut moving_first: Vec<u32> = vec![1, 2, 3, 4];
-        super::IncomingBundle::put_front_and_shift(&mut moving_first, 0);
-        assert_eq!(moving_first, vec![1, 2, 3, 4]);
-
-        // Moving last element
-        let mut moving_last: Vec<u32> = vec![1, 2, 3, 4, 5];
-        super::IncomingBundle::put_front_and_shift(&mut moving_last, 4);
-        assert_eq!(moving_last, vec![5, 1, 2, 3, 4]);
-
-        // Identical elements
-        let mut identical: Vec<u32> = vec![1, 1, 1, 1];
-        super::IncomingBundle::put_front_and_shift(&mut identical, 2);
-        assert_eq!(identical, vec![1, 1, 1, 1]);
-
-        // Larger vector test
-        let mut large_vec: Vec<u32> = (1..=10).collect();
-        super::IncomingBundle::put_front_and_shift(&mut large_vec, 7);
-        assert_eq!(large_vec, vec![8, 1, 2, 3, 4, 5, 6, 7, 9, 10]);
     }
 }
 
