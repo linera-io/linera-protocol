@@ -31,10 +31,7 @@ use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
 #[cfg(web)]
-use {
-    js_sys::wasm_bindgen::JsValue,
-    linera_base::dyn_convert,
-};
+use js_sys::wasm_bindgen::JsValue;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
@@ -48,6 +45,7 @@ use linera_base::{
         GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
+    task,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -100,15 +98,9 @@ pub type UserContractInstance = Box<dyn UserContract>;
 /// An implementation of [`UserService`].
 pub type UserServiceInstance = Box<dyn UserService>;
 
-#[cfg(not(web))]
-pub trait Post: Send + Sync {}
-
-#[cfg(web)]
-pub trait Post: dyn_convert::DynInto<JsValue> {}
-
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 // TODO: remove `Send` and `Sync` from here
-pub trait UserContractModule: dyn_clone::DynClone + Any + Post + Send + Sync {
+pub trait UserContractModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -124,7 +116,7 @@ impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone + Any + Post + Send + Sync {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -157,15 +149,10 @@ impl UserContractCode {
     }
 }
 
-#[cfg(not(web))]
-impl<T: Send + Sync> Post for T {}
-
 #[cfg(web)]
 const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
-
-    impl<T: dyn_convert::DynInto<JsValue>> Post for T {}
 
     impl From<UserContractCode> for JsValue {
         fn from(code: UserContractCode) -> JsValue {

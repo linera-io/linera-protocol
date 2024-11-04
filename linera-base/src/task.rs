@@ -11,6 +11,13 @@ use std::future::Future;
 mod implementation {
     use super::*;
 
+    /// Types that can be _explicitly_ sent to a new thread.
+    /// This differs from `Send` in that we can provide an explicit post step
+    /// (e.g. `postMessage` on the Web).
+    pub trait Post: Send + Sync {}
+
+    impl<T: Send + Sync> Post for T {}
+
     /// The type of errors that can result from awaiting a task to completion.
     pub type Error = tokio::task::JoinError;
     /// The type of a future awaiting another task.
@@ -36,8 +43,18 @@ mod implementation {
 #[cfg(web)]
 mod implementation {
     use futures::channel::oneshot;
+    use wasm_bindgen_futures::wasm_bindgen::JsValue;
 
     use super::*;
+    use crate::dyn_convert;
+
+    /// Types that can be _explicitly_ sent to a new thread.
+    /// This differs from `Send` in that we can provide an explicit post step
+    /// (e.g. `postMessage` on the Web).
+    // TODO(#2809): this trait is overly liberal.
+    pub trait Post: dyn_convert::DynInto<JsValue> {}
+
+    impl<T: dyn_convert::DynInto<JsValue>> Post for T {}
 
     /// The type of errors that can result from awaiting a task to completion.
     pub type Error = oneshot::Canceled;
