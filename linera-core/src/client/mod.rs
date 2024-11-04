@@ -720,9 +720,7 @@ where
             // The first incoming message of any child chain must be `OpenChain`. We must have it in
             // our inbox, and include it before all other messages.
             rearranged = IncomingBundle::put_openchain_at_front(&mut pending_message_bundles);
-            if !rearranged {
-                return Err(LocalNodeError::InactiveChain(self.chain_id).into());
-            };
+            ensure!(rearranged, LocalNodeError::InactiveChain(self.chain_id));
         }
 
         if self.options.message_policy.is_ignore() {
@@ -885,8 +883,6 @@ where
 
         let mut info = self.sync_until(self.next_block_height()).await?;
 
-        // If, during sync above, we've learned about new owners we need to check if the chain
-        // has been extended beyoned `self.next_block_height()`.
         if self.state().has_other_owners(&info.manager.ownership) {
             // For chains with any owner other than ourselves, we could be missing recent
             // certificates created by other owners. Further synchronize blocks from the network.
@@ -1737,7 +1733,7 @@ where
     /// Attempts to execute the block locally. If any incoming message execution fails, that
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
-    // TODO: Measure how failing messages affect the execution times.
+    // TODO[#2806]: Measure how failing messages affect the execution times.
     #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,

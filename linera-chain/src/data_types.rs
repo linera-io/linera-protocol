@@ -181,7 +181,7 @@ impl IncomingBundle {
         })
     }
 
-    /// Rearrange the messages in the bundle so that the first message is an `OpenChain` message.
+    /// Rearranges the messages in the bundle so that the first message is an `OpenChain` message.
     /// Returns whether the `OpenChain` message was found at all.
     pub fn put_openchain_at_front(bundles: &mut [IncomingBundle]) -> bool {
         let Some(index) = bundles.iter().position(|msg| {
@@ -207,11 +207,9 @@ impl IncomingBundle {
         if v.is_empty() {
             return;
         }
-        let i = v[pos].clone();
         for idx in (1..=pos).rev() {
             v.swap(idx - 1, idx);
         }
-        v[0] = i;
     }
 }
 
