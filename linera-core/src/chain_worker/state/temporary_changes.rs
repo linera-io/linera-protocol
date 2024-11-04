@@ -3,8 +3,6 @@
 
 //! Operations that don't persist any changes to the chain state.
 
-use std::borrow::Cow;
-
 use linera_base::{
     data_types::{ArithmeticError, BlobContent, Timestamp, UserApplicationDescription},
     ensure,
@@ -17,7 +15,7 @@ use linera_chain::{
     },
     manager,
 };
-use linera_execution::{ChannelSubscription, Query, Response};
+use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::View;
 #[cfg(with_testing)]
@@ -178,9 +176,8 @@ where
             .system
             .current_committee()
             .expect("chain is active");
+        let policy = committee.policy().clone();
         check_block_epoch(epoch, block)?;
-        let maximum_blob_size = committee.policy().maximum_blob_size;
-        let maximum_bytecode_size = committee.policy().maximum_bytecode_size;
         // Check the authentication of the block.
         let public_key = self
             .0
@@ -207,32 +204,21 @@ where
         // legitimately required.
         // Actual execution happens below, after other validity checks.
         self.0.chain.remove_bundles_from_inboxes(block).await?;
-        // Verify that all required bytecode hashed certificate values and blobs are available, and no
-        // unrelated ones provided.
+        // Verify that no unrelated blobs were provided.
+        let published_blob_ids = block.published_blob_ids();
         self.0
-            .check_no_missing_blobs(block.published_blob_ids(), blobs)
+            .check_for_unneeded_blobs(&published_blob_ids, blobs)
             .await?;
+        let missing_published_blob_ids = published_blob_ids
+            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .cloned()
+            .collect::<Vec<_>>();
+        ensure!(
+            missing_published_blob_ids.is_empty(),
+            WorkerError::BlobsNotFound(missing_published_blob_ids)
+        );
         for blob in blobs {
-            self.0.cache_recent_blob(Cow::Borrowed(blob)).await;
-        }
-        for blob in self.0.get_blobs(block.published_blob_ids()).await? {
-            let blob_size = match blob.content() {
-                BlobContent::Data(bytes) => bytes.len(),
-                BlobContent::ContractBytecode(compressed_bytecode)
-                | BlobContent::ServiceBytecode(compressed_bytecode) => {
-                    ensure!(
-                        compressed_bytecode.decompressed_size_at_most(maximum_bytecode_size)?,
-                        WorkerError::BytecodeTooLarge
-                    );
-                    compressed_bytecode.compressed_bytes.len()
-                }
-            };
-            ensure!(
-                u64::try_from(blob_size)
-                    .ok()
-                    .is_some_and(|size| size <= maximum_blob_size),
-                WorkerError::BlobTooLarge
-            )
+            Self::check_blob_size(blob.content(), &policy)?;
         }
 
         let local_time = self.0.storage.clock().current_time();
@@ -353,6 +339,29 @@ where
             info.manager.add_values(chain.manager.get());
         }
         Ok(ChainInfoResponse::new(info, self.0.config.key_pair()))
+    }
+
+    fn check_blob_size(
+        content: &BlobContent,
+        policy: &ResourceControlPolicy,
+    ) -> Result<(), WorkerError> {
+        ensure!(
+            u64::try_from(content.size())
+                .ok()
+                .is_some_and(|size| size <= policy.maximum_blob_size),
+            WorkerError::BlobTooLarge
+        );
+        match content {
+            BlobContent::ContractBytecode(compressed_bytecode)
+            | BlobContent::ServiceBytecode(compressed_bytecode) => {
+                ensure!(
+                    compressed_bytecode.decompressed_size_at_most(policy.maximum_bytecode_size)?,
+                    WorkerError::BytecodeTooLarge
+                );
+            }
+            BlobContent::Data(_) => {}
+        }
+        Ok(())
     }
 }
 

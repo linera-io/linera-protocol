@@ -5,7 +5,6 @@
 
 use std::{marker::Unpin, sync::LazyLock};
 
-use bytes::Bytes;
 use linera_base::data_types::Bytecode;
 use linera_witty::{
     wasmer::{EntrypointInstance, InstanceBuilder},
@@ -13,7 +12,6 @@ use linera_witty::{
 };
 use tokio::sync::Mutex;
 use wasm_instrument::{gas_metering, parity_wasm};
-use wasmer::{Engine, Module, Store};
 
 use super::{
     module_cache::ModuleCache,
@@ -27,7 +25,7 @@ use crate::{
 };
 
 /// An [`Engine`] instance configured to run application services.
-static SERVICE_ENGINE: LazyLock<Engine> = LazyLock::new(|| {
+static SERVICE_ENGINE: LazyLock<wasmer::Engine> = LazyLock::new(|| {
     #[cfg(web)]
     {
         wasmer::Engine::default()
@@ -39,12 +37,12 @@ static SERVICE_ENGINE: LazyLock<Engine> = LazyLock::new(|| {
     }
 });
 
-/// A cache of compiled contract modules, with their respective [`Engine`] instances.
+/// A cache of compiled contract modules, with their respective [`wasmer::Engine`] instances.
 static CONTRACT_CACHE: LazyLock<Mutex<ModuleCache<CachedContractModule>>> =
     LazyLock::new(Mutex::default);
 
 /// A cache of compiled service modules.
-static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<Module>>> = LazyLock::new(Mutex::default);
+static SERVICE_CACHE: LazyLock<Mutex<ModuleCache<wasmer::Module>>> = LazyLock::new(Mutex::default);
 
 /// Type representing a running [Wasmer](https://wasmer.io/) contract.
 pub(crate) struct WasmerContractInstance<Runtime> {
@@ -77,8 +75,8 @@ where
 {
     /// Prepares a runtime instance to call into the Wasm contract.
     pub fn prepare(
-        contract_engine: Engine,
-        contract_module: &Module,
+        contract_engine: wasmer::Engine,
+        contract_module: &wasmer::Module,
         runtime: Runtime,
     ) -> Result<Self, WasmExecutionError> {
         let system_api_data = SystemApiData::new(runtime);
@@ -99,7 +97,7 @@ impl WasmServiceModule {
         let mut service_cache = SERVICE_CACHE.lock().await;
         let module = service_cache
             .get_or_insert_with(service_bytecode, |bytecode| {
-                Module::new(&*SERVICE_ENGINE, bytecode).map_err(anyhow::Error::from)
+                wasmer::Module::new(&*SERVICE_ENGINE, bytecode).map_err(anyhow::Error::from)
             })
             .map_err(WasmExecutionError::LoadServiceModule)?;
         Ok(WasmServiceModule::Wasmer { module })
@@ -111,7 +109,10 @@ where
     Runtime: ServiceRuntime + WriteBatch + Clone + Unpin + 'static,
 {
     /// Prepares a runtime instance to call into the Wasm service.
-    pub fn prepare(service_module: &Module, runtime: Runtime) -> Result<Self, WasmExecutionError> {
+    pub fn prepare(
+        service_module: &wasmer::Module,
+        runtime: Runtime,
+    ) -> Result<Self, WasmExecutionError> {
         let system_api_data = SystemApiData::new(runtime);
         let mut instance_builder = InstanceBuilder::new(SERVICE_ENGINE.clone(), system_api_data);
 
@@ -197,9 +198,9 @@ impl From<wasmer::RuntimeError> for ExecutionError {
 }
 
 /// Serialized bytes of a compiled contract bytecode.
-pub struct CachedContractModule {
-    compiled_bytecode: Bytes,
-}
+// Cloning `Module`s is cheap.
+#[derive(Clone)]
+pub struct CachedContractModule(wasmer::Module);
 
 pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
     struct WasmtimeRules;
@@ -246,16 +247,15 @@ pub fn add_metering(bytecode: Bytecode) -> anyhow::Result<Bytecode> {
 impl CachedContractModule {
     /// Creates a new [`CachedContractModule`] by compiling a `contract_bytecode`.
     pub fn new(contract_bytecode: Bytecode) -> Result<Self, anyhow::Error> {
-        let module = Module::new(
+        let module = wasmer::Module::new(
             &Self::create_compilation_engine(),
             add_metering(contract_bytecode)?,
         )?;
-        let compiled_bytecode = module.serialize()?;
-        Ok(CachedContractModule { compiled_bytecode })
+        Ok(CachedContractModule(module))
     }
 
     /// Creates a new [`Engine`] to compile a contract bytecode.
-    fn create_compilation_engine() -> Engine {
+    fn create_compilation_engine() -> wasmer::Engine {
         #[cfg(not(web))]
         {
             let mut compiler_config = wasmer_compiler_singlepass::Singlepass::default();
@@ -269,10 +269,21 @@ impl CachedContractModule {
     }
 
     /// Creates a [`Module`] from a compiled contract using a headless [`Engine`].
-    pub fn create_execution_instance(&self) -> Result<(Engine, Module), anyhow::Error> {
-        let engine = Engine::default();
-        let store = Store::new(engine.clone());
-        let module = unsafe { Module::deserialize(&store, &*self.compiled_bytecode) }?;
-        Ok((engine, module))
+    pub fn create_execution_instance(
+        &self,
+    ) -> Result<(wasmer::Engine, wasmer::Module), anyhow::Error> {
+        #[cfg(web)]
+        {
+            Ok((wasmer::Engine::default(), self.0.clone()))
+        }
+
+        #[cfg(not(web))]
+        {
+            let engine = wasmer::Engine::default();
+            let store = wasmer::Store::new(engine.clone());
+            let bytes = self.0.serialize()?;
+            let module = unsafe { wasmer::Module::deserialize(&store, bytes) }?;
+            Ok((engine, module))
+        }
     }
 }

@@ -38,7 +38,8 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [dev-dependencies]
-linera-storage-service = { path = ".", features = ["test"] }
+criterion = { workspace = true, features = ["async_tokio"] }
+linera-storage-service = { path = ".", default-features = false, features = ["test"] }
 proptest = { workspace = true, features = ["alloc"] }
 serde-reflection.workspace = true
 serde_yaml.workspace = true
@@ -51,3 +52,7 @@ tonic-build = { workspace = true, features = ["prost", "transport"] }
 
 [package.metadata.cargo-machete]
 ignored = ["proptest", "prost"]
+
+[[bench]]
+name = "store"
+harness = false

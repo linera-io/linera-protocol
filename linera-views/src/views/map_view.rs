@@ -1988,6 +1988,7 @@ mod graphql {
     }
 }
 
+/// The tests for `Borrow` and `bcs`.
 #[cfg(test)]
 pub mod tests {
     use std::borrow::Borrow;

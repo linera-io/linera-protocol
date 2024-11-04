@@ -1,13 +1,25 @@
-use linera_sdk::base::{{ContractAbi, ServiceAbi}};
-
+use linera_sdk::{{
+  base::{{ContractAbi, ServiceAbi}},
+  graphql::GraphQLMutationRoot
+}};
+use serde::{{Deserialize, Serialize}};
+use async_graphql::{{Request, Response}};
 pub struct {project_name}Abi;
 
 impl ContractAbi for {project_name}Abi {{
-    type Operation = ();
+    type Operation = Operation;
     type Response = ();
 }}
 
 impl ServiceAbi for {project_name}Abi {{
-    type Query = ();
-    type QueryResponse = ();
+    type Query = Request;
+    type QueryResponse = Response;
 }}
+
+#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+pub enum Operation {{
+  Increment {{
+      value: u64
+  }} 
+}}
+

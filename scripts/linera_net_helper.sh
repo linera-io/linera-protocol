@@ -20,6 +20,9 @@ function linera_spawn_and_read_wallet_variables() {
     # Read from LINERA_TMP_ERR until the string "READY!" is found.
     sed '/^READY!/q' <"$LINERA_TMP_ERR" || exit 1
 
+    # Output the commands for reading.
+    cat "$LINERA_TMP_OUT"
+
     # Source the Bash commands output by the server.
     source "$LINERA_TMP_OUT"
 

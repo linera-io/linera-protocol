@@ -53,17 +53,6 @@ static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = Lazy
     .expect("Counter creation should not fail")
 });
 
-/// The metric counting how often hashed certificate values are tested for existence from storage.
-#[cfg(with_metrics)]
-static CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "contains_hashed_certificate_values",
-        "The metric counting how often hashed certificate values are tested for existence from storage",
-        &[],
-    )
-    .expect("Counter creation should not fail")
-});
-
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -406,23 +395,6 @@ where
         Ok(test)
     }
 
-    async fn contains_hashed_certificate_values(
-        &self,
-        hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<bool>, ViewError> {
-        let mut keys = Vec::new();
-        for hash in hashes {
-            let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-            keys.push(value_key);
-        }
-        let test = self.store.contains_keys(keys).await?;
-        #[cfg(with_metrics)]
-        CONTAINS_HASHED_CERTIFICATE_VALUES_COUNTER
-            .with_label_values(&[])
-            .inc();
-        Ok(test)
-    }
-
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
@@ -431,17 +403,17 @@ where
         Ok(test)
     }
 
-    async fn missing_blobs(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, ViewError> {
+    async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut keys = Vec::new();
-        for blob_id in blob_ids.clone() {
-            let key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
+        for blob_id in blob_ids {
+            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
             keys.push(key);
         }
         let results = self.store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
-        for (blob_id, result) in blob_ids.into_iter().zip(results) {
+        for (blob_id, result) in blob_ids.iter().zip(results) {
             if !result {
-                missing_blobs.push(blob_id);
+                missing_blobs.push(*blob_id);
             }
         }
         #[cfg(with_metrics)]

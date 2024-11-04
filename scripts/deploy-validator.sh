@@ -74,10 +74,29 @@ internal_port = 20100
 Grpc = "ClearText"
 [internal_protocol]
 Grpc = "ClearText"
+
 [[shards]]
-host = "shard"
+host = "docker-shard-1"
 port = $PORT
-metrics_host = "shard"
+metrics_host = "docker-shard-1"
+metrics_port = $METRICS_PORT
+
+[[shards]]
+host = "docker-shard-2"
+port = $PORT
+metrics_host = "docker-shard-2"
+metrics_port = $METRICS_PORT
+
+[[shards]]
+host = "docker-shard-3"
+port = $PORT
+metrics_host = "docker-shard-3"
+metrics_port = $METRICS_PORT
+
+[[shards]]
+host = "docker-shard-4"
+port = $PORT
+metrics_host = "docker-shard-4"
 metrics_port = $METRICS_PORT
 EOL
 

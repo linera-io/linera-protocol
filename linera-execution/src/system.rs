@@ -795,18 +795,18 @@ where
                 }
             }
             CreateCommittee { epoch, committee } => {
+                let chain_next_epoch = self.epoch.get().expect("chain is active").try_add_one()?;
                 ensure!(
-                    epoch == self.epoch.get().expect("chain is active").try_add_one()?,
+                    epoch <= chain_next_epoch,
                     SystemExecutionError::InvalidCommitteeCreation
                 );
-                self.committees.get_mut().insert(epoch, committee.clone());
-                self.epoch.set(Some(epoch));
+                if epoch == chain_next_epoch {
+                    self.committees.get_mut().insert(epoch, committee.clone());
+                    self.epoch.set(Some(epoch));
+                }
             }
             RemoveCommittee { epoch } => {
-                ensure!(
-                    self.committees.get_mut().remove(&epoch).is_some(),
-                    SystemExecutionError::InvalidCommitteeRemoval
-                );
+                self.committees.get_mut().remove(&epoch);
             }
             RegisterApplications { applications } => {
                 for application in applications {

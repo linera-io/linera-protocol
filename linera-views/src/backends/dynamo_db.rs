@@ -748,7 +748,10 @@ pub struct DynamoDbKeys {
 }
 
 impl KeyIterable<DynamoDbStoreInternalError> for DynamoDbKeys {
-    type Iterator<'a> = DynamoDbKeyBlockIterator<'a> where Self: 'a;
+    type Iterator<'a>
+        = DynamoDbKeyBlockIterator<'a>
+    where
+        Self: 'a;
 
     fn iterator(&self) -> Self::Iterator<'_> {
         let pos = 0;
@@ -835,7 +838,10 @@ impl Iterator for DynamoDbKeyValueIteratorOwned {
 }
 
 impl KeyValueIterable<DynamoDbStoreInternalError> for DynamoDbKeyValues {
-    type Iterator<'a> = DynamoDbKeyValueIterator<'a> where Self: 'a;
+    type Iterator<'a>
+        = DynamoDbKeyValueIterator<'a>
+    where
+        Self: 'a;
     type IteratorOwned = DynamoDbKeyValueIteratorOwned;
 
     fn iterator(&self) -> Self::Iterator<'_> {

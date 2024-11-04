@@ -5,13 +5,14 @@ use std::{collections::HashMap, fmt};
 
 use futures::future;
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
     ensure,
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate};
 use linera_execution::committee::ValidatorName;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
@@ -44,7 +45,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub(crate) async fn handle_block_proposal(
         &self,
         proposal: Box<BlockProposal>,
@@ -54,7 +55,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub(crate) async fn handle_certificate(
         &self,
         certificate: Certificate,
@@ -69,7 +70,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub(crate) async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
@@ -101,7 +102,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(response.info)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub(crate) async fn try_query_certificates_from(
         &self,
         chain_id: ChainId,
@@ -125,7 +126,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub(crate) async fn download_certificate_for_blob(
         &self,
         blob_id: BlobId,
@@ -142,7 +143,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificate)
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Vec<Blob> {
         future::join_all(
             blob_ids
@@ -155,7 +156,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         .collect::<Vec<_>>()
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[instrument(level = "trace")]
     pub(crate) async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
         match self.node.download_blob_content(blob_id).await {
             Ok(blob) => {
@@ -209,5 +210,32 @@ impl<N: ValidatorNode> RemoteNode<N> {
         found_blobs.extend(self.try_download_blobs(&missing_blobs).await);
 
         Ok(found_blobs)
+    }
+
+    /// Returns the list of certificate hashes on the given chain in the given range of heights.
+    /// Returns an error if the number of hashes does not match the size of the range.
+    #[instrument(level = "trace")]
+    pub(crate) async fn fetch_sent_certificate_hashes(
+        &self,
+        chain_id: ChainId,
+        range: BlockHeightRange,
+    ) -> Result<Vec<CryptoHash>, NodeError> {
+        let query =
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(range.clone());
+        let response = self.handle_chain_info_query(query).await?;
+        let hashes = response.requested_sent_certificate_hashes;
+
+        if range
+            .limit
+            .is_some_and(|limit| hashes.len() as u64 != limit)
+        {
+            warn!(
+                ?range,
+                received_num = hashes.len(),
+                "Validator sent invalid number of certificate hashes."
+            );
+            return Err(NodeError::InvalidChainInfoResponse);
+        }
+        Ok(hashes)
     }
 }

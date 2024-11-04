@@ -8,6 +8,8 @@ use linera_sdk::{{
     Contract, ContractRuntime,
 }};
 
+use {module_name}::Operation;
+
 use self::state::{project_name};
 
 pub struct {project_name}Contract {{
@@ -24,7 +26,7 @@ impl WithContractAbi for {project_name}Contract {{
 impl Contract for {project_name}Contract {{
     type Message = ();
     type Parameters = ();
-    type InstantiationArgument = ();
+    type InstantiationArgument = u64;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {{
         let state = {project_name}::load(runtime.root_view_storage_context())
@@ -33,13 +35,67 @@ impl Contract for {project_name}Contract {{
         {project_name}Contract {{ state, runtime }}
     }}
 
-    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {{}}
+    async fn instantiate(&mut self, argument: Self::InstantiationArgument) {{
+        // validate that the application parameters were configured correctly.
+        self.runtime.application_parameters();
+        self.state.value.set(argument);
+    }}
 
-    async fn execute_operation(&mut self, _operation: Self::Operation) -> Self::Response {{}}
+    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {{
+        match operation {{
+            Operation::Increment {{ value }} => {{
+                self.state.value.set(self.state.value.get() + value);
+            }}
+        }}
+    }}
 
     async fn execute_message(&mut self, _message: Self::Message) {{}}
 
     async fn store(mut self) {{
         self.state.save().await.expect("Failed to save state");
     }}
+}}
+
+#[cfg(test)]
+mod tests {{
+    use {module_name}::Operation;
+    use futures::FutureExt as _;
+
+    use linera_sdk::{{util::BlockingWait, views::View, Contract, ContractRuntime}};
+
+    use super::{{{project_name}, {project_name}Contract}};
+
+    #[test]
+    fn operation() {{
+        let initial_value = 10u64;
+        let mut app = create_and_instantiate_app(initial_value);
+
+        let increment = 10u64;
+
+        let _response = app
+            .execute_operation(Operation::Increment {{ value: increment }})
+            .now_or_never()
+            .expect("Execution of application operation should not await anything");
+
+        assert_eq!(*app.state.value.get(), initial_value + increment);
+    }}
+
+    fn create_and_instantiate_app(initial_value: u64) -> {project_name}Contract {{
+        let runtime = ContractRuntime::new().with_application_parameters(());
+        let mut contract = {project_name}Contract {{
+            state: {project_name}::load(runtime.root_view_storage_context())
+                .blocking_wait()
+                .expect("Failed to read from mock key value store"),
+            runtime,
+        }};
+
+        contract
+            .instantiate(initial_value)
+            .now_or_never()
+            .expect("Initialization of application state should not await anything");
+
+        assert_eq!(*contract.state.value.get(), initial_value);
+
+        contract
+    }} 
 }}

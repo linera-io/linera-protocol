@@ -22,7 +22,7 @@ use linera_core::{
 };
 use linera_execution::{Message, SystemMessage};
 use linera_storage::{Clock as _, Storage};
-use tracing::{debug, error, info, warn, Instrument as _};
+use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::{wallet::Wallet, Error};
 
@@ -117,7 +117,7 @@ impl ChainListener {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
+    #[instrument(level = "trace", skip_all, fields(?chain_id))]
     fn run_with_chain_id<C>(
         chain_id: ChainId,
         context: Arc<Mutex<C>>,
@@ -139,7 +139,7 @@ impl ChainListener {
         );
     }
 
-    #[tracing::instrument(level = "trace", skip_all, fields(?chain_id))]
+    #[instrument(level = "trace", skip_all, fields(?chain_id))]
     async fn run_client_stream<C>(
         chain_id: ChainId,
         context: Arc<Mutex<C>>,

@@ -71,7 +71,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
-linera-rpc = { path = ".", features = ["test"] }
+linera-rpc = { path = ".", default-features = false, features = ["test"] }
 proptest.workspace = true
 serde-reflection.workspace = true
 test-strategy.workspace = true

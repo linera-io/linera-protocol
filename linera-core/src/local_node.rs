@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     future::Future,
     sync::Arc,
 };
@@ -26,14 +25,13 @@ use linera_views::views::ViewError;
 use rand::{prelude::SliceRandom, thread_rng};
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{NodeError, ValidatorNode},
     notifier::Notifier,
     remote_node::RemoteNode,
-    value_cache::ValueCache,
     worker::{WorkerError, WorkerState},
 };
 
@@ -122,7 +120,7 @@ impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -132,7 +130,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
@@ -147,7 +145,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,
@@ -163,7 +161,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
@@ -178,7 +176,7 @@ impl<S> LocalNodeClient<S>
 where
     S: Storage,
 {
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub fn new(state: WorkerState<S>) -> Self {
         Self {
             node: Arc::new(LocalNode { state }),
@@ -190,7 +188,7 @@ impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone,
 {
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn storage_client(&self) -> S {
         self.node.state.storage_client().clone()
     }
@@ -200,7 +198,7 @@ impl<S> LocalNodeClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn stage_block_execution(
         &self,
         block: Block,
@@ -247,18 +245,6 @@ where
             return Err(NodeError::InvalidChainInfoResponse);
         }
 
-        let (found_blobs, not_found_blobs): (HashMap<BlobId, Blob>, Vec<BlobId>) = self
-            .recent_blobs()
-            .await
-            .try_get_many(missing_blob_ids.clone())
-            .await;
-        let found_blob_ids = found_blobs.clone().into_keys().collect::<HashSet<_>>();
-        let mut found_blobs = found_blobs.clone().into_values().collect::<Vec<_>>();
-
-        unique_missing_blob_ids = unique_missing_blob_ids
-            .difference(&found_blob_ids)
-            .copied()
-            .collect::<HashSet<BlobId>>();
         let chain_manager_pending_blobs = self
             .chain_state_view(chain_id)
             .await?
@@ -266,10 +252,11 @@ where
             .get()
             .pending_blobs
             .clone();
-        for blob_id in not_found_blobs {
-            if let Some(blob) = chain_manager_pending_blobs.get(&blob_id).cloned() {
+        let mut found_blobs = Vec::new();
+        for blob_id in missing_blob_ids {
+            if let Some(blob) = chain_manager_pending_blobs.get(blob_id).cloned() {
                 found_blobs.push(blob);
-                unique_missing_blob_ids.remove(&blob_id);
+                unique_missing_blob_ids.remove(blob_id);
             }
         }
 
@@ -284,7 +271,7 @@ where
         Ok(found_blobs)
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn try_process_certificates(
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
@@ -338,7 +325,7 @@ where
     ///
     /// The returned view holds a lock on the chain state, which prevents the local node from
     /// changing the state of that chain.
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
@@ -346,7 +333,7 @@ where
         self.node.state.chain_state_view(chain_id).await
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub(crate) async fn local_chain_info(
         &self,
         chain_id: ChainId,
@@ -355,7 +342,7 @@ where
         Ok(self.handle_chain_info_query(query).await?.info)
     }
 
-    #[tracing::instrument(level = "trace", skip(self, query))]
+    #[instrument(level = "trace", skip(self, query))]
     pub async fn query_application(
         &self,
         chain_id: ChainId,
@@ -365,7 +352,7 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
@@ -379,23 +366,8 @@ where
         Ok(response)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn recent_blob(&self, blob_id: &BlobId) -> Option<Blob> {
-        self.node.state.recent_blob(blob_id).await
-    }
-
-    #[tracing::instrument(level = "trace", skip(self))]
-    async fn recent_blobs(&self) -> Arc<ValueCache<BlobId, Blob>> {
-        self.node.state.recent_blobs()
-    }
-
-    #[tracing::instrument(level = "trace", skip(self, blob), fields(blob_id = ?blob.id()))]
-    pub async fn cache_recent_blob(&self, blob: &Blob) -> bool {
-        self.node.state.cache_recent_blob(Cow::Borrowed(blob)).await
-    }
-
     /// Downloads and processes all certificates up to (excluding) the specified height.
-    #[tracing::instrument(level = "trace", skip(self, validators, notifier))]
+    #[instrument(level = "trace", skip(self, validators, notifier))]
     pub async fn download_certificates(
         &self,
         validators: &[RemoteNode<impl ValidatorNode>],
@@ -432,7 +404,7 @@ where
     }
 
     /// Obtains the certificate containing the specified message.
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub async fn certificate_for(
         &self,
         message_id: &MessageId,
@@ -455,7 +427,7 @@ where
 
     /// Downloads and processes all certificates up to (excluding) the specified height from the
     /// given validator.
-    #[tracing::instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn try_download_certificates_from(
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
@@ -488,7 +460,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(validators))]
+    #[instrument(level = "trace", skip(validators))]
     async fn download_blob(
         validators: &[RemoteNode<impl ValidatorNode>],
         blob_id: BlobId,
@@ -504,7 +476,7 @@ where
         None
     }
 
-    #[tracing::instrument(level = "trace", skip(validators))]
+    #[instrument(level = "trace", skip(validators))]
     pub async fn download_certificate_for_blob_from_validators_futures(
         validators: &[RemoteNode<impl ValidatorNode>],
         blob_id: BlobId,
@@ -525,7 +497,7 @@ where
         futures
     }
 
-    #[tracing::instrument(level = "trace", skip(nodes))]
+    #[instrument(level = "trace", skip(nodes))]
     pub async fn download_blobs(
         blob_ids: &[BlobId],
         nodes: &[RemoteNode<impl ValidatorNode>],
@@ -542,7 +514,7 @@ where
     }
 
     /// Handles any pending local cross-chain requests.
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub async fn retry_pending_cross_chain_requests(
         &self,
         sender_chain: ChainId,

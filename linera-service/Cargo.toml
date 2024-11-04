@@ -13,7 +13,7 @@ version.workspace = true
 
 [features]
 ethereum = []
-default = ["wasmer", "rocksdb"]
+default = ["wasmer", "rocksdb", "storage-service"]
 test = [
     "linera-base/test",
     "linera-views/test",
@@ -133,7 +133,7 @@ linera-ethereum.workspace = true
 linera-execution = { workspace = true, features = ["test"] }
 linera-rpc = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["wasmer", "test"] }
-linera-service = { path = ".", features = ["test"] }
+linera-service = { path = ".", default-features = false, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
 matching-engine.workspace = true

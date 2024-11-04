@@ -6,7 +6,6 @@
 //! This allows manipulating a test microchain.
 
 use std::{
-    borrow::Cow,
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -94,6 +93,20 @@ impl ActiveChain {
             .expect("Failed to execute block.")
     }
 
+    /// Adds a block to this microchain, passing the blobs to be used during certificate handling.
+    ///
+    /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
+    /// to provide the block's contents.
+    pub async fn add_block_with_blobs(
+        &self,
+        block_builder: impl FnOnce(&mut BlockBuilder),
+        blobs: Vec<Blob>,
+    ) -> Certificate {
+        self.try_add_block_with_blobs(block_builder, blobs)
+            .await
+            .expect("Failed to execute block.")
+    }
+
     /// Tries to add a block to this microchain.
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
@@ -101,6 +114,14 @@ impl ActiveChain {
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
+    ) -> anyhow::Result<Certificate> {
+        self.try_add_block_with_blobs(block_builder, vec![]).await
+    }
+
+    async fn try_add_block_with_blobs(
+        &self,
+        block_builder: impl FnOnce(&mut BlockBuilder),
+        blobs: Vec<Blob>,
     ) -> anyhow::Result<Certificate> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
@@ -117,7 +138,7 @@ impl ActiveChain {
 
         self.validator
             .worker()
-            .fully_handle_certificate(certificate.clone(), vec![])
+            .fully_handle_certificate(certificate.clone(), blobs)
             .await
             .expect("Rejected certificate");
 
@@ -178,19 +199,13 @@ impl ActiveChain {
 
         let bytecode_id = BytecodeId::new(contract_blob_hash, service_blob_hash);
 
-        self.validator
-            .worker()
-            .cache_recent_blob(Cow::Borrowed(&contract_blob))
-            .await;
-        self.validator
-            .worker()
-            .cache_recent_blob(Cow::Borrowed(&service_blob))
-            .await;
-
         let certificate = self
-            .add_block(|block| {
-                block.with_system_operation(SystemOperation::PublishBytecode { bytecode_id });
-            })
+            .add_block_with_blobs(
+                |block| {
+                    block.with_system_operation(SystemOperation::PublishBytecode { bytecode_id });
+                },
+                vec![contract_blob, service_blob],
+            )
             .await;
 
         let executed_block = certificate

@@ -413,7 +413,11 @@ where
     K1: KeyIterable<E1>,
     K2: KeyIterable<E2>,
 {
-    type Iterator<'a> = DualStoreKeyIterator<K1::Iterator<'a>, K2::Iterator<'a>> where K1: 'a, K2: 'a;
+    type Iterator<'a>
+        = DualStoreKeyIterator<K1::Iterator<'a>, K2::Iterator<'a>>
+    where
+        K1: 'a,
+        K2: 'a;
 
     fn iterator(&self) -> Self::Iterator<'_> {
         match self {
@@ -447,7 +451,11 @@ where
     K1: KeyValueIterable<E1>,
     K2: KeyValueIterable<E2>,
 {
-    type Iterator<'a> = DualStoreKeyValueIterator<K1::Iterator<'a>, K2::Iterator<'a>> where K1: 'a, K2: 'a;
+    type Iterator<'a>
+        = DualStoreKeyValueIterator<K1::Iterator<'a>, K2::Iterator<'a>>
+    where
+        K1: 'a,
+        K2: 'a;
     type IteratorOwned = DualStoreKeyValueIteratorOwned<K1::IteratorOwned, K2::IteratorOwned>;
 
     fn iterator(&self) -> Self::Iterator<'_> {

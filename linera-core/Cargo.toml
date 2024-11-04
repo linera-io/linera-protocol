@@ -90,7 +90,7 @@ assert_matches.workspace = true
 counter.workspace = true
 criterion.workspace = true
 fungible.workspace = true
-linera-core = { path = ".", features = ["test"] }
+linera-core = { path = ".", default-features = false, features = ["test"] }
 linera-views.workspace = true
 meta-counter.workspace = true
 serde_json.workspace = true

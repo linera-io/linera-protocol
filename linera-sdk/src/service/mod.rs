@@ -18,7 +18,7 @@ pub use self::runtime::ServiceRuntime;
 pub use self::test_runtime::MockServiceRuntime;
 #[doc(hidden)]
 pub use self::wit::export_service;
-use crate::{util::BlockingWait, ServiceLogger};
+use crate::util::BlockingWait as _;
 
 /// Inside tests, use the [`MockServiceRuntime`] instead of the real [`ServiceRuntime`].
 #[cfg(with_testing)]
@@ -41,9 +41,10 @@ macro_rules! service {
         /// Mark the service type to be exported.
         impl $crate::service::wit::exports::linera::app::service_entrypoints::Guest for $service {
             fn handle_query(argument: Vec<u8>) -> Vec<u8> {
-                use $crate::util::BlockingWait;
+                use $crate::util::BlockingWait as _;
+                $crate::ServiceLogger::install();
                 let request = $crate::serde_json::from_slice(&argument)
-                    .expect("Query is invalid and could not be deserialized");
+                    .unwrap_or_else(|_| panic!("Query {argument:?} is invalid and could not be deserialized"));
                 let response = $crate::service::run_async_entrypoint(
                     unsafe { &mut SERVICE },
                     move |service| service.handle_query(request).blocking_wait(),
@@ -69,8 +70,6 @@ pub fn run_async_entrypoint<Service, Output>(
 where
     Service: crate::Service,
 {
-    ServiceLogger::install();
-
     let service =
         service.get_or_insert_with(|| Service::new(ServiceRuntime::new()).blocking_wait());
 

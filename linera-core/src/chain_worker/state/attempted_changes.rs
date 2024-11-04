@@ -28,7 +28,7 @@ use linera_views::{
     views::{RootView, View},
 };
 use tokio::sync::oneshot;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use super::{check_block_epoch, ChainWorkerConfig, ChainWorkerState};
 use crate::{
@@ -204,10 +204,17 @@ where
             .recent_hashed_certificate_values
             .insert(Cow::Borrowed(&certificate.value))
             .await;
-        // Verify that all required bytecode hashed certificate values and blobs are available, and no
-        // unrelated ones provided.
+        let required_blob_ids = executed_block.required_blob_ids();
+        // Verify that no unrelated blobs were provided.
         self.state
-            .check_no_missing_blobs(executed_block.required_blob_ids(), blobs)
+            .check_for_unneeded_blobs(&required_blob_ids, blobs)
+            .await?;
+        let remaining_required_blob_ids = required_blob_ids
+            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .cloned()
+            .collect();
+        self.state
+            .check_no_missing_blobs(&remaining_required_blob_ids)
             .await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
@@ -292,16 +299,17 @@ where
         );
 
         let required_blob_ids = executed_block.required_blob_ids();
-        // Verify that all required bytecode hashed certificate values and blobs are available, and no
-        // unrelated ones provided.
+        // Verify that no unrelated blobs were provided.
         self.state
-            .check_no_missing_blobs(required_blob_ids.clone(), blobs)
+            .check_for_unneeded_blobs(&required_blob_ids, blobs)
             .await?;
-        for blob in blobs {
-            self.state.cache_recent_blob(Cow::Borrowed(blob)).await;
-        }
+        let remaining_required_blob_ids = required_blob_ids
+            .difference(&blobs.iter().map(|blob| blob.id()).collect())
+            .cloned()
+            .collect();
+        let mut blobs_in_block = self.state.get_blobs(&remaining_required_blob_ids).await?;
+        blobs_in_block.extend_from_slice(blobs);
 
-        let blobs_in_block = self.state.get_blobs(required_blob_ids.clone()).await?;
         let certificate_hash = certificate.hash();
 
         self.state
@@ -349,7 +357,7 @@ where
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
         self.state.track_newly_created_chains(executed_block);
         let mut actions = self.state.create_network_actions().await?;
-        tracing::trace!(
+        trace!(
             "Processed confirmed block {} on chain {:.8}",
             block_height,
             block.chain_id
@@ -377,7 +385,7 @@ where
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
     /// `height`.
-    #[tracing::instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
+    #[instrument(level = "trace", skip(self, notify_when_messages_are_delivered))]
     async fn register_delivery_notifier(
         &mut self,
         height: BlockHeight,
