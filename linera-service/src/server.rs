@@ -278,15 +278,12 @@ fn make_server_config<R: CryptoRng>(
     rng: &mut R,
     options: ValidatorOptions,
 ) -> anyhow::Result<persistent::File<ValidatorServerConfig>> {
-    let key = KeyPair::generate_from(rng);
-    let name = ValidatorName(key.public());
     let network = ValidatorPublicNetworkConfig {
         protocol: options.external_protocol,
         host: options.host,
         port: options.port,
     };
     let internal_network = ValidatorInternalNetworkConfig {
-        name,
         protocol: options.internal_protocol,
         shards: options.shards,
         host: options.internal_host,
@@ -294,6 +291,8 @@ fn make_server_config<R: CryptoRng>(
         metrics_host: options.metrics_host,
         metrics_port: options.metrics_port,
     };
+    let key = KeyPair::generate_from(rng);
+    let name = ValidatorName(key.public());
     let validator = ValidatorConfig { network, name };
     Ok(persistent::File::new(
         path,
