@@ -135,6 +135,13 @@ pub trait Storage: Sized {
         blob_state: BlobState,
     ) -> Result<Epoch, ViewError>;
 
+    /// Attempts to write the given blob state. Returns the latest `Epoch` to have used this blob.
+    async fn maybe_write_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+        blob_state: BlobState,
+    ) -> Result<Vec<Epoch>, ViewError>;
+
     /// Writes several hashed certificate values.
     async fn write_hashed_certificate_values(
         &self,

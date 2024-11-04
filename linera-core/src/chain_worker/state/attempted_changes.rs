@@ -5,7 +5,6 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
-use futures::future::try_join_all;
 use linera_base::{
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
@@ -318,16 +317,17 @@ where
             .await?;
 
         // Update the blob state with last used certificate hash.
-        try_join_all(required_blob_ids.into_iter().map(|blob_id| {
-            self.state.storage.maybe_write_blob_state(
-                blob_id,
-                BlobState {
-                    last_used_by: certificate_hash,
-                    epoch: certificate.value().epoch(),
-                },
+        let blob_state = BlobState {
+            last_used_by: certificate_hash,
+            epoch: certificate.value().epoch(),
+        };
+        self.state
+            .storage
+            .maybe_write_blob_states(
+                &required_blob_ids.into_iter().collect::<Vec<_>>(),
+                blob_state,
             )
-        }))
-        .await?;
+            .await?;
 
         // Execute the block and update inboxes.
         self.state.chain.remove_bundles_from_inboxes(block).await?;
