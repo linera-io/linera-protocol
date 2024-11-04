@@ -9,8 +9,6 @@
 
 mod applications;
 pub mod committee;
-#[cfg(web)]
-mod dyn_convert;
 mod execution;
 mod execution_state_actor;
 mod graphql;
@@ -33,7 +31,10 @@ use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
 #[cfg(web)]
-use js_sys::wasm_bindgen::JsValue;
+use {
+    js_sys::wasm_bindgen::JsValue,
+    linera_base::dyn_convert,
+};
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
