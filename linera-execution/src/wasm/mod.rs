@@ -221,16 +221,17 @@ const _: () = {
         type Error = JsValue;
 
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            // XXX: currently `Wasmer` is the only backend enabled on the Web.
-            #[cfg(with_wasmer)]
-            {
-                Ok(Self::Wasmer {
-                    module: value.try_into()?,
-                })
-            }
+            // TODO(#2775): be generic over possible implementations
 
-            #[cfg(not(with_wasmer))]
-            Err(value)
+            cfg_if::cfg_if! {
+                if #[cfg(with_wasmer)] {
+                    Ok(Self::Wasmer {
+                        module: value.try_into()?,
+                    })
+                } else {
+                    Err(value)
+                }
+            }
         }
     }
 
@@ -247,17 +248,17 @@ const _: () = {
         type Error = JsValue;
 
         fn try_from(value: JsValue) -> Result<Self, JsValue> {
-            // XXX: currently `Wasmer` is the only backend enabled on the Web.
-            #[cfg(with_wasmer)]
-            {
-                Ok(Self::Wasmer {
-                    module: value.try_into()?,
-                    engine: Default::default(),
-                })
+            // TODO(#2775): be generic over possible implementations
+            cfg_if::cfg_if! {
+                if #[cfg(with_wasmer)] {
+                    Ok(Self::Wasmer {
+                        module: value.try_into()?,
+                        engine: Default::default(),
+                    })
+                } else {
+                    Err(value)
+                }
             }
-
-            #[cfg(not(with_wasmer))]
-            Err(value)
         }
     }
 
