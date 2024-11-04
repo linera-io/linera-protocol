@@ -577,6 +577,42 @@ where
         Ok(latest_epoch)
     }
 
+    async fn maybe_write_blob_states(
+        &self,
+        blob_ids: &[BlobId],
+        blob_state: BlobState,
+    ) -> Result<Vec<Epoch>, ViewError> {
+        let blob_state_keys = blob_ids
+            .iter()
+            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
+            .collect::<Result<_, _>>()?;
+        let maybe_blob_states = self
+            .store
+            .read_multi_values::<BlobState>(blob_state_keys)
+            .await?;
+        let mut latest_epoches = Vec::new();
+        let mut batch = Batch::new();
+        let mut need_write = false;
+        for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
+            let (should_write, latest_epoch) = match maybe_blob_state {
+                None => (true, blob_state.epoch),
+                Some(current_blob_state) => (
+                    current_blob_state.epoch < blob_state.epoch,
+                    current_blob_state.epoch.max(blob_state.epoch),
+                ),
+            };
+            if should_write {
+                Self::add_blob_state_to_batch(*blob_id, &blob_state, &mut batch)?;
+                need_write = true;
+            }
+            latest_epoches.push(latest_epoch);
+        }
+        if need_write {
+            self.write_batch(batch).await?;
+        }
+        Ok(latest_epoches)
+    }
+
     async fn write_blob_state(
         &self,
         blob_id: BlobId,
