@@ -207,9 +207,7 @@ impl IncomingBundle {
         if v.is_empty() {
             return;
         }
-        for idx in (1..=pos).rev() {
-            v.swap(idx - 1, idx);
-        }
+        v[0..=pos].rotate_right(1);
     }
 }
 
