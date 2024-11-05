@@ -310,7 +310,7 @@ where
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
                         origin: origin.clone(),
-                        bundle: bundle.clone(),
+                        bundle,
                         action,
                     });
                 }

@@ -17,7 +17,7 @@ use linera_base::{
 use linera_execution::{
     committee::{Committee, Epoch, ValidatorName},
     system::OpenChainConfig,
-    Message, MessageKind, Operation, SystemOperation,
+    Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
@@ -179,6 +179,25 @@ impl IncomingBundle {
             let message_id = chain_and_height.to_message_id(posted_message.index);
             (message_id, posted_message)
         })
+    }
+
+    /// Rearranges the messages in the bundle so that the first message is an `OpenChain` message.
+    /// Returns whether the `OpenChain` message was found at all.
+    pub fn put_openchain_at_front(bundles: &mut [IncomingBundle]) -> bool {
+        let Some(index) = bundles.iter().position(|msg| {
+            matches!(
+                msg.bundle.messages.first(),
+                Some(PostedMessage {
+                    message: Message::System(SystemMessage::OpenChain(_)),
+                    ..
+                })
+            )
+        }) else {
+            return false;
+        };
+
+        bundles[0..=index].rotate_right(1);
+        true
     }
 }
 
@@ -515,11 +534,7 @@ impl<'a> LiteCertificate<'a> {
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
-        if !is_strictly_ordered(&signatures) {
-            // Not enforcing no duplicates, check the documentation for is_strictly_ordered
-            // It's the responsibility of the caller to make sure signatures has no duplicates
-            signatures.sort_by_key(|&(validator_name, _)| validator_name)
-        }
+        signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
         let signatures = Cow::Owned(signatures);
         Self {
@@ -551,7 +566,12 @@ impl<'a> LiteCertificate<'a> {
 
     /// Verifies the certificate.
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
-        check_signatures(&self.value, self.round, &self.signatures, committee)?;
+        check_signatures(
+            self.value.value_hash,
+            self.round,
+            &self.signatures,
+            committee,
+        )?;
         Ok(&self.value)
     }
 
@@ -822,6 +842,43 @@ impl PostedMessage {
 impl ExecutedBlock {
     pub fn messages(&self) -> &Vec<Vec<OutgoingMessage>> {
         &self.outcome.messages
+    }
+
+    /// Returns the bundles of messages sent via the given medium to the specified
+    /// recipient. Messages originating from different transactions of the original block
+    /// are kept in separate bundles. If the medium is a channel, does not verify that the
+    /// recipient is actually subscribed to that channel.
+    pub fn message_bundles_for<'a>(
+        &'a self,
+        medium: &'a Medium,
+        recipient: ChainId,
+        certificate_hash: CryptoHash,
+    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
+        let mut index = 0u32;
+        let block_height = self.block.height;
+        let block_timestamp = self.block.timestamp;
+        let block_epoch = self.block.epoch;
+
+        (0u32..)
+            .zip(self.messages())
+            .filter_map(move |(transaction_index, txn_messages)| {
+                let messages = (index..)
+                    .zip(txn_messages)
+                    .filter(|(_, message)| message.has_destination(medium, recipient))
+                    .map(|(idx, message)| message.clone().into_posted(idx))
+                    .collect::<Vec<_>>();
+                index += txn_messages.len() as u32;
+                (!messages.is_empty()).then(|| {
+                    let bundle = MessageBundle {
+                        height: block_height,
+                        timestamp: block_timestamp,
+                        certificate_hash,
+                        transaction_index,
+                        messages,
+                    };
+                    (block_epoch, bundle)
+                })
+            })
     }
 
     /// Returns the `message_index`th outgoing message created by the `operation_index`th operation,
@@ -1141,11 +1198,7 @@ impl Certificate {
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
-        if !is_strictly_ordered(&signatures) {
-            // Not enforcing no duplicates, check the documentation for is_strictly_ordered
-            // It's the responsibility of the caller to make sure signatures has no duplicates
-            signatures.sort_by_key(|&(validator_name, _)| validator_name)
-        }
+        signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
         Self {
             value,
@@ -1177,7 +1230,12 @@ impl Certificate {
         &'a self,
         committee: &Committee,
     ) -> Result<&'a HashedCertificateValue, ChainError> {
-        check_signatures(&self.lite_value(), self.round, &self.signatures, committee)?;
+        check_signatures(
+            self.lite_value().value_hash,
+            self.round,
+            &self.signatures,
+            committee,
+        )?;
         Ok(&self.value)
     }
 
@@ -1224,30 +1282,13 @@ impl Certificate {
         medium: &'a Medium,
         recipient: ChainId,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
-        let mut index = 0u32;
-        let maybe_executed_block = self.value().executed_block().into_iter();
-        maybe_executed_block.flat_map(move |executed_block| {
-            (0u32..).zip(executed_block.messages()).filter_map(
-                move |(transaction_index, txn_messages)| {
-                    let messages = (index..)
-                        .zip(txn_messages)
-                        .filter(|(_, message)| message.has_destination(medium, recipient))
-                        .map(|(idx, message)| message.clone().into_posted(idx))
-                        .collect::<Vec<_>>();
-                    index += txn_messages.len() as u32;
-                    (!messages.is_empty()).then(|| {
-                        let bundle = MessageBundle {
-                            height: executed_block.block.height,
-                            timestamp: executed_block.block.timestamp,
-                            certificate_hash: self.hash(),
-                            transaction_index,
-                            messages,
-                        };
-                        (executed_block.block.epoch, bundle)
-                    })
-                },
-            )
-        })
+        let certificate_hash = self.hash();
+        self.value()
+            .executed_block()
+            .into_iter()
+            .flat_map(move |executed_block| {
+                executed_block.message_bundles_for(medium, recipient, certificate_hash)
+            })
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
@@ -1267,7 +1308,7 @@ impl Certificate {
 
 /// Verifies certificate signatures.
 fn check_signatures(
-    value: &LiteValue,
+    value_hash: CryptoHash,
     round: Round,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
@@ -1292,7 +1333,7 @@ fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = ValueHashAndRound(value.value_hash, round);
+    let hash_and_round = ValueHashAndRound(value_hash, round);
     Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }
