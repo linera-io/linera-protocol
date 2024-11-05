@@ -177,7 +177,7 @@ impl ChainListener {
                         continue;
                     }
                     debug!("Processing inbox");
-                    match client.process_inbox_without_prepare().await {
+                    match client.process_inbox().await {
                         Err(ChainClientError::CannotFindKeyForChain(_)) => {}
                         Err(error) => warn!(%error, "Failed to process inbox."),
                         Ok((certs, None)) => {

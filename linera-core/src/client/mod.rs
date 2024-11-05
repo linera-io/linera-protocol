@@ -89,19 +89,18 @@ mod metrics {
     use linera_base::prometheus_util;
     use prometheus::HistogramVec;
 
-    pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
-            prometheus_util::register_histogram_vec(
-                "process_inbox_latency",
-                "process_inbox latency",
-                &[],
-                Some(vec![
-                    0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                    25.0, 50.0, 100.0, 250.0, 500.0,
-                ]),
-            )
-            .expect("Histogram creation should not fail")
-        });
+    pub static PROCESS_INBOX_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "process_inbox_latency",
+            "process_inbox latency",
+            &[],
+            Some(vec![
+                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                25.0, 50.0, 100.0, 250.0, 500.0,
+            ]),
+        )
+        .expect("Histogram creation should not fail")
+    });
 
     pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         prometheus_util::register_histogram_vec(
@@ -1968,16 +1967,6 @@ where
         &self,
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.prepare_chain().await?;
-        self.execute_without_prepare(operations).await
-    }
-
-    /// Executes a list of operations, without calling `prepare_chain`.
-    #[instrument(level = "trace", skip(operations))]
-    pub async fn execute_without_prepare(
-        &self,
-        operations: Vec<Operation>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         loop {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone())).await? {
@@ -2019,7 +2008,7 @@ where
 
         let mutex = self.state().client_mutex();
         let _guard = mutex.lock_owned().await;
-        match self.process_pending_block_without_prepare().await? {
+        match self.process_pending_block().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
@@ -2030,7 +2019,7 @@ where
         }
         let incoming_bundles = self.pending_message_bundles().await?;
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
-        match self.process_pending_block_without_prepare().await? {
+        match self.process_pending_block().await? {
             ClientOutcome::Committed(Some(certificate))
                 if certificate.value().block() == confirmed_value.inner().block() =>
             {
@@ -2049,7 +2038,7 @@ where
         }
     }
 
-    /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
+    /// Sets the pending block, so that next time `process_pending_block` is
     /// called, it will be proposed to the validators.
     #[instrument(level = "trace", skip(incoming_bundles, operations))]
     async fn set_pending_block(
@@ -2356,15 +2345,6 @@ where
     pub async fn process_pending_block(
         &self,
     ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
-        self.synchronize_from_validators().await?;
-        self.process_pending_block_without_prepare().await
-    }
-
-    /// Processes the last pending block. Assumes that the local chain is up to date.
-    #[instrument(level = "trace")]
-    async fn process_pending_block_without_prepare(
-        &self,
-    ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
         let identity = self.identity().await?;
         let mut info = self.chain_info_with_manager_values().await?;
         // If the current round has timed out, we request a timeout certificate and retry in
@@ -2522,7 +2502,13 @@ where
         new_weight: u64,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         loop {
-            let ownership = self.prepare_chain().await?.manager.ownership;
+            let ownership = self
+                .client
+                .local_node
+                .local_chain_info(self.chain_id)
+                .await?
+                .manager
+                .ownership;
             ensure!(
                 ownership.is_active(),
                 ChainError::InactiveChain(self.chain_id)
@@ -2593,7 +2579,6 @@ where
         application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ClientOutcome<(MessageId, Certificate)>, ChainClientError> {
-        self.prepare_chain().await?;
         loop {
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -2782,7 +2767,6 @@ where
         committee: Committee,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         loop {
-            self.prepare_chain().await?;
             let epoch = self.epoch().await?;
             match self
                 .execute_block(vec![Operation::System(SystemOperation::Admin(
@@ -2813,21 +2797,8 @@ where
     pub async fn process_inbox(
         &self,
     ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
-        self.prepare_chain().await?;
-        self.process_inbox_without_prepare().await
-    }
-
-    /// Creates blocks without any operations to process all incoming messages. This may require
-    /// several blocks.
-    ///
-    /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
-    /// is returned, too.
-    #[instrument(level = "trace")]
-    pub async fn process_inbox_without_prepare(
-        &self,
-    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
         #[cfg(with_metrics)]
-        let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
+        let _latency = metrics::PROCESS_INBOX_LATENCY.measure_latency();
 
         let mut certificates = Vec::new();
         loop {
@@ -2878,7 +2849,6 @@ where
     /// shortly after such command is issued.
     #[instrument(level = "trace")]
     pub async fn finalize_committee(&self) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         let operations = committees
@@ -2893,7 +2863,7 @@ where
                 }
             })
             .collect();
-        self.execute_without_prepare(operations).await
+        self.execute_operations(operations).await
     }
 
     /// Sends money to a chain.

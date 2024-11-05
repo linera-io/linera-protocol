@@ -354,7 +354,7 @@ where
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
             chain_client.synchronize_from_validators().await?;
-            let result = chain_client.process_inbox_without_prepare().await;
+            let result = chain_client.process_inbox().await;
             self.update_wallet_from_client(chain_client).await?;
             if result.is_err() {
                 self.save_wallet().await?;
@@ -404,6 +404,7 @@ where
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
+        client.synchronize_from_validators().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_and_save_wallet(client).await?;
@@ -622,7 +623,7 @@ where
                 .take(num_new_chains)
                 .collect();
             let certificate = chain_client
-                .execute_without_prepare(operations)
+                .execute_operations(operations)
                 .await?
                 .expect("should execute block with OpenChain operations");
             let executed_block = certificate
@@ -694,7 +695,7 @@ where
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
-                .execute_without_prepare(operations.to_vec())
+                .execute_operations(operations.to_vec())
                 .await?
                 .expect("should execute block with OpenChain operations");
         }
