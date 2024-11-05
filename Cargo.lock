@@ -4238,6 +4238,7 @@ dependencies = [
  "derive_more 1.0.0",
  "dyn-clone",
  "futures",
+ "js-sys",
  "linera-base",
  "linera-execution",
  "linera-views",
@@ -4692,9 +4693,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer"
-version = "4.4.0-linera.5"
+version = "4.4.0-linera.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69638eb27ddb5517313d539603f09153d62eff05b5bb02c3e7b7e01d6892d3f6"
+checksum = "a0878cce565a3c8e3b7c786a33c6f682f35fea56c816aef2014d67537a9faad6"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -4723,9 +4724,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler"
-version = "4.4.0-linera.5"
+version = "4.4.0-linera.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44e8668359b8c051635c0040687faf0b6005af4611543a6bb6d3bef5957de6c3"
+checksum = "149ce5d54f0353047349ccf1ac68b6571e8fda10c2082720fba4c83fc3277cdb"
 dependencies = [
  "backtrace",
  "bytes",
@@ -4741,6 +4742,8 @@ dependencies = [
  "region",
  "rkyv",
  "self_cell",
+ "serde",
+ "serde_bytes",
  "shared-buffer",
  "smallvec",
  "thiserror",
@@ -4752,9 +4755,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
-version = "4.4.0-linera.5"
+version = "4.4.0-linera.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6904c07f0399879c18c3c548d59fff8e7a5c46e6b6e3aec2511ec37beda0c93b"
+checksum = "693854eb826bb380d8ef1fe168998bdbba66c707c4990ebd27e95d99821c617f"
 dependencies = [
  "cranelift-codegen 0.91.1",
  "cranelift-entity 0.91.1",
@@ -4771,9 +4774,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
-version = "4.4.0-linera.5"
+version = "4.4.0-linera.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b740b428562504bc5c306240d0859657a2b266996818de7e24058453a057f31"
+checksum = "eeea457da007afc2adbb106ea6025d2563cef774f6cd26e9e2f1cd348c423f1a"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -4790,9 +4793,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-vm"
-version = "4.4.0-linera.5"
+version = "4.4.0-linera.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77de5db5a977bcca136e2824c7eb97022d5d5177c25ce41d180b26921f0a268f"
+checksum = "4c74dd9994ec47851c5166543ab4bb93457670024663192cb5753e01548acc15"
 dependencies = [
  "backtrace",
  "cc",
@@ -4811,6 +4814,7 @@ dependencies = [
  "more-asserts",
  "region",
  "scopeguard",
+ "serde",
  "thiserror",
  "wasmer-types",
  "windows-sys 0.59.0",
@@ -8309,6 +8313,8 @@ dependencies = [
  "indexmap 1.9.3",
  "more-asserts",
  "rkyv",
+ "serde",
+ "serde_bytes",
  "sha2",
  "target-lexicon",
  "thiserror",

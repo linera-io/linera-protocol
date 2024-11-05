@@ -18,6 +18,7 @@ metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []
 wasmer = [
     "dep:wasmer",
+    "wasmer/enable-serde",
     "linera-witty/wasmer",
     "wasm-encoder",
     "wasm-instrument",
@@ -29,7 +30,7 @@ wasmtime = [
     "wasm-encoder",
     "wasmparser",
 ]
-web = ["linera-base/web", "linera-views/web"]
+web = ["linera-base/web", "linera-views/web", "js-sys"]
 
 [dependencies]
 anyhow.workspace = true
@@ -43,6 +44,7 @@ dashmap.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 dyn-clone.workspace = true
 futures.workspace = true
+js-sys = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-views.workspace = true
 linera-views-derive.workspace = true

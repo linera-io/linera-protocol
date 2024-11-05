@@ -16,6 +16,7 @@ pub mod abi;
 pub mod command;
 pub mod crypto;
 pub mod data_types;
+pub mod dyn_convert;
 mod graphql;
 pub mod identifiers;
 mod limited_writer;

@@ -4,6 +4,7 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
+#![cfg_attr(web, feature(trait_upcasting))]
 #![deny(clippy::large_futures)]
 
 mod applications;
@@ -21,7 +22,7 @@ mod transaction_tracker;
 mod util;
 mod wasm;
 
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{any::Any, fmt, str::FromStr, sync::Arc};
 
 use async_graphql::SimpleObject;
 use async_trait::async_trait;
@@ -29,6 +30,8 @@ use committee::Epoch;
 use custom_debug_derive::Debug;
 use dashmap::DashMap;
 use derive_more::Display;
+#[cfg(web)]
+use js_sys::wasm_bindgen::JsValue;
 use linera_base::{
     abi::Abi,
     crypto::CryptoHash,
@@ -42,6 +45,7 @@ use linera_base::{
         GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
+    task,
 };
 use linera_views::{batch::Batch, views::ViewError};
 use serde::{Deserialize, Serialize};
@@ -81,10 +85,12 @@ const MAX_EVENT_KEY_LEN: usize = 64;
 const MAX_STREAM_NAME_LEN: usize = 64;
 
 /// An implementation of [`UserContractModule`].
-pub type UserContractCode = Box<dyn UserContractModule + Send + Sync>;
+#[derive(Clone)]
+pub struct UserContractCode(Box<dyn UserContractModule>);
 
 /// An implementation of [`UserServiceModule`].
-pub type UserServiceCode = Box<dyn UserServiceModule + Send + Sync>;
+#[derive(Clone)]
+pub struct UserServiceCode(Box<dyn UserServiceModule>);
 
 /// An implementation of [`UserContract`].
 pub type UserContractInstance = Box<dyn UserContract>;
@@ -93,7 +99,7 @@ pub type UserContractInstance = Box<dyn UserContract>;
 pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone {
+pub trait UserContractModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -102,14 +108,14 @@ pub trait UserContractModule: dyn_clone::DynClone {
 
 impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode {
     fn from(module: T) -> Self {
-        Box::new(module)
+        Self(Box::new(module))
     }
 }
 
 dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone {
+pub trait UserServiceModule: dyn_clone::DynClone + Any + task::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -118,11 +124,67 @@ pub trait UserServiceModule: dyn_clone::DynClone {
 
 impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
     fn from(module: T) -> Self {
-        Box::new(module)
+        Self(Box::new(module))
     }
 }
 
 dyn_clone::clone_trait_object!(UserServiceModule);
+
+impl UserServiceCode {
+    fn instantiate(
+        &self,
+        runtime: ServiceSyncRuntimeHandle,
+    ) -> Result<UserServiceInstance, ExecutionError> {
+        self.0.instantiate(runtime)
+    }
+}
+
+impl UserContractCode {
+    fn instantiate(
+        &self,
+        runtime: ContractSyncRuntimeHandle,
+    ) -> Result<UserContractInstance, ExecutionError> {
+        self.0.instantiate(runtime)
+    }
+}
+
+#[cfg(web)]
+const _: () = {
+    // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
+    // implementor
+
+    impl From<UserContractCode> for JsValue {
+        fn from(code: UserContractCode) -> JsValue {
+            let module: WasmContractModule = *(code.0 as Box<dyn Any>)
+                .downcast()
+                .expect("we only support Wasm modules on the Web for now");
+            module.into()
+        }
+    }
+
+    impl From<UserServiceCode> for JsValue {
+        fn from(code: UserServiceCode) -> JsValue {
+            let module: WasmServiceModule = *(code.0 as Box<dyn Any>)
+                .downcast()
+                .expect("we only support Wasm modules on the Web for now");
+            module.into()
+        }
+    }
+
+    impl TryFrom<JsValue> for UserContractCode {
+        type Error = JsValue;
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            WasmContractModule::try_from(value).map(Into::into)
+        }
+    }
+
+    impl TryFrom<JsValue> for UserServiceCode {
+        type Error = JsValue;
+        fn try_from(value: JsValue) -> Result<Self, JsValue> {
+            WasmServiceModule::try_from(value).map(Into::into)
+        }
+    }
+};
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
@@ -909,7 +971,8 @@ impl TestExecutionRuntimeContext {
 }
 
 #[cfg(with_testing)]
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId {
         self.chain_id
