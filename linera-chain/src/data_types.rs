@@ -534,8 +534,6 @@ impl<'a> LiteCertificate<'a> {
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
-        // Not enforcing no duplicates, check the documentation for is_strictly_ordered
-        // It's the responsibility of the caller to make sure signatures has no duplicates
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
         let signatures = Cow::Owned(signatures);
@@ -1200,8 +1198,6 @@ impl Certificate {
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
-        // Not enforcing no duplicates, check the documentation for is_strictly_ordered
-        // It's the responsibility of the caller to make sure signatures has no duplicates
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
         Self {

@@ -359,7 +359,7 @@ impl MessagePolicy {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     fn must_handle(&self, bundle: &mut IncomingBundle) -> bool {
         if self.is_reject() {
             if bundle.bundle.is_skippable() {
@@ -887,7 +887,7 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        let mut info = self.sync_until(self.next_block_height()).await?;
+        let mut info = self.synchronize_until(self.next_block_height()).await?;
 
         if self.state().has_other_owners(&info.manager.ownership) {
             // For chains with any owner other than ourselves, we could be missing recent
@@ -903,7 +903,7 @@ where
     // Verifies that our local storage contains enough history compared to the
     // expected block height. Otherwise, downloads the missing history from the
     // network.
-    async fn sync_until(
+    async fn synchronize_until(
         &self,
         next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
@@ -1739,7 +1739,7 @@ where
     /// Attempts to execute the block locally. If any incoming message execution fails, that
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
-    // TODO[#2806]: Measure how failing messages affect the execution times.
+    // TODO(#2806): Measure how failing messages affect the execution times.
     #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
