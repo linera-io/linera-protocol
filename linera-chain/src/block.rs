@@ -4,9 +4,10 @@
 
 use std::fmt::Debug;
 
-use crate::data_types::{ExecutedBlock, HashedCertificateValue};
 use linera_base::crypto::BcsHashable;
 use serde::{Deserialize, Serialize};
+
+use crate::data_types::{ExecutedBlock, HashedCertificateValue};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub struct ValidatedBlock {

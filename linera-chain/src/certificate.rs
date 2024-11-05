@@ -2,25 +2,30 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Cow;
-use std::fmt::{Debug, Formatter};
-
-use crate::data_types::{
-    Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue, LiteCertificate,
-    LiteValue,
+use std::{
+    borrow::Cow,
+    fmt::{Debug, Formatter},
 };
-use linera_base::crypto::BcsHashable;
+
 use linera_base::{
-    crypto::{CryptoHash, Signature},
+    crypto::{BcsHashable, CryptoHash, Signature},
     data_types::Round,
     identifiers::BlobId,
 };
 use linera_execution::committee::{Committee, ValidatorName};
-use serde::ser::{Serialize, SerializeStruct, Serializer};
-use serde::{Deserialize, Deserializer};
+use serde::{
+    ser::{Serialize, SerializeStruct, Serializer},
+    Deserialize, Deserializer,
+};
 
-use crate::block::{ConfirmedBlock, ValidatedBlock};
-use crate::ChainError;
+use crate::{
+    block::{ConfirmedBlock, ValidatedBlock},
+    data_types::{
+        Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue, LiteCertificate,
+        LiteValue,
+    },
+    ChainError,
+};
 
 pub type ValidatedBlockCertificate = CertificateT<ValidatedBlock>;
 
@@ -346,7 +351,7 @@ impl ConfirmedBlockCertificate {
             ..
         } = validated;
         // To keep the signature checks passing, we need to obtain a hash over the old type.
-        let old_confirmed =  HashedCertificateValue::new_confirmed(validated_block.inner().clone());
+        let old_confirmed = HashedCertificateValue::new_confirmed(validated_block.inner().clone());
         let confirmed = ConfirmedBlock::from_validated(validated_block);
         let hashed = Hashed::unsafe_new(confirmed, old_confirmed.hash());
 

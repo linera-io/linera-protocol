@@ -930,7 +930,8 @@ where
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<Certificate, ChainClientError> {
-        let hashed_value = HashedCertificateValue::new_confirmed(certificate.executed_block().clone());
+        let hashed_value =
+            HashedCertificateValue::new_confirmed(certificate.executed_block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: certificate.into(),
             delivery: self.options.cross_chain_message_delivery,

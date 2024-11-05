@@ -9,8 +9,7 @@ mod block;
 mod certificate;
 
 pub mod types {
-    pub use super::block::*;
-    pub use super::certificate::*;
+    pub use super::{block::*, certificate::*};
 }
 
 mod chain;
