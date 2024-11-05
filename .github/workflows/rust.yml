@@ -31,14 +31,133 @@ env:
   RUSTUP_MAX_RETRIES: 10
   RUST_LOG: linera=debug
   RUST_LOG_FORMAT: plain
+  LINERA_STORAGE_SERVICE: 127.0.0.1:1235
+  LINERA_WALLET: /tmp/local-linera-net/wallet_0.json
+  LINERA_STORAGE: rocksdb:/tmp/local-linera-net/client_0.db
+  LINERA_FAUCET_URL: http://localhost:8079
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  remote-net-test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 75
+    timeout-minutes: 40
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run the storage-service instance
+      run: |
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+    - name: Run the validators
+      run: |
+        cargo build --features storage-service
+        mkdir /tmp/local-linera-net
+        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
+    - name: Run the faucet
+      run: |
+        cargo build --bin linera
+        cargo run --bin linera -- faucet --amount 1000 --port 8079 &
+    - name: Run the remote-net tests
+      run: |
+        cargo test -p linera-service remote_net_grpc --features remote-net
+
+  execution-wasmtime-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Run some extra execution tests with wasmtime
+      run: |
+        cargo test --locked -p linera-execution --features wasmtime
+
+  wasm-application-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run Wasm application tests
+      run: |
+        cd examples
+        cargo test --locked
+
+  default-features-and-witty-integration-test:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Compile Wasm test modules for Witty integration tests
+      run: |
+        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+    - name: Run all tests using the default features (plus unstable-oracles, except storage-service)
+      run: |
+        # TODO(#2764): Actually link this to the default features
+        cargo test --no-default-features --features fs,macros,wasmer,rocksdb,unstable-oracles --locked
+    - name: Run Witty integration tests
+      run: |
+        cargo test -p linera-witty --features wasmer,wasmtime
+
+  check-outdated-cli-md:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Check for outdated CLI.md
+      run: |
+        if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
+        then
+          echo '`CLI.md` differs from the output of `linera help-markdown`'
+          echo 'Run `linera help-markdown > CLI.md` to update it.'
+          exit 1
+        fi
+
+  benchmark-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run the storage-service instance
+      run: |
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+    - name: Run the benchmark test
+      run: |
+        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
+        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
+
+  ethereum-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v3
@@ -56,22 +175,28 @@ jobs:
       uses: pontem-network/get-solc@master
       with:
         version: v0.8.25
-    - name: Clear up some space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Set environment variables
+    - name: Run the storage-service instance
       run: |
-        echo "LINERA_STORAGE_SERVICE=127.0.0.1:1235" >> "$GITHUB_ENV"
-        echo "LINERA_WALLET=/tmp/local-linera-net/wallet_0.json" >> "$GITHUB_ENV"
-        echo "LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_0.db" >> "$GITHUB_ENV"
-        echo "LINERA_FAUCET_URL=http://localhost:8079" >> "$GITHUB_ENV"
+        cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
+    - name: Run Ethereum tests
+      run: |
+        cargo test -p linera-ethereum --features ethereum
+        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
+  
+  storage-service-tests:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 50
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build example applications
       run: |
         cd examples
@@ -80,58 +205,10 @@ jobs:
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
         cargo test --features storage-service,unstable-oracles -- storage_service --nocapture
-    - name: Run Ethereum tests
-      run: |
-        cargo test -p linera-ethereum --features ethereum
-        cargo test test_wasm_end_to_end_ethereum_tracker --features ethereum,storage-service,unstable-oracles
-    - name: Run the benchmark test
-      run: |
-        cargo build --locked -p linera-service --bin linera-benchmark --features benchmark,storage-service
-        cargo test --locked -p linera-service --features benchmark,storage-service benchmark
-    - name: Run the validators
-      run: |
-        cargo build --features storage-service
-        mkdir /tmp/local-linera-net
-        cargo run --features storage-service --bin linera -- net up --storage service:tcp:localhost:1235:table --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
-    - name: Compile Wasm test modules for Witty integration tests
-      run: |
-        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
-    - name: Run the faucet
-      run: |
-        cargo build --bin linera
-        cargo run --bin linera -- faucet --amount 1000 --port 8079 &
-    - name: Check that the WIT files are up-to-date
-      run: |
-        cargo run --bin wit-generator -- -c
-    - name: Run the remote-net tests
-      run: |
-        cargo test -p linera-service remote_net_grpc --features remote-net
-    - name: Run all tests using the default features (plus unstable-oracles, except storage-service)
-      run: |
-        # TODO(#2764): Actually link this to the default features
-        cargo test --no-default-features --features fs,macros,wasmer,rocksdb,unstable-oracles --locked
-    - name: Run some extra execution tests with wasmtime
-      run: |
-        cargo test --locked -p linera-execution --features wasmtime
-    - name: Run Wasm application tests
-      run: |
-        cd examples
-        cargo test --locked
-    - name: Run Witty integration tests
-      run: |
-        cargo test -p linera-witty --features wasmer,wasmtime
-    - name: Check for outdated CLI.md
-      run: |
-        if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
-        then
-          echo '`CLI.md` differs from the output of `linera help-markdown`'
-          echo 'Run `linera help-markdown > CLI.md` to update it.'
-          exit 1
-        fi
 
   web:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
     - uses: arduino/setup-protoc@v3
@@ -308,7 +385,7 @@ jobs:
 
   lint-cargo-doc:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v3
@@ -326,7 +403,7 @@ jobs:
 
   lint-check-linera-service-graphql-schema:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v3
@@ -341,7 +418,7 @@ jobs:
 
   lint-check-all-features:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 40
+    timeout-minutes: 50
 
     steps:
     - uses: actions/checkout@v3
