@@ -330,7 +330,7 @@ where
     }
 
     /// Returns an error if unrelated blobs were provided.
-    async fn check_for_unneeded_blobs(
+    fn check_for_unneeded_blobs(
         &self,
         required_blob_ids: &HashSet<BlobId>,
         blobs: &[Blob],
@@ -347,9 +347,12 @@ where
         Ok(())
     }
 
-    /// Returns the blobs requested by their `blob_ids` that are either in the chain manager's
-    /// pending blobs or in storage.
-    async fn get_blobs(&self, blob_ids: &HashSet<BlobId>) -> Result<Vec<Blob>, WorkerError> {
+    /// Returns the blobs requested by their `blob_ids` that are in the chain manager's pending blobs
+    /// and checks that they are otherwise in storage.
+    async fn get_blobs_and_checks_storage(
+        &self,
+        blob_ids: &HashSet<BlobId>,
+    ) -> Result<Vec<Blob>, WorkerError> {
         let pending_blobs = &self.chain.manager.get().pending_blobs;
 
         let mut found_blobs = Vec::new();
@@ -361,14 +364,7 @@ where
                 missing_blob_ids.push(*blob_id);
             }
         }
-        let blobs = self.storage.read_blobs(&missing_blob_ids).await?;
-        let mut not_found_blob_ids = Vec::new();
-        for (blob, blob_id) in blobs.into_iter().zip(missing_blob_ids) {
-            match blob {
-                None => not_found_blob_ids.push(blob_id),
-                Some(blob) => found_blobs.push(blob),
-            }
-        }
+        let not_found_blob_ids = self.storage.missing_blobs(&missing_blob_ids).await?;
 
         if not_found_blob_ids.is_empty() {
             Ok(found_blobs)

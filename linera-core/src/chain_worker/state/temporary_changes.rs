@@ -41,7 +41,7 @@ impl<'state, StorageClient> ChainWorkerStateWithTemporaryChanges<'state, Storage
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    /// Creates a new [`ChainWorkerStateWithAttemptedChanges`] instance to temporarily change the
+    /// Creates a new [`ChainWorkerStateWithTemporaryChanges`] instance to temporarily change the
     /// `state`.
     pub(super) async fn new(state: &'state mut ChainWorkerState<StorageClient>) -> Self {
         assert!(
@@ -207,8 +207,7 @@ where
         // Verify that no unrelated blobs were provided.
         let published_blob_ids = block.published_blob_ids();
         self.0
-            .check_for_unneeded_blobs(&published_blob_ids, blobs)
-            .await?;
+            .check_for_unneeded_blobs(&published_blob_ids, blobs)?;
         let missing_published_blob_ids = published_blob_ids
             .difference(&blobs.iter().map(|blob| blob.id()).collect())
             .cloned()

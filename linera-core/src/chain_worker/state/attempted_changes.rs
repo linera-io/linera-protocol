@@ -206,8 +206,7 @@ where
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
         self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)
-            .await?;
+            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
         let remaining_required_blob_ids = required_blob_ids
             .difference(&blobs.iter().map(|blob| blob.id()).collect())
             .cloned()
@@ -300,13 +299,15 @@ where
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
         self.state
-            .check_for_unneeded_blobs(&required_blob_ids, blobs)
-            .await?;
+            .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
         let remaining_required_blob_ids = required_blob_ids
             .difference(&blobs.iter().map(|blob| blob.id()).collect())
             .cloned()
             .collect();
-        let mut blobs_in_block = self.state.get_blobs(&remaining_required_blob_ids).await?;
+        let mut blobs_in_block = self
+            .state
+            .get_blobs_and_checks_storage(&remaining_required_blob_ids)
+            .await?;
         blobs_in_block.extend_from_slice(blobs);
 
         let certificate_hash = certificate.hash();
