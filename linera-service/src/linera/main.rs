@@ -362,7 +362,11 @@ impl Runnable for Job {
                 );
             }
 
-            QueryValidator { address, chain_id } => {
+            QueryValidator {
+                address,
+                chain_id,
+                name,
+            } => {
                 use linera_core::node::ValidatorNode as _;
 
                 let node = context.make_node_provider().make_node(&address)?;
@@ -406,6 +410,13 @@ impl Runnable for Job {
                             response.info.next_block_height,
                             response.info.epoch,
                         );
+                        if let Some(name) = name {
+                            if response.check(&name).is_ok() {
+                                info!("Signature for public key {name} is OK.");
+                            } else {
+                                warn!("Signature for public key {name} is NOT OK.");
+                            }
+                        }
                     }
                     Err(e) => {
                         warn!("Failed to get chain info for validator {address} and chain {chain_id}:\n{e}");
@@ -452,6 +463,11 @@ impl Runnable for Job {
                                 response.info.next_block_height,
                                 response.info.epoch,
                             );
+                            if response.check(name).is_ok() {
+                                info!("Signature for public key {name} is OK.");
+                            } else {
+                                warn!("Signature for public key {name} is NOT OK.");
+                            }
                         }
                         Err(e) => {
                             warn!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");

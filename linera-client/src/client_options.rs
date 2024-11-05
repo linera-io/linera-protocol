@@ -432,6 +432,10 @@ pub enum ClientCommand {
         address: String,
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
+        /// The public key of the validator. If given, the signature of the chain query
+        /// info will be checked.
+        #[arg(long)]
+        name: Option<ValidatorName>,
     },
 
     /// Show the current set of validators for a chain. Also print some information about
