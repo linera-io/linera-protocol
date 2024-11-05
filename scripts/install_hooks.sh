@@ -10,7 +10,9 @@ if cat <<EOF > $ROOT_DIR/.git/hooks/pre-push
 
 cargo clippy --all-targets || { echo "Error: clippy did not pass - aborting push. Please run 'cargo clippy --all-targets'." ; exit 1 ; }
 
-cargo +nightly fmt -- --check --config unstable_features=true --config imports_granularity=Crate || { echo "Error: format check failed - aborting push. Please run 'cargo +nightly fmt'." ; exit 1 ; }
+trap "ln -sf toolchains/stable/rust-toolchain.toml" EXIT
+ln -sf toolchains/nightly/rust-toolchain.toml
+cargo fmt -- --check --config unstable_features=true --config imports_granularity=Crate || { echo "Error: format check failed - aborting push. Please run 'cargo +nightly fmt'." ; exit 1 ; }
 
 cargo machete || { echo "Error: dependency check failed - aborting push." ; exit 1 ; }
 EOF
