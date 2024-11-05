@@ -159,7 +159,7 @@ mod metrics {
 /// The number of chain workers that can be in memory at the same time. More workers improve
 /// perfomance whenever the client interacts with multiple chains at the same time, but also
 /// increases memory usage.
-const CHAIN_WORKER_LIMIT: usize = 20;
+pub(crate) const CHAIN_WORKER_LIMIT: usize = 20;
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>

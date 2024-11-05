@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{btree_map, BTreeMap, HashMap, HashSet},
     fmt,
     hash::Hash,
     mem,
     ops::Range,
 };
 
-use futures::{stream, Future, StreamExt};
+use futures::{stream, stream::TryStreamExt, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
@@ -24,6 +24,7 @@ use thiserror::Error;
 use tracing::{error, warn};
 
 use crate::{
+    client::CHAIN_WORKER_LIMIT,
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -65,6 +66,7 @@ impl CommunicateAction {
     }
 }
 
+#[derive(Clone)]
 pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
@@ -291,16 +293,39 @@ where
                     let certificates = local_storage
                         .read_certificates(blob_states.into_iter().map(|x| x.last_used_by))
                         .await?;
+                    let mut chain_heights = BTreeMap::new();
                     for certificate in certificates {
                         let block_chain_id = certificate.value().chain_id();
                         let block_height = certificate.value().height();
-                        self.send_chain_information(
-                            block_chain_id,
-                            block_height.try_add_one()?,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
+                        match chain_heights.entry(block_chain_id) {
+                            btree_map::Entry::Occupied(entry) => {
+                                let entry = entry.into_mut();
+                                if block_height > *entry {
+                                    *entry = block_height;
+                                }
+                            }
+                            btree_map::Entry::Vacant(entry) => {
+                                entry.insert(block_height);
+                            }
+                        }
                     }
+                    let chain_worker_limit = CHAIN_WORKER_LIMIT;
+                    let stream = stream::iter(chain_heights)
+                        .map(|(chain_id, height)| {
+                            let mut client = self.clone();
+                            async move {
+                                let height = height.try_add_one()?;
+                                client
+                                    .send_chain_information(
+                                        chain_id,
+                                        height,
+                                        CrossChainMessageDelivery::NonBlocking,
+                                    )
+                                    .await
+                            }
+                        })
+                        .buffer_unordered(chain_worker_limit);
+                    stream.try_collect::<Vec<_>>().await?;
                 }
                 // Fail immediately on other errors.
                 Err(e) => return Err(e),
