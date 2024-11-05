@@ -1,11 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr as _;
+
 use linera_base::time::Duration;
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::GrpcClient;
 use crate::{
+    config::ValidatorPublicNetworkConfig,
     grpc::{pool::GrpcConnectionPool, transport::Options},
     node_provider::NodeOptions,
 };
@@ -35,21 +38,12 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
     type Node = GrpcClient;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError> {
-        let parts = address.split(':').collect::<Vec<_>>();
-        if parts.len() != 3 {
-            return Err(NodeError::CannotResolveValidatorAddress {
+        let network = ValidatorPublicNetworkConfig::from_str(address).map_err(|_| {
+            NodeError::CannotResolveValidatorAddress {
                 address: address.to_string(),
-            });
-        }
-        let http_address = match parts[0] {
-            "grpc" => format!("http://{}:{}", parts[1], parts[2]),
-            "grpcs" => format!("https://{}:{}", parts[1], parts[2]),
-            _ => {
-                return Err(NodeError::CannotResolveValidatorAddress {
-                    address: address.to_string(),
-                });
             }
-        };
+        })?;
+        let http_address = network.http_address();
         let channel =
             self.pool
                 .channel(http_address.clone())

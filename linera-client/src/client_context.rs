@@ -896,9 +896,12 @@ where
                     let options = (&node_options).into();
                     let address = config.network.http_address();
                     let channel = create_channel(address.clone(), &options).unwrap();
-                    let retry_relay = node_options.retry_delay;
-                    let max_retries = node_options.max_retries;
-                    Box::new(GrpcClient::new(address, channel, retry_relay, max_retries))
+                    Box::new(GrpcClient::new(
+                        address,
+                        channel,
+                        node_options.retry_relay,
+                        node_options.max_retries,
+                    ))
                 }
             };
 
