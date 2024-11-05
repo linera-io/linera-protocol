@@ -42,7 +42,6 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
         HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
-        PostedMessage,
     },
     manager::ChainManagerInfo,
     ChainError, ChainExecutionContext, ChainStateView,
@@ -53,8 +52,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemOperation,
         CREATE_APPLICATION_MESSAGE_INDEX, OPEN_CHAIN_MESSAGE_INDEX,
     },
-    ExecutionError, Message, Operation, Query, Response, SystemExecutionError, SystemMessage,
-    SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, Response, SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
@@ -369,7 +367,7 @@ impl MessagePolicy {
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn handle(&self, bundle: &mut IncomingBundle) -> bool {
+    fn must_handle(&self, bundle: &mut IncomingBundle) -> bool {
         if self.is_reject() {
             if bundle.bundle.is_skippable() {
                 return false;
@@ -720,8 +718,10 @@ where
         if info.next_block_height != BlockHeight::ZERO && self.options.message_policy.is_ignore() {
             return Ok(Vec::new()); // OpenChain is already received, others are ignored.
         }
-        let mut requested_pending_message_bundles = info.requested_pending_message_bundles;
-        let mut pending_message_bundles = vec![];
+
+        let mut rearranged = false;
+        let mut pending_message_bundles = info.requested_pending_message_bundles;
+
         // The first incoming message of any child chain must be `OpenChain`. We must have it in
         // our inbox, and include it before all other messages.
         if info.next_block_height == BlockHeight::ZERO
@@ -730,40 +730,31 @@ where
                 .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?
                 .is_child()
         {
-            let Some(index) = requested_pending_message_bundles
-                .iter()
-                .position(|message| {
-                    matches!(
-                        message.bundle.messages.first(),
-                        Some(PostedMessage {
-                            message: Message::System(SystemMessage::OpenChain(_)),
-                            ..
-                        })
-                    )
-                })
-            else {
-                return Err(LocalNodeError::InactiveChain(self.chain_id).into());
-            };
-            let open_chain_bundle = requested_pending_message_bundles.remove(index);
-            pending_message_bundles.push(open_chain_bundle);
+            // The first incoming message of any child chain must be `OpenChain`. We must have it in
+            // our inbox, and include it before all other messages.
+            rearranged = IncomingBundle::put_openchain_at_front(&mut pending_message_bundles);
+            ensure!(rearranged, LocalNodeError::InactiveChain(self.chain_id));
         }
+
         if self.options.message_policy.is_ignore() {
-            return Ok(pending_message_bundles); // Ignore messages other than OpenChain.
-        }
-        for mut bundle in requested_pending_message_bundles {
-            if pending_message_bundles.len() >= self.options.max_pending_message_bundles {
-                warn!(
-                    "Limiting block to {} incoming message bundles",
-                    self.options.max_pending_message_bundles
-                );
-                break;
+            // Ignore messages other than OpenChain.
+            if rearranged {
+                return Ok(pending_message_bundles[0..1].to_vec());
+            } else {
+                return Ok(Vec::new());
             }
-            if !self.options.message_policy.handle(&mut bundle) {
-                continue;
-            }
-            pending_message_bundles.push(bundle);
         }
-        Ok(pending_message_bundles)
+
+        Ok(pending_message_bundles
+            .into_iter()
+            .filter_map(|mut bundle| {
+                self.options
+                    .message_policy
+                    .must_handle(&mut bundle)
+                    .then_some(bundle)
+            })
+            .take(self.options.max_pending_message_bundles)
+            .collect())
     }
 
     /// Obtains the current epoch of the given chain as well as its set of trusted committees.
@@ -863,16 +854,16 @@ where
             LocalNodeError::InactiveChain(self.chain_id)
         );
         let state = self.state();
-        let mut identities = manager
+        let mut our_identities = manager
             .ownership
             .all_owners()
             .chain(&manager.leader)
             .filter(|owner| state.known_key_pairs().contains_key(owner));
-        let Some(identity) = identities.next() else {
+        let Some(identity) = our_identities.next() else {
             return Err(ChainClientError::CannotFindKeyForChain(self.chain_id));
         };
         ensure!(
-            identities.all(|id| id == identity),
+            our_identities.all(|id| id == identity),
             ChainClientError::FoundMultipleKeysForChain(self.chain_id)
         );
         Ok(*identity)
@@ -903,12 +894,28 @@ where
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
-        // Verify that our local storage contains enough history compared to the
-        // expected block height. Otherwise, download the missing history from the
-        // network.
-        let next_block_height = self.next_block_height();
+        let mut info = self.synchronize_until(self.next_block_height()).await?;
+
+        if self.state().has_other_owners(&info.manager.ownership) {
+            // For chains with any owner other than ourselves, we could be missing recent
+            // certificates created by other owners. Further synchronize blocks from the network.
+            // This is a best-effort that depends on network conditions.
+            let nodes = self.validator_nodes().await?;
+            info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
+        }
+        self.update_from_info(&info);
+        Ok(info)
+    }
+
+    // Verifies that our local storage contains enough history compared to the
+    // expected block height. Otherwise, downloads the missing history from the
+    // network.
+    async fn synchronize_until(
+        &self,
+        next_block_height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         let nodes = self.validator_nodes().await?;
-        let mut info = self
+        let info = self
             .client
             .download_certificates(&nodes, self.chain_id, next_block_height)
             .await?;
@@ -919,14 +926,6 @@ where
                 ChainClientError::InternalError("Invalid chain of blocks in local node")
             );
         }
-        if self.state().has_other_owners(&info.manager.ownership) {
-            // For chains with any owner other than ourselves, we could be missing recent
-            // certificates created by other owners. Further synchronize blocks from the network.
-            // This is a best-effort that depends on network conditions.
-            let nodes = self.validator_nodes().await?;
-            info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
-        }
-        self.update_from_info(&info);
         Ok(info)
     }
 
@@ -1747,7 +1746,8 @@ where
     /// Attempts to execute the block locally. If any incoming message execution fails, that
     /// message is rejected and execution is retried, until the block accepts only messages
     /// that succeed.
-    #[instrument(level = "trace", skip(block))]
+    // TODO(#2806): Measure how failing messages affect the execution times.
+    #[tracing::instrument(level = "trace", skip(block))]
     async fn stage_block_execution_and_discard_failing_messages(
         &self,
         mut block: Block,
@@ -1991,14 +1991,14 @@ where
                 ExecuteBlockOutcome::Executed(certificate) => {
                     return Ok(ClientOutcome::Committed(certificate));
                 }
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
                         height = %certificate.value().height(),
                         "Another block was committed; retrying."
                     );
-                }
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
                 }
             };
         }
@@ -2030,10 +2030,10 @@ where
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
-            ClientOutcome::Committed(None) => {}
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
             }
+            ClientOutcome::Committed(None) => {}
         }
         let incoming_bundles = self.pending_message_bundles().await?;
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
@@ -2443,12 +2443,7 @@ where
                 "Conflicting proposal in the current round.",
             ));
         };
-        let can_propose = match round {
-            Round::Fast => manager.ownership.super_owners.contains_key(&identity),
-            Round::MultiLeader(_) => true,
-            Round::SingleLeader(_) | Round::Validator(_) => manager.leader == Some(identity),
-        };
-        if can_propose {
+        if manager.can_propose(&identity, round) {
             let certificate = self.propose_block(block.clone(), round, manager).await?;
             Ok(ClientOutcome::Committed(Some(certificate)))
         } else {

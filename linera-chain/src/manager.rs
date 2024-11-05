@@ -632,4 +632,14 @@ impl ChainManagerInfo {
 
         None
     }
+
+    /// Returns whether the `identity` is allowed to propose a block in `round`.
+    /// This is dependant on the type of round and whether `identity` is a validator or (super)owner.
+    pub fn can_propose(&self, identity: &Owner, round: Round) -> bool {
+        match round {
+            Round::Fast => self.ownership.super_owners.contains_key(identity),
+            Round::MultiLeader(_) => true,
+            Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
+        }
+    }
 }

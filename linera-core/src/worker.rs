@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    borrow::Cow,
     collections::{HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
@@ -378,14 +377,6 @@ where
             .full_certificate(certificate)
             .await
     }
-
-    #[instrument(level = "trace", skip(self, hash))]
-    pub(crate) async fn recent_hashed_certificate_value(
-        &self,
-        hash: &CryptoHash,
-    ) -> Option<HashedCertificateValue> {
-        self.recent_hashed_certificate_values.get(hash).await
-    }
 }
 
 impl<StorageClient> WorkerState<StorageClient>
@@ -558,15 +549,6 @@ where
             }
         })
         .await
-    }
-
-    /// Inserts a [`HashedCertificateValue`] into the worker's cache.
-    #[instrument(level = "trace", skip(self, value))]
-    pub(crate) async fn cache_recent_hashed_certificate_value<'a>(
-        &self,
-        value: Cow<'a, HashedCertificateValue>,
-    ) -> bool {
-        self.recent_hashed_certificate_values.insert(value).await
     }
 
     /// Returns a stored [`Certificate`] for a chain's block.
