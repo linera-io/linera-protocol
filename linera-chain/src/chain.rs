@@ -29,6 +29,7 @@ use linera_execution::{
     ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
+    bucket_queue_view::BucketQueueView,
     context::Context,
     log_view::LogView,
     map_view::MapView,
@@ -224,7 +225,8 @@ where
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
     /// A queue of unskippable bundles, with the timestamp when we added them to the inbox.
-    pub unskippable_bundles: BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
+    pub unskippable_bundles:
+        BucketQueueView<C, TimestampedBundleInInbox, TIMESTAMPBUNDLE_BUCKET_SIZE>,
     /// Unskippable bundles that have been removed but are still in the queue.
     pub removed_unskippable_bundles: SetView<C, BundleInInbox>,
     /// Mailboxes used to send messages, indexed by their target.
