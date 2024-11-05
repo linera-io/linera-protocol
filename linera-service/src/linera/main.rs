@@ -53,7 +53,7 @@ use linera_service::{
 use linera_storage::Storage;
 use serde_json::Value;
 use tokio::task::JoinSet;
-use tracing::{debug, info, warn, Instrument as _};
+use tracing::{debug, error, info, warn, Instrument as _};
 
 mod net_up_utils;
 
@@ -63,7 +63,6 @@ use {
     linera_core::data_types::ChainInfoResponse,
     linera_rpc::{HandleCertificateRequest, RpcMessage},
     std::collections::HashSet,
-    tracing::error,
 };
 
 use crate::persistent::PersistExt as _;
@@ -379,25 +378,29 @@ impl Runnable for Job {
                             version_info
                         );
                     }
-                    Ok(version_info) => warn!(
+                    Ok(version_info) => error!(
                         "Validator version {} is not compatible with local version {}.",
                         version_info,
                         linera_version::VERSION_INFO
                     ),
                     Err(error) => {
-                        warn!("Failed to get version information for validator {address}:\n{error}")
+                        error!(
+                            "Failed to get version information for validator {address}:\n{error}"
+                        )
                     }
                 }
 
                 let genesis_config_hash = context.wallet().genesis_config().hash();
                 match node.get_genesis_config_hash().await {
                     Ok(hash) if hash == genesis_config_hash => {}
-                    Ok(hash) => warn!(
+                    Ok(hash) => error!(
                         "Validator's genesis config hash {} does not match our own: {}.",
                         hash, genesis_config_hash
                     ),
                     Err(error) => {
-                        warn!("Failed to get genesis config hash for validator {address}:\n{error}")
+                        error!(
+                            "Failed to get genesis config hash for validator {address}:\n{error}"
+                        )
                     }
                 }
 
@@ -414,12 +417,12 @@ impl Runnable for Job {
                             if response.check(&name).is_ok() {
                                 info!("Signature for public key {name} is OK.");
                             } else {
-                                warn!("Signature for public key {name} is NOT OK.");
+                                error!("Signature for public key {name} is NOT OK.");
                             }
                         }
                     }
                     Err(e) => {
-                        warn!("Failed to get chain info for validator {address} and chain {chain_id}:\n{e}");
+                        error!("Failed to get chain info for validator {address} and chain {chain_id}:\n{e}");
                     }
                 }
 
@@ -451,7 +454,7 @@ impl Runnable for Job {
                             );
                         }
                         Err(e) => {
-                            warn!("Failed to get version information for validator {name:?} at {address}:\n{e}");
+                            error!("Failed to get version information for validator {name:?} at {address}:\n{e}");
                             continue;
                         }
                     }
@@ -466,11 +469,11 @@ impl Runnable for Job {
                             if response.check(name).is_ok() {
                                 info!("Signature for public key {name} is OK.");
                             } else {
-                                warn!("Signature for public key {name} is NOT OK.");
+                                error!("Signature for public key {name} is NOT OK.");
                             }
                         }
                         Err(e) => {
-                            warn!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");
+                            error!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");
                             continue;
                         }
                     }
