@@ -334,12 +334,16 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are it
 
-**Usage:** `linera query-validator <ADDRESS> [CHAIN_ID]`
+**Usage:** `linera query-validator [OPTIONS] <ADDRESS> [CHAIN_ID]`
 
 ###### **Arguments:**
 
 * `<ADDRESS>` — The new validator's address
 * `<CHAIN_ID>` — The chain to query. If omitted, query the default chain of the wallet
+
+###### **Options:**
+
+* `--name <NAME>` — The public key of the validator. If given, the signature of the chain query info will be checked
 
 
 
