@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{
-    ser::{SerializeStruct, Serializer},
+    ser::Serializer,
     Deserialize, Deserializer, Serialize,
 };
 
@@ -137,43 +137,6 @@ impl From<ValidatedBlockCertificate> for Certificate {
 pub struct Hashed<T> {
     value: T,
     hash: CryptoHash,
-}
-
-// NOTE: We shouldn't serialize the hash and expect the deserializer to compute it.
-// We implement it this way for backwards-compatibility with the old `Certificate` type.
-// If we were to compute `hash` in the deserializer, we would need to do map `T` to corresponding
-// variants of `CertificateValue` and then compute the hash. This would require a lot of boilerplate
-// and is not possible to do on generic `T` type.
-impl<T: Serialize> Serialize for Hashed<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let Hashed { value, hash } = self;
-        let mut state = serializer.serialize_struct("Hashed", 2)?;
-        state.serialize_field("value", &value)?;
-        state.serialize_field("hash", &hash)?;
-        state.end()
-    }
-}
-
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for Hashed<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        {
-            #[derive(Deserialize)]
-            #[serde(rename = "Hashed")]
-            struct HashedHelper<T2> {
-                value: T2,
-                hash: CryptoHash,
-            }
-
-            let helper: HashedHelper<T> = Deserialize::deserialize(deserializer)?;
-            Ok(Self {
-                value: helper.value,
-                hash: helper.hash,
-            })
-        }
-    }
 }
 
 impl<T> Hashed<T> {
