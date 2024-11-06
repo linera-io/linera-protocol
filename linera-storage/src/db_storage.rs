@@ -695,20 +695,6 @@ where
         Ok(certificates)
     }
 
-    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        Self::add_certificate_to_batch(certificate, &mut batch)?;
-        self.write_batch(batch).await
-    }
-
-    async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        for certificate in certificates {
-            Self::add_certificate_to_batch(certificate, &mut batch)?;
-        }
-        self.write_batch(batch).await
-    }
-
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
         self.wasm_runtime
     }
