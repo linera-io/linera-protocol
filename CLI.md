@@ -135,6 +135,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
 * `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--skip-incoming-message-sync` — Skip synchronizing incoming messages before executing the command
 
 
 

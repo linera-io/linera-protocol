@@ -17,8 +17,8 @@ use linera_base::{
 };
 use linera_chain::data_types::Certificate;
 use linera_core::{
-    client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy},
-    data_types::ClientOutcome,
+    client::{BlanketMessagePolicy, ChainClient, ChainClientError, Client, MessagePolicy},
+    data_types::{ChainInfo, ClientOutcome},
     join_set_ext::{JoinSet, JoinSetExt as _},
     node::CrossChainMessageDelivery,
 };
@@ -86,6 +86,7 @@ where
     pub chain_listeners: JoinSet,
     pub blanket_message_policy: BlanketMessagePolicy,
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    pub skip_incoming_message_sync: bool,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -179,6 +180,7 @@ where
             recv_timeout: options.recv_timeout,
             retry_delay: options.retry_delay,
             max_retries: options.max_retries,
+            skip_incoming_message_sync: options.skip_incoming_message_sync,
             chain_listeners: JoinSet::default(),
             blanket_message_policy: options.blanket_message_policy,
             restrict_chain_ids_to: options.restrict_chain_ids_to,
@@ -214,6 +216,7 @@ where
             recv_timeout: send_recv_timeout,
             retry_delay,
             max_retries,
+            skip_incoming_message_sync: false,
             chain_listeners: JoinSet::default(),
             blanket_message_policy: BlanketMessagePolicy::Accept,
             restrict_chain_ids_to: None,
@@ -353,7 +356,7 @@ where
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
-            chain_client.synchronize_from_validators().await?;
+            self.synchronize_from_validators(chain_client).await?;
             let result = chain_client.process_inbox().await;
             self.update_wallet_from_client(chain_client).await?;
             if result.is_err() {
@@ -404,7 +407,7 @@ where
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
-        client.synchronize_from_validators().await?;
+        self.synchronize_from_validators(client).await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_and_save_wallet(client).await?;
@@ -457,6 +460,17 @@ where
         info!("Operation confirmed after {} ms", time_total.as_millis());
         debug!("{:?}", certificate);
         Ok(())
+    }
+
+    /// Synchronizes the chain state, and, if configured, the incoming messages.
+    pub async fn synchronize_from_validators(
+        &self,
+        client: &ChainClient<NodeProvider, S>,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        if !self.skip_incoming_message_sync {
+            client.find_received_certificates().await?;
+        }
+        client.prepare_chain().await
     }
 }
 

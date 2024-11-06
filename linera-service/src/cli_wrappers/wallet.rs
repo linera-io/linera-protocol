@@ -544,8 +544,8 @@ impl ClientWrapper {
         Ok(())
     }
 
-    /// Runs `linera transfer` with no logging.
-    pub async fn transfer_with_silent_logs(
+    /// Runs `linera transfer` with no logging and without synchronizing incoming messages.
+    pub async fn transfer_with_silent_logs_no_sync(
         &self,
         amount: Amount,
         from: ChainId,
@@ -554,6 +554,7 @@ impl ClientWrapper {
         self.command()
             .await?
             .env("RUST_LOG", "off")
+            .arg("--skip-incoming-message-sync")
             .arg("transfer")
             .arg(amount.to_string())
             .args(["--from", &from.to_string()])

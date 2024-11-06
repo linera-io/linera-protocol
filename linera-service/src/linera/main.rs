@@ -321,7 +321,7 @@ impl Runnable for Job {
                 info!("Synchronizing chain information and querying the local balance");
                 warn!("This command is deprecated. Use `linera sync && linera query-balance` instead.");
                 let time_start = Instant::now();
-                chain_client.synchronize_from_validators().await?;
+                context.synchronize_from_validators(&chain_client).await?;
                 let result = match account.owner {
                     Some(owner) => chain_client.query_owner_balance(owner).await,
                     None => chain_client.query_balance().await,
@@ -338,7 +338,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Synchronizing chain information");
                 let time_start = Instant::now();
-                chain_client.synchronize_from_validators().await?;
+                context.synchronize_from_validators(&chain_client).await?;
                 context.update_and_save_wallet(&chain_client).await?;
                 let time_total = time_start.elapsed();
                 info!(

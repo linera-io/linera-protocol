@@ -146,6 +146,10 @@ pub struct ClientOptions {
     /// an empty string.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+
+    /// Skip synchronizing incoming messages before executing the command.
+    #[arg(long)]
+    pub skip_incoming_message_sync: bool,
 }
 
 impl ClientOptions {

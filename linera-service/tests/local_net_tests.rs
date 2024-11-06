@@ -534,7 +534,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
         net.remove_validator(i)?;
     }
     let result = client
-        .transfer_with_silent_logs(Amount::from_tokens(2), chain_id, ChainId::root(1))
+        .transfer_with_silent_logs_no_sync(Amount::from_tokens(2), chain_id, ChainId::root(1))
         .await;
     assert!(result.is_err());
     // The transfer didn't get confirmed.

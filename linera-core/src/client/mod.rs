@@ -882,7 +882,7 @@ where
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height.
     #[instrument(level = "trace")]
-    async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+    pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
@@ -1379,7 +1379,7 @@ where
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
     #[instrument(level = "trace")]
-    async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
+    pub async fn find_received_certificates(&self) -> Result<(), ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
 
