@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{btree_map, BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
     hash::Hash,
     mem,
@@ -297,17 +297,10 @@ where
                     for certificate in certificates {
                         let block_chain_id = certificate.value().chain_id();
                         let block_height = certificate.value().height();
-                        match chain_heights.entry(block_chain_id) {
-                            btree_map::Entry::Occupied(entry) => {
-                                let entry = entry.into_mut();
-                                if block_height > *entry {
-                                    *entry = block_height;
-                                }
-                            }
-                            btree_map::Entry::Vacant(entry) => {
-                                entry.insert(block_height);
-                            }
-                        }
+                        chain_heights
+                            .entry(block_chain_id)
+                            .and_modify(|h| *h = block_height.max(*h))
+                            .or_insert(block_height);
                     }
                     let stream = stream::iter(chain_heights)
                         .map(|(chain_id, height)| {
