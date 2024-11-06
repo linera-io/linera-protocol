@@ -168,6 +168,14 @@ impl ValidatorNode for SimpleClient {
         self.query(RpcMessage::BlobLastUsedBy(Box::new(blob_id)))
             .await
     }
+
+    async fn blobs_last_used_by(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<CryptoHash>, NodeError> {
+        self.query(RpcMessage::BlobsLastUsedBy(Box::new(blob_ids)))
+            .await
+    }
 }
 
 #[derive(Clone)]

@@ -355,6 +355,15 @@ impl ValidatorNode for GrpcClient {
         let req = api::BlobId::try_from(blob_id)?;
         Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)
     }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn blobs_last_used_by(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<CryptoHash>, NodeError> {
+        let req = api::BlobIds::try_from(blob_ids)?;
+        Ok(client_delegate!(self, blobs_last_used_by, req)?.try_into()?)
+    }
 }
 
 #[cfg(not(web))]

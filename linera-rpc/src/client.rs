@@ -185,4 +185,16 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => simple_client.blob_last_used_by(blob_id).await?,
         })
     }
+
+    async fn blobs_last_used_by(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<CryptoHash>, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.blobs_last_used_by(blob_ids).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.blobs_last_used_by(blob_ids).await?,
+        })
+    }
 }

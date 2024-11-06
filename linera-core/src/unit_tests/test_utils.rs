@@ -195,6 +195,16 @@ where
         })
         .await
     }
+
+    async fn blobs_last_used_by(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<Vec<CryptoHash>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_blobs_last_used_by(blob_ids, sender)
+        })
+        .await
+    }
 }
 
 impl<S> LocalValidatorClient<S>
@@ -502,6 +512,27 @@ where
             .map_err(Into::into);
 
         sender.send(certificate_hash)
+    }
+
+    async fn do_blobs_last_used_by(
+        self,
+        blob_ids: Vec<BlobId>,
+        sender: oneshot::Sender<Result<Vec<CryptoHash>, NodeError>>,
+    ) -> Result<(), Result<Vec<CryptoHash>, NodeError>> {
+        let validator = self.client.lock().await;
+        let blob_states = validator
+            .state
+            .storage_client()
+            .read_blob_states(&blob_ids)
+            .await;
+        let hashes = match blob_states {
+            Err(err) => Err(err.into()),
+            Ok(blob_states) => Ok(blob_states
+                .into_iter()
+                .map(|blob_state| blob_state.last_used_by)
+                .collect()),
+        };
+        sender.send(hashes)
     }
 }
 
