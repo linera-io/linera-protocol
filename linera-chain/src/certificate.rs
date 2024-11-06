@@ -8,7 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{BcsHashable, CryptoHash, Signature},
+    crypto::{CryptoHash, Signature},
     data_types::Round,
     identifiers::BlobId,
 };
@@ -59,7 +59,7 @@ impl<T: Clone> Clone for CertificateT<T> {
     }
 }
 
-impl<T: Debug + BcsHashable> Debug for CertificateT<T> {
+impl<T: Debug> Debug for CertificateT<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CertificateT")
             .field("value", &self.value)
@@ -175,7 +175,7 @@ impl<T: Clone> Clone for Hashed<T> {
     }
 }
 
-impl<T: BcsHashable> CertificateT<T> {
+impl<T> CertificateT<T> {
     pub fn new(
         value: T,
         old_hash: CryptoHash,
@@ -216,7 +216,7 @@ impl<T: BcsHashable> CertificateT<T> {
     }
 }
 
-impl<T: BcsHashable> CertificateT<T> {
+impl<T> CertificateT<T> {
     /// Returns the certified value's hash.
     pub fn hash(&self) -> CryptoHash {
         self.value.hash()
