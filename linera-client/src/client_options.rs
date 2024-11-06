@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
-    committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
+    committee::ValidatorPublicKey, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
 use linera_views::store::CommonStoreConfig;
 
@@ -444,7 +444,7 @@ pub enum ClientCommand {
         /// The public key of the validator. If given, the signature of the chain query
         /// info will be checked.
         #[arg(long)]
-        name: Option<ValidatorName>,
+        public_key: Option<ValidatorPublicKey>,
     },
 
     /// Show the current set of validators for a chain. Also print some information about
@@ -458,7 +458,7 @@ pub enum ClientCommand {
     SetValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorName,
+        public_key: ValidatorPublicKey,
 
         /// Network address
         #[arg(long)]
@@ -477,7 +477,7 @@ pub enum ClientCommand {
     RemoveValidator {
         /// The public key of the validator.
         #[arg(long)]
-        name: ValidatorName,
+        public_key: ValidatorPublicKey,
     },
 
     /// Deprecates all committees except the last one.

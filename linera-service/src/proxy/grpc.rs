@@ -606,14 +606,14 @@ mod proto_message_cap {
     use linera_chain::data_types::{
         BlockExecutionOutcome, Certificate, ExecutedBlock, HashedCertificateValue,
     };
-    use linera_execution::committee::ValidatorName;
+    use linera_execution::committee::ValidatorPublicKey;
     use linera_sdk::base::{ChainId, TestString};
 
     use super::{CertificatesBatchResponse, GrpcMessageLimiter};
 
     fn test_certificate() -> Certificate {
         let keypair = KeyPair::generate();
-        let validator = ValidatorName(keypair.public());
+        let validator = ValidatorPublicKey(keypair.public());
         let signature = Signature::new(&TestString::new("Test"), &keypair);
         let executed_block = ExecutedBlock {
             block: linera_chain::test::make_first_block(ChainId::root(0)),

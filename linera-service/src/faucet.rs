@@ -18,7 +18,7 @@ use linera_client::{
     config::GenesisConfig,
 };
 use linera_core::data_types::ClientOutcome;
-use linera_execution::committee::ValidatorName;
+use linera_execution::committee::ValidatorPublicKey;
 use linera_storage::{Clock as _, Storage};
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
@@ -60,7 +60,7 @@ pub struct ClaimOutcome {
 
 #[derive(Debug, Deserialize, SimpleObject)]
 pub struct Validator {
-    pub name: ValidatorName,
+    pub public_key: ValidatorPublicKey,
     pub network_address: String,
 }
 
@@ -87,7 +87,7 @@ where
             .validators()
             .iter()
             .map(|(name, validator)| Validator {
-                name: *name,
+                public_key: *name,
                 network_address: validator.network_address.clone(),
             })
             .collect())

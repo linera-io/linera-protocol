@@ -113,14 +113,14 @@ where
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
         .filter_map(|remote_node| {
-            if committee.weight(&remote_node.name) == 0 {
+            if committee.weight(&remote_node.public_key) == 0 {
                 // This should not happen but better prevent it because certificates
                 // are not allowed to include votes with weight 0.
                 return None;
             }
             let execute = execute.clone();
             let remote_node = remote_node.clone();
-            Some(async move { (remote_node.name, execute(remote_node).await) })
+            Some(async move { (remote_node.public_key, execute(remote_node).await) })
         })
         .collect();
 
@@ -202,7 +202,7 @@ where
         certificate: &Certificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.remote_node.name) {
+        if certificate.is_signed_by(&self.remote_node.public_key) {
             let result = self
                 .remote_node
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
@@ -211,7 +211,7 @@ where
                 Err(NodeError::MissingCertificateValue) => {
                     warn!(
                         "Validator {} forgot a certificate value that they signed before",
-                        self.remote_node.name
+                        self.remote_node.public_key
                     );
                 }
                 _ => {
@@ -327,7 +327,7 @@ where
             Ok(info) => info.next_block_height,
             Err(error) => {
                 error!(
-                    name = ?self.remote_node.name, ?chain_id, %error,
+                    name = ?self.remote_node.public_key, ?chain_id, %error,
                     "Failed to query validator about missing blocks"
                 );
                 return Err(error);
@@ -442,7 +442,7 @@ where
             }
         };
         match vote {
-            Some(vote) if vote.validator == self.remote_node.name => {
+            Some(vote) if vote.validator == self.remote_node.public_key => {
                 vote.check()?;
                 Ok(vote)
             }

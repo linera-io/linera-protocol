@@ -14,7 +14,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::Block;
-use linera_execution::committee::ValidatorName;
+use linera_execution::committee::ValidatorPublicKey;
 use tokio::sync::Mutex;
 
 use crate::data_types::ChainInfo;
@@ -38,7 +38,7 @@ pub struct ChainClientState {
 
     /// For each validator, up to which index we have synchronized their
     /// [`ChainStateView::received_log`].
-    received_certificate_trackers: HashMap<ValidatorName, u64>,
+    received_certificate_trackers: HashMap<ValidatorPublicKey, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pending_blobs: BTreeMap<BlobId, Blob>,
@@ -130,17 +130,17 @@ impl ChainClientState {
         new_public_key
     }
 
-    pub fn received_certificate_trackers(&self) -> &HashMap<ValidatorName, u64> {
+    pub fn received_certificate_trackers(&self) -> &HashMap<ValidatorPublicKey, u64> {
         &self.received_certificate_trackers
     }
 
     pub(super) fn update_received_certificate_tracker(
         &mut self,
-        name: ValidatorName,
+        validator_public_key: ValidatorPublicKey,
         tracker: u64,
     ) {
         self.received_certificate_trackers
-            .entry(name)
+            .entry(validator_public_key)
             .and_modify(|t| {
                 // Because several synchronizations could happen in parallel, we need to make
                 // sure to never go backward.

@@ -15,7 +15,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch, ValidatorPublicKey},
     ExecutionRuntimeContext,
 };
 use linera_storage::ChainRuntimeContext;
@@ -271,8 +271,12 @@ impl ChainInfoResponse {
         self.signature = Some(Signature::new(&*self.info, key_pair));
     }
 
-    pub fn check(&self, name: &ValidatorName) -> Result<(), CryptoError> {
-        Signature::check_optional_signature(self.signature.as_ref(), &*self.info, &name.0)
+    pub fn check(&self, validator_public_key: &ValidatorPublicKey) -> Result<(), CryptoError> {
+        Signature::check_optional_signature(
+            self.signature.as_ref(),
+            &*self.info,
+            &validator_public_key.0,
+        )
     }
 
     /// Returns the committee in the latest epoch.

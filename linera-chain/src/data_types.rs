@@ -15,7 +15,7 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName},
+    committee::{Committee, Epoch, ValidatorPublicKey},
     system::OpenChainConfig,
     Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
@@ -459,7 +459,7 @@ struct ValueHashAndRound(CryptoHash, Round);
 pub struct Vote {
     pub value: HashedCertificateValue,
     pub round: Round,
-    pub validator: ValidatorName,
+    pub validator: ValidatorPublicKey,
     pub signature: Signature,
 }
 
@@ -471,7 +471,7 @@ impl Vote {
         Self {
             value,
             round,
-            validator: ValidatorName(key_pair.public()),
+            validator: ValidatorPublicKey(key_pair.public()),
             signature,
         }
     }
@@ -498,7 +498,7 @@ impl Vote {
 pub struct LiteVote {
     pub value: LiteValue,
     pub round: Round,
-    pub validator: ValidatorName,
+    pub validator: ValidatorPublicKey,
     pub signature: Signature,
 }
 
@@ -526,14 +526,14 @@ pub struct LiteCertificate<'a> {
     /// The round in which the value was certified.
     pub round: Round,
     /// Signatures on the value.
-    pub signatures: Cow<'a, [(ValidatorName, Signature)]>,
+    pub signatures: Cow<'a, [(ValidatorPublicKey, Signature)]>,
 }
 
 impl<'a> LiteCertificate<'a> {
     pub fn new(
         value: LiteValue,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorPublicKey, Signature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
@@ -612,7 +612,7 @@ impl Serialize for Certificate {
         struct CertificateHelper<'a> {
             value: &'a CertificateValue,
             round: Round,
-            signatures: &'a Vec<(ValidatorName, Signature)>,
+            signatures: &'a Vec<(ValidatorPublicKey, Signature)>,
         }
 
         let helper = CertificateHelper {
@@ -1067,7 +1067,7 @@ impl LiteVote {
         Self {
             value,
             round,
-            validator: ValidatorName(key_pair.public()),
+            validator: ValidatorPublicKey(key_pair.public()),
             signature,
         }
     }
@@ -1082,7 +1082,7 @@ impl LiteVote {
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: u64,
-    used_validators: HashSet<ValidatorName>,
+    used_validators: HashSet<ValidatorPublicKey>,
     partial: Certificate,
 }
 
@@ -1102,7 +1102,7 @@ impl<'a> SignatureAggregator<'a> {
     /// of `check` below. Returns an error if the signed value cannot be aggregated.
     pub fn append(
         &mut self,
-        validator: ValidatorName,
+        validator: ValidatorPublicKey,
         signature: Signature,
     ) -> Result<Option<Certificate>, ChainError> {
         let hash_and_round = ValueHashAndRound(self.partial.hash(), self.partial.round);
@@ -1131,7 +1131,7 @@ impl<'a> SignatureAggregator<'a> {
 
 // Checks if the array slice is strictly ordered. That means that if the array
 // has duplicates, this will return False, even if the array is sorted
-pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
+pub(crate) fn is_strictly_ordered(values: &[(ValidatorPublicKey, Signature)]) -> bool {
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
 }
 
@@ -1145,7 +1145,7 @@ impl<'de> Deserialize<'de> for Certificate {
         struct CertificateHelper {
             value: HashedCertificateValue,
             round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
+            signatures: Vec<(ValidatorPublicKey, Signature)>,
         }
 
         let helper: CertificateHelper = Deserialize::deserialize(deserializer)?;
@@ -1212,7 +1212,7 @@ impl Certificate {
 pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     round: Round,
-    signatures: &[(ValidatorName, Signature)],
+    signatures: &[(ValidatorPublicKey, Signature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
     // Check the quorum.

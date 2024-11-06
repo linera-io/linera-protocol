@@ -145,7 +145,7 @@ Certificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: ValidatorPublicKey
             - TYPENAME: Signature
 CertificateValue:
   ENUM:
@@ -327,7 +327,7 @@ Committee:
     - validators:
         MAP:
           KEY:
-            TYPENAME: ValidatorName
+            TYPENAME: ValidatorPublicKey
           VALUE:
             TYPENAME: ValidatorState
     - policy:
@@ -442,7 +442,7 @@ LiteCertificate:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: ValidatorName
+            - TYPENAME: ValidatorPublicKey
             - TYPENAME: Signature
 LiteValue:
   STRUCT:
@@ -457,7 +457,7 @@ LiteVote:
     - round:
         TYPENAME: Round
     - validator:
-        TYPENAME: ValidatorName
+        TYPENAME: ValidatorPublicKey
     - signature:
         TYPENAME: Signature
 Medium:
@@ -1093,7 +1093,7 @@ ValidatedBlockCertificate:
           TUPLE:
             - TYPENAME: ValidatorName
             - TYPENAME: Signature
-ValidatorName:
+ValidatorPublicKey:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey
 ValidatorState:

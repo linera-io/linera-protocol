@@ -12,7 +12,7 @@ use linera_base::{
 use linera_views::{context::Context, map_view::MapView};
 
 use crate::{
-    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    committee::{Committee, Epoch, ValidatorPublicKey, ValidatorState},
     system::{Recipient, UserData},
     ChannelSubscription, ExecutionStateView, SystemExecutionStateView,
 };
@@ -23,12 +23,12 @@ doc_scalar!(
 );
 doc_scalar!(Recipient, "The recipient of a transfer");
 doc_scalar!(UserData, "Optional user message attached to a transfer");
-doc_scalar!(ValidatorName, "The identity of a validator");
+doc_scalar!(ValidatorPublicKey, "The identity of a validator");
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl Committee {
     #[graphql(derived(name = "validators"))]
-    async fn _validators(&self) -> &BTreeMap<ValidatorName, ValidatorState> {
+    async fn _validators(&self) -> &BTreeMap<ValidatorPublicKey, ValidatorState> {
         self.validators()
     }
 

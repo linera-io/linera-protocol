@@ -16,7 +16,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_execution::{
-    committee::{Committee, Epoch, ValidatorName, ValidatorState},
+    committee::{Committee, Epoch, ValidatorPublicKey, ValidatorState},
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
@@ -118,7 +118,7 @@ async fn test_block_size_limit() {
         Epoch(0),
         Committee::new(
             BTreeMap::from([(
-                ValidatorName(PublicKey::test_key(1)),
+                ValidatorPublicKey(PublicKey::test_key(1)),
                 ValidatorState {
                     network_address: PublicKey::test_key(1).to_string(),
                     votes: 1,

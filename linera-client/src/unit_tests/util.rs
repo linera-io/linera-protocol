@@ -20,7 +20,7 @@ pub fn make_genesis_config(builder: &TestBuilder<MemoryStorageBuilder>) -> Genes
     let validator_names = builder.initial_committee.validators().keys();
     let validators = validator_names
         .map(|name| ValidatorConfig {
-            name: *name,
+            public_key: *name,
             network: network.clone(),
         })
         .collect();

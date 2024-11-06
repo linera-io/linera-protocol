@@ -23,7 +23,7 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName},
+    committee::{Committee, ValidatorPublicKey},
     test_utils::{register_mock_applications_internal, MockApplication},
     ExecutionRuntimeContext, ExecutionStateView, ResourceControlPolicy, WasmRuntime,
 };
@@ -89,7 +89,7 @@ pub struct LocalValidatorClient<S>
 where
     S: Storage,
 {
-    name: ValidatorName,
+    public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
 }
 
@@ -214,20 +214,20 @@ impl<S> LocalValidatorClient<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    fn new(name: ValidatorName, state: WorkerState<S>) -> Self {
+    fn new(public_key: ValidatorPublicKey, state: WorkerState<S>) -> Self {
         let client = LocalValidator {
             fault_type: FaultType::Honest,
             state,
             notifier: Arc::new(ChannelNotifier::default()),
         };
         Self {
-            name,
+            public_key,
             client: Arc::new(Mutex::new(client)),
         }
     }
 
-    pub fn name(&self) -> ValidatorName {
-        self.name
+    pub fn public_key(&self) -> ValidatorPublicKey {
+        self.public_key
     }
 
     async fn set_fault_type(&self, fault_type: FaultType) {
@@ -535,7 +535,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct NodeProvider<S>(BTreeMap<ValidatorName, Arc<Mutex<LocalValidator<S>>>>)
+pub struct NodeProvider<S>(BTreeMap<ValidatorPublicKey, Arc<Mutex<LocalValidator<S>>>>)
 where
     S: Storage;
 
@@ -551,21 +551,21 @@ where
 
     fn make_nodes_from_list<A>(
         &self,
-        validators: impl IntoIterator<Item = (ValidatorName, A)>,
-    ) -> Result<impl Iterator<Item = (ValidatorName, Self::Node)>, NodeError>
+        validators: impl IntoIterator<Item = (ValidatorPublicKey, A)>,
+    ) -> Result<impl Iterator<Item = (ValidatorPublicKey, Self::Node)>, NodeError>
     where
         A: AsRef<str>,
     {
         Ok(validators
             .into_iter()
-            .map(|(name, address)| {
+            .map(|(public_key, address)| {
                 self.0
-                    .get(&name)
+                    .get(&public_key)
                     .ok_or_else(|| NodeError::CannotResolveValidatorAddress {
                         address: address.as_ref().to_string(),
                     })
                     .cloned()
-                    .map(|client| (name, LocalValidatorClient { name, client }))
+                    .map(|client| (public_key, LocalValidatorClient { public_key, client }))
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter())
@@ -580,7 +580,8 @@ where
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
     {
-        let destructure = |validator: LocalValidatorClient<S>| (validator.name, validator.client);
+        let destructure =
+            |validator: LocalValidatorClient<S>| (validator.public_key, validator.client);
         Self(iter.into_iter().map(destructure).collect())
     }
 }
@@ -597,7 +598,7 @@ pub struct TestBuilder<B: StorageBuilder> {
     admin_id: ChainId,
     genesis_storage_builder: GenesisStorageBuilder,
     validator_clients: Vec<LocalValidatorClient<B::Storage>>,
-    validator_storages: HashMap<ValidatorName, B::Storage>,
+    validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
 }
 
@@ -664,8 +665,8 @@ where
         let mut validators = Vec::new();
         for _ in 0..count {
             let key_pair = KeyPair::generate();
-            let name = ValidatorName(key_pair.public());
-            validators.push(name);
+            let public_key = ValidatorPublicKey(key_pair.public());
+            validators.push(public_key);
             key_pairs.push(key_pair);
         }
         let initial_committee = Committee::make_simple(validators);
@@ -673,7 +674,7 @@ where
         let mut validator_storages = HashMap::new();
         let mut faulty_validators = HashSet::new();
         for (i, key_pair) in key_pairs.into_iter().enumerate() {
-            let name = ValidatorName(key_pair.public());
+            let public_key = ValidatorPublicKey(key_pair.public());
             let storage = storage_builder.build().await?;
             let state = WorkerState::new(
                 format!("Node {}", i),
@@ -683,13 +684,13 @@ where
             )
             .with_allow_inactive_chains(false)
             .with_allow_messages_from_deprecated_epochs(false);
-            let validator = LocalValidatorClient::new(name, state);
+            let validator = LocalValidatorClient::new(public_key, state);
             if i < with_faulty_validators {
-                faulty_validators.insert(name);
+                faulty_validators.insert(public_key);
                 validator.set_fault_type(FaultType::Malicious).await;
             }
             validator_clients.push(validator);
-            validator_storages.insert(name, storage);
+            validator_storages.insert(public_key, storage);
         }
         tracing::info!(
             "Test will use the following faulty validators: {:?}",
@@ -717,7 +718,7 @@ where
         for index in indexes.as_ref() {
             let validator = &mut self.validator_clients[*index];
             validator.set_fault_type(fault_type).await;
-            faulty_validators.push(validator.name);
+            faulty_validators.push(validator.public_key);
         }
         tracing::info!(
             "Making the following validators {:?}: {:?}",
@@ -737,7 +738,10 @@ where
         self.genesis_storage_builder
             .add(description, public_key, balance);
         for validator in &self.validator_clients {
-            let storage = self.validator_storages.get_mut(&validator.name).unwrap();
+            let storage = self
+                .validator_storages
+                .get_mut(&validator.public_key)
+                .unwrap();
             if validator.fault_type().await == FaultType::Malicious {
                 storage
                     .create_chain(
@@ -866,7 +870,7 @@ where
         let mut certificate = None;
         for validator in self.validator_clients.clone() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
-                if response.check(&validator.name).is_ok() {
+                if response.check(&validator.public_key).is_ok() {
                     let ChainInfo {
                         mut requested_sent_certificate_hashes,
                         ..
@@ -906,7 +910,7 @@ where
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.info.manager.current_round == round
                     && response.info.next_block_height == block_height
-                    && response.check(&validator.name).is_ok()
+                    && response.check(&validator.public_key).is_ok()
                 {
                     count += 1;
                 }

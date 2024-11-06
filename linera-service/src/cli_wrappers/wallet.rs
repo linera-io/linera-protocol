@@ -26,7 +26,9 @@ use linera_base::{
 };
 use linera_client::{config::GenesisConfig, wallet::Wallet};
 use linera_core::worker::Notification;
-use linera_execution::{committee::ValidatorName, system::SystemChannel, ResourceControlPolicy};
+use linera_execution::{
+    committee::ValidatorPublicKey, system::SystemChannel, ResourceControlPolicy,
+};
 use linera_version::VersionInfo;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
@@ -855,12 +857,12 @@ impl ClientWrapper {
             .is_some_and(|wallet| wallet.get(chain).is_some())
     }
 
-    pub async fn set_validator(&self, name: &str, port: usize, votes: usize) -> Result<()> {
+    pub async fn set_validator(&self, public_key: &str, port: usize, votes: usize) -> Result<()> {
         let address = format!("{}:127.0.0.1:{}", self.network.short(), port);
         self.command()
             .await?
             .arg("set-validator")
-            .args(["--name", name])
+            .args(["--public-key", public_key])
             .args(["--address", &address])
             .args(["--votes", &votes.to_string()])
             .spawn_and_wait_for_stdout()
@@ -868,11 +870,11 @@ impl ClientWrapper {
         Ok(())
     }
 
-    pub async fn remove_validator(&self, name: &str) -> Result<()> {
+    pub async fn remove_validator(&self, public_key: &str) -> Result<()> {
         self.command()
             .await?
             .arg("remove-validator")
-            .args(["--name", name])
+            .args(["--public-key", public_key])
             .spawn_and_wait_for_stdout()
             .await?;
         Ok(())
@@ -1522,8 +1524,8 @@ impl Faucet {
         Ok(outcome)
     }
 
-    pub async fn current_validators(&self) -> Result<Vec<(ValidatorName, String)>> {
-        let query = "query { currentValidators { name networkAddress } }";
+    pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>> {
+        let query = "query { currentValidators { publicKey networkAddress } }";
         let client = reqwest_client();
         let response = client
             .post(&self.url)
@@ -1551,13 +1553,14 @@ impl Faucet {
         validators
             .into_iter()
             .map(|mut validator| {
-                let name = serde_json::from_value::<ValidatorName>(validator["name"].take())
-                    .context("could not parse current validators: invalid name")?;
+                let public_key =
+                    serde_json::from_value::<ValidatorPublicKey>(validator["publicKey"].take())
+                        .context("could not parse current validators: invalid public key")?;
                 let addr = validator["networkAddress"]
                     .as_str()
                     .context("could not parse current validators: invalid address")?
                     .to_string();
-                Ok((name, addr))
+                Ok((public_key, addr))
             })
             .collect()
     }

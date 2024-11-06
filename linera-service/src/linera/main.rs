@@ -44,7 +44,7 @@ use linera_core::{
     JoinSetExt as _,
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorPublicKey, ValidatorState},
     Message, ResourceControlPolicy, SystemMessage,
 };
 use linera_service::{
@@ -357,7 +357,7 @@ impl Runnable for Job {
             QueryValidator {
                 address,
                 chain_id,
-                name,
+                public_key,
             } => {
                 use linera_core::node::ValidatorNode as _;
 
@@ -406,11 +406,11 @@ impl Runnable for Job {
                             response.info.next_block_height,
                             response.info.epoch,
                         );
-                        if let Some(name) = name {
-                            if response.check(&name).is_ok() {
-                                info!("Signature for public key {name} is OK.");
+                        if let Some(public_key) = public_key {
+                            if response.check(&public_key).is_ok() {
+                                info!("Signature for public key {public_key} is OK.");
                             } else {
-                                error!("Signature for public key {name} is NOT OK.");
+                                error!("Signature for public key {public_key} is NOT OK.");
                             }
                         }
                     }
@@ -436,18 +436,18 @@ impl Runnable for Job {
                     committee.validators()
                 );
                 let node_provider = context.make_node_provider();
-                for (name, state) in committee.validators() {
+                for (public_key, state) in committee.validators() {
                     let address = &state.network_address;
                     let node = node_provider.make_node(address)?;
                     match node.get_version_info().await {
                         Ok(version_info) => {
                             info!(
-                                "Version information for validator {name:?} at {address}:{}",
+                                "Version information for validator {public_key:?} at {address}:{}",
                                 version_info
                             );
                         }
                         Err(e) => {
-                            error!("Failed to get version information for validator {name:?} at {address}:\n{e}");
+                            error!("Failed to get version information for validator {public_key:?} at {address}:\n{e}");
                             continue;
                         }
                     }
@@ -455,18 +455,18 @@ impl Runnable for Job {
                     match node.handle_chain_info_query(query).await {
                         Ok(response) => {
                             info!(
-                                "Validator {name:?} at {address} sees chain {chain_id} at block height {} and epoch {:?}",
+                                "Validator {public_key:?} at {address} sees chain {chain_id} at block height {} and epoch {:?}",
                                 response.info.next_block_height,
                                 response.info.epoch,
                             );
-                            if response.check(name).is_ok() {
-                                info!("Signature for public key {name} is OK.");
+                            if response.check(public_key).is_ok() {
+                                info!("Signature for public key {public_key} is OK.");
                             } else {
-                                error!("Signature for public key {name} is NOT OK.");
+                                error!("Signature for public key {public_key} is NOT OK.");
                             }
                         }
                         Err(e) => {
-                            error!("Failed to get chain info for validator {name:?} at {address} and chain {chain_id}:\n{e}");
+                            error!("Failed to get chain info for validator {public_key:?} at {address} and chain {chain_id}:\n{e}");
                             continue;
                         }
                     }
@@ -484,7 +484,7 @@ impl Runnable for Job {
                 let context = Arc::new(Mutex::new(context));
                 let mut context = context.lock().await;
                 if let SetValidator {
-                    name,
+                    public_key,
                     address,
                     votes: _,
                     skip_online_check: false,
@@ -500,7 +500,7 @@ impl Runnable for Job {
                             linera_version::VERSION_INFO
                         ),
                         Err(error) => bail!(
-                            "Failed to get version information for validator {name:?} at {address}:\n{error}"
+                            "Failed to get version information for validator {public_key:?} at {address}:\n{error}"
                         ),
                     }
                     let genesis_config_hash = context.wallet().genesis_config().hash();
@@ -512,7 +512,7 @@ impl Runnable for Job {
                             genesis_config_hash
                         ),
                         Err(error) => bail!(
-                            "Failed to get genesis config hash for validator {name:?} at {address}:\n{error}"
+                            "Failed to get genesis config hash for validator {public_key:?} at {address}:\n{error}"
                         ),
                     }
                 }
@@ -537,21 +537,21 @@ impl Runnable for Job {
                             let mut validators = committee.validators().clone();
                             match command {
                                 SetValidator {
-                                    name,
+                                    public_key,
                                     address,
                                     votes,
                                     skip_online_check: _,
                                 } => {
                                     validators.insert(
-                                        name,
+                                        public_key,
                                         ValidatorState {
                                             network_address: address,
                                             votes,
                                         },
                                     );
                                 }
-                                RemoveValidator { name } => {
-                                    if validators.remove(&name).is_none() {
+                                RemoveValidator { public_key } => {
+                                    if validators.remove(&public_key).is_none() {
                                         warn!("Skipping removal of nonexistent validator");
                                         return Ok(ClientOutcome::Committed(None));
                                     }
@@ -1142,7 +1142,7 @@ impl Job {
         message_id: MessageId,
         storage: S,
         public_key: PublicKey,
-        validators: Option<Vec<(ValidatorName, String)>>,
+        validators: Option<Vec<(ValidatorPublicKey, String)>>,
         context: &mut ClientContext<S, impl Persist<Target = Wallet>>,
     ) -> anyhow::Result<()>
     where
@@ -1166,7 +1166,10 @@ impl Job {
         let nodes: Vec<_> = if let Some(validators) = validators {
             node_provider
                 .make_nodes_from_list(validators)?
-                .map(|(name, node)| RemoteNode { name, node })
+                .map(|(name, node)| RemoteNode {
+                    public_key: name,
+                    node,
+                })
                 .collect()
         } else {
             let info = client.local_node().handle_chain_info_query(query).await?;
@@ -1175,7 +1178,10 @@ impl Job {
                 .context("Invalid chain info response; missing latest committee")?;
             node_provider
                 .make_nodes(committee)?
-                .map(|(name, node)| RemoteNode { name, node })
+                .map(|(name, node)| RemoteNode {
+                    public_key: name,
+                    node,
+                })
                 .collect()
         };
 

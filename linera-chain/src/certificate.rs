@@ -12,7 +12,7 @@ use linera_base::{
     data_types::Round,
     identifiers::{BlobId, ChainId, MessageId},
 };
-use linera_execution::committee::{Committee, Epoch, ValidatorName};
+use linera_execution::committee::{Committee, Epoch, ValidatorPublicKey};
 use serde::{
     ser::{Serialize, SerializeStruct, Serializer},
     Deserialize, Deserializer,
@@ -40,7 +40,7 @@ pub type TimeoutCertificate = GenericCertificate<Timeout>;
 pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
-    signatures: Vec<(ValidatorName, Signature)>,
+    signatures: Vec<(ValidatorPublicKey, Signature)>,
 }
 
 impl<T> GenericCertificate<T> {
@@ -115,7 +115,7 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
         struct Inner {
             value: ValidatedBlock,
             round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
+            signatures: Vec<(ValidatorPublicKey, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
         let validated_hashed: HashedCertificateValue = inner.value.clone().into();
@@ -137,7 +137,7 @@ impl<'de> Deserialize<'de> for TimeoutCertificate {
         struct Inner {
             value: Timeout,
             round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
+            signatures: Vec<(ValidatorPublicKey, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
         let timeout_hashed: HashedCertificateValue = inner.value.clone().into();
@@ -270,7 +270,7 @@ impl<T> GenericCertificate<T> {
     pub fn new(
         value: Hashed<T>,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorPublicKey, Signature)>,
     ) -> Self
     where
         T: BcsHashable,
@@ -283,12 +283,12 @@ impl<T> GenericCertificate<T> {
         }
     }
 
-    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
+    pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, Signature)> {
         &self.signatures
     }
 
     #[cfg(with_testing)]
-    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
+    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorPublicKey, Signature)> {
         &mut self.signatures
     }
 
@@ -296,8 +296,8 @@ impl<T> GenericCertificate<T> {
     /// It's the responsibility of the caller to not insert duplicates
     pub fn add_signature(
         &mut self,
-        signature: (ValidatorName, Signature),
-    ) -> &Vec<(ValidatorName, Signature)> {
+        signature: (ValidatorPublicKey, Signature),
+    ) -> &Vec<(ValidatorPublicKey, Signature)> {
         let index = self
             .signatures
             .binary_search_by(|(name, _)| name.cmp(&signature.0))
@@ -307,7 +307,7 @@ impl<T> GenericCertificate<T> {
     }
 
     /// Returns whether the validator is among the signatories of this certificate.
-    pub fn is_signed_by(&self, validator_name: &ValidatorName) -> bool {
+    pub fn is_signed_by(&self, validator_name: &ValidatorPublicKey) -> bool {
         self.signatures
             .binary_search_by(|(name, _)| name.cmp(validator_name))
             .is_ok()

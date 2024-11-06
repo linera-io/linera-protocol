@@ -16,7 +16,7 @@ use linera_core::{
     node::NodeError,
     worker::Notification,
 };
-use linera_execution::committee::ValidatorName;
+use linera_execution::committee::ValidatorPublicKey;
 use thiserror::Error;
 use tonic::{Code, Status};
 
@@ -457,19 +457,19 @@ impl TryFrom<api::PublicKey> for PublicKey {
     }
 }
 
-impl From<ValidatorName> for api::PublicKey {
-    fn from(validator_name: ValidatorName) -> Self {
+impl From<ValidatorPublicKey> for api::PublicKey {
+    fn from(public_key: ValidatorPublicKey) -> Self {
         Self {
-            bytes: validator_name.0 .0.to_vec(),
+            bytes: public_key.0 .0.to_vec(),
         }
     }
 }
 
-impl TryFrom<api::PublicKey> for ValidatorName {
+impl TryFrom<api::PublicKey> for ValidatorPublicKey {
     type Error = GrpcProtoConversionError;
 
     fn try_from(public_key: api::PublicKey) -> Result<Self, Self::Error> {
-        Ok(ValidatorName(public_key.try_into()?))
+        Ok(ValidatorPublicKey(public_key.try_into()?))
     }
 }
 
@@ -766,11 +766,11 @@ pub mod tests {
     }
 
     #[test]
-    pub fn validator_name() {
-        let validator_name = ValidatorName::from(KeyPair::generate().public());
-        // This is a correct comparison - `ValidatorNameRpc` does not exist in our
+    pub fn validator_public_key() {
+        let validator_public_key = ValidatorPublicKey::from(KeyPair::generate().public());
+        // This is a correct comparison - `ValidatorPublicKeyRpc` does not exist in our
         // proto definitions.
-        round_trip_check::<_, api::PublicKey>(validator_name);
+        round_trip_check::<_, api::PublicKey>(validator_public_key);
     }
 
     #[test]
@@ -849,7 +849,7 @@ pub mod tests {
             },
             round: Round::MultiLeader(2),
             signatures: Cow::Owned(vec![(
-                ValidatorName::from(key_pair.public()),
+                ValidatorPublicKey::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
             )]),
         };
@@ -874,7 +874,7 @@ pub mod tests {
             ),
             Round::MultiLeader(3),
             vec![(
-                ValidatorName::from(key_pair.public()),
+                ValidatorPublicKey::from(key_pair.public()),
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
@@ -923,7 +923,7 @@ pub mod tests {
             ),
             Round::SingleLeader(2),
             vec![(
-                ValidatorName::from(key_pair.public()),
+                ValidatorPublicKey::from(key_pair.public()),
                 Signature::new(&Foo("signed".into()), &key_pair),
             )],
         )

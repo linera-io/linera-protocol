@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{BlockProposal, Certificate, LiteCertificate},
     types::ConfirmedBlockCertificate,
 };
-use linera_execution::committee::ValidatorName;
+use linera_execution::committee::ValidatorPublicKey;
 use rand::seq::SliceRandom as _;
 use tracing::{instrument, warn};
 
@@ -23,17 +23,17 @@ use crate::{
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
 };
 
-/// A validator node together with the validator's name.
+/// A validator node together with the validator's public key.
 #[derive(Clone)]
 pub struct RemoteNode<N> {
-    pub name: ValidatorName,
+    pub public_key: ValidatorPublicKey,
     pub node: N,
 }
 
 impl<N> fmt::Debug for RemoteNode<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RemoteNode")
-            .field("name", &self.name)
+            .field("public_key", &self.public_key)
             .finish_non_exhaustive()
     }
 }
@@ -100,7 +100,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             proposed.map_or(true, |proposal| proposal.content.block.chain_id == chain_id)
                 && locked.map_or(true, |cert| cert.executed_block().block.chain_id
                     == chain_id)
-                && response.check(&self.name).is_ok(),
+                && response.check(&self.public_key).is_ok(),
             NodeError::InvalidChainInfoResponse
         );
         Ok(response.info)
@@ -113,7 +113,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         start: BlockHeight,
         limit: u64,
     ) -> Result<Option<Vec<ConfirmedBlockCertificate>>, NodeError> {
-        tracing::debug!(name = ?self.name, ?chain_id, ?start, ?limit, "Querying certificates");
+        tracing::debug!(name = ?self.public_key, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
             limit: Some(limit),
@@ -146,7 +146,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         if !certificate.requires_blob(&blob_id) {
             warn!(
                 "Got invalid last used by certificate for blob {} from validator {}",
-                blob_id, self.name
+                blob_id, self.public_key
             );
             return Err(NodeError::InvalidCertificateForBlob(blob_id));
         }
@@ -176,7 +176,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 let blob = blob.with_blob_id_checked(blob_id);
 
                 if blob.is_none() {
-                    tracing::info!("Validator {} sent an invalid blob {blob_id}.", self.name);
+                    tracing::info!(
+                        "Validator {} sent an invalid blob {blob_id}.",
+                        self.public_key
+                    );
                 }
 
                 blob
@@ -184,7 +187,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             Err(error) => {
                 tracing::debug!(
                     "Failed to fetch blob {blob_id} from validator {}: {error}",
-                    self.name
+                    self.public_key
                 );
                 None
             }
@@ -203,7 +206,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let info = match self.handle_chain_info_query(query).await {
             Ok(info) => Some(info),
             Err(err) => {
-                warn!("Got error from validator {}: {}", self.name, err);
+                warn!("Got error from validator {}: {}", self.public_key, err);
                 return Ok(None);
             }
         };

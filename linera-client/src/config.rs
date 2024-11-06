@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId},
 };
 use linera_execution::{
-    committee::{Committee, ValidatorName, ValidatorState},
+    committee::{Committee, ValidatorPublicKey, ValidatorState},
     ResourceControlPolicy,
 };
 use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
@@ -45,7 +45,7 @@ util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorConfig {
     /// The public key of the validator.
-    pub name: ValidatorName,
+    pub public_key: ValidatorPublicKey,
     /// The network configuration for the validator.
     pub network: ValidatorPublicNetworkConfig,
 }
@@ -76,7 +76,7 @@ impl CommitteeConfig {
             .into_iter()
             .map(|v| {
                 (
-                    v.name,
+                    v.public_key,
                     ValidatorState {
                         network_address: v.network.to_string(),
                         votes: 100,

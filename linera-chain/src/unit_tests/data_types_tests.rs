@@ -11,7 +11,7 @@ use crate::test::{make_first_block, BlockTestExt};
 fn test_signed_values() {
     let key1 = KeyPair::generate();
     let key2 = KeyPair::generate();
-    let name1 = ValidatorName(key1.public());
+    let public_key1 = ValidatorPublicKey(key1.public());
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
@@ -28,7 +28,7 @@ fn test_signed_values() {
     assert!(v.check().is_ok());
 
     let mut v = LiteVote::new(value.lite(), Round::Fast, &key2);
-    v.validator = name1;
+    v.validator = public_key1;
     assert!(v.check().is_err());
 }
 
@@ -37,10 +37,10 @@ fn test_certificates() {
     let key1 = KeyPair::generate();
     let key2 = KeyPair::generate();
     let key3 = KeyPair::generate();
-    let name1 = ValidatorName(key1.public());
-    let name2 = ValidatorName(key2.public());
+    let public_key1 = ValidatorPublicKey(key1.public());
+    let public_key2 = ValidatorPublicKey(key2.public());
 
-    let committee = Committee::make_simple(vec![name1, name2]);
+    let committee = Committee::make_simple(vec![public_key1, public_key2]);
 
     let block =
         make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(1), Amount::ONE);
