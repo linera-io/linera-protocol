@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{io::Read as _, path::PathBuf};
+use std::{fmt, io::Read as _, path::PathBuf};
 
 #[cfg(linera_version_building)]
 use crate::serde_pretty::Pretty;
@@ -40,6 +40,12 @@ impl From<CrateVersion> for semver::Version {
         }: CrateVersion,
     ) -> Self {
         Self::new(major as u64, minor as u64, patch as u64)
+    }
+}
+
+impl fmt::Display for CrateVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 

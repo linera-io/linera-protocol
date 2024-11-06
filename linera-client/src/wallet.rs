@@ -15,6 +15,7 @@ use linera_base::{
 use linera_chain::data_types::Block;
 use linera_core::{client::ChainClient, node::ValidatorNodeProvider};
 use linera_storage::Storage;
+use linera_version::{CrateVersion, VERSION_INFO};
 use rand::Rng as _;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +27,7 @@ pub struct Wallet {
     pub unassigned_key_pairs: HashMap<PublicKey, KeyPair>,
     pub default: Option<ChainId>,
     pub genesis_config: GenesisConfig,
+    pub crate_version: CrateVersion,
     pub testing_prng_seed: Option<u64>,
 }
 
@@ -50,8 +52,17 @@ impl Wallet {
             unassigned_key_pairs: HashMap::new(),
             default: None,
             genesis_config,
+            crate_version: VERSION_INFO.crate_version.value.clone(),
             testing_prng_seed,
         }
+    }
+
+    pub fn has_compatible_version(&self) -> bool {
+        (self.crate_version.major, self.crate_version.minor)
+            == (
+                VERSION_INFO.crate_version.value.major,
+                VERSION_INFO.crate_version.value.minor,
+            )
     }
 
     pub fn get(&self, chain_id: ChainId) -> Option<&UserChain> {

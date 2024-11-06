@@ -16,6 +16,7 @@ use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
     committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
 };
+use linera_version::CrateVersion;
 use linera_views::store::CommonStoreConfig;
 
 #[cfg(feature = "fs")]
@@ -41,6 +42,8 @@ pub enum Error {
     NoDefaultConfigurationDirectory,
     #[error("no wallet found")]
     NonexistentWallet,
+    #[error("wallet was created with version {0}, which is not compatible")]
+    IncompatibleWalletVersion(CrateVersion),
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("storage error: {0}")]
@@ -228,7 +231,12 @@ impl ClientOptions {
 #[cfg(feature = "fs")]
 impl ClientOptions {
     pub async fn wallet(&self) -> Result<WalletState<persistent::File<Wallet>>, Error> {
-        let wallet = persistent::File::read(&self.wallet_path()?)?;
+        let wallet = persistent::File::<Wallet>::read(&self.wallet_path()?)?;
+        if !wallet.has_compatible_version() {
+            return Err(Error::IncompatibleWalletVersion(
+                wallet.crate_version.clone(),
+            ));
+        }
         Ok(WalletState::new(wallet))
     }
 
