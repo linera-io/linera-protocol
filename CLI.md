@@ -48,6 +48,13 @@ This document contains the help content for the `linera` command-line program.
 * [`linera net`↴](#linera-net)
 * [`linera net up`↴](#linera-net-up)
 * [`linera net helper`↴](#linera-net-helper)
+* [`linera storage`↴](#linera-storage)
+* [`linera storage delete_all`↴](#linera-storage-delete_all)
+* [`linera storage delete_namespace`↴](#linera-storage-delete_namespace)
+* [`linera storage check_existence`↴](#linera-storage-check_existence)
+* [`linera storage check_absence`↴](#linera-storage-check_absence)
+* [`linera storage initialize`↴](#linera-storage-initialize)
+* [`linera storage list_namespaces`↴](#linera-storage-list_namespaces)
 
 ## `linera`
 
@@ -90,6 +97,7 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `wallet` — Show the contents of the wallet
 * `project` — Manage Linera projects
 * `net` — Manage a local Linera Network
+* `storage` — Operation on the storage
 
 ###### **Options:**
 
@@ -894,6 +902,95 @@ Start a Local Linera Network
 Print a bash helper script to make `linera net up` easier to use. The script is meant to be installed in `~/.bash_profile` or sourced when needed
 
 **Usage:** `linera net helper`
+
+
+
+## `linera storage`
+
+Operation on the storage
+
+**Usage:** `linera storage <COMMAND>`
+
+###### **Subcommands:**
+
+* `delete_all` — Delete all the namespaces of the database
+* `delete_namespace` — Delete a single namespace from the database
+* `check_existence` — Check existence of a namespace in the database
+* `check_absence` — Check absence of a namespace in the database
+* `initialize` — Initialize a namespace in the database
+* `list_namespaces` — List the namespaces of the database
+
+
+
+## `linera storage delete_all`
+
+Delete all the namespaces of the database
+
+**Usage:** `linera storage delete_all --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera storage delete_namespace`
+
+Delete a single namespace from the database
+
+**Usage:** `linera storage delete_namespace --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera storage check_existence`
+
+Check existence of a namespace in the database
+
+**Usage:** `linera storage check_existence --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera storage check_absence`
+
+Check absence of a namespace in the database
+
+**Usage:** `linera storage check_absence --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera storage initialize`
+
+Initialize a namespace in the database
+
+**Usage:** `linera storage initialize --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
+
+
+
+## `linera storage list_namespaces`
+
+List the namespaces of the database
+
+**Usage:** `linera storage list_namespaces --storage <STORAGE_CONFIG>`
+
+###### **Options:**
+
+* `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 
 
 
