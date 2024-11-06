@@ -159,7 +159,7 @@ mod metrics {
 /// The number of chain workers that can be in memory at the same time. More workers improve
 /// perfomance whenever the client interacts with multiple chains at the same time, but also
 /// increases memory usage.
-pub(crate) const CHAIN_WORKER_LIMIT: usize = 20;
+const CHAIN_WORKER_LIMIT: usize = 20;
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>
@@ -992,12 +992,15 @@ where
     ) -> Result<(), ChainClientError> {
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
+        let n_validators = nodes.len();
+        let n_tasks = std::cmp::max(1, CHAIN_WORKER_LIMIT.div_euclid(n_validators));
         communicate_with_quorum(
             &nodes,
             committee,
             |_: &()| (),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
+                    n_tasks,
                     remote_node,
                     local_node: local_node.clone(),
                 };
@@ -1026,12 +1029,15 @@ where
     ) -> Result<Certificate, ChainClientError> {
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
+        let n_validators = nodes.len();
+        let n_tasks = std::cmp::max(1, CHAIN_WORKER_LIMIT.div_euclid(n_validators));
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| (vote.value.value_hash, vote.round),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
+                    n_tasks,
                     remote_node,
                     local_node: local_node.clone(),
                 };

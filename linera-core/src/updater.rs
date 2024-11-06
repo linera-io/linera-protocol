@@ -24,7 +24,6 @@ use thiserror::Error;
 use tracing::{error, warn};
 
 use crate::{
-    client::CHAIN_WORKER_LIMIT,
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -71,6 +70,7 @@ pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
+    pub n_tasks: usize,
     pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
@@ -304,10 +304,10 @@ where
                     }
                     let stream = stream::iter(chain_heights)
                         .map(|(chain_id, height)| {
-                            let mut client = self.clone();
+                            let mut updater = self.clone();
                             async move {
                                 let height = height.try_add_one()?;
-                                client
+                                updater
                                     .send_chain_information(
                                         chain_id,
                                         height,
@@ -316,7 +316,7 @@ where
                                     .await
                             }
                         })
-                        .buffer_unordered(CHAIN_WORKER_LIMIT);
+                        .buffer_unordered(self.n_tasks);
                     stream.try_collect::<Vec<_>>().await?;
                 }
                 // Fail immediately on other errors.
