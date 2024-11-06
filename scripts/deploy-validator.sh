@@ -2,6 +2,9 @@
 
 set -e
 
+# Make sure we're at the source of the repo.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -50,8 +53,6 @@ METRICS_PORT="21100"
 GENESIS_URL="https://storage.googleapis.com/linera-io-dev-public/$FORMATTED_BRANCH_NAME/genesis.json"
 VALIDATOR_CONFIG="docker/validator-config.toml"
 GENESIS_CONFIG="docker/genesis.json"
-
-cd ..
 
 echo "Building Linera binaries"
 cargo install --locked --path linera-service
