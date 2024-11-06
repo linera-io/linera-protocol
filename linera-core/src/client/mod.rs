@@ -44,7 +44,7 @@ use linera_chain::{
         HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
     },
     manager::ChainManagerInfo,
-    types::ValidatedBlockCertificate,
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
@@ -1184,7 +1184,11 @@ where
         let block_chain_id = certificate.value().chain_id();
         let block_height = certificate.value().height();
 
-        self.receive_certificate_internal(certificate, mode).await?;
+        let confirmed_block_certificate = ConfirmedBlockCertificate::try_from(certificate)
+            .map_err(|_| ChainClientError::InternalError("Expected ConfirmedBlock certificate"))?;
+
+        self.receive_certificate_internal(confirmed_block_certificate, mode)
+            .await?;
 
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
@@ -1204,15 +1208,10 @@ where
     #[instrument(level = "trace", skip(certificate, mode))]
     async fn receive_certificate_internal(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            return Err(ChainClientError::InternalError(
-                "Was expecting a confirmed chain operation",
-            ));
-        };
-        let block = &executed_block.block;
+        let block = &certificate.executed_block().block;
 
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1234,13 +1233,16 @@ where
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
+        if let Err(err) = self
+            .process_certificate(certificate.clone().into(), vec![])
+            .await
+        {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
                     let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
                         .await
                         .ok_or(err)?;
-                    self.process_certificate(certificate.clone(), blobs).await?;
+                    self.process_certificate(certificate.into(), blobs).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1440,9 +1442,24 @@ where
             let client = self.clone();
             async move {
                 for certificate in certificates.into_values() {
+                    if !certificate.value().is_confirmed() {
+                        warn!(
+                            "Expected instance of confirmed chain operation but received {:?}",
+                            certificate
+                        );
+                        continue;
+                    }
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
-                    if let Err(e) = client.receive_certificate_internal(certificate, mode).await {
+                    if let Err(e) = client
+                        .receive_certificate_internal(
+                            certificate
+                                .try_into()
+                                .expect("Certificate of ConfirmedBlock"),
+                            mode,
+                        )
+                        .await
+                    {
                         warn!("Received invalid certificate {hash}: {e}");
                     }
                 }
@@ -2574,7 +2591,7 @@ where
     )]
     pub async fn receive_certificate(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
         self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
             .await
