@@ -40,7 +40,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
+        Block, BlockProposal, Certificate, ChainAndHeight, ExecutedBlock,
         HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
     },
     manager::ChainManagerInfo,
@@ -1325,7 +1325,8 @@ where
             let sender_chain_id = certificate.value().chain_id();
             let height = certificate.value().height();
             let epoch = certificate.value().epoch();
-            match self.check_certificate(max_epoch, &committees, &certificate)? {
+            debug_assert!(certificate.value().is_confirmed());
+            match self.check_certificate(max_epoch, &committees, &(certificate.clone().try_into().unwrap()))? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
                         "Postponing received certificate from {sender_chain_id:.8} at height \
@@ -1379,13 +1380,9 @@ where
         &self,
         highest_known_epoch: Epoch,
         committees: &BTreeMap<Epoch, Committee>,
-        incoming_certificate: &Certificate,
+        incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = incoming_certificate.value()
-        else {
-            return Err(NodeError::InvalidChainInfoResponse);
-        };
-        let block = &executed_block.block;
+        let block = &incoming_certificate.executed_block().block;
         // Check that certificates are valid w.r.t one of our trusted committees.
         if block.epoch > highest_known_epoch {
             return Ok(CheckCertificateResult::FutureEpoch);
