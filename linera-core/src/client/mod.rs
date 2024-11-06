@@ -40,8 +40,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ChainAndHeight, ExecutedBlock,
-        HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
+        Block, BlockProposal, Certificate, ChainAndHeight, ExecutedBlock, HashedCertificateValue,
+        IncomingBundle, LiteCertificate, LiteVote, MessageAction,
     },
     manager::ChainManagerInfo,
     types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
@@ -1326,7 +1326,11 @@ where
             let height = certificate.value().height();
             let epoch = certificate.value().epoch();
             debug_assert!(certificate.value().is_confirmed());
-            match self.check_certificate(max_epoch, &committees, &(certificate.clone().try_into().unwrap()))? {
+            match self.check_certificate(
+                max_epoch,
+                &committees,
+                &(certificate.clone().try_into().unwrap()),
+            )? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
                         "Postponing received certificate from {sender_chain_id:.8} at height \
@@ -1390,7 +1394,7 @@ where
         if let Some(known_committee) = committees.get(&block.epoch) {
             // This epoch is recognized by our chain. Let's verify the
             // certificate.
-            let _ = incoming_certificate.check(known_committee)?;
+            incoming_certificate.check(known_committee)?;
             Ok(CheckCertificateResult::New)
         } else {
             // We don't accept a certificate from a committee that was retired.
