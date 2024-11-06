@@ -25,7 +25,7 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
     },
-    types::ValidatedBlockCertificate,
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::Epoch, Query, Response};
@@ -468,14 +468,11 @@ where
     )]
     async fn process_confirmed_block(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            panic!("Expecting a confirmation certificate");
-        };
-        let chain_id = executed_block.block.chain_id;
+        let chain_id = certificate.executed_block().block.chain_id;
 
         let (response, actions) = self
             .query_chain_worker(chain_id, move |callback| {
@@ -783,9 +780,11 @@ where
                         + _executed_block.block.operations.len())
                         as u64;
                 }
+                let confirmed_block_certificate: ConfirmedBlockCertificate =
+                    certificate.try_into().unwrap();
                 // Execute the confirmed block.
                 self.process_confirmed_block(
-                    certificate,
+                    confirmed_block_certificate,
                     &blobs,
                     notify_when_messages_are_delivered,
                 )
