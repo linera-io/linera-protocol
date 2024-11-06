@@ -527,7 +527,7 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client
-        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
     assert_eq!(client.query_balance().await.unwrap(), Amount::ZERO);
@@ -583,28 +583,25 @@ where
     assert_eq!(parent.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
+    assert_matches!(
+        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        Operation::System(SystemOperation::OpenChain(_)),
+        "Unexpected certificate value",
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
             .await
             .unwrap()
             .value,
-        certificate.value
-    );
-    assert_matches!(
-        certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
-            executed_block.block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
-        ),
-        "Unexpected certificate value",
+        certificate.inner().clone().into()
     );
     // Make a client to try the new chain.
     let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client
-        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
     // Make another block on top of the one that sent the two tokens, so that the validators
@@ -677,28 +674,25 @@ where
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
+    assert_matches!(
+        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        Operation::System(SystemOperation::OpenChain(_)),
+        "Unexpected certificate value",
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
             .await
             .unwrap()
             .value,
-        certificate.value
-    );
-    assert_matches!(
-        &certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
-        ),
-        "Unexpected certificate value",
+        certificate.inner().clone().into()
     );
     // Make a client to try the new chain.
     let client = builder
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client
-        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
     let result = client
@@ -764,7 +758,7 @@ where
         .await?;
     // Must process the creation certificate before using the new chain.
     client
-        .receive_certificate_and_update_validators(creation_certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(creation_certificate)
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);

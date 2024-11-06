@@ -2698,7 +2698,7 @@ where
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(MessageId, Certificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(MessageId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.prepare_chain().await?;
         loop {
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
@@ -2712,20 +2712,20 @@ where
                 application_permissions: application_permissions.clone(),
             };
             let operation = Operation::System(SystemOperation::OpenChain(config));
-            let certificate = match self.execute_block(vec![operation]).await? {
-                ExecuteBlockOutcome::Executed(certificate) => certificate,
-                ExecuteBlockOutcome::Conflict(_) => continue,
-                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                    return Ok(ClientOutcome::WaitForTimeout(timeout));
-                }
-            };
+            let certificate: ConfirmedBlockCertificate =
+                match self.execute_block(vec![operation]).await? {
+                    ExecuteBlockOutcome::Executed(certificate) => certificate
+                        .try_into()
+                        .expect("OpenChain command to end with confirmed certificate"),
+                    ExecuteBlockOutcome::Conflict(_) => continue,
+                    ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                        return Ok(ClientOutcome::WaitForTimeout(timeout));
+                    }
+                };
             // The first message of the only operation created the new chain.
             let message_id = certificate
-                .value()
                 .executed_block()
-                .and_then(|executed_block| {
-                    executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
-                })
+                .message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
             // Add the new chain to the list of tracked chains
             self.client.track_chain(ChainId::child(message_id));
