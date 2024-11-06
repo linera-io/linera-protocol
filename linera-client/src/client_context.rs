@@ -899,7 +899,7 @@ where
                     Box::new(GrpcClient::new(
                         address,
                         channel,
-                        node_options.retry_relay,
+                        node_options.retry_delay,
                         node_options.max_retries,
                     ))
                 }
