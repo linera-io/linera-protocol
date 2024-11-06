@@ -2959,6 +2959,11 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+    };
+
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2989,16 +2994,49 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
 
     let (mut tx1, mut rx) = mpsc::channel(8);
     let mut tx2 = tx1.clone();
-    let handle1: JoinHandle<Result<()>> = tokio::spawn(async move {
-        loop {
-            client1.transfer(Amount::ONE, chain2, chain1).await?;
-            tx1.send(()).await?;
+    let drop_barrier = Arc::new(Barrier::new(3));
+    let handle1: JoinHandle<Result<()>> = tokio::spawn({
+        let drop_barrier = drop_barrier.clone();
+        async move {
+            let result = async {
+                loop {
+                    client1.transfer(Amount::ONE, chain2, chain1).await?;
+                    tx1.send(()).await?;
+                }
+            }
+            .await;
+            // Drop the client in a separate thread so that the synchronous `Drop` implementation
+            // can close the chains without blocking the asynchronous worker thread, which might be
+            // shared with the other client's task. If the asynchronous thread is blocked, the
+            // other client might have the round but not be able to execute and propose a block,
+            // deadlocking the test.
+            thread::spawn(move || {
+                drop(client1);
+                drop_barrier.wait();
+            });
+            result
         }
     });
-    let handle2: JoinHandle<Result<()>> = tokio::spawn(async move {
-        loop {
-            client2.transfer(Amount::ONE, chain2, chain1).await?;
-            tx2.send(()).await?;
+    let handle2: JoinHandle<Result<()>> = tokio::spawn({
+        let drop_barrier = drop_barrier.clone();
+        async move {
+            let result = async {
+                loop {
+                    client2.transfer(Amount::ONE, chain2, chain1).await?;
+                    tx2.send(()).await?;
+                }
+            }
+            .await;
+            // Drop the client in a separate thread so that the synchronous `Drop` implementation
+            // can close the chains without blocking the asynchronous worker thread, which might be
+            // shared with the other client's task. If the asynchronous thread is blocked, the
+            // other client might have the round but not be able to execute and propose a block,
+            // deadlocking the test.
+            thread::spawn(move || {
+                drop(client2);
+                drop_barrier.wait();
+            });
+            result
         }
     });
 
@@ -3011,6 +3049,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     assert!(result1?.is_err());
     assert!(result2?.is_err());
 
+    drop_barrier.wait();
     net.ensure_is_running().await?;
     net.terminate().await?;
 
