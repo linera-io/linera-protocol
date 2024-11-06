@@ -57,10 +57,6 @@ GENESIS_CONFIG="docker/genesis.json"
 echo "Building Linera binaries"
 cargo install --locked --path linera-service
 
-# Build Docker image
-echo "Building Linera docker image"
-docker build --build-arg git_commit="$GIT_COMMIT" -f  docker/Dockerfile . -t linera
-
 # Create validator configuration file
 echo "Creating validator configuration..."
 cat > $VALIDATOR_CONFIG <<EOL
@@ -114,6 +110,7 @@ PUBLIC_KEY=$(linera-server generate --validators validator-config.toml)
 echo "Validator setup completed successfully."
 echo "Starting docker compose..."
 
+export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:$BRANCH_NAME"
 docker compose up --wait
 
 echo "Public Key: $PUBLIC_KEY"
