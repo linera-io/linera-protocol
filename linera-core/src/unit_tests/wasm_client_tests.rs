@@ -368,7 +368,7 @@ where
 
     receiver.synchronize_from_validators().await.unwrap();
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     receiver.process_inbox().await.unwrap();
@@ -393,7 +393,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
@@ -420,7 +420,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
@@ -442,7 +442,7 @@ where
 
     // The bounced message is marked as "bouncing" in the Wasm context and succeeds.
     creator
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let mut certs = creator.process_inbox().await.unwrap().0;
@@ -600,7 +600,7 @@ where
     }
     receiver.synchronize_from_validators().await.unwrap();
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -637,7 +637,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -684,7 +684,7 @@ where
         .unwrap();
 
     receiver2
-        .receive_certificate_and_update_validators(certificate)
+        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
         .await
         .unwrap();
 
@@ -783,7 +783,7 @@ where
     // Subscribe the receiver. This also registers the application.
     sender.synchronize_from_validators().await.unwrap();
     sender
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
@@ -801,7 +801,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert.clone())
+        .receive_certificate_and_update_validators(cert.clone().try_into().unwrap())
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -847,7 +847,7 @@ where
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
     sender
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
@@ -865,7 +865,7 @@ where
 
     // The post will not be received by the unsubscribed chain.
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;

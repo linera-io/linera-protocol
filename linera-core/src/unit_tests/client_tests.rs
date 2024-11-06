@@ -177,7 +177,7 @@ where
         Amount::from_millis(898)
     );
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await?;
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
@@ -234,7 +234,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
@@ -250,7 +250,7 @@ where
     }
 
     sender
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await?;
     sender.process_inbox().await?;
     assert_eq!(
@@ -527,7 +527,7 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client
-        .receive_certificate_and_update_validators(certificate)
+        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
         .await
         .unwrap();
     assert_eq!(client.query_balance().await.unwrap(), Amount::ZERO);
@@ -604,7 +604,7 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client
-        .receive_certificate_and_update_validators(certificate)
+        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
         .await
         .unwrap();
     // Make another block on top of the one that sent the two tokens, so that the validators
@@ -615,7 +615,7 @@ where
         .unwrap()
         .unwrap();
     client
-        .receive_certificate_and_update_validators(certificate2)
+        .receive_certificate_and_update_validators(certificate2.try_into().unwrap())
         .await
         .unwrap();
     assert_eq!(
@@ -698,7 +698,7 @@ where
         .make_client(new_id, new_key_pair, None, BlockHeight::ZERO)
         .await?;
     client
-        .receive_certificate_and_update_validators(certificate)
+        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
         .await
         .unwrap();
     let result = client
@@ -764,12 +764,12 @@ where
         .await?;
     // Must process the creation certificate before using the new chain.
     client
-        .receive_certificate_and_update_validators(creation_certificate)
+        .receive_certificate_and_update_validators(creation_certificate.try_into().unwrap())
         .await
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     client
-        .receive_certificate_and_update_validators(transfer_certificate)
+        .receive_certificate_and_update_validators(transfer_certificate.try_into().unwrap())
         .await
         .unwrap();
     assert_eq!(
@@ -1062,7 +1062,7 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client2
-        .receive_certificate_and_update_validators(certificate)
+        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
         .await
         .unwrap();
     assert_eq!(
@@ -1162,7 +1162,7 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client3
-        .receive_certificate_and_update_validators(certificate)
+        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
         .await
         .unwrap();
     assert_eq!(
@@ -1207,7 +1207,7 @@ where
         .unwrap()
         .unwrap();
     admin
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     admin.process_inbox().await.unwrap();
@@ -1239,7 +1239,8 @@ where
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
     assert_matches!(
-        user.receive_certificate_and_update_validators(cert).await,
+        user.receive_certificate_and_update_validators(cert.try_into().unwrap())
+            .await,
         Err(ChainClientError::CommitteeSynchronizationError)
     );
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
@@ -1252,7 +1253,7 @@ where
     // Now subscribe explicitly to migrations.
     let cert = user.subscribe_to_new_committees().await.unwrap().unwrap();
     admin
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     builder
@@ -1274,7 +1275,9 @@ where
         .unwrap()
         .unwrap();
     assert_matches!(
-        admin.receive_certificate_and_update_validators(cert).await,
+        admin
+            .receive_certificate_and_update_validators(cert.try_into().unwrap())
+            .await,
         Err(ChainClientError::CommitteeDeprecationError)
     );
     // Transfer is blocked because the epoch #0 has been retired by admin.
@@ -1294,7 +1297,7 @@ where
         .unwrap()
         .unwrap();
     admin
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await
         .unwrap();
     admin.process_inbox().await.unwrap();
@@ -2380,7 +2383,7 @@ where
 
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
     receiver
-        .receive_certificate_and_update_validators(cert)
+        .receive_certificate_and_update_validators(cert.try_into().unwrap())
         .await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2395,7 +2398,9 @@ where
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender
-        .receive_certificate_and_update_validators(certs.into_iter().next().unwrap())
+        .receive_certificate_and_update_validators(
+            certs.into_iter().next().unwrap().try_into().unwrap(),
+        )
         .await?;
     // The message bounces.
     assert_eq!(sender.process_inbox().await?.0.len(), 1);

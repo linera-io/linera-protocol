@@ -1037,16 +1037,18 @@ where
         &self,
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let hashed_value =
             HashedCertificateValue::new_confirmed(certificate.executed_block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: certificate.into(),
             delivery: self.options.cross_chain_message_delivery,
         };
-        let certificate = self
+        let certificate: ConfirmedBlockCertificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
-            .await?;
+            .await?
+            .try_into()
+            .expect("Finalized block should be confirmed");
         self.receive_certificate_and_update_validators_internal(
             certificate.clone(),
             ReceiveCertificateMode::AlreadyChecked,
@@ -1063,7 +1065,7 @@ where
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: HashedCertificateValue,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let required_blob_ids = value
             .inner()
             .executed_block()
@@ -1081,11 +1083,9 @@ where
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
         if certificate.value().is_confirmed() {
-            Ok(certificate)
+            Ok(certificate.try_into().unwrap()) // shouldn't panic, we just checked.
         } else {
-            let validated_block_certificate = certificate.into();
-            self.finalize_block(committee, validated_block_certificate)
-                .await
+            self.finalize_block(committee, certificate.into()).await
         }
     }
 
@@ -1178,17 +1178,13 @@ where
     #[instrument(level = "trace", skip(certificate, mode))]
     async fn receive_certificate_and_update_validators_internal(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
-        let block_chain_id = certificate.value().chain_id();
-        let block_height = certificate.value().height();
+        let block_chain_id = certificate.executed_block().block.chain_id;
+        let block_height = certificate.executed_block().block.height;
 
-        let confirmed_block_certificate = ConfirmedBlockCertificate::try_from(certificate)
-            .map_err(|_| ChainClientError::InternalError("Expected ConfirmedBlock certificate"))?;
-
-        self.receive_certificate_internal(confirmed_block_certificate, mode)
-            .await?;
+        self.receive_certificate_internal(certificate, mode).await?;
 
         // Make sure a quorum of validators (according to our new local committee) are up-to-date
         // for data availability.
@@ -1959,7 +1955,7 @@ where
         block: Block,
         round: Round,
         manager: ChainManagerInfo,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let next_block_height;
         let block_hash;
         {
@@ -2491,7 +2487,9 @@ where
             if certificate.round == manager.current_round {
                 let committee = self.local_committee().await?;
                 match self.finalize_block(&committee, *certificate.clone()).await {
-                    Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
+                    Ok(certificate) => {
+                        return Ok(ClientOutcome::Committed(Some(certificate.into())))
+                    }
                     Err(ChainClientError::CommunicationError(_)) => {
                         // Communication errors in this case often mean that someone else already
                         // finalized the block.
@@ -2546,7 +2544,7 @@ where
         };
         if manager.can_propose(&identity, round) {
             let certificate = self.propose_block(block.clone(), round, manager).await?;
-            Ok(ClientOutcome::Committed(Some(certificate)))
+            Ok(ClientOutcome::Committed(Some(certificate.into())))
         } else {
             // TODO(#1424): Local timeout might not match validators' exactly.
             let timestamp = manager.round_timeout.ok_or_else(|| {
@@ -2574,7 +2572,7 @@ where
     )]
     pub async fn receive_certificate_and_update_validators(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
         self.receive_certificate_and_update_validators_internal(
             certificate,
