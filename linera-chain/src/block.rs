@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data_types::{ExecutedBlock, HashedCertificateValue};
 
+/// Wrapper around an `ExecutedBlock` that has been validated.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub struct ValidatedBlock {
     executed_block: ExecutedBlock,
@@ -39,6 +40,7 @@ impl From<ValidatedBlock> for HashedCertificateValue {
     }
 }
 
+/// Wrapper around an `ExecutedBlock` that has been confirmed.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub struct ConfirmedBlock {
     // The executed block contained in this `ConfirmedBlock`.

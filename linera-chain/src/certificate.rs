@@ -14,8 +14,8 @@ use linera_base::{
 };
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{
-    ser::{Serialize, SerializeStruct, Serializer},
-    Deserialize, Deserializer,
+    ser::{SerializeStruct, Serializer},
+    Deserialize, Deserializer, Serialize,
 };
 
 use crate::{
@@ -27,8 +27,10 @@ use crate::{
     ChainError,
 };
 
+/// Certificate for a ValidatedBlock instance.
 pub type ValidatedBlockCertificate = CertificateT<ValidatedBlock>;
 
+/// Certificate for a ConfirmedBlock instance.
 pub type ConfirmedBlockCertificate = CertificateT<ConfirmedBlock>;
 
 /// Generic type representing a certificate for `value` of type `T`.
@@ -70,46 +72,22 @@ impl<T: Debug + BcsHashable> Debug for CertificateT<T> {
     }
 }
 
-impl<T: Serialize> Serialize for CertificateT<T> {
+// NOTE: For backwards compatiblity reasons we serialize the new `Certificate` type as the old
+// one. Otherwise we would be breaking the RPC API schemas. We can't implement generic serialization
+// for `Certificate<T>` since only specific `T`s have corresponding `CertificateValue` variants.
+impl Serialize for ValidatedBlockCertificate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let value = self.value.inner();
-        let hash = self.value.hash();
-        let round = self.round;
-        let signatures = &self.signatures;
-        let mut state = serializer.serialize_struct("Certificate", 4)?;
-        state.serialize_field("value", value)?;
-        state.serialize_field("hash", &hash)?;
-        state.serialize_field("round", &round)?;
-        state.serialize_field("signatures", signatures)?;
-        state.end()
+        let cert = Certificate::from(self.clone());
+        cert.serialize(serializer)
     }
 }
 
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for CertificateT<T> {
+impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        {
-            #[derive(Debug, Deserialize)]
-            #[serde(rename = "Certificate")]
-            struct CertificateHelper<T2> {
-                value: Hashed<T2>,
-                round: Round,
-                signatures: Vec<(ValidatorName, Signature)>,
-            }
-
-            let helper: CertificateHelper<T> = Deserialize::deserialize(deserializer)?;
-            if !crate::data_types::is_strictly_ordered(&helper.signatures) {
-                Err(serde::de::Error::custom("Vector is not strictly sorted"))
-            } else {
-                Ok(Self {
-                    value: helper.value,
-                    round: helper.round,
-                    signatures: helper.signatures,
-                })
-            }
-        }
+        Certificate::deserialize(deserializer).map(ValidatedBlockCertificate::from)
     }
 }
 
