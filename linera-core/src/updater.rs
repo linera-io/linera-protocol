@@ -309,7 +309,6 @@ where
                             }
                         }
                     }
-                    let chain_worker_limit = CHAIN_WORKER_LIMIT;
                     let stream = stream::iter(chain_heights)
                         .map(|(chain_id, height)| {
                             let mut client = self.clone();
@@ -324,7 +323,7 @@ where
                                     .await
                             }
                         })
-                        .buffer_unordered(chain_worker_limit);
+                        .buffer_unordered(CHAIN_WORKER_LIMIT);
                     stream.try_collect::<Vec<_>>().await?;
                 }
                 // Fail immediately on other errors.
