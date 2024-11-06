@@ -13,10 +13,7 @@ use linera_base::{
     identifiers::BlobId,
 };
 use linera_execution::committee::{Committee, ValidatorName};
-use serde::{
-    ser::Serializer,
-    Deserialize, Deserializer, Serialize,
-};
+use serde::{ser::Serializer, Deserialize, Deserializer, Serialize};
 
 use crate::{
     block::{ConfirmedBlock, ValidatedBlock},
