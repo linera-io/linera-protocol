@@ -51,6 +51,9 @@ pub fn make_first_block(chain_id: ChainId) -> Block {
 
 /// A helper trait to simplify constructing blocks for tests.
 pub trait BlockTestExt: Sized {
+    /// Returns the block with the given authenticated signer.
+    fn with_authenticated_signer(self, authenticated_signer: Option<Owner>) -> Self;
+
     /// Returns the block with the given operation appended at the end.
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
@@ -79,6 +82,11 @@ pub trait BlockTestExt: Sized {
 }
 
 impl BlockTestExt for Block {
+    fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+        self.authenticated_signer = authenticated_signer;
+        self
+    }
+
     fn with_operation(mut self, operation: impl Into<Operation>) -> Self {
         self.operations.push(operation.into());
         self
