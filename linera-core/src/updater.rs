@@ -70,7 +70,7 @@ pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
-    pub n_tasks: usize,
+    pub chain_worker_count: usize,
     pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
@@ -316,7 +316,7 @@ where
                                     .await
                             }
                         })
-                        .buffer_unordered(self.n_tasks);
+                        .buffer_unordered(self.chain_worker_count);
                     stream.try_collect::<Vec<_>>().await?;
                 }
                 // Fail immediately on other errors.

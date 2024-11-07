@@ -993,14 +993,14 @@ where
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         let n_validators = nodes.len();
-        let n_tasks = std::cmp::max(1, CHAIN_WORKER_LIMIT.div_euclid(n_validators));
+        let chain_worker_count = std::cmp::max(1, CHAIN_WORKER_LIMIT / n_validators);
         communicate_with_quorum(
             &nodes,
             committee,
             |_: &()| (),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
-                    n_tasks,
+                    chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
                 };
@@ -1030,14 +1030,14 @@ where
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         let n_validators = nodes.len();
-        let n_tasks = std::cmp::max(1, CHAIN_WORKER_LIMIT.div_euclid(n_validators));
+        let chain_worker_count = std::cmp::max(1, CHAIN_WORKER_LIMIT / n_validators);
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| (vote.value.value_hash, vote.round),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
-                    n_tasks,
+                    chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
                 };
