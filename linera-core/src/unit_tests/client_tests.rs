@@ -116,7 +116,7 @@ where
                 .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
                 .await
                 .unwrap(),
-            certificate.into()
+            certificate
         );
     }
     assert_matches!(
@@ -284,7 +284,7 @@ where
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap(),
-        certificate.into()
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -337,7 +337,7 @@ where
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap(),
-        certificate.into()
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -386,7 +386,7 @@ where
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap(),
-        certificate.into()
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -585,9 +585,8 @@ where
         builder
             .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
             .await
-            .unwrap()
-            .value,
-        certificate.inner().clone().into()
+            .unwrap(),
+        certificate
     );
     // Make a client to try the new chain.
     let client = builder
@@ -676,9 +675,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
             .await
-            .unwrap()
-            .value,
-        certificate.inner().clone().into()
+            .unwrap(),
+        certificate
     );
     // Make a client to try the new chain.
     let client = builder
@@ -809,7 +807,7 @@ where
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap(),
-        certificate.into()
+        certificate
     );
     // Cannot use the chain for operations any more.
     let result = client1
@@ -964,7 +962,7 @@ where
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
             .unwrap(),
-        certificate.into()
+        certificate
     );
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
