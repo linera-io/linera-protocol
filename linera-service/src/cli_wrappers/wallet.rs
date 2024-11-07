@@ -65,6 +65,14 @@ pub struct ClientWrapper {
     pub path_provider: PathProvider,
 }
 
+/// Action to perform when the [`ClientWrapper`] is dropped.
+pub enum OnClientDrop {
+    /// Close all the chains on the wallet.
+    CloseChains,
+    /// Do not close any chains, leaving them active.
+    LeakChains,
+}
+
 impl ClientWrapper {
     pub fn new(
         path_provider: PathProvider,
