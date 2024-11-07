@@ -24,10 +24,10 @@ use crate::{
     ChainError,
 };
 
-/// Certificate for a ValidatedBlock instance.
+/// Certificate for a [`ValidatedBlock`]` instance.
 pub type ValidatedBlockCertificate = CertificateT<ValidatedBlock>;
 
-/// Certificate for a ConfirmedBlock instance.
+/// Certificate for a [`ConfirmedBlock`] instance.
 pub type ConfirmedBlockCertificate = CertificateT<ConfirmedBlock>;
 
 /// Generic type representing a certificate for `value` of type `T`.
@@ -129,18 +129,21 @@ impl From<ValidatedBlockCertificate> for Certificate {
     }
 }
 
-// In practice, it should be HashedCertificateValue = Hashed<CertificateValue>
+// TODO(#2842): In practice, it should be HashedCertificateValue = Hashed<CertificateValue>
 // but [`HashedCertificateValue`] is used in too many places to change it now.
+/// Wrapper type around hashed instance of `T` type.
 pub struct Hashed<T> {
     value: T,
     hash: CryptoHash,
 }
 
 impl<T> Hashed<T> {
-    // Note on usage: This method is unsafe because it allows the caller to create a Hashed
-    // with a hash that doesn't match the value. This is necessary for the rewrite state when
-    // signers sign over old `Certificate` type.
-    pub fn unsafe_new(value: T, hash: CryptoHash) -> Self {
+    /// Creates an instance of [`Hashed`] with the given `hash` value.
+    ///
+    /// Note on usage: This method is unsafe because it allows the caller to create a Hashed
+    /// with a hash that doesn't match the value. This is necessary for the rewrite state when
+    /// signers sign over old `Certificate` type.
+    pub fn unchecked_new(value: T, hash: CryptoHash) -> Self {
         Self { value, hash }
     }
 
@@ -184,7 +187,7 @@ impl<T> CertificateT<T> {
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
         Self {
-            value: Hashed::unsafe_new(value, old_hash),
+            value: Hashed::unchecked_new(value, old_hash),
             round,
             signatures,
         }
@@ -194,8 +197,8 @@ impl<T> CertificateT<T> {
         &self.signatures
     }
 
-    // Adds a signature to the certificate's list of signatures
-    // It's the responsibility of the caller to not insert duplicates
+    /// Adds a signature to the certificate's list of signatures
+    /// It's the responsibility of the caller to not insert duplicates
     pub fn add_signature(
         &mut self,
         signature: (ValidatorName, Signature),
@@ -268,7 +271,7 @@ impl From<Certificate> for ValidatedBlockCertificate {
         let hash = cert.value.hash();
         match cert.value.into_inner() {
             CertificateValue::ValidatedBlock { executed_block } => Self {
-                value: Hashed::unsafe_new(ValidatedBlock::new(executed_block), hash),
+                value: Hashed::unchecked_new(ValidatedBlock::new(executed_block), hash),
                 round: cert.round,
                 signatures,
             },
@@ -280,18 +283,12 @@ impl From<Certificate> for ValidatedBlockCertificate {
 impl ConfirmedBlockCertificate {
     /// Creates a new `ConfirmedBlockCertificate` from a `ValidatedBlockCertificate`.
     pub fn from_validated(validated: ValidatedBlockCertificate) -> Self {
-        let ValidatedBlockCertificate {
-            round,
-            value: Hashed {
-                value: validated_block,
-                ..
-            },
-            ..
-        } = validated;
+        let round = validated.round;
+        let validated_block = validated.value.into_inner();
         // To keep the signature checks passing, we need to obtain a hash over the old type.
         let old_confirmed = HashedCertificateValue::new_confirmed(validated_block.inner().clone());
         let confirmed = ConfirmedBlock::from_validated(validated_block);
-        let hashed = Hashed::unsafe_new(confirmed, old_confirmed.hash());
+        let hashed = Hashed::unchecked_new(confirmed, old_confirmed.hash());
 
         Self {
             value: hashed,
