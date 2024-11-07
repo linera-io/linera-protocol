@@ -31,11 +31,11 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::prometheus_util::{self, MeasureLatency};
 use crate::{
-    crypto::BcsHashable,
+    crypto::{BcsHashable, CryptoHash},
     doc_scalar, hex_debug,
     identifiers::{
-        ApplicationId, BlobId, BlobType, BytecodeId, Destination, GenericApplicationId, MessageId,
-        UserApplicationId,
+        ApplicationId, BlobId, BlobType, BlobUserApplicationId, BytecodeId, ChainId, Destination,
+        GenericApplicationId, MessageId, UserApplicationId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
@@ -805,12 +805,54 @@ pub struct UserApplicationDescription {
     pub required_application_ids: Vec<UserApplicationId>,
 }
 
+/// Description of the necessary information to run a user application used within blobs.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitStore)]
+pub struct BlobUserApplicationDescription {
+    /// The unique ID of the bytecode to use for the application.
+    pub bytecode_id: BytecodeId,
+    /// The chain ID that created the application.
+    pub creator_chain_id: ChainId,
+    /// Height of the block that created this application.
+    pub block_height: BlockHeight,
+    /// At what efffect index of the block this application was created.
+    pub block_effect_index: u32,
+    /// The parameters of the application.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub parameters: Vec<u8>,
+    /// Required dependencies.
+    pub required_application_ids: Vec<BlobUserApplicationId>,
+}
+
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
         UserApplicationId {
             bytecode_id: description.bytecode_id,
             creation: description.creation,
         }
+    }
+}
+
+impl From<&BlobUserApplicationDescription> for BlobUserApplicationId {
+    fn from(description: &BlobUserApplicationDescription) -> Self {
+        BlobUserApplicationId::new(
+            CryptoHash::new(&description.blob_bytes()),
+            description.bytecode_id,
+        )
+    }
+}
+
+impl BcsHashable for BlobUserApplicationDescription {}
+
+impl BlobUserApplicationDescription {
+    /// Gets the `BlobBytes` for this `BlobUserApplicationDescription`.
+    pub fn blob_bytes(&self) -> BlobBytes {
+        BlobBytes(self.to_bytes())
+    }
+
+    /// Gets the serialized bytes for this `BlobUserApplicationDescription`.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).expect("Serializing blob bytes should not fail!")
     }
 }
 
@@ -973,6 +1015,8 @@ pub enum BlobContent {
     ContractBytecode(CompressedBytecode),
     /// A blob containing service bytecode.
     ServiceBytecode(CompressedBytecode),
+    /// A blob containing an application description.
+    ApplicationDescription(BlobUserApplicationDescription),
 }
 
 impl fmt::Debug for BlobContent {
@@ -981,6 +1025,13 @@ impl fmt::Debug for BlobContent {
             BlobContent::Data(_) => write!(f, "BlobContent::Data"),
             BlobContent::ContractBytecode(_) => write!(f, "BlobContent::ContractBytecode"),
             BlobContent::ServiceBytecode(_) => write!(f, "BlobContent::ServiceBytecode"),
+            BlobContent::ApplicationDescription(description) => f
+                .debug_struct("BlobContent::ApplicationDescription")
+                .field("bytecode_id", &description.bytecode_id)
+                .field("creator_chain_id", &description.creator_chain_id)
+                .field("block_height", &description.block_height)
+                .field("block_effect_index", &description.block_effect_index)
+                .finish_non_exhaustive(),
         }
     }
 }
@@ -996,6 +1047,9 @@ impl BlobContent {
             BlobType::ServiceBytecode => BlobContent::ServiceBytecode(CompressedBytecode {
                 compressed_bytes: bytes,
             }),
+            BlobType::ApplicationDescription => BlobContent::ApplicationDescription(
+                bcs::from_bytes(&bytes).expect("Deserializing blob bytes should not fail!"),
+            ),
         }
     }
 
@@ -1012,6 +1066,13 @@ impl BlobContent {
     /// Creates a new service bytecode [`BlobContent`] from the provided bytes.
     pub fn new_service_bytecode(compressed_bytecode: CompressedBytecode) -> Self {
         BlobContent::ServiceBytecode(compressed_bytecode)
+    }
+
+    /// Creates a new application description [`BlobContent`] from a [`BlobUserApplicationDescription`].
+    pub fn new_application_description(
+        application_description: BlobUserApplicationDescription,
+    ) -> Self {
+        BlobContent::ApplicationDescription(application_description)
     }
 
     /// Creates a `Blob` without checking that this is the correct `BlobId`.
@@ -1032,6 +1093,11 @@ impl BlobContent {
             BlobType::ServiceBytecode if matches!(&self, BlobContent::ServiceBytecode(_)) => {
                 Some(())
             }
+            BlobType::ApplicationDescription
+                if matches!(&self, BlobContent::ApplicationDescription(_)) =>
+            {
+                Some(())
+            }
             _ => None,
         }?;
 
@@ -1047,13 +1113,20 @@ impl BlobContent {
     /// Gets the inner blob's bytes.
     pub fn inner_bytes(&self) -> Vec<u8> {
         match self {
-            BlobContent::Data(bytes) => bytes,
-            BlobContent::ContractBytecode(compressed_bytecode) => {
-                &compressed_bytecode.compressed_bytes
+            BlobContent::Data(bytes) => bytes.clone(),
+            BlobContent::ContractBytecode(compressed_bytecode)
+            | BlobContent::ServiceBytecode(compressed_bytecode) => {
+                compressed_bytecode.compressed_bytes.clone()
             }
-            BlobContent::ServiceBytecode(compressed_bytecode) => {
-                &compressed_bytecode.compressed_bytes
-            }
+            BlobContent::ApplicationDescription(description) => description.to_bytes(),
+        }
+    }
+
+    /// Moves ownership of the blob's application description. If the `BlobContent` is of the wrong type, returns `None`.
+    pub fn into_inner_application_description(self) -> Option<BlobUserApplicationDescription> {
+        match self {
+            BlobContent::ApplicationDescription(description) => Some(description),
+            _ => None,
         }
         .clone()
     }
@@ -1071,6 +1144,7 @@ impl BlobContent {
             | BlobContent::ServiceBytecode(compressed_bytecode) => {
                 compressed_bytecode.compressed_bytes.len()
             }
+            BlobContent::ApplicationDescription(description) => description.to_bytes().len(),
         }
     }
 }
@@ -1082,7 +1156,7 @@ impl From<Blob> for BlobContent {
 }
 
 impl From<BlobContent> for Blob {
-    fn from(content: BlobContent) -> Blob {
+    fn from(content: BlobContent) -> Self {
         Self {
             id: BlobId::from_content(&content),
             content,
@@ -1121,6 +1195,13 @@ impl Blob {
         BlobContent::new_service_bytecode(compressed_bytecode).into()
     }
 
+    /// Creates a new application description [`Blob`] from a [`BlobUserApplicationDescription`].
+    pub fn new_application_description(
+        application_description: BlobUserApplicationDescription,
+    ) -> Self {
+        BlobContent::new_application_description(application_description).into()
+    }
+
     /// A content-addressed blob ID i.e. the hash of the `Blob`.
     pub fn id(&self) -> BlobId {
         self.id
@@ -1141,8 +1222,13 @@ impl Blob {
         self.content.inner_bytes()
     }
 
+    /// Moves ownership of the blob's application description. If the `Blob` is of the wrong type, returns `None`.
+    pub fn into_inner_application_description(self) -> Option<BlobUserApplicationDescription> {
+        self.content.into_inner_application_description()
+    }
+
     /// Loads data blob content from a file.
-    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
+    pub async fn load_data_blob_from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         Ok(Self::new_data(fs::read(path)?))
     }
 }

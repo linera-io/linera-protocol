@@ -463,6 +463,9 @@ pub enum ChainClientError {
     #[error(transparent)]
     CommunicationError(#[from] CommunicationError<NodeError>),
 
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
     #[error("Internal error within chain client: {0}")]
     InternalError(&'static str),
 
@@ -2711,9 +2714,12 @@ where
         &self,
         bytes: Vec<Vec<u8>>,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
-        let blobs = bytes.into_iter().map(Blob::new_data);
+        let mut blobs = Vec::with_capacity(bytes.len());
+        for byte_vec in bytes {
+            blobs.push(Blob::new_data(byte_vec));
+        }
         let publish_blob_operations = blobs
-            .clone()
+            .iter()
             .map(|blob| {
                 Operation::System(SystemOperation::PublishDataBlob {
                     blob_hash: blob.id().hash,

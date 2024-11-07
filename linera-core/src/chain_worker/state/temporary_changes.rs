@@ -358,7 +358,7 @@ where
                     WorkerError::BytecodeTooLarge
                 );
             }
-            BlobContent::Data(_) => {}
+            BlobContent::Data(_) | BlobContent::ApplicationDescription(_) => {}
         }
         Ok(())
     }

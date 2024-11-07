@@ -247,7 +247,7 @@ pub enum ExecutionError {
     #[error("Invalid JSON: {}", .0)]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
