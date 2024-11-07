@@ -1064,7 +1064,7 @@ where
             })?;
         let hash = loop {
             let timeout = match client.execute_operations(operations.clone()).await? {
-                ClientOutcome::Committed(certificate) => break certificate.value.hash(),
+                ClientOutcome::Committed(certificate) => break certificate.hash(),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().await.map_err(|_| {

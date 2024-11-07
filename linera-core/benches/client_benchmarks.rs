@@ -69,7 +69,7 @@ where
         .unwrap();
 
     chain2
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     chain2.process_inbox().await.unwrap();
@@ -86,7 +86,7 @@ where
         .unwrap();
 
     chain2
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let cert = chain2.process_inbox().await.unwrap().0.pop().unwrap();

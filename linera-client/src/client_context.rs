@@ -625,10 +625,7 @@ where
                 .execute_without_prepare(operations)
                 .await?
                 .expect("should execute block with OpenChain operations");
-            let executed_block = certificate
-                .value()
-                .executed_block()
-                .expect("certificate should be confirmed block");
+            let executed_block = certificate.executed_block();
             let timestamp = executed_block.block.timestamp;
             for i in 0..num_new_chains {
                 let message_id = executed_block

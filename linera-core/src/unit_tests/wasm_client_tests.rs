@@ -328,7 +328,7 @@ where
         .unwrap()
         .unwrap();
     assert_eq!(
-        certificate.value().executed_block().unwrap().outcome.events,
+        certificate.executed_block().outcome.events,
         vec![
             Vec::new(),
             vec![EventRecord {
@@ -350,7 +350,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = cert.value().executed_block().unwrap();
+    let executed_block = cert.executed_block();
     let responses = &executed_block.outcome.oracle_responses;
     let [_, responses] = &responses[..] else {
         panic!("Unexpected oracle responses: {:?}", responses);
@@ -368,7 +368,7 @@ where
 
     receiver.synchronize_from_validators().await.unwrap();
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     receiver.process_inbox().await.unwrap();
@@ -393,7 +393,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
@@ -420,7 +420,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let mut certs = receiver.process_inbox().await.unwrap().0;
@@ -581,7 +581,7 @@ where
         .unwrap()
         .unwrap();
 
-    let messages = cert.value().messages().unwrap();
+    let messages = cert.executed_block().messages();
     {
         let OutgoingMessage {
             destination,
@@ -600,7 +600,7 @@ where
     }
     receiver.synchronize_from_validators().await.unwrap();
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -637,7 +637,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -684,7 +684,7 @@ where
         .unwrap();
 
     receiver2
-        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
 
@@ -783,7 +783,7 @@ where
     // Subscribe the receiver. This also registers the application.
     sender.synchronize_from_validators().await.unwrap();
     sender
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
@@ -801,7 +801,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert.clone().try_into().unwrap())
+        .receive_certificate_and_update_validators(cert.clone())
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -847,7 +847,7 @@ where
     // Unsubscribe the receiver.
     sender.synchronize_from_validators().await.unwrap();
     sender
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let _certs = sender.process_inbox().await.unwrap();
@@ -865,7 +865,7 @@ where
 
     // The post will not be received by the unsubscribed chain.
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     let certs = receiver.process_inbox().await.unwrap().0;

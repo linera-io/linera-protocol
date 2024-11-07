@@ -14,10 +14,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{
-        CertificateValue, ExecutedBlock, IncomingBundle, Medium, MessageBundle, Origin,
-        PostedMessage,
-    },
+    data_types::{CertificateValue, IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -118,9 +115,8 @@ where
             builder
                 .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
                 .await
-                .unwrap()
-                .value,
-            certificate.value
+                .unwrap(),
+            certificate.into()
         );
     }
     assert_matches!(
@@ -177,7 +173,7 @@ where
         Amount::from_millis(898)
     );
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await?;
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
@@ -234,7 +230,7 @@ where
         .unwrap();
 
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
@@ -287,9 +283,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate.into()
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -341,9 +336,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate.into()
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -391,9 +385,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate.into()
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -612,7 +605,7 @@ where
         .unwrap()
         .unwrap();
     client
-        .receive_certificate_and_update_validators(certificate2.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate2)
         .await
         .unwrap();
     assert_eq!(
@@ -763,7 +756,7 @@ where
         .unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     client
-        .receive_certificate_and_update_validators(transfer_certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(transfer_certificate)
         .await
         .unwrap();
     assert_eq!(
@@ -804,10 +797,8 @@ where
 
     let certificate = client1.close_chain().await.unwrap().unwrap();
     assert_matches!(
-        certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            &block.operations[..], &[Operation::System(SystemOperation::CloseChain)]
-        ),
+        certificate.executed_block().block.operations[..],
+        [Operation::System(SystemOperation::CloseChain)],
         "Unexpected certificate value",
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
@@ -817,9 +808,8 @@ where
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate.into()
     );
     // Cannot use the chain for operations any more.
     let result = client1
@@ -973,9 +963,8 @@ where
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate.into()
     );
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1056,7 +1045,7 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client2
-        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
     assert_eq!(
@@ -1156,7 +1145,7 @@ where
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
     client3
-        .receive_certificate_and_update_validators(certificate.try_into().unwrap())
+        .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
     assert_eq!(
@@ -1201,7 +1190,7 @@ where
         .unwrap()
         .unwrap();
     admin
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     admin.process_inbox().await.unwrap();
@@ -1233,8 +1222,7 @@ where
     // User is still at the initial epoch, but we can receive transfers from future
     // epochs AFTER synchronizing the client with the admin chain.
     assert_matches!(
-        user.receive_certificate_and_update_validators(cert.try_into().unwrap())
-            .await,
+        user.receive_certificate_and_update_validators(cert).await,
         Err(ChainClientError::CommitteeSynchronizationError)
     );
     assert_eq!(user.epoch().await.unwrap(), Epoch::from(1));
@@ -1247,7 +1235,7 @@ where
     // Now subscribe explicitly to migrations.
     let cert = user.subscribe_to_new_committees().await.unwrap().unwrap();
     admin
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     builder
@@ -1269,9 +1257,7 @@ where
         .unwrap()
         .unwrap();
     assert_matches!(
-        admin
-            .receive_certificate_and_update_validators(cert.try_into().unwrap())
-            .await,
+        admin.receive_certificate_and_update_validators(cert).await,
         Err(ChainClientError::CommitteeDeprecationError)
     );
     // Transfer is blocked because the epoch #0 has been retired by admin.
@@ -1291,7 +1277,7 @@ where
         .unwrap()
         .unwrap();
     admin
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     admin.process_inbox().await.unwrap();
@@ -1438,9 +1424,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     // Validators goes back up
@@ -1456,11 +1440,7 @@ where
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .requires_blob(&blob0_id));
+    assert!(certificate.executed_block().requires_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)
@@ -1513,7 +1493,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1600,9 +1580,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     builder
@@ -1656,7 +1634,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1755,9 +1733,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate0
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
@@ -1774,9 +1750,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate2
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob2_id));
 
     builder
@@ -1931,7 +1905,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client3_c
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 3)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 3)
         .await
         .unwrap();
 
@@ -2377,7 +2351,7 @@ where
 
     receiver.options_mut().message_policy = MessagePolicy::new(BlanketMessagePolicy::Ignore, None);
     receiver
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2465,7 +2439,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = certificate.value().executed_block().unwrap();
+    let executed_block = certificate.executed_block();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
 
