@@ -896,6 +896,15 @@ where
             let nodes = self.validator_nodes().await?;
             info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
         }
+
+        let result = self
+            .chain_state_view()
+            .await?
+            .validate_incoming_bundles()
+            .await;
+        if matches!(result, Err(ChainError::MissingCrossChainUpdate { .. })) {
+            self.find_received_certificates().await?;
+        }
         self.update_from_info(&info);
         Ok(info)
     }
