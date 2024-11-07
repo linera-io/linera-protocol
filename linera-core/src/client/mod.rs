@@ -1325,12 +1325,10 @@ where
             let sender_chain_id = certificate.value().chain_id();
             let height = certificate.value().height();
             let epoch = certificate.value().epoch();
-            debug_assert!(certificate.value().is_confirmed());
-            match self.check_certificate(
-                max_epoch,
-                &committees,
-                &(certificate.clone().try_into().unwrap()),
-            )? {
+            let confirmed_block_certificate = certificate
+                .try_into()
+                .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+            match self.check_certificate(max_epoch, &committees, &confirmed_block_certificate)? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
                         "Postponing received certificate from {sender_chain_id:.8} at height \
@@ -1351,7 +1349,7 @@ where
                         .entry(sender_chain_id)
                         .and_modify(|h| *h = height.max(*h))
                         .or_insert(height);
-                    certificates.push(certificate);
+                    certificates.push(confirmed_block_certificate);
                 }
             }
         }
@@ -1411,16 +1409,17 @@ where
     ) {
         let validator_count = received_certificates_batches.len();
         let mut other_sender_chains = BTreeSet::new();
-        let mut certificates = BTreeMap::<ChainId, BTreeMap<BlockHeight, Certificate>>::new();
+        let mut certificates =
+            BTreeMap::<ChainId, BTreeMap<BlockHeight, ConfirmedBlockCertificate>>::new();
         let mut new_trackers = BTreeMap::new();
         for response in received_certificates_batches {
             other_sender_chains.extend(response.other_sender_chains);
             new_trackers.insert(response.name, response.tracker);
             for certificate in response.certificates {
                 certificates
-                    .entry(certificate.value().chain_id())
+                    .entry(certificate.executed_block().block.chain_id)
                     .or_default()
-                    .insert(certificate.value().height(), certificate);
+                    .insert(certificate.executed_block().block.height, certificate);
             }
         }
         let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
@@ -1439,24 +1438,9 @@ where
             let client = self.clone();
             async move {
                 for certificate in certificates.into_values() {
-                    if !certificate.value().is_confirmed() {
-                        warn!(
-                            "Expected instance of confirmed chain operation but received {:?}",
-                            certificate
-                        );
-                        continue;
-                    }
                     let hash = certificate.hash();
                     let mode = ReceiveCertificateMode::AlreadyChecked;
-                    if let Err(e) = client
-                        .receive_certificate_internal(
-                            certificate
-                                .try_into()
-                                .expect("Certificate of ConfirmedBlock"),
-                            mode,
-                        )
-                        .await
-                    {
+                    if let Err(e) = client.receive_certificate_internal(certificate, mode).await {
                         warn!("Received invalid certificate {hash}: {e}");
                     }
                 }
@@ -3391,7 +3375,7 @@ struct ReceivedCertificatesFromValidator {
     tracker: u64,
     /// The downloaded certificates. The signatures were already checked and they are ready
     /// to be processed.
-    certificates: Vec<Certificate>,
+    certificates: Vec<ConfirmedBlockCertificate>,
     /// Sender chains that were already up to date locally. We need to ensure their messages
     /// are delivered.
     other_sender_chains: Vec<ChainId>,
