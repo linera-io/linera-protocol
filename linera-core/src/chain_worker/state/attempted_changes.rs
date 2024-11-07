@@ -243,7 +243,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let executed_block = certificate.executed_block();
-        let block = executed_block.block.clone();
+        let block = &executed_block.block;
         let block_height = executed_block.block.height;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
@@ -289,7 +289,7 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        check_block_epoch(epoch, &block)?;
+        check_block_epoch(epoch, block)?;
         certificate.check(committee)?;
         // This should always be true for valid certificates.
         ensure!(
@@ -332,10 +332,10 @@ where
             .await?;
 
         // Execute the block and update inboxes.
-        self.state.chain.remove_bundles_from_inboxes(&block).await?;
+        self.state.chain.remove_bundles_from_inboxes(block).await?;
         let local_time = self.state.storage.clock().current_time();
         let verified_outcome = Box::pin(self.state.chain.execute_block(
-            &block,
+            block,
             local_time,
             Some(executed_block.outcome.oracle_responses.clone()),
         ))

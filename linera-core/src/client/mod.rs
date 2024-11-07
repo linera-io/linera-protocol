@@ -2711,14 +2711,13 @@ where
                 application_permissions: application_permissions.clone(),
             };
             let operation = Operation::System(SystemOperation::OpenChain(config));
-            let certificate: ConfirmedBlockCertificate =
-                match self.execute_block(vec![operation]).await? {
-                    ExecuteBlockOutcome::Executed(certificate) => certificate,
-                    ExecuteBlockOutcome::Conflict(_) => continue,
-                    ExecuteBlockOutcome::WaitForTimeout(timeout) => {
-                        return Ok(ClientOutcome::WaitForTimeout(timeout));
-                    }
-                };
+            let certificate = match self.execute_block(vec![operation]).await? {
+                ExecuteBlockOutcome::Executed(certificate) => certificate,
+                ExecuteBlockOutcome::Conflict(_) => continue,
+                ExecuteBlockOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+            };
             // The first message of the only operation created the new chain.
             let message_id = certificate
                 .executed_block()
@@ -2940,8 +2939,8 @@ where
                 return Ok((certificates, None));
             }
             match self.execute_block(vec![]).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate)) => certificates.push(certificate),
-                Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
+                Ok(ExecuteBlockOutcome::Executed(certificate))
+                | Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
                 }
