@@ -79,3 +79,23 @@ impl ConfirmedBlock {
         self.executed_block
     }
 }
+
+use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_execution::committee::Epoch;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
+pub struct Timeout {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub epoch: Epoch,
+}
+
+impl Timeout {
+    pub fn new(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> Self {
+        Self {
+            chain_id,
+            height,
+            epoch,
+        }
+    }
+}

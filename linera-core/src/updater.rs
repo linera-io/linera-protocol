@@ -351,8 +351,8 @@ where
             }
         }
         if let Some(cert) = manager.timeout {
-            if cert.value().is_timeout() && cert.value().chain_id() == chain_id {
-                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
+            if cert.inner().chain_id == chain_id {
+                self.send_certificate(cert.into(), CrossChainMessageDelivery::NonBlocking)
                     .await?;
             }
         }

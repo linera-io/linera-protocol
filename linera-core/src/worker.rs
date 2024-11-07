@@ -25,7 +25,7 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
     },
-    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::Epoch, Query, Response};
@@ -510,12 +510,10 @@ where
     #[instrument(level = "trace", skip(self, certificate))]
     async fn process_timeout(
         &self,
-        certificate: Certificate,
+        certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
-            panic!("Expecting a leader timeout certificate");
-        };
-        self.query_chain_worker(*chain_id, move |callback| {
+        let chain_id = certificate.inner().chain_id;
+        self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessTimeout {
                 certificate,
                 callback,
@@ -788,7 +786,10 @@ where
             }
             CertificateValue::Timeout { .. } => {
                 // Handle the leader timeout.
-                self.process_timeout(certificate).await?
+                // Note: This conversion panics if `certificate` is not a timeout certificate
+                // but we just checked that it is.
+                let timeout_certificate = certificate.into();
+                self.process_timeout(timeout_certificate).await?
             }
         };
 

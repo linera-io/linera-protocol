@@ -19,10 +19,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, Medium,
-        MessageBundle, Origin, Target,
+        Block, BlockProposal, ExecutedBlock, HashedCertificateValue, Medium, MessageBundle, Origin,
+        Target,
     },
-    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -130,7 +130,7 @@ where
     pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
-    ) -> Result<Option<Certificate>, WorkerError> {
+    ) -> Result<Option<linera_chain::data_types::Certificate>, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .read_certificate(height)
@@ -188,7 +188,7 @@ where
     /// Processes a leader timeout issued for this multi-owner chain.
     pub(super) async fn process_timeout(
         &mut self,
-        certificate: Certificate,
+        certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await

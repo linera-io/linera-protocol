@@ -266,10 +266,10 @@ ChainManagerInfo:
           TYPENAME: BlockProposal
     - requested_locked:
         OPTION:
-          TYPENAME: Certificate
+          TYPENAME: ValidatedBlockCertificate
     - timeout:
         OPTION:
-          TYPENAME: Certificate
+          TYPENAME: TimeoutCertificate
     - pending:
         OPTION:
           TYPENAME: LiteVote
@@ -1039,6 +1039,27 @@ SystemOperation:
           TYPENAME: AdminOperation
 TimeDelta:
   NEWTYPESTRUCT: U64
+Timeout:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - epoch:
+        TYPENAME: Epoch
+TimeoutCertificate:
+  STRUCT:
+    - hash:
+        TYPENAME: CryptoHash
+    - value:
+        TYPENAME: Timeout
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 TimeoutConfig:
   STRUCT:
     - fast_round_duration:
@@ -1062,6 +1083,23 @@ UserApplicationDescription:
     - required_application_ids:
         SEQ:
           TYPENAME: ApplicationId
+ValidatedBlock:
+  STRUCT:
+    - executed_block:
+        TYPENAME: ExecutedBlock
+ValidatedBlockCertificate:
+  STRUCT:
+    - hash:
+        TYPENAME: CryptoHash
+    - value:
+        TYPENAME: ValidatedBlock
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 ValidatorName:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey

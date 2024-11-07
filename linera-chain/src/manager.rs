@@ -81,14 +81,13 @@ use linera_execution::committee::Epoch;
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
 use crate::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        HashedCertificateValue, LiteVote, ProposalContent, Vote,
+        Block, BlockExecutionOutcome, BlockProposal, CertificateValue, HashedCertificateValue,
+        LiteVote, ProposalContent, Vote,
     },
-    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
 
@@ -117,7 +116,7 @@ pub struct ChainManager {
     /// validator).
     pub locked: Option<ValidatedBlockCertificate>,
     /// Latest leader timeout certificate we have received.
-    pub timeout: Option<Certificate>,
+    pub timeout: Option<TimeoutCertificate>,
     /// Latest vote we have cast, to validate or confirm.
     pub pending: Option<Vote>,
     /// Latest timeout vote we cast.
@@ -470,12 +469,11 @@ impl ChainManager {
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
     /// any known certificate.
-    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, local_time: Timestamp) {
-        if !certificate.value().is_timeout() {
-            // Unreachable: This is only called with timeout certificates.
-            error!("Unexpected certificate; expected leader timeout");
-            return;
-        }
+    pub fn handle_timeout_certificate(
+        &mut self,
+        certificate: TimeoutCertificate,
+        local_time: Timestamp,
+    ) {
         let round = certificate.round;
         if let Some(known_certificate) = &self.timeout {
             if known_certificate.round >= round {
@@ -565,7 +563,7 @@ pub struct ChainManagerInfo {
     /// validator).
     pub requested_locked: Option<Box<ValidatedBlockCertificate>>,
     /// Latest timeout certificate we have seen.
-    pub timeout: Option<Box<Certificate>>,
+    pub timeout: Option<Box<TimeoutCertificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
