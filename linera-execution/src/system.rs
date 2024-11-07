@@ -668,11 +668,16 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        if owner.is_some() {
-            ensure!(
+        match (owner, authenticated_signer) {
+            (Some(_), _) => ensure!(
                 authenticated_signer == owner,
                 SystemExecutionError::UnauthenticatedTransferOwner
-            );
+            ),
+            (None, Some(signer)) => ensure!(
+                self.ownership.get().verify_owner(&signer).is_some(),
+                SystemExecutionError::UnauthenticatedTransferOwner
+            ),
+            (None, None) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
         }
         ensure!(
             amount > Amount::ZERO,
