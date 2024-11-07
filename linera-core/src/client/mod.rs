@@ -992,12 +992,15 @@ where
     ) -> Result<(), ChainClientError> {
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
+        let n_validators = nodes.len();
+        let chain_worker_count = std::cmp::max(1, CHAIN_WORKER_LIMIT / n_validators);
         communicate_with_quorum(
             &nodes,
             committee,
             |_: &()| (),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
+                    chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
                 };
@@ -1026,12 +1029,15 @@ where
     ) -> Result<Certificate, ChainClientError> {
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
+        let n_validators = nodes.len();
+        let chain_worker_count = std::cmp::max(1, CHAIN_WORKER_LIMIT / n_validators);
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| (vote.value.value_hash, vote.round),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
+                    chain_worker_count,
                     remote_node,
                     local_node: local_node.clone(),
                 };

@@ -10,7 +10,7 @@ use std::{
     ops::Range,
 };
 
-use futures::{stream, Future, StreamExt};
+use futures::{stream, stream::TryStreamExt, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
@@ -65,10 +65,12 @@ impl CommunicateAction {
     }
 }
 
+#[derive(Clone)]
 pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
+    pub chain_worker_count: usize,
     pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
@@ -291,16 +293,31 @@ where
                     let certificates = local_storage
                         .read_certificates(blob_states.into_iter().map(|x| x.last_used_by))
                         .await?;
+                    let mut chain_heights = BTreeMap::new();
                     for certificate in certificates {
                         let block_chain_id = certificate.value().chain_id();
                         let block_height = certificate.value().height();
-                        self.send_chain_information(
-                            block_chain_id,
-                            block_height.try_add_one()?,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
+                        chain_heights
+                            .entry(block_chain_id)
+                            .and_modify(|h| *h = block_height.max(*h))
+                            .or_insert(block_height);
                     }
+                    let stream = stream::iter(chain_heights)
+                        .map(|(chain_id, height)| {
+                            let mut updater = self.clone();
+                            async move {
+                                let height = height.try_add_one()?;
+                                updater
+                                    .send_chain_information(
+                                        chain_id,
+                                        height,
+                                        CrossChainMessageDelivery::NonBlocking,
+                                    )
+                                    .await
+                            }
+                        })
+                        .buffer_unordered(self.chain_worker_count);
+                    stream.try_collect::<Vec<_>>().await?;
                 }
                 // Fail immediately on other errors.
                 Err(e) => return Err(e),
