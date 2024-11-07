@@ -135,6 +135,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
 * `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--grace-period <GRACE_PERIOD>` — The amount of time we wait for additional validators to contribute to the result, as a fraction of how long it took to reach a quorum
+
+  Default value: `0.1`
 
 
 

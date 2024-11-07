@@ -170,6 +170,7 @@ where
             options.long_lived_services,
             chain_ids,
             name,
+            options.grace_period,
         );
 
         ClientContext {
@@ -205,7 +206,16 @@ where
             1 => format!("Client node for {:.8}", chain_ids[0]),
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
-        let client = Client::new(node_provider, storage, 10, delivery, false, chain_ids, name);
+        let client = Client::new(
+            node_provider,
+            storage,
+            10,
+            delivery,
+            false,
+            chain_ids,
+            name,
+            0.1,
+        );
 
         ClientContext {
             client: Arc::new(client),
