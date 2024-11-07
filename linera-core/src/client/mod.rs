@@ -2126,9 +2126,7 @@ where
         let _guard = mutex.lock_owned().await;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(ExecuteBlockOutcome::Conflict(
-                    certificate.try_into().unwrap(),
-                ))
+                return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
@@ -2139,15 +2137,13 @@ where
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if certificate.value().block() == confirmed_value.inner().block() =>
+                if Some(&certificate.executed_block().block) == confirmed_value.inner().block() =>
             {
-                Ok(ExecuteBlockOutcome::Executed(
-                    certificate.try_into().unwrap(),
-                ))
+                Ok(ExecuteBlockOutcome::Executed(certificate))
             }
-            ClientOutcome::Committed(Some(certificate)) => Ok(ExecuteBlockOutcome::Conflict(
-                certificate.try_into().unwrap(),
-            )),
+            ClientOutcome::Committed(Some(certificate)) => {
+                Ok(ExecuteBlockOutcome::Conflict(certificate))
+            }
             // Should be unreachable: We did set a pending block.
             ClientOutcome::Committed(None) => Err(ChainClientError::BlockProposalError(
                 "Unexpected block proposal error",
@@ -2464,7 +2460,7 @@ where
     #[instrument(level = "trace")]
     pub async fn process_pending_block(
         &self,
-    ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         self.synchronize_from_validators().await?;
         self.process_pending_block_without_prepare().await
     }
@@ -2473,7 +2469,7 @@ where
     #[instrument(level = "trace")]
     async fn process_pending_block_without_prepare(
         &self,
-    ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         let identity = self.identity().await?;
         let mut info = self.chain_info_with_manager_values().await?;
         // If the current round has timed out, we request a timeout certificate and retry in
@@ -2492,9 +2488,7 @@ where
             if certificate.round == manager.current_round {
                 let committee = self.local_committee().await?;
                 match self.finalize_block(&committee, *certificate.clone()).await {
-                    Ok(certificate) => {
-                        return Ok(ClientOutcome::Committed(Some(certificate.into())))
-                    }
+                    Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
                     Err(ChainClientError::CommunicationError(_)) => {
                         // Communication errors in this case often mean that someone else already
                         // finalized the block.
@@ -2549,7 +2543,7 @@ where
         };
         if manager.can_propose(&identity, round) {
             let certificate = self.propose_block(block.clone(), round, manager).await?;
-            Ok(ClientOutcome::Committed(Some(certificate.into())))
+            Ok(ClientOutcome::Committed(Some(certificate)))
         } else {
             // TODO(#1424): Local timeout might not match validators' exactly.
             let timestamp = manager.round_timeout.ok_or_else(|| {
