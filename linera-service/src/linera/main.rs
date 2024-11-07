@@ -515,7 +515,7 @@ impl Runnable for Job {
                     .await
                     .unwrap()
                     .into_iter()
-                    .filter_map(|c| c.value().executed_block().map(|e| e.messages().len()))
+                    .map(|c| c.executed_block().messages().len())
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
                 let maybe_certificate = context

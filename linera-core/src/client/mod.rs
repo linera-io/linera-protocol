@@ -2094,7 +2094,7 @@ where
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
-                        height = %certificate.value().height(),
+                        height = %certificate.executed_block().block.height,
                         "Another block was committed; retrying."
                     );
                 }
@@ -2126,7 +2126,9 @@ where
         let _guard = mutex.lock_owned().await;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(ExecuteBlockOutcome::Conflict(certificate))
+                return Ok(ExecuteBlockOutcome::Conflict(
+                    certificate.try_into().unwrap(),
+                ))
             }
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout))
@@ -2143,9 +2145,9 @@ where
                     certificate.try_into().unwrap(),
                 ))
             }
-            ClientOutcome::Committed(Some(certificate)) => {
-                Ok(ExecuteBlockOutcome::Conflict(certificate))
-            }
+            ClientOutcome::Committed(Some(certificate)) => Ok(ExecuteBlockOutcome::Conflict(
+                certificate.try_into().unwrap(),
+            )),
             // Should be unreachable: We did set a pending block.
             ClientOutcome::Committed(None) => Err(ChainClientError::BlockProposalError(
                 "Unexpected block proposal error",
@@ -2657,7 +2659,7 @@ where
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
-                        height = %certificate.value().height(),
+                        height = %certificate.executed_block().block.height,
                         "Another block was committed; retrying."
                     );
                 }
@@ -2920,7 +2922,7 @@ where
     #[instrument(level = "trace")]
     pub async fn process_inbox(
         &self,
-    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
+    ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), ChainClientError> {
         self.prepare_chain().await?;
         self.process_inbox_without_prepare().await
     }
@@ -2933,7 +2935,7 @@ where
     #[instrument(level = "trace")]
     pub async fn process_inbox_without_prepare(
         &self,
-    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
+    ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
@@ -2944,9 +2946,7 @@ where
                 return Ok((certificates, None));
             }
             match self.execute_block(vec![]).await {
-                Ok(ExecuteBlockOutcome::Executed(certificate)) => {
-                    certificates.push(certificate.into())
-                }
+                Ok(ExecuteBlockOutcome::Executed(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::Conflict(certificate)) => certificates.push(certificate),
                 Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)) => {
                     return Ok((certificates, Some(timeout)));
@@ -3373,7 +3373,7 @@ enum ExecuteBlockOutcome {
     Executed(ConfirmedBlockCertificate),
     /// A different block was already proposed and got committed. Check whether the messages and
     /// operations are still suitable, and try again at the next block height.
-    Conflict(Certificate),
+    Conflict(ConfirmedBlockCertificate),
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),

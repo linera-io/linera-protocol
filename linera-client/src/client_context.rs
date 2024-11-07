@@ -15,7 +15,7 @@ use linera_base::{
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
-use linera_chain::data_types::Certificate;
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
@@ -34,7 +34,9 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
+    linera_chain::data_types::{
+        Block, BlockProposal, Certificate, ExecutedBlock, SignatureAggregator, Vote,
+    },
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
@@ -349,7 +351,7 @@ where
     pub async fn process_inbox(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
-    ) -> Result<Vec<Certificate>, Error> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {

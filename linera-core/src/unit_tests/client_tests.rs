@@ -234,7 +234,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages = &cert.value().block().unwrap().incoming_bundles;
+        let messages = &cert.executed_block().block.incoming_bundles;
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
@@ -246,7 +246,7 @@ where
     }
 
     sender
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await?;
     sender.process_inbox().await?;
     assert_eq!(
@@ -842,7 +842,7 @@ where
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
-    let block = certificates[0].value().block().unwrap();
+    let block = &certificates[0].executed_block().block;
     assert!(block.operations.is_empty());
     assert_eq!(block.incoming_bundles.len(), 1);
     assert_matches!(
@@ -2366,9 +2366,7 @@ where
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender
-        .receive_certificate_and_update_validators(
-            certs.into_iter().next().unwrap().try_into().unwrap(),
-        )
+        .receive_certificate_and_update_validators(certs.into_iter().next().unwrap())
         .await?;
     // The message bounces.
     assert_eq!(sender.process_inbox().await?.0.len(), 1);

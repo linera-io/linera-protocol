@@ -92,7 +92,7 @@ where
     let cert = chain2.process_inbox().await.unwrap().0.pop().unwrap();
 
     chain1
-        .receive_certificate_and_update_validators(cert.try_into().unwrap())
+        .receive_certificate_and_update_validators(cert)
         .await
         .unwrap();
     chain1.process_inbox().await.unwrap();
