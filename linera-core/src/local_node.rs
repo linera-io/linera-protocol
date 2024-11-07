@@ -90,17 +90,16 @@ impl LocalNodeError {
     pub fn get_blobs_not_found(&self) -> Option<Vec<BlobId>> {
         match self {
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error)) => {
-                match **chain_error {
-                    ChainError::ExecutionError(
+                match &**chain_error {
+                    ChainError::ExecutionError(execution_error, _) => match **execution_error {
                         ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(
                             blob_id,
-                        )),
-                        _,
-                    )
-                    | ChainError::ExecutionError(
-                        ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
-                        _,
-                    ) => Some(vec![blob_id]),
+                        ))
+                        | ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)) => {
+                            Some(vec![blob_id])
+                        }
+                        _ => None,
+                    },
                     _ => None,
                 }
             }

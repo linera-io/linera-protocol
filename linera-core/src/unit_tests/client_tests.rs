@@ -712,11 +712,11 @@ where
         result,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(&*error, ChainError::CannotSkipMessage {
-            bundle: MessageBundle { messages, .. }, ..
-        } if matches!(messages[..], [PostedMessage {
-            message: Message::System(SystemMessage::Credit { .. }), ..
-        }]))
+        )) if matches!(&*error, ChainError::CannotSkipMessage { bundle, .. }
+            if matches!(&**bundle, MessageBundle { messages, .. }
+            if matches!(messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::Credit { .. }), ..
+        }])))
     );
     Ok(())
 }
@@ -1125,7 +1125,13 @@ where
             Account::chain(client3.chain_id),
         )
         .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+            error
+        )))) if matches!(&*error, ChainError::ExecutionError(
+            execution_error, ChainExecutionContext::Operation(_)
+        ) if matches!(**execution_error, ExecutionError::SystemError(
+            SystemExecutionError::InsufficientFunding { .. }
+        )))
     );
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
@@ -1322,9 +1328,11 @@ where
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
             WorkerError::ChainError(error)
-        ))) if matches!(*error, ChainError::ExecutionError(
-            ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+        ))) if matches!(&*error, ChainError::ExecutionError(
+            execution_error,
             ChainExecutionContext::Operation(0)
+        ) if matches!(**execution_error,
+            ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })
         ))
     );
     let obtained_error = sender
@@ -1338,11 +1346,11 @@ where
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error,
-            ChainError::ExecutionError(ExecutionError::SystemError(
-                SystemExecutionError::InsufficientFundingForFees { .. }
-            ), ChainExecutionContext::Block)
-        )
+        )) if matches!(&*error, ChainError::ExecutionError(
+            execution_error, ChainExecutionContext::Block
+        )  if matches!(**execution_error, ExecutionError::SystemError(
+            SystemExecutionError::InsufficientFundingForFees { .. }
+        )))
     );
     Ok(())
 }

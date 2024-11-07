@@ -482,13 +482,11 @@ where
         .await,
         Err(
             WorkerError::ChainError(error)
-        ) if matches!(
-            *error,
-            ChainError::ExecutionError(
-                ExecutionError::SystemError(SystemExecutionError::IncorrectTransferAmount),
-                ChainExecutionContext::Operation(_)
-            )
-        )
+        ) if matches!(&*error, ChainError::ExecutionError(
+            execution_error, ChainExecutionContext::Operation(_)
+        ) if matches!(**execution_error, ExecutionError::SystemError(
+            SystemExecutionError::IncorrectTransferAmount
+        )))
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -823,15 +821,11 @@ where
                 worker.handle_block_proposal(block_proposal).await,
                 Err(
                     WorkerError::ChainError(error)
-                ) if matches!(
-                    *error,
-                    ChainError::ExecutionError(
-                        ExecutionError::SystemError(
-                            SystemExecutionError::InsufficientFunding { .. }
-                        ),
-                        ChainExecutionContext::Operation(_)
-                    )
-                )
+                ) if matches!(&*error, ChainError::ExecutionError(
+                    execution_error, ChainExecutionContext::Operation(_)
+                ) if matches!(**execution_error, ExecutionError::SystemError(
+                    SystemExecutionError::InsufficientFunding { .. }
+                )))
         );
     }
     {
@@ -1066,13 +1060,11 @@ where
         worker.handle_block_proposal(block_proposal).await,
         Err(
             WorkerError::ChainError(error)
-        ) if matches!(
-            *error,
-            ChainError::ExecutionError(
-                ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
-                ChainExecutionContext::Operation(_)
-            )
-        )
+        ) if matches!(&*error, ChainError::ExecutionError(
+                execution_error, ChainExecutionContext::Operation(_)
+        ) if matches!(**execution_error, ExecutionError::SystemError(
+            SystemExecutionError::InsufficientFunding { .. }
+        )))
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());

@@ -2239,13 +2239,13 @@ where
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(error),
             ))) if matches!(
-                *error,
+                &*error,
                 ChainError::ExecutionError(
-                    ExecutionError::SystemError(
-                        SystemExecutionError::InsufficientFundingForFees { .. }
-                    ),
+                    execution_error,
                     ChainExecutionContext::Block
-                )
+                ) if matches!(**execution_error, ExecutionError::SystemError(
+                    SystemExecutionError::InsufficientFundingForFees { .. }
+                ))
             ) =>
             {
                 // We can't even pay for the execution of one empty block. Let's return zero.
