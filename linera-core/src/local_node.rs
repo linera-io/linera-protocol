@@ -55,10 +55,10 @@ where
 /// Error type for the operations on a local node.
 #[derive(Debug, Error)]
 pub enum LocalNodeError {
-    #[error(transparent)]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
 
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] linera_views::views::ViewError),
 
     #[error("Local node operation failed: {0}")]
@@ -82,7 +82,7 @@ pub enum LocalNodeError {
     #[error("The chain info response received from the local node is invalid")]
     InvalidChainInfoResponse,
 
-    #[error(transparent)]
+    #[error("Node error: {0}")]
     NodeError(#[from] NodeError),
 }
 

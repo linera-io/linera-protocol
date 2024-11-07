@@ -1214,7 +1214,7 @@ impl<C> WithError for ViewContainer<C> {
 #[derive(Error, Debug)]
 pub enum ViewContainerError {
     /// View error.
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] ViewError),
 
     /// BCS serialization error.

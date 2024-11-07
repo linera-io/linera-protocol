@@ -14,21 +14,21 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum IndexerError {
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] linera_views::views::ViewError),
-    #[error(transparent)]
+    #[error("Reqwest error: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error(transparent)]
+    #[error("GraphQL error: {0}")]
     GraphQLError(#[from] graphql_ws_client::Error),
-    #[error(transparent)]
+    #[error("Tungstenite error: {0}")]
     TungsteniteError(#[from] async_tungstenite::tungstenite::Error),
-    #[error(transparent)]
+    #[error("Invalid header value: {0}")]
     InvalidHeader(#[from] InvalidHeaderValue),
-    #[error(transparent)]
+    #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error(transparent)]
+    #[error("Parse error: {0}")]
     ParserError(#[from] AddrParseError),
-    #[error(transparent)]
+    #[error("Server error: {0}")]
     ServerError(#[from] hyper::Error),
     #[error("Null GraphQL data: {0:?}")]
     NullData(Option<Vec<graphql_client::Error>>),
@@ -50,10 +50,10 @@ pub enum IndexerError {
     CloneWithRootKeyError,
 
     #[cfg(feature = "rocksdb")]
-    #[error(transparent)]
+    #[error("RocksDB error: {0}")]
     RocksDbError(#[from] linera_views::rocks_db::RocksDbStoreError),
     #[cfg(feature = "scylladb")]
-    #[error(transparent)]
+    #[error("ScyllaDB error: {0}")]
     ScyllaDbError(#[from] linera_views::scylla_db::ScyllaDbStoreError),
 }
 

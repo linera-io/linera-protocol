@@ -76,31 +76,31 @@ pub struct MutationRoot<C> {
 
 #[derive(Debug, ThisError)]
 enum NodeServiceError {
-    #[error(transparent)]
+    #[error("Chain client error: {0}")]
     ChainClientError(#[from] ChainClientError),
-    #[error(transparent)]
+    #[error("BCS hex error: {0}")]
     BcsHexError(#[from] BcsHexParseError),
-    #[error("could not decode query string")]
+    #[error("Query string error: {0}")]
     QueryStringError(#[from] hex::FromHexError),
-    #[error(transparent)]
+    #[error("BCS error: {0}")]
     BcsError(#[from] bcs::Error),
-    #[error(transparent)]
+    #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
-    #[error("missing GraphQL operation")]
+    #[error("Missing GraphQL operation")]
     MissingOperation,
-    #[error("unsupported query type: subscription")]
+    #[error("Unsupported query type: subscription")]
     UnsupportedQueryType,
     #[error("GraphQL operations of different types submitted")]
     HeterogeneousOperations,
-    #[error("failed to parse GraphQL query: {error}")]
+    #[error("Failed to parse GraphQL query: {error}")]
     GraphQLParseError { error: String },
-    #[error("malformed application response")]
+    #[error("Malformed application response")]
     MalformedApplicationResponse,
-    #[error("application service error")]
+    #[error("Application service errors: {errors:?}")]
     ApplicationServiceError { errors: Vec<String> },
-    #[error("chain ID not found")]
+    #[error("Chain ID not found: {chain_id}")]
     UnknownChainId { chain_id: String },
-    #[error("malformed chain ID")]
+    #[error("Malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
 }
 

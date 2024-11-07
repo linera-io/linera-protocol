@@ -23,7 +23,7 @@ use crate::{
 #[derive(Error, Debug)]
 pub enum ValueSplittingError<E> {
     /// inner store error
-    #[error("inner store error")]
+    #[error("Inner store error: {0}")]
     InnerStoreError(#[from] E),
 
     /// The key is of length less than 4, so we cannot extract the first byte

@@ -6,14 +6,14 @@ use reqwest::Client;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
+pub enum GraphQlClientError {
+    #[error("Reqwest error: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("GraphQL errors: {0:?}")]
     GraphQLError(Vec<graphql_client::Error>),
 }
 
-impl From<Option<Vec<graphql_client::Error>>> for Error {
+impl From<Option<Vec<graphql_client::Error>>> for GraphQlClientError {
     fn from(val: Option<Vec<graphql_client::Error>>) -> Self {
         Self::GraphQLError(val.unwrap_or_default())
     }
@@ -23,7 +23,7 @@ pub async fn request<T, V>(
     client: &Client,
     url: &str,
     variables: V,
-) -> Result<T::ResponseData, Error>
+) -> Result<T::ResponseData, GraphQlClientError>
 where
     T: GraphQLQuery<Variables = V> + Send + Unpin + 'static,
     V: Send + Unpin,

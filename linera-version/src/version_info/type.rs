@@ -67,16 +67,16 @@ pub struct VersionInfo {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("failed to interpret cargo-metadata: {0}")]
+pub enum VersionError {
+    #[error("Failed to interpret cargo-metadata: {0}")]
     CargoMetadata(#[from] cargo_metadata::Error),
-    #[error("no such package: {0}")]
+    #[error("No such package: {0}")]
     NoSuchPackage(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("glob error: {0}")]
+    #[error("Glob error: {0}")]
     Glob(#[from] glob::GlobError),
-    #[error("pattern error: {0}")]
+    #[error("Pattern error: {0}")]
     Pattern(#[from] glob::PatternError),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
@@ -92,12 +92,12 @@ fn get_hash(
     metadata: &cargo_metadata::Metadata,
     package: &str,
     glob: &str,
-) -> Result<String, Error> {
+) -> Result<String, VersionError> {
     use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
     use sha3::Digest as _;
 
     let package_root = get_package_root(metadata, package)
-        .ok_or_else(|| Error::NoSuchPackage(package.to_owned()))?;
+        .ok_or_else(|| VersionError::NoSuchPackage(package.to_owned()))?;
     let mut hasher = sha3::Sha3_256::new();
     let mut buffer = [0u8; 4096];
 
@@ -118,7 +118,7 @@ fn get_hash(
     Ok(STANDARD_NO_PAD.encode(hasher.finalize()))
 }
 
-fn run(cmd: &str, args: &[&str]) -> Result<Outcome, Error> {
+fn run(cmd: &str, args: &[&str]) -> Result<Outcome, VersionError> {
     let mut cmd = std::process::Command::new(cmd);
 
     let mut child = cmd
@@ -178,14 +178,17 @@ pub struct ApiHashes {
 }
 
 impl VersionInfo {
-    pub fn get() -> Result<Self, Error> {
+    pub fn get() -> Result<Self, VersionError> {
         Self::trace_get(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
             &mut vec![],
         )
     }
 
-    fn trace_get(crate_dir: &std::path::Path, paths: &mut Vec<PathBuf>) -> Result<Self, Error> {
+    fn trace_get(
+        crate_dir: &std::path::Path,
+        paths: &mut Vec<PathBuf>,
+    ) -> Result<Self, VersionError> {
         let metadata = cargo_metadata::MetadataCommand::new()
             .current_dir(crate_dir)
             .exec()?;

@@ -402,15 +402,15 @@ pub enum ScyllaDbStoreError {
     KeyTooLong,
 
     /// A row error in ScyllaDB
-    #[error(transparent)]
+    #[error("ScyllaDB Row error: {0}")]
     ScyllaDbRowError(#[from] scylla::cql_to_rust::FromRowError),
 
     /// A query error in ScyllaDB
-    #[error(transparent)]
+    #[error("ScyllaDB query error: {0}")]
     ScyllaDbQueryError(#[from] scylla::transport::errors::QueryError),
 
     /// A query error in ScyllaDB
-    #[error(transparent)]
+    #[error("ScyllaDB new session error: {0}")]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
 
     /// Table name contains forbidden characters
@@ -418,7 +418,7 @@ pub enum ScyllaDbStoreError {
     InvalidTableName,
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Already existing database
@@ -426,7 +426,7 @@ pub enum ScyllaDbStoreError {
     AlreadyExistingDatabase,
 
     /// The journal is not coherent
-    #[error(transparent)]
+    #[error("Journal consistency error: {0}")]
     JournalConsistencyError(#[from] JournalConsistencyError),
 }
 

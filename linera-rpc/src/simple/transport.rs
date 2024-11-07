@@ -68,7 +68,7 @@ pub trait ConnectionPool: Send {
         &'a mut self,
         message: RpcMessage,
         address: &'a str,
-    ) -> future::BoxFuture<'a, Result<(), codec::Error>>;
+    ) -> future::BoxFuture<'a, Result<(), codec::SimpleError>>;
 }
 
 /// The handler required to create a service.
@@ -103,12 +103,13 @@ impl ServerHandle {
 /// A transport is an active connection that can be used to send and receive
 /// [`RpcMessage`]s.
 pub trait Transport:
-    Stream<Item = Result<RpcMessage, codec::Error>> + Sink<RpcMessage, Error = codec::Error>
+    Stream<Item = Result<RpcMessage, codec::SimpleError>> + Sink<RpcMessage, Error = codec::SimpleError>
 {
 }
 
 impl<T> Transport for T where
-    T: Stream<Item = Result<RpcMessage, codec::Error>> + Sink<RpcMessage, Error = codec::Error>
+    T: Stream<Item = Result<RpcMessage, codec::SimpleError>>
+        + Sink<RpcMessage, Error = codec::SimpleError>
 {
 }
 
@@ -192,7 +193,7 @@ impl ConnectionPool for UdpConnectionPool {
         &'a mut self,
         message: RpcMessage,
         address: &'a str,
-    ) -> future::BoxFuture<'a, Result<(), codec::Error>> {
+    ) -> future::BoxFuture<'a, Result<(), codec::SimpleError>> {
         Box::pin(async move {
             let address = address
                 .parse()
@@ -286,9 +287,9 @@ where
     }
 
     /// Handles an error while receiving a message.
-    async fn handle_error(&mut self, error: codec::Error) -> Result<(), std::io::Error> {
+    async fn handle_error(&mut self, error: codec::SimpleError) -> Result<(), std::io::Error> {
         match error {
-            codec::Error::Io(io_error) => {
+            codec::SimpleError::Io(io_error) => {
                 error!("IO error in UDP server: {io_error}");
                 self.shutdown().await;
                 Err(io_error)
@@ -351,7 +352,7 @@ impl ConnectionPool for TcpConnectionPool {
         &'a mut self,
         message: RpcMessage,
         address: &'a str,
-    ) -> future::BoxFuture<'a, Result<(), codec::Error>> {
+    ) -> future::BoxFuture<'a, Result<(), codec::SimpleError>> {
         Box::pin(async move {
             let stream = self.get_stream(address).await?;
             let result = stream.send(message).await;
@@ -482,10 +483,10 @@ where
     ///
     /// Ignores a successful connection termination, while logging an unexpected connection
     /// termination or any other error.
-    fn handle_error(&self, error: codec::Error) {
+    fn handle_error(&self, error: codec::SimpleError) {
         if !matches!(
             &error,
-            codec::Error::Io(error)
+            codec::SimpleError::Io(error)
                 if error.kind() == io::ErrorKind::UnexpectedEof
                 || error.kind() == io::ErrorKind::ConnectionReset
         ) {

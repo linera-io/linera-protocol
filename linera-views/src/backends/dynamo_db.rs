@@ -1018,27 +1018,27 @@ pub enum InvalidTableName {
 #[derive(Debug, Error)]
 pub enum DynamoDbStoreInternalError {
     /// An error occurred while getting the item.
-    #[error(transparent)]
+    #[error("Get item error: {0}")]
     Get(#[from] Box<SdkError<GetItemError>>),
 
     /// An error occurred while writing a batch of items.
-    #[error(transparent)]
+    #[error("Batch write item error: {0}")]
     BatchWriteItem(#[from] Box<SdkError<BatchWriteItemError>>),
 
     /// An error occurred while writing a transaction of items.
-    #[error(transparent)]
+    #[error("Transact write item error: {0}")]
     TransactWriteItem(#[from] Box<SdkError<TransactWriteItemsError>>),
 
     /// An error occurred while doing a Query.
-    #[error(transparent)]
+    #[error("Query error: {0}")]
     Query(#[from] Box<SdkError<QueryError>>),
 
     /// An error occurred while deleting a table
-    #[error(transparent)]
+    #[error("Delete table error: {0}")]
     DeleteTable(#[from] Box<SdkError<DeleteTableError>>),
 
     /// An error occurred while listing tables
-    #[error(transparent)]
+    #[error("List table error: {0}")]
     ListTables(#[from] Box<SdkError<ListTablesError>>),
 
     /// The transact maximum size is MAX_TRANSACT_WRITE_ITEM_SIZE.
@@ -1066,11 +1066,11 @@ pub enum DynamoDbStoreInternalError {
     DatabaseRecoveryFailed,
 
     /// The journal is not coherent
-    #[error(transparent)]
+    #[error("Journal consistency error: {0}")]
     JournalConsistencyError(#[from] JournalConsistencyError),
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Already existing database
@@ -1098,19 +1098,19 @@ pub enum DynamoDbStoreInternalError {
     WrongValueType(String),
 
     /// A BCS error occurred.
-    #[error(transparent)]
+    #[error("BCS error: {0}")]
     BcsError(#[from] bcs::Error),
 
     /// A wrong table name error occurred
-    #[error(transparent)]
+    #[error("Invalid table name error: {0}")]
     InvalidTableName(#[from] InvalidTableName),
 
     /// An error occurred while creating the table.
-    #[error(transparent)]
+    #[error("Create table error: {0}")]
     CreateTable(#[from] SdkError<CreateTableError>),
 
     /// An error occurred while building an object
-    #[error(transparent)]
+    #[error("Build error: {0}")]
     Build(#[from] Box<BuildError>),
 }
 

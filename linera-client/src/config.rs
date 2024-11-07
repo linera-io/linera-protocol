@@ -21,12 +21,12 @@ use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum ConfigError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("chain error: {0}")]
+    #[error("Chain error: {0}")]
     Chain(#[from] linera_chain::ChainError),
-    #[error("persistence error: {0}")]
+    #[error("Persistence error: {0}")]
     Persistence(Box<dyn std::error::Error + Send + Sync>),
 }
 
@@ -35,11 +35,11 @@ use crate::{
     wallet::{UserChain, Wallet},
 };
 
-util::impl_from_dynamic!(Error:Persistence, persistent::memory::Error);
+util::impl_from_dynamic!(ConfigError:Persistence, persistent::memory::Error);
 #[cfg(with_indexed_db)]
-util::impl_from_dynamic!(Error:Persistence, persistent::indexed_db::Error);
+util::impl_from_dynamic!(ConfigError:Persistence, persistent::indexed_db::Error);
 #[cfg(feature = "fs")]
-util::impl_from_dynamic!(Error:Persistence, persistent::file::Error);
+util::impl_from_dynamic!(ConfigError:Persistence, persistent::file::Error);
 
 /// The public configuration of a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -99,11 +99,11 @@ impl<W: Persist<Target = Wallet>> WalletState<W> {
     pub async fn add_chains<Chains: IntoIterator<Item = UserChain>>(
         &mut self,
         chains: Chains,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ConfigError> {
         self.wallet.as_mut().extend(chains);
         W::persist(&mut self.wallet)
             .await
-            .map_err(|e| Error::Persistence(Box::new(e)))
+            .map_err(|e| ConfigError::Persistence(Box::new(e)))
     }
 }
 
@@ -142,26 +142,26 @@ impl<W: Persist<Target = Wallet>> Persist for WalletState<W> {
 
 #[cfg(feature = "fs")]
 impl WalletState<persistent::File<Wallet>> {
-    pub fn create_from_file(path: &std::path::Path, wallet: Wallet) -> Result<Self, Error> {
+    pub fn create_from_file(path: &std::path::Path, wallet: Wallet) -> Result<Self, ConfigError> {
         Ok(Self::new(persistent::File::read_or_create(path, || {
             Ok(wallet)
         })?))
     }
 
-    pub fn read_from_file(path: &std::path::Path) -> Result<Self, Error> {
+    pub fn read_from_file(path: &std::path::Path) -> Result<Self, ConfigError> {
         Ok(Self::new(persistent::File::read(path)?))
     }
 }
 
 #[cfg(with_indexed_db)]
 impl WalletState<persistent::IndexedDb<Wallet>> {
-    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, Error> {
+    pub async fn create_from_indexed_db(key: &str, wallet: Wallet) -> Result<Self, ConfigError> {
         Ok(Self::new(
             persistent::IndexedDb::read_or_create(key, wallet).await?,
         ))
     }
 
-    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, Error> {
+    pub async fn read_from_indexed_db(key: &str) -> Result<Option<Self>, ConfigError> {
         Ok(persistent::IndexedDb::read(key).await?.map(Self::new))
     }
 }
@@ -209,7 +209,7 @@ impl GenesisConfig {
         }
     }
 
-    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
+    pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), ConfigError>
     where
         S: Storage + Clone + Send + Sync + 'static,
     {

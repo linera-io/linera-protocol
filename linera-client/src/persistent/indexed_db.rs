@@ -34,7 +34,7 @@ const STORE_NAME: &str = "linera-wallet";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("marshalling error: {0}")]
+    #[error("Marshalling error: {0}")]
     Marshalling(#[source] gloo_utils::errors::JsError),
     #[error("DOM exception: {0:?}")]
     DomException(#[source] gloo_utils::errors::JsError),

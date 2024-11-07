@@ -21,7 +21,7 @@ const PREFIX_SIZE: u8 = mem::size_of::<u32>() as u8;
 pub struct Codec;
 
 impl Encoder<RpcMessage> for Codec {
-    type Error = Error;
+    type Error = SimpleError;
 
     fn encode(&mut self, message: RpcMessage, buffer: &mut BytesMut) -> Result<(), Self::Error> {
         let mut frame_buffer = buffer.split_off(buffer.len());
@@ -31,7 +31,7 @@ impl Encoder<RpcMessage> for Codec {
         let mut frame_writer = frame_buffer.writer();
 
         bincode::serialize_into(&mut frame_writer, &message)
-            .map_err(|error| Error::Serialization(*error))?;
+            .map_err(|error| SimpleError::Serialization(*error))?;
 
         let mut frame_buffer = frame_writer.into_inner();
         let frame_size = frame_buffer.len();
@@ -42,7 +42,7 @@ impl Encoder<RpcMessage> for Codec {
         start_of_frame.put_u32_le(
             payload_size
                 .try_into()
-                .map_err(|_| Error::MessageTooBig { size: payload_size })?,
+                .map_err(|_| SimpleError::MessageTooBig { size: payload_size })?,
         );
 
         buffer.unsplit(frame_buffer);
@@ -53,7 +53,7 @@ impl Encoder<RpcMessage> for Codec {
 
 impl Decoder for Codec {
     type Item = RpcMessage;
-    type Error = Error;
+    type Error = SimpleError;
 
     fn decode(&mut self, buffer: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if buffer.len() < PREFIX_SIZE.into() {
@@ -77,7 +77,7 @@ impl Decoder for Codec {
         let payload = buffer.split_to(payload_size);
 
         let message =
-            bincode::deserialize(&payload).map_err(|error| Error::Deserialization(*error))?;
+            bincode::deserialize(&payload).map_err(|error| SimpleError::Deserialization(*error))?;
 
         Ok(Some(message))
     }
@@ -85,14 +85,14 @@ impl Decoder for Codec {
 
 /// Errors that can arise during transmission or reception of [`RpcMessage`]s.
 #[derive(Debug, Error)]
-pub enum Error {
-    #[error("IO error in the underlying transport")]
+pub enum SimpleError {
+    #[error("I/O error in the underlying transport {0}")]
     Io(#[from] io::Error),
 
-    #[error("Failed to deserialize an incoming message")]
+    #[error("Failed to deserialize an incoming message {0}")]
     Deserialization(#[source] bincode::ErrorKind),
 
-    #[error("Failed to serialize outgoing message")]
+    #[error("Failed to serialize outgoing message {0}")]
     Serialization(#[source] bincode::ErrorKind),
 
     #[error("RpcMessage is too big to fit in a protocol frame: \
@@ -101,10 +101,10 @@ pub enum Error {
     MessageTooBig { size: usize },
 }
 
-impl From<Error> for NodeError {
-    fn from(error: Error) -> NodeError {
+impl From<SimpleError> for NodeError {
+    fn from(error: SimpleError) -> NodeError {
         match error {
-            Error::Io(io_error) => NodeError::ClientIoError {
+            SimpleError::Io(io_error) => NodeError::ClientIoError {
                 error: format!("{}", io_error),
             },
             err => {

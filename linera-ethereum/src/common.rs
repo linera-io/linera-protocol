@@ -28,11 +28,11 @@ pub enum EthereumQueryError {
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
     /// The database is not coherent
-    #[error(transparent)]
+    #[error("Ethereum query error: {0}")]
     EthereumQueryError(#[from] EthereumQueryError),
 
     /// Parsing error
-    #[error(transparent)]
+    #[error("Parsing integer error: {0}")]
     ParseIntError(#[from] ParseIntError),
 
     #[error("Failed to deploy the smart contract")]
@@ -48,7 +48,7 @@ pub enum EthereumServiceError {
     EventParsingError,
 
     /// Parse big int error
-    #[error(transparent)]
+    #[error("Parsing big integer error: {0}")]
     ParseBigIntError(#[from] num_bigint::ParseBigIntError),
 
     /// Ethereum parsing error
@@ -60,25 +60,25 @@ pub enum EthereumServiceError {
     ParseBoolError,
 
     /// Hex parsing error
-    #[error(transparent)]
+    #[error("From hexadecimal integer error: {0}")]
     FromHexError(#[from] linera_alloy::primitives::hex::FromHexError),
 
     /// `serde_json` error
-    #[error(transparent)]
+    #[error("JSON error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
 
     /// RPC error
-    #[error(transparent)]
+    #[error("RPC error: {0}")]
     #[cfg(not(target_arch = "wasm32"))]
     RpcError(#[from] json_rpc::RpcError<linera_alloy::transports::TransportErrorKind>),
 
     /// URL parsing error
-    #[error(transparent)]
+    #[error("URL parsing error: {0}")]
     #[cfg(not(target_arch = "wasm32"))]
     UrlParseError(#[from] url::ParseError),
 
     /// Alloy Reqwest error
-    #[error(transparent)]
+    #[error("Alloy reqwest error: {0}")]
     #[cfg(not(target_arch = "wasm32"))]
     AlloyReqwestError(#[from] linera_alloy::transports::http::reqwest::Error),
 }

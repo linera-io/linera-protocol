@@ -54,7 +54,7 @@ pub enum ServiceStoreError {
     FailedToFindStorageServerBinary,
 
     /// gRPC error
-    #[error(transparent)]
+    #[error("GRPC error: {0}")]
     GrpcError(#[from] Status),
 
     /// The key size must be at most 1 MB
@@ -62,15 +62,15 @@ pub enum ServiceStoreError {
     KeyTooLong,
 
     /// Transport error
-    #[error(transparent)]
+    #[error("Transport error: {0}")]
     TransportError(#[from] tonic::transport::Error),
 
     /// Var error
-    #[error(transparent)]
+    #[error("Var error: {0}")]
     VarError(#[from] std::env::VarError),
 
-    /// An error occurred during BCS serialization
-    #[error("An error occurred during BCS serialization")]
+    /// BCS serialization error
+    #[error("BCS serialization error: {0}")]
     Serialization(#[from] bcs::Error),
 }
 

@@ -189,20 +189,20 @@ const _: () = {
 /// A type for errors happening during execution.
 #[derive(Error, Debug)]
 pub enum ExecutionError {
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] ViewError),
-    #[error(transparent)]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
-    #[error(transparent)]
+    #[error("System error: {0}")]
     SystemError(#[from] SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
     #[cfg(any(with_wasmer, with_wasmtime))]
-    #[error(transparent)]
+    #[error("Wasm error: {0}")]
     WasmError(#[from] WasmExecutionError),
-    #[error(transparent)]
+    #[error("Join error: {0}")]
     JoinError(#[from] linera_base::task::Error),
-    #[error(transparent)]
+    #[error("Decompression error: {0}")]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
@@ -240,13 +240,13 @@ pub enum ExecutionError {
     UnauthorizedApplication(UserApplicationId),
     #[error("Failed to make network reqwest")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("Encountered IO error")]
+    #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("More recorded oracle responses than expected")]
     UnexpectedOracleResponse,
-    #[error("Invalid JSON: {}", .0)]
+    #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    #[error(transparent)]
+    #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,

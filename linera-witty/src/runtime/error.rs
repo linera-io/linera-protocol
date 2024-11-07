@@ -39,11 +39,11 @@ pub enum RuntimeError {
     NotMemory,
 
     /// Attempt to load a string from a sequence of bytes that doesn't contain a UTF-8 string.
-    #[error("Failed to load string from non-UTF-8 bytes")]
+    #[error("Failed to load string from non-UTF-8 bytes: {0}")]
     InvalidString(#[from] FromUtf8Error),
 
     /// Attempt to create a `GuestPointer` from an invalid address representation.
-    #[error("Invalid address read")]
+    #[error("Invalid address read: {0}")]
     InvalidNumber(#[from] TryFromIntError),
 
     /// Attempt to load an `enum` type but the discriminant doesn't match any of the variants.
@@ -61,21 +61,21 @@ pub enum RuntimeError {
 
     /// Wasmer runtime error.
     #[cfg(with_wasmer)]
-    #[error(transparent)]
+    #[error("Wasmer runtime error: {0}")]
     Wasmer(#[from] wasmer::RuntimeError),
 
     /// Attempt to access an invalid memory address using Wasmer.
     #[cfg(with_wasmer)]
-    #[error(transparent)]
+    #[error("Wasmer memory access error: {0}")]
     WasmerMemory(#[from] wasmer::MemoryAccessError),
 
     /// Wasmtime error.
     #[cfg(with_wasmtime)]
-    #[error(transparent)]
+    #[error("Wasmtime error: {0}")]
     Wasmtime(anyhow::Error),
 
     /// Wasmtime trap during execution.
     #[cfg(with_wasmtime)]
-    #[error(transparent)]
+    #[error("Wasmtime trap error: {0}")]
     WasmtimeTrap(#[from] wasmtime::Trap),
 }

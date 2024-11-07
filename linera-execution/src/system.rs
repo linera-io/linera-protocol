@@ -333,9 +333,9 @@ impl UserData {
 
 #[derive(Error, Debug)]
 pub enum SystemExecutionError {
-    #[error(transparent)]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] ViewError),
 
     #[error("Invalid admin ID in new chain: {0}")]

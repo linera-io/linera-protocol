@@ -99,7 +99,7 @@ pub trait View<C>: Sized {
 #[derive(Error, Debug)]
 pub enum ViewError {
     /// An error occurred during BCS serialization.
-    #[error("failed to serialize value to calculate its hash")]
+    #[error("Serialization error: {0}")]
     Serialization(#[from] bcs::Error),
 
     /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView.
@@ -107,11 +107,11 @@ pub enum ViewError {
     CannotAcquireCollectionEntry,
 
     /// Input output error.
-    #[error("IO error")]
+    #[error("I/O error")]
     Io(#[from] std::io::Error),
 
     /// Arithmetic error
-    #[error("Arithmetic error")]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
 
     /// An error happened while trying to lock.

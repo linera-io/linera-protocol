@@ -139,23 +139,23 @@ pub enum Reason {
 /// Error type for worker operations..
 #[derive(Debug, Error)]
 pub enum WorkerError {
-    #[error(transparent)]
+    #[error("Crypto error: {0}")]
     CryptoError(#[from] linera_base::crypto::CryptoError),
 
-    #[error(transparent)]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
 
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] linera_views::views::ViewError),
 
-    #[error(transparent)]
+    #[error("Chain error: {0}")]
     ChainError(#[from] Box<linera_chain::ChainError>),
 
     // Chain access control
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
 
-    #[error("Operations in the block are not authenticated by the proper signer")]
+    #[error("Operations in the block are not authenticated by the proper signer, owner={0}")]
     InvalidSigner(Owner),
 
     // Chaining
@@ -217,7 +217,7 @@ pub enum WorkerError {
     BlobTooLarge,
     #[error("Bytecode exceeds size limit")]
     BytecodeTooLarge,
-    #[error(transparent)]
+    #[error("Decompression error: {0}")]
     Decompression(#[from] DecompressionError),
 }
 

@@ -15,14 +15,14 @@ use super::{Dirty, Persist};
 struct Lock(fs_err::File);
 
 #[derive(Debug, thiserror::Error)]
-enum ErrorInner {
+enum FileError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("JSON error: {0}")]
     Serde(#[from] serde_json::Error),
 }
 
-thiserror_context::impl_context!(Error(ErrorInner));
+thiserror_context::impl_context!(Error(FileError));
 
 /// Utility: run a fallible cleanup function if an operation failed, attaching the
 /// original operation as context to its error.

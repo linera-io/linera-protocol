@@ -218,9 +218,9 @@ pub enum NodeError {
 
     #[error("Blob not found on storage read: {0}")]
     BlobNotFoundOnRead(BlobId),
-    #[error("Node failed to provide a 'last used by' certificate for the blob")]
+    #[error("Node failed to provide a 'last used by' certificate for the blob {0}")]
     InvalidCertificateForBlob(BlobId),
-    #[error("Local error handling validator response")]
+    #[error("Local error handling validator response: {error}")]
     LocalError { error: String },
 }
 

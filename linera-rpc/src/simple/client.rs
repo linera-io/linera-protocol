@@ -47,25 +47,28 @@ impl SimpleClient {
         }
     }
 
-    async fn send_recv_internal(&self, message: RpcMessage) -> Result<RpcMessage, codec::Error> {
+    async fn send_recv_internal(
+        &self,
+        message: RpcMessage,
+    ) -> Result<RpcMessage, codec::SimpleError> {
         let address = format!("{}:{}", self.network.host, self.network.port);
         let mut stream = self.network.protocol.connect(address).await?;
         // Send message
         timer::timeout(self.send_timeout, stream.send(message))
             .await
-            .map_err(|timeout| codec::Error::Io(timeout.into()))??;
+            .map_err(|timeout| codec::SimpleError::Io(timeout.into()))??;
         // Wait for reply
         timer::timeout(self.recv_timeout, stream.next())
             .await
-            .map_err(|timeout| codec::Error::Io(timeout.into()))?
+            .map_err(|timeout| codec::SimpleError::Io(timeout.into()))?
             .transpose()?
-            .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
+            .ok_or_else(|| codec::SimpleError::Io(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
     async fn query<Response>(&self, query: RpcMessage) -> Result<Response, Response::Error>
     where
         Response: TryFrom<RpcMessage>,
-        Response::Error: From<codec::Error>,
+        Response::Error: From<codec::SimpleError>,
     {
         self.send_recv_internal(query).await?.try_into()
     }

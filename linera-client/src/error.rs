@@ -13,7 +13,7 @@ pub(crate) enum Inner {
     #[error("chain client error: {0}")]
     ChainClient(#[from] linera_core::client::ChainClientError),
     #[error("options error: {0}")]
-    Options(#[from] crate::client_options::Error),
+    Options(#[from] crate::client_options::OptionError),
     #[error("persistence error: {0}")]
     Persistence(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("view error: {0}")]

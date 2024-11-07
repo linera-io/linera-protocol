@@ -21,23 +21,23 @@ pub mod api {
 
 #[derive(thiserror::Error, Debug)]
 pub enum GrpcError {
-    #[error("failed to connect to address: {0}")]
+    #[error("Failed to connect to address: {0}")]
     ConnectionFailed(#[from] transport::Error),
 
-    #[error("failed to communicate cross-chain queries: {0}")]
+    #[error("Failed to communicate cross-chain queries: {0}")]
     CrossChain(#[from] tonic::Status),
 
-    #[error("failed to execute task to completion")]
+    #[error("Failed to execute task to completion")]
     Join(#[from] futures::channel::oneshot::Canceled),
 
-    #[error("failed to parse socket address: {0}")]
+    #[error("Failed to parse socket address: {0}")]
     SocketAddr(#[from] std::net::AddrParseError),
 
-    #[error(transparent)]
+    #[error("Invalid URI error: {0}")]
     InvalidUri(#[from] tonic::codegen::http::uri::InvalidUri),
 
     #[cfg(with_server)]
-    #[error(transparent)]
+    #[error("Tonic reflection error: {0}")]
     Reflection(#[from] tonic_reflection::server::Error),
 }
 

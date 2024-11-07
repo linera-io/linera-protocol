@@ -451,7 +451,7 @@ pub enum ChainClientError {
     #[error("Remote node operation failed: {0}")]
     RemoteNodeError(#[from] NodeError),
 
-    #[error(transparent)]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
 
     #[error("JSON (de)serialization error: {0}")]
@@ -460,7 +460,7 @@ pub enum ChainClientError {
     #[error("Chain operation failed: {0}")]
     ChainError(#[from] ChainError),
 
-    #[error(transparent)]
+    #[error("Communication error: {0}")]
     CommunicationError(#[from] CommunicationError<NodeError>),
 
     #[error("Internal error within chain client: {0}")]
@@ -493,7 +493,7 @@ pub enum ChainClientError {
     #[error("Found several possible identities to interact with chain {0}")]
     FoundMultipleKeysForChain(ChainId),
 
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] ViewError),
 
     #[error("Blobs not found: {0:?}")]

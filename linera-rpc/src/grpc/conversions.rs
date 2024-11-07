@@ -25,7 +25,7 @@ use crate::{HandleCertificateRequest, HandleLiteCertRequest};
 
 #[derive(Error, Debug)]
 pub enum GrpcProtoConversionError {
-    #[error(transparent)]
+    #[error("Bincode error: {0}")]
     BincodeError(#[from] bincode::Error),
     #[error("Conversion failed due to missing field")]
     MissingField,

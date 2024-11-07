@@ -73,9 +73,9 @@ pub struct Cursor {
 
 #[derive(Error, Debug)]
 pub(crate) enum InboxError {
-    #[error(transparent)]
+    #[error("View error: {0}")]
     ViewError(#[from] ViewError),
-    #[error(transparent)]
+    #[error("Arithmetic error: {0}")]
     ArithmeticError(#[from] ArithmeticError),
     #[error("Cannot reconcile {bundle:?} with {previous_bundle:?}")]
     UnexpectedBundle {
