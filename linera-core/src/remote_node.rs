@@ -144,6 +144,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificate)
     }
 
+    /// Tries to download the given blobs from this node.
     #[instrument(level = "trace")]
     pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Vec<Blob> {
         future::join_all(
@@ -158,7 +159,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     #[instrument(level = "trace")]
-    pub(crate) async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
+    async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
         match self.node.download_blob_content(blob_id).await {
             Ok(blob) => {
                 let blob = blob.with_blob_id_checked(blob_id);
@@ -180,7 +181,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     /// Downloads the blobs from the specified validator and returns them, including blobs that
-    /// are still pending the the validator's chain manager.
+    /// are still pending in the validator's chain manager.
     pub(crate) async fn find_missing_blobs(
         &self,
         blob_ids: Vec<BlobId>,
@@ -253,6 +254,9 @@ impl<N: ValidatorNode> RemoteNode<N> {
         None
     }
 
+    /// Downloads the blobs with the given IDs. This is done in one concurrent task per block.
+    /// Each task goes through the validators sequentially in random order and tries to download
+    /// it. Returns all the blobs it could find, and silently ignores the ones it could not.
     #[instrument(level = "trace", skip(validators))]
     pub async fn download_blobs(blob_ids: &[BlobId], validators: &[Self]) -> Vec<Blob> {
         future::join_all(
