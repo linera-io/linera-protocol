@@ -32,9 +32,10 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
+    client,
     data_types::{ChainInfoQuery, ClientOutcome},
     local_node::LocalNodeClient,
-    node::ValidatorNodeProvider,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
     worker::{Reason, WorkerState},
     JoinSetExt as _,
@@ -1154,7 +1155,7 @@ impl Job {
         let state = WorkerState::new(
             "Local node".to_string(),
             None,
-            storage,
+            storage.clone(),
             NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
         )
         .with_tracked_chains([message_id.chain_id, chain_id])
@@ -1185,10 +1186,18 @@ impl Job {
 
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
-        node_client
-            .download_certificates(&nodes, message_id.chain_id, target_height, &())
-            .await
-            .context("Failed to download parent chain")?;
+        client::Client::new(
+            context.make_node_provider(),
+            storage,
+            1,
+            CrossChainMessageDelivery::NonBlocking,
+            false,
+            vec![message_id.chain_id, chain_id],
+            "Temporary client for fetching the parent chain",
+        )
+        .download_certificates(&nodes, message_id.chain_id, target_height)
+        .await
+        .context("Failed to download parent chain")?;
 
         // The initial timestamp for the new chain is taken from the block with the message.
         let certificate = node_client
