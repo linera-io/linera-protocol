@@ -1129,7 +1129,7 @@ where
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                    let blobs = LocalNodeClient::<S>::download_blobs(blob_ids, &nodes).await;
+                    let blobs = RemoteNode::download_blobs(blob_ids, &nodes).await;
 
                     ensure!(blobs.len() == blob_ids.len(), err);
                     self.process_certificate(certificate.clone(), blobs).await?;
@@ -1710,7 +1710,7 @@ where
 
             tasks.insert(
                 blob_id,
-                LocalNodeClient::<S>::download_certificate_for_blob_from_validators_futures(
+                RemoteNode::download_certificate_for_blob_from_validators_futures(
                     &validators,
                     blob_id,
                 )

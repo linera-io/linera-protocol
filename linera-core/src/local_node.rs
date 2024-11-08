@@ -4,11 +4,9 @@
 
 use std::{
     collections::{HashSet, VecDeque},
-    future::Future,
     sync::Arc,
 };
 
-use futures::{future, stream::FuturesUnordered};
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
@@ -458,59 +456,6 @@ where
             start = info.next_block_height;
         }
         Ok(())
-    }
-
-    #[instrument(level = "trace", skip(validators))]
-    async fn download_blob(
-        validators: &[RemoteNode<impl ValidatorNode>],
-        blob_id: BlobId,
-    ) -> Option<Blob> {
-        // Sequentially try each validator in random order.
-        let mut validators = validators.iter().collect::<Vec<_>>();
-        validators.shuffle(&mut thread_rng());
-        for remote_node in validators {
-            if let Some(blob) = remote_node.try_download_blob(blob_id).await {
-                return Some(blob);
-            }
-        }
-        None
-    }
-
-    #[instrument(level = "trace", skip(validators))]
-    pub async fn download_certificate_for_blob_from_validators_futures(
-        validators: &[RemoteNode<impl ValidatorNode>],
-        blob_id: BlobId,
-    ) -> FuturesUnordered<impl Future<Output = Option<Certificate>> + '_> {
-        let futures = FuturesUnordered::new();
-
-        let mut validators = validators.iter().collect::<Vec<_>>();
-        validators.shuffle(&mut thread_rng());
-        for remote_node in validators {
-            futures.push(async move {
-                remote_node
-                    .download_certificate_for_blob(blob_id)
-                    .await
-                    .ok()
-            });
-        }
-
-        futures
-    }
-
-    #[instrument(level = "trace", skip(nodes))]
-    pub async fn download_blobs(
-        blob_ids: &[BlobId],
-        nodes: &[RemoteNode<impl ValidatorNode>],
-    ) -> Vec<Blob> {
-        future::join_all(
-            blob_ids
-                .iter()
-                .map(|blob_id| Self::download_blob(nodes, *blob_id)),
-        )
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
     }
 
     /// Handles any pending local cross-chain requests.
