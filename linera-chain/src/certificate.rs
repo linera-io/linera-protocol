@@ -25,19 +25,19 @@ use crate::{
 };
 
 /// Certificate for a [`ValidatedBlock`]` instance.
-pub type ValidatedBlockCertificate = CertificateT<ValidatedBlock>;
+pub type ValidatedBlockCertificate = GenericCertificate<ValidatedBlock>;
 
 /// Certificate for a [`ConfirmedBlock`] instance.
-pub type ConfirmedBlockCertificate = CertificateT<ConfirmedBlock>;
+pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
 
 /// Generic type representing a certificate for `value` of type `T`.
-pub struct CertificateT<T> {
+pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
     signatures: Vec<(ValidatorName, Signature)>,
 }
 
-impl<T> CertificateT<T> {
+impl<T> GenericCertificate<T> {
     /// Returns reference to the value contained in this certificate.
     pub fn inner(&self) -> &T {
         self.value.inner()
@@ -49,7 +49,7 @@ impl<T> CertificateT<T> {
     }
 }
 
-impl<T: Clone> Clone for CertificateT<T> {
+impl<T: Clone> Clone for GenericCertificate<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -59,7 +59,7 @@ impl<T: Clone> Clone for CertificateT<T> {
     }
 }
 
-impl<T: Debug> Debug for CertificateT<T> {
+impl<T: Debug> Debug for GenericCertificate<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CertificateT")
             .field("value", &self.value)
@@ -89,9 +89,9 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
 }
 
 #[cfg(with_testing)]
-impl<T: Eq + PartialEq> Eq for CertificateT<T> {}
+impl<T: Eq + PartialEq> Eq for GenericCertificate<T> {}
 #[cfg(with_testing)]
-impl<T: Eq + PartialEq> PartialEq for CertificateT<T> {
+impl<T: Eq + PartialEq> PartialEq for GenericCertificate<T> {
     fn eq(&self, other: &Self) -> bool {
         self.value.hash == other.value.hash
             && self.round == other.round
@@ -178,7 +178,7 @@ impl<T: Clone> Clone for Hashed<T> {
     }
 }
 
-impl<T> CertificateT<T> {
+impl<T> GenericCertificate<T> {
     pub fn new(
         value: T,
         old_hash: CryptoHash,
@@ -219,7 +219,7 @@ impl<T> CertificateT<T> {
     }
 }
 
-impl<T> CertificateT<T> {
+impl<T> GenericCertificate<T> {
     /// Returns the certified value's hash.
     pub fn hash(&self) -> CryptoHash {
         self.value.hash()
