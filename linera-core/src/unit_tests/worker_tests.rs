@@ -1279,23 +1279,28 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
+    let chain_key_pair = KeyPair::generate();
     let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(2),
-            PublicKey::test_key(2),
+            chain_key_pair.public(),
             Amount::from_tokens(5),
         )],
     )
     .await;
-    let certificate = make_simple_transfer_certificate(
+    let certificate = make_transfer_certificate_for_epoch(
         ChainDescription::Root(2),
         &sender_key_pair,
-        ChainId::root(2),
+        Some(chain_key_pair.public().into()),
+        None,
+        Recipient::chain(ChainId::root(2)),
         Amount::from_tokens(5),
         Vec::new(),
+        Epoch::ZERO,
         &committee,
         Amount::ZERO,
+        BTreeMap::new(),
         &worker,
         None,
     )
