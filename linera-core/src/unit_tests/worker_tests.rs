@@ -188,6 +188,7 @@ where
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
+        Some(key_pair.public().into()),
         None,
         Recipient::chain(target_id),
         amount,
@@ -222,6 +223,7 @@ where
     make_transfer_certificate_for_epoch(
         chain_description,
         key_pair,
+        source.or_else(|| Some(key_pair.public().into())),
         source,
         recipient,
         amount,
@@ -240,6 +242,7 @@ where
 async fn make_transfer_certificate_for_epoch<S>(
     chain_description: ChainDescription,
     key_pair: &KeyPair,
+    authenticated_signer: Option<Owner>,
     source: Option<Owner>,
     recipient: Recipient,
     amount: Amount,
@@ -296,7 +299,7 @@ where
     let block = Block {
         epoch,
         incoming_bundles,
-        authenticated_signer: source,
+        authenticated_signer,
         ..block_template
     }
     .with_transfer(source, recipient, amount);
@@ -2893,6 +2896,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let certificate0 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        Some(key_pair0.public().into()),
         None,
         Recipient::chain(id1),
         Amount::ONE,
@@ -2908,6 +2912,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let certificate1 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        Some(key_pair0.public().into()),
         None,
         Recipient::chain(id1),
         Amount::ONE,
@@ -2923,6 +2928,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let certificate2 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        Some(key_pair0.public().into()),
         None,
         Recipient::chain(id1),
         Amount::ONE,
@@ -2939,6 +2945,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let certificate3 = make_transfer_certificate_for_epoch(
         ChainDescription::Root(0),
         &key_pair0,
+        Some(key_pair0.public().into()),
         None,
         Recipient::chain(id1),
         Amount::ONE,
