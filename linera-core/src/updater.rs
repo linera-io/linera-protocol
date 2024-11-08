@@ -10,7 +10,7 @@ use std::{
     ops::Range,
 };
 
-use futures::{stream, Future, StreamExt};
+use futures::{stream, stream::TryStreamExt, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
     ensure,
@@ -65,10 +65,12 @@ impl CommunicateAction {
     }
 }
 
+#[derive(Clone)]
 pub struct ValidatorUpdater<A, S>
 where
     S: Storage,
 {
+    pub chain_worker_count: usize,
     pub remote_node: RemoteNode<A>,
     pub local_node: LocalNodeClient<S>,
 }
@@ -291,16 +293,21 @@ where
                     let certificates = local_storage
                         .read_certificates(blob_states.into_iter().map(|x| x.last_used_by))
                         .await?;
+                    let mut chain_heights = BTreeMap::new();
                     for certificate in certificates {
                         let block_chain_id = certificate.value().chain_id();
-                        let block_height = certificate.value().height();
-                        self.send_chain_information(
-                            block_chain_id,
-                            block_height.try_add_one()?,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
+                        let block_height = certificate.value().height().try_add_one()?;
+                        chain_heights
+                            .entry(block_chain_id)
+                            .and_modify(|h| *h = block_height.max(*h))
+                            .or_insert(block_height);
                     }
+
+                    self.send_chain_information_to_chain_heights(
+                        chain_heights,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await?;
                 }
                 // Fail immediately on other errors.
                 Err(e) => return Err(e),
@@ -353,6 +360,25 @@ where
         Ok(())
     }
 
+    async fn send_chain_information_to_chain_heights(
+        &mut self,
+        chain_heights: BTreeMap<ChainId, BlockHeight>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<(), NodeError> {
+        let stream = stream::iter(chain_heights)
+            .map(|(chain_id, height)| {
+                let mut updater = self.clone();
+                async move {
+                    updater
+                        .send_chain_information(chain_id, height, delivery)
+                        .await
+                }
+            })
+            .buffer_unordered(self.chain_worker_count);
+        stream.try_collect::<Vec<_>>().await?;
+        Ok(())
+    }
+
     async fn send_chain_information_for_senders(
         &mut self,
         chain_id: ChainId,
@@ -362,17 +388,19 @@ where
             let chain = self.local_node.chain_state_view(chain_id).await?;
             let pairs = chain.inboxes.try_load_all_entries().await?;
             for (origin, inbox) in pairs {
-                let next_height = sender_heights.entry(origin.sender).or_default();
                 let inbox_next_height = inbox.next_block_height_to_receive()?;
-                if inbox_next_height > *next_height {
-                    *next_height = inbox_next_height;
-                }
+                sender_heights
+                    .entry(origin.sender)
+                    .and_modify(|h| *h = inbox_next_height.max(*h))
+                    .or_insert(inbox_next_height);
             }
         }
-        for (sender, next_height) in sender_heights {
-            self.send_chain_information(sender, next_height, CrossChainMessageDelivery::Blocking)
-                .await?;
-        }
+
+        self.send_chain_information_to_chain_heights(
+            sender_heights,
+            CrossChainMessageDelivery::Blocking,
+        )
+        .await?;
         Ok(())
     }
 
