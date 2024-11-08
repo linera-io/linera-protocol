@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, future::Future};
 
-use futures::future;
+use futures::{future, stream::FuturesUnordered};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -12,6 +12,7 @@ use linera_base::{
 };
 use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate};
 use linera_execution::committee::ValidatorName;
+use rand::seq::SliceRandom as _;
 use tracing::{instrument, warn};
 
 use crate::{
@@ -237,5 +238,52 @@ impl<N: ValidatorNode> RemoteNode<N> {
             return Err(NodeError::InvalidChainInfoResponse);
         }
         Ok(hashes)
+    }
+
+    #[instrument(level = "trace", skip(validators))]
+    async fn download_blob(validators: &[Self], blob_id: BlobId) -> Option<Blob> {
+        // Sequentially try each validator in random order.
+        let mut validators = validators.iter().collect::<Vec<_>>();
+        validators.shuffle(&mut rand::thread_rng());
+        for remote_node in validators {
+            if let Some(blob) = remote_node.try_download_blob(blob_id).await {
+                return Some(blob);
+            }
+        }
+        None
+    }
+
+    #[instrument(level = "trace", skip(validators))]
+    pub async fn download_certificate_for_blob_from_validators_futures(
+        validators: &[Self],
+        blob_id: BlobId,
+    ) -> FuturesUnordered<impl Future<Output = Option<Certificate>> + '_> {
+        let futures = FuturesUnordered::new();
+
+        let mut validators = validators.iter().collect::<Vec<_>>();
+        validators.shuffle(&mut rand::thread_rng());
+        for remote_node in validators {
+            futures.push(async move {
+                remote_node
+                    .download_certificate_for_blob(blob_id)
+                    .await
+                    .ok()
+            });
+        }
+
+        futures
+    }
+
+    #[instrument(level = "trace", skip(validators))]
+    pub async fn download_blobs(blob_ids: &[BlobId], validators: &[Self]) -> Vec<Blob> {
+        future::join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| Self::download_blob(validators, *blob_id)),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
     }
 }
