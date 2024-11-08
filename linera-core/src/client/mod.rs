@@ -1793,38 +1793,26 @@ where
         &self,
         blob_ids: Vec<BlobId>,
     ) -> Result<(), ChainClientError> {
+        // Deduplicate IDs.
+        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         let validators = self.validator_nodes().await?;
-        let mut tasks = BTreeMap::new();
-
-        for blob_id in blob_ids {
-            if tasks.contains_key(&blob_id) {
-                continue;
-            }
-
-            tasks.insert(
-                blob_id,
-                RemoteNode::download_certificate_for_blob_from_validators_futures(
-                    &validators,
-                    blob_id,
-                )
-                .await,
-            );
-        }
 
         let mut missing_blobs = Vec::new();
-        for (blob_id, mut blob_id_tasks) in tasks {
-            let mut found_blob = false;
-            while let Some(result) = blob_id_tasks.next().await {
-                if let Some(cert) = result {
+        for blob_id in blob_ids {
+            let mut certificate_stream = validators
+                .iter()
+                .map(|remote_node| remote_node.download_certificate_for_blob(blob_id))
+                .collect::<FuturesUnordered<_>>();
+            loop {
+                let Some(result) = certificate_stream.next().await else {
+                    missing_blobs.push(blob_id);
+                    break;
+                };
+                if let Ok(cert) = result {
                     if self.receive_certificate(cert).await.is_ok() {
-                        found_blob = true;
                         break;
                     }
                 }
-            }
-
-            if !found_blob {
-                missing_blobs.push(blob_id);
             }
         }
 

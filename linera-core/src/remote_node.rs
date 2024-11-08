@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt, future::Future};
+use std::{collections::HashMap, fmt};
 
-use futures::{future, stream::FuturesUnordered};
+use futures::future;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -251,27 +251,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
             }
         }
         None
-    }
-
-    #[instrument(level = "trace", skip(validators))]
-    pub async fn download_certificate_for_blob_from_validators_futures(
-        validators: &[Self],
-        blob_id: BlobId,
-    ) -> FuturesUnordered<impl Future<Output = Option<Certificate>> + '_> {
-        let futures = FuturesUnordered::new();
-
-        let mut validators = validators.iter().collect::<Vec<_>>();
-        validators.shuffle(&mut rand::thread_rng());
-        for remote_node in validators {
-            futures.push(async move {
-                remote_node
-                    .download_certificate_for_blob(blob_id)
-                    .await
-                    .ok()
-            });
-        }
-
-        futures
     }
 
     #[instrument(level = "trace", skip(validators))]
