@@ -1479,7 +1479,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 async fn test_open_chain() {
     let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
-    let ownership = ChainOwnership::single(PublicKey::test_key(1));
+    let chain_key = PublicKey::test_key(1);
+    let ownership = ChainOwnership::single(chain_key);
     let child_ownership = ChainOwnership::single(PublicKey::test_key(2));
     let state = SystemExecutionState {
         committees: committees.clone(),
@@ -1493,6 +1494,7 @@ async fn test_open_chain() {
 
     let context = OperationContext {
         height: BlockHeight(1),
+        authenticated_signer: Some(chain_key.into()),
         ..make_operation_context()
     };
     let first_message_index = 5;
