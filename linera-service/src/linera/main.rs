@@ -5,10 +5,7 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{
-    borrow::Cow, collections::HashMap, env, num::NonZeroUsize, path::PathBuf, sync::Arc,
-    time::Instant,
-};
+use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -32,11 +29,11 @@ use linera_client::{
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
+    client,
     data_types::{ChainInfoQuery, ClientOutcome},
-    local_node::LocalNodeClient,
-    node::ValidatorNodeProvider,
+    node::{CrossChainMessageDelivery, ValidatorNodeProvider},
     remote_node::RemoteNode,
-    worker::{Reason, WorkerState},
+    worker::Reason,
     JoinSetExt as _,
 };
 use linera_execution::{
@@ -1151,33 +1148,31 @@ impl Job {
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
-        let state = WorkerState::new(
-            "Local node".to_string(),
-            None,
+        let node_provider = context.make_node_provider();
+        let client = client::Client::new(
+            node_provider,
             storage,
-            NonZeroUsize::new(10).expect("Chain worker limit should not be zero"),
-        )
-        .with_tracked_chains([message_id.chain_id, chain_id])
-        .with_allow_inactive_chains(true)
-        .with_allow_messages_from_deprecated_epochs(true);
-        let node_client = LocalNodeClient::new(state);
+            100,
+            CrossChainMessageDelivery::Blocking,
+            false,
+            vec![message_id.chain_id, chain_id],
+            "Temporary client for fetching the parent chain",
+        );
 
         // Take the latest committee we know of.
         let admin_chain_id = context.wallet.genesis_admin_chain();
         let query = ChainInfoQuery::new(admin_chain_id).with_committees();
         let nodes: Vec<_> = if let Some(validators) = validators {
-            context
-                .make_node_provider()
+            node_provider
                 .make_nodes_from_list(validators)?
                 .map(|(name, node)| RemoteNode { name, node })
                 .collect()
         } else {
-            let info = node_client.handle_chain_info_query(query).await?;
+            let info = client.local_node().handle_chain_info_query(query).await?;
             let committee = info
                 .latest_committee()
                 .context("Invalid chain info response; missing latest committee")?;
-            context
-                .make_node_provider()
+            node_provider
                 .make_nodes(committee)?
                 .map(|(name, node)| RemoteNode { name, node })
                 .collect()
@@ -1185,13 +1180,14 @@ impl Job {
 
         // Download the parent chain.
         let target_height = message_id.height.try_add_one()?;
-        node_client
-            .download_certificates(&nodes, message_id.chain_id, target_height, &())
+        client
+            .download_certificates(&nodes, message_id.chain_id, target_height)
             .await
             .context("Failed to download parent chain")?;
 
         // The initial timestamp for the new chain is taken from the block with the message.
-        let certificate = node_client
+        let certificate = client
+            .local_node()
             .certificate_for(&message_id)
             .await
             .context("could not find OpenChain message")?;
