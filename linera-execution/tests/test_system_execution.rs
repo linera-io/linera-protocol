@@ -16,9 +16,11 @@ use linera_execution::{
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
-    let mut state = SystemExecutionState::default();
-    state.description = Some(ChainDescription::Root(0));
-    state.balance = Amount::from_tokens(4);
+    let state = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balance: Amount::from_tokens(4),
+        ..SystemExecutionState::default()
+    };
     let mut view = state.into_view().await;
     let operation = SystemOperation::Transfer {
         owner: None,
