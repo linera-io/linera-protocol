@@ -30,7 +30,7 @@ pub fn make_child_block(parent: &HashedCertificateValue) -> Block {
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
         height: parent_value.height().try_add_one().unwrap(),
-        authenticated_signer: None,
+        authenticated_signer: parent_block.authenticated_signer,
         timestamp: parent_block.timestamp,
     }
 }
