@@ -187,19 +187,20 @@ where
         Ok((executed_block, info))
     }
 
-    // Given a list of missing `BlobId`s and a `Certificate` for a block:
-    // - Makes sure they're required by the block provided
-    // - Makes sure there's no duplicate blobs being requested
-    // - Searches for the blob in different places of the local node: blob cache,
-    //   chain manager's pending blobs, and blob storage.
+    /// Given a list of missing `BlobId`s and a `Certificate` for a block:
+    /// - Makes sure they're required by the block provided
+    /// - Makes sure there's no duplicate blobs being requested
+    /// - Searches for the blob in different places of the local node: blob cache,
+    ///   chain manager's pending blobs, and blob storage.
+    /// - Returns `None` if not all blobs could be found.
     pub async fn find_missing_blobs(
         &self,
         certificate: &Certificate,
         missing_blob_ids: &Vec<BlobId>,
         chain_id: ChainId,
-    ) -> Result<Vec<Blob>, NodeError> {
+    ) -> Result<Option<Vec<Blob>>, NodeError> {
         if missing_blob_ids.is_empty() {
-            return Ok(Vec::new());
+            return Ok(Some(Vec::new()));
         }
 
         // Find the missing blobs locally and retry.
@@ -225,7 +226,7 @@ where
             return Err(NodeError::InvalidChainInfoResponse);
         }
 
-        let chain_manager_pending_blobs = self
+        let mut chain_manager_pending_blobs = self
             .chain_state_view(chain_id)
             .await?
             .manager
@@ -234,21 +235,23 @@ where
             .clone();
         let mut found_blobs = Vec::new();
         for blob_id in missing_blob_ids {
-            if let Some(blob) = chain_manager_pending_blobs.get(blob_id).cloned() {
+            if let Some(blob) = chain_manager_pending_blobs.remove(blob_id) {
                 found_blobs.push(blob);
                 unique_missing_blob_ids.remove(blob_id);
             }
         }
 
         let storage = self.storage_client();
-        found_blobs.extend(
-            storage
-                .read_blobs(&unique_missing_blob_ids.into_iter().collect::<Vec<_>>())
-                .await?
-                .into_iter()
-                .flatten(),
-        );
-        Ok(found_blobs)
+        let Some(read_blobs) = storage
+            .read_blobs(&unique_missing_blob_ids.into_iter().collect::<Vec<_>>())
+            .await?
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+        else {
+            return Ok(None);
+        };
+        found_blobs.extend(read_blobs);
+        Ok(Some(found_blobs))
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
