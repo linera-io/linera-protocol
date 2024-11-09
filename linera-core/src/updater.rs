@@ -13,7 +13,6 @@ use std::{
 use futures::{stream, Future, StreamExt};
 use linera_base::{
     data_types::{BlockHeight, Round},
-    ensure,
     identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
@@ -237,8 +236,8 @@ where
                 let blobs = self
                     .local_node
                     .find_missing_blobs(&certificate, blob_ids, certificate.value().chain_id())
-                    .await?;
-                ensure!(blobs.len() == blob_ids.len(), original_err.clone());
+                    .await?
+                    .ok_or_else(|| original_err.clone())?;
                 self.remote_node
                     .handle_certificate(certificate, blobs, delivery)
                     .await

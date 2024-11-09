@@ -369,6 +369,8 @@ where
         Ok(())
     }
 
+    /// Tries to process all the certificates, requesting any missing blobs from the given node.
+    /// Returns the chain info of the last successfully processed certificate.
     #[instrument(level = "trace", skip_all)]
     pub async fn try_process_certificates(
         &self,
@@ -386,21 +388,15 @@ where
             }
             let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
 
-            result = match &result {
-                Err(err) => {
-                    if let Some(blob_ids) = err.get_blobs_not_found() {
-                        let blobs = remote_node.try_download_blobs(blob_ids.as_slice()).await;
-                        if blobs.len() != blob_ids.len() {
-                            result
-                        } else {
-                            self.handle_certificate(certificate, blobs).await
-                        }
-                    } else {
-                        result
-                    }
+            if let Some(blob_ids) = result
+                .as_ref()
+                .err()
+                .and_then(LocalNodeError::get_blobs_not_found)
+            {
+                if let Some(blobs) = remote_node.try_download_blobs(&blob_ids).await {
+                    result = self.handle_certificate(certificate, blobs).await;
                 }
-                _ => result,
-            };
+            }
 
             match result {
                 Ok(response) => info = Some(response.info),
@@ -1233,9 +1229,9 @@ where
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                    let blobs = RemoteNode::download_blobs(blob_ids, &nodes).await;
-
-                    ensure!(blobs.len() == blob_ids.len(), err);
+                    let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
+                        .await
+                        .ok_or(err)?;
                     self.process_certificate(certificate.clone(), blobs).await?;
                 }
                 _ => {
@@ -1744,12 +1740,12 @@ where
                 if let LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) =
                     &original_err
                 {
-                    blobs = remote_node
+                    if let Some(new_blobs) = remote_node
                         .find_missing_blobs(blob_ids.clone(), chain_id)
-                        .await?;
-
-                    if blobs.len() == blob_ids.len() {
-                        continue; // We found the missing blobs: retry.
+                        .await?
+                    {
+                        blobs = new_blobs;
+                        continue;
                     }
                 }
                 warn!(
@@ -1794,38 +1790,26 @@ where
         &self,
         blob_ids: Vec<BlobId>,
     ) -> Result<(), ChainClientError> {
+        // Deduplicate IDs.
+        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         let validators = self.validator_nodes().await?;
-        let mut tasks = BTreeMap::new();
-
-        for blob_id in blob_ids {
-            if tasks.contains_key(&blob_id) {
-                continue;
-            }
-
-            tasks.insert(
-                blob_id,
-                RemoteNode::download_certificate_for_blob_from_validators_futures(
-                    &validators,
-                    blob_id,
-                )
-                .await,
-            );
-        }
 
         let mut missing_blobs = Vec::new();
-        for (blob_id, mut blob_id_tasks) in tasks {
-            let mut found_blob = false;
-            while let Some(result) = blob_id_tasks.next().await {
-                if let Some(cert) = result {
+        for blob_id in blob_ids {
+            let mut certificate_stream = validators
+                .iter()
+                .map(|remote_node| remote_node.download_certificate_for_blob(blob_id))
+                .collect::<FuturesUnordered<_>>();
+            loop {
+                let Some(result) = certificate_stream.next().await else {
+                    missing_blobs.push(blob_id);
+                    break;
+                };
+                if let Ok(cert) = result {
                     if self.receive_certificate(cert).await.is_ok() {
-                        found_blob = true;
                         break;
                     }
                 }
-            }
-
-            if !found_blob {
-                missing_blobs.push(blob_id);
             }
         }
 
