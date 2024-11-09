@@ -22,10 +22,10 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::OpenChainConfig, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
-    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
-    ServiceRuntimeEndpoint, TransactionTracker,
+    system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
+    Message, MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceController, ResourceTracker, Response, ServiceRuntimeEndpoint,
+    TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -46,7 +46,7 @@ use crate::{
     inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
-    ChainError, ChainExecutionContext,
+    ChainError, ChainExecutionContext, ExecutionResultExt,
 };
 
 #[cfg(test)]
@@ -385,12 +385,10 @@ where
             next_block_height: self.tip_state.get().next_block_height,
             local_time,
         };
-        let response = self
-            .execution_state
+        self.execution_state
             .query_application(context, query, service_runtime_endpoint)
             .await
-            .map_err(|error| ChainError::ExecutionError(error, ChainExecutionContext::Query))?;
-        Ok(response)
+            .with_execution_context(ChainExecutionContext::Query)
     }
 
     pub async fn describe_application(
@@ -402,9 +400,7 @@ where
             .registry
             .describe_application(application_id)
             .await
-            .map_err(|err| {
-                ChainError::ExecutionError(err.into(), ChainExecutionContext::DescribeApplication)
-            })
+            .with_execution_context(ChainExecutionContext::DescribeApplication)
     }
 
     pub async fn mark_messages_as_received(
@@ -745,7 +741,7 @@ where
                 resource_controller
                     .track_executed_block_size_sequence_extension(0, block.operations.len())
             })
-            .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
+            .with_execution_context(ChainExecutionContext::Block)?;
 
         if self.is_closed() {
             ensure!(
@@ -793,8 +789,6 @@ where
                 Transaction::ReceiveMessages(_) => ChainExecutionContext::IncomingBundle(txn_index),
                 Transaction::ExecuteOperation(_) => ChainExecutionContext::Operation(txn_index),
             };
-            let with_context =
-                |error: ExecutionError| ChainError::ExecutionError(error, chain_execution_context);
             let maybe_responses = match replaying_oracle_responses.as_mut().map(Iterator::next) {
                 Some(Some(responses)) => Some(responses),
                 Some(None) => return Err(ChainError::MissingOracleResponseList),
@@ -805,7 +799,7 @@ where
                 Transaction::ReceiveMessages(incoming_bundle) => {
                     resource_controller
                         .track_executed_block_size_of(&incoming_bundle)
-                        .map_err(with_context)?;
+                        .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
                         self.execute_message_in_block(
                             message_id,
@@ -823,7 +817,7 @@ where
                 Transaction::ExecuteOperation(operation) => {
                     resource_controller
                         .track_executed_block_size_of(&operation)
-                        .map_err(with_context)?;
+                        .with_execution_context(chain_execution_context)?;
                     #[cfg(with_metrics)]
                     let _operation_latency = OPERATION_EXECUTION_LATENCY.measure_latency();
                     let context = OperationContext {
@@ -842,21 +836,22 @@ where
                             &mut resource_controller,
                         )
                         .await
-                        .map_err(with_context)?;
+                        .with_execution_context(chain_execution_context)?;
                     resource_controller
                         .with_state(&mut self.execution_state)
                         .await?
                         .track_operation(operation)
-                        .map_err(with_context)?;
+                        .with_execution_context(chain_execution_context)?;
                 }
             }
 
             self.execution_state
                 .update_execution_outcomes_with_app_registrations(&mut txn_tracker)
                 .await
-                .map_err(with_context)?;
-            let (txn_outcomes, txn_oracle_responses, new_next_message_index) =
-                txn_tracker.destructure().map_err(with_context)?;
+                .with_execution_context(chain_execution_context)?;
+            let (txn_outcomes, txn_oracle_responses, new_next_message_index) = txn_tracker
+                .destructure()
+                .with_execution_context(chain_execution_context)?;
             next_message_index = new_next_message_index;
             let (txn_messages, txn_events) = self
                 .process_execution_outcomes(block.height, txn_outcomes)
@@ -874,21 +869,21 @@ where
                         .with_state(&mut self.execution_state)
                         .await?
                         .track_message(&message_out.message)
-                        .map_err(with_context)?;
+                        .with_execution_context(chain_execution_context)?;
                 }
             }
             resource_controller
                 .track_executed_block_size_of(&(&txn_oracle_responses, &txn_messages, &txn_events))
-                .map_err(with_context)?;
+                .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(oracle_responses.len(), 1)
-                .map_err(with_context)?;
+                .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(messages.len(), 1)
-                .map_err(with_context)?;
+                .with_execution_context(chain_execution_context)?;
             resource_controller
                 .track_executed_block_size_sequence_extension(events.len(), 1)
-                .map_err(with_context)?;
+                .with_execution_context(chain_execution_context)?;
             oracle_responses.push(txn_oracle_responses);
             messages.push(txn_messages);
             events.push(txn_events);
@@ -901,7 +896,7 @@ where
                 .with_state(&mut self.execution_state)
                 .await?
                 .track_block()
-                .map_err(|err| ChainError::ExecutionError(err, ChainExecutionContext::Block))?;
+                .with_execution_context(ChainExecutionContext::Block)?;
         }
 
         // Recompute the state hash.
@@ -978,10 +973,6 @@ where
         let mut grant = posted_message.grant;
         match incoming_bundle.action {
             MessageAction::Accept => {
-                let with_context = |error: ExecutionError| {
-                    let context = ChainExecutionContext::IncomingBundle(txn_index);
-                    ChainError::ExecutionError(error, context)
-                };
                 // Once a chain is closed, accepting incoming messages is not allowed.
                 ensure!(!self.is_closed(), ChainError::ClosedChain);
 
@@ -995,20 +986,19 @@ where
                         resource_controller,
                     )
                     .await
-                    .map_err(with_context)?;
+                    .with_execution_context(ChainExecutionContext::IncomingBundle(txn_index))?;
                 if grant > Amount::ZERO {
                     if let Some(refund_grant_to) = posted_message.refund_grant_to {
                         self.execution_state
                             .send_refund(context, grant, refund_grant_to, txn_tracker)
                             .await
-                            .map_err(with_context)?;
+                            .with_execution_context(ChainExecutionContext::IncomingBundle(
+                                txn_index,
+                            ))?;
                     }
                 }
             }
             MessageAction::Reject => {
-                let with_context = |error: ExecutionError| {
-                    ChainError::ExecutionError(error, ChainExecutionContext::Block)
-                };
                 // If rejecting a message fails, the entire block proposal should be
                 // scrapped.
                 ensure!(
@@ -1016,7 +1006,7 @@ where
                     ChainError::CannotRejectMessage {
                         chain_id: block.chain_id,
                         origin: Box::new(incoming_bundle.origin.clone()),
-                        posted_message: posted_message.clone(),
+                        posted_message: Box::new(posted_message.clone()),
                     }
                 );
                 if posted_message.is_tracked() {
@@ -1024,7 +1014,7 @@ where
                     self.execution_state
                         .bounce_message(context, grant, posted_message.message.clone(), txn_tracker)
                         .await
-                        .map_err(with_context)?;
+                        .with_execution_context(ChainExecutionContext::Block)?;
                 } else if grant > Amount::ZERO {
                     // Nothing to do except maybe refund the grant.
                     let Some(refund_grant_to) = posted_message.refund_grant_to else {
@@ -1037,7 +1027,7 @@ where
                     self.execution_state
                         .send_refund(context, posted_message.grant, refund_grant_to, txn_tracker)
                         .await
-                        .map_err(with_context)?;
+                        .with_execution_context(ChainExecutionContext::Block)?;
                 }
             }
         }

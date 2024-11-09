@@ -987,7 +987,7 @@ where
     }
 
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
-    /// its current height.
+    /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
     async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
@@ -1001,6 +1001,15 @@ where
             // This is a best-effort that depends on network conditions.
             let nodes = self.validator_nodes().await?;
             info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
+        }
+
+        let result = self
+            .chain_state_view()
+            .await?
+            .validate_incoming_bundles()
+            .await;
+        if matches!(result, Err(ChainError::MissingCrossChainUpdate { .. })) {
+            self.find_received_certificates().await?;
         }
         self.update_from_info(&info);
         Ok(info)
@@ -2308,13 +2317,13 @@ where
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(error),
             ))) if matches!(
-                *error,
+                &*error,
                 ChainError::ExecutionError(
-                    ExecutionError::SystemError(
-                        SystemExecutionError::InsufficientFundingForFees { .. }
-                    ),
+                    execution_error,
                     ChainExecutionContext::Block
-                )
+                ) if matches!(**execution_error, ExecutionError::SystemError(
+                    SystemExecutionError::InsufficientFundingForFees { .. }
+                ))
             ) =>
             {
                 // We can't even pay for the execution of one empty block. Let's return zero.
