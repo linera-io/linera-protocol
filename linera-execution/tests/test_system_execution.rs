@@ -4,9 +4,10 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, KeyPair},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId, MessageId},
+    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
+    ownership::ChainOwnership,
 };
 use linera_execution::{
     system::Recipient, test_utils::SystemExecutionState, ExecutionOutcome, Message, MessageContext,
@@ -16,9 +17,15 @@ use linera_execution::{
 
 #[tokio::test]
 async fn test_simple_system_operation() -> anyhow::Result<()> {
+    let owner_key_pair = KeyPair::generate();
+    let owner = Owner::from(owner_key_pair.public());
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         balance: Amount::from_tokens(4),
+        ownership: ChainOwnership {
+            super_owners: [(owner, owner_key_pair.public())].into_iter().collect(),
+            ..ChainOwnership::default()
+        },
         ..SystemExecutionState::default()
     };
     let mut view = state.into_view().await;
@@ -31,7 +38,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
         chain_id: ChainId::root(0),
         height: BlockHeight(0),
         index: Some(0),
-        authenticated_signer: None,
+        authenticated_signer: Some(owner),
         authenticated_caller_id: None,
     };
     let mut controller = ResourceController::default();
@@ -48,13 +55,15 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: None,
+        owner: Some(owner),
     };
     let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
         outcomes,
         vec![ExecutionOutcome::System(
-            RawExecutionOutcome::default().with_refund_grant_to(Some(account))
+            RawExecutionOutcome::default()
+                .with_authenticated_signer(Some(owner))
+                .with_refund_grant_to(Some(account))
         )]
     );
     Ok(())
