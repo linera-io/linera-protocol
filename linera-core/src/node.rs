@@ -107,7 +107,6 @@ pub trait ValidatorNode {
 
 /// Turn an address into a validator node.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
-#[expect(clippy::result_large_err)]
 pub trait ValidatorNodeProvider: 'static {
     #[cfg(not(web))]
     type Node: ValidatorNode + Send + Sync + Clone + 'static;
@@ -174,7 +173,7 @@ pub enum NodeError {
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        origin: Origin,
+        origin: Box<Origin>,
         height: BlockHeight,
     },
 
@@ -283,18 +282,20 @@ impl From<ChainError> for NodeError {
                 height,
             } => Self::MissingCrossChainUpdate {
                 chain_id,
-                origin: *origin,
+                origin,
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::ExecutionError(
-                ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
-                _,
-            )
-            | ChainError::ExecutionError(
-                ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
-                _,
-            ) => Self::BlobNotFoundOnRead(blob_id),
+            ChainError::ExecutionError(execution_error, context) => match *execution_error {
+                ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id))
+                | ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)) => {
+                    Self::BlobNotFoundOnRead(blob_id)
+                }
+                execution_error => Self::ChainError {
+                    error: ChainError::ExecutionError(Box::new(execution_error), context)
+                        .to_string(),
+                },
+            },
             error => Self::ChainError {
                 error: error.to_string(),
             },

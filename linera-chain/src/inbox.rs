@@ -126,8 +126,8 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
             } => ChainError::UnexpectedMessage {
                 chain_id,
                 origin: origin.into(),
-                bundle,
-                previous_bundle,
+                bundle: Box::new(bundle),
+                previous_bundle: Box::new(previous_bundle),
             },
             InboxError::IncorrectOrder {
                 bundle,
@@ -135,14 +135,14 @@ impl From<(ChainId, Origin, InboxError)> for ChainError {
             } => ChainError::IncorrectMessageOrder {
                 chain_id,
                 origin: origin.into(),
-                bundle,
+                bundle: Box::new(bundle),
                 next_height: next_cursor.height,
                 next_index: next_cursor.index,
             },
             InboxError::UnskippableBundle { bundle } => ChainError::CannotSkipMessage {
                 chain_id,
                 origin: origin.into(),
-                bundle,
+                bundle: Box::new(bundle),
             },
         }
     }
