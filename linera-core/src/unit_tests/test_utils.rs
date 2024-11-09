@@ -525,13 +525,9 @@ where
             .storage_client()
             .read_blob_states(&blob_ids)
             .await;
-        let hashes = match blob_states {
-            Err(err) => Err(err.into()),
-            Ok(blob_states) => Ok(blob_states
-                .into_iter()
-                .map(|blob_state| blob_state.last_used_by)
-                .collect()),
-        };
+        let hashes = blob_states
+            .map(|states| states.into_iter().map(|state| state.last_used_by).collect())
+            .map_err(Into::into);
         sender.send(hashes)
     }
 }
