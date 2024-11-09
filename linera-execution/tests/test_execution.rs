@@ -1690,6 +1690,13 @@ async fn test_close_chain() {
     ));
     "fails if unauthenticated and receiving chain has no owners"
 )]
+#[test_case(
+    None, Some(PublicKey::test_key(1).into())
+    => matches Ok(Err(
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
+    ));
+    "fails if receiving chain has no owners"
+)]
 #[tokio::test]
 async fn test_message_receipt_spending_chain_balance(
     receiving_chain_owner_key: Option<PublicKey>,
