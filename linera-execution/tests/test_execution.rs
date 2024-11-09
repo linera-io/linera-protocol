@@ -1665,6 +1665,11 @@ async fn test_close_chain() {
 /// Tests an application attempting to transfer the tokens in the chain's balance while executing
 /// messages.
 #[test_case(
+    Some(PublicKey::test_key(1)), Some(PublicKey::test_key(1).into())
+    => matches Ok(Ok(()));
+    "works if sender is a receiving chain owner"
+)]
+#[test_case(
     None, None
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
