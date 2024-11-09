@@ -8,6 +8,7 @@
 #![deny(clippy::large_futures)]
 
 mod applications;
+mod authenticated_account;
 pub mod committee;
 mod execution;
 mod execution_state_actor;
@@ -52,6 +53,9 @@ use serde::{Deserialize, Serialize};
 use system::OpenChainConfig;
 use thiserror::Error;
 
+pub(crate) use self::authenticated_account::{
+    AuthenticatedAccount, AuthenticatedAccountOwner, UnauthorizedError,
+};
 #[cfg(with_testing)]
 pub use crate::applications::ApplicationRegistry;
 use crate::runtime::ContractSyncRuntime;
@@ -236,6 +240,8 @@ pub enum ExecutionError {
     InvalidBytecodeId(BytecodeId),
     #[error("Owner is None")]
     OwnerIsNone,
+    #[error("Unauthorized attempt to transfer tokens")]
+    UnauthorizedTransfer(#[from] authenticated_account::UnauthorizedError),
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
     #[error("Failed to make network reqwest")]

@@ -39,10 +39,10 @@ use {linera_base::prometheus_util, prometheus::IntCounterVec};
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::{Committee, Epoch},
-    ApplicationRegistryView, ChannelName, ChannelSubscription, Destination,
-    ExecutionRuntimeContext, MessageContext, MessageKind, OperationContext, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, TransactionTracker, UserApplicationDescription,
-    UserApplicationId,
+    ApplicationRegistryView, AuthenticatedAccount, AuthenticatedAccountOwner, ChannelName,
+    ChannelSubscription, Destination, ExecutionRuntimeContext, MessageContext, MessageKind,
+    OperationContext, QueryContext, RawExecutionOutcome, RawOutgoingMessage, TransactionTracker,
+    UnauthorizedError, UserApplicationDescription, UserApplicationId,
 };
 
 /// The relative index of the `OpenChain` message created by the `OpenChain` operation.
@@ -347,7 +347,7 @@ pub enum SystemExecutionError {
     #[error("Transfer must have positive amount")]
     IncorrectTransferAmount,
     #[error("Transfer from owned account must be authenticated by the right signer")]
-    UnauthenticatedTransferOwner,
+    UnauthenticatedTransferOwner(#[source] UnauthorizedError),
     #[error("The transferred amount must not exceed the current chain balance: {balance}")]
     InsufficientFunding { balance: Amount },
     #[error("Required execution fees exceeded the total funding available: {balance}")]
@@ -355,7 +355,7 @@ pub enum SystemExecutionError {
     #[error("Claim must have positive amount")]
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
-    UnauthenticatedClaimOwner,
+    UnauthenticatedClaimOwner(#[source] UnauthorizedError),
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
     #[error("Failed to create new committee")]
@@ -472,9 +472,9 @@ where
                 recipient,
                 ..
             } => {
-                let message = self
-                    .transfer(context.authenticated_signer, owner, recipient, amount)
-                    .await?;
+                let sender = AuthenticatedAccountOwner::new_in_system_application(&context, owner)
+                    .map_err(SystemExecutionError::UnauthenticatedTransferOwner)?;
+                let message = self.transfer(sender, recipient, amount).await?;
 
                 if let Some(message) = message {
                     outcome.messages.push(message)
@@ -486,15 +486,10 @@ where
                 recipient,
                 amount,
             } => {
-                let message = self
-                    .claim(
-                        context.authenticated_signer,
-                        owner,
-                        target_id,
-                        recipient,
-                        amount,
-                    )
-                    .await?;
+                let source =
+                    AuthenticatedAccount::new_in_system_application(&context, target_id, owner)
+                        .map_err(SystemExecutionError::UnauthenticatedClaimOwner)?;
+                let message = self.claim(source, recipient, amount).await?;
 
                 outcome.messages.push(message)
             }
@@ -663,23 +658,17 @@ where
 
     pub async fn transfer(
         &mut self,
-        authenticated_signer: Option<Owner>,
-        owner: Option<Owner>,
+        sender: AuthenticatedAccountOwner,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        if owner.is_some() {
-            ensure!(
-                authenticated_signer == owner,
-                SystemExecutionError::UnauthenticatedTransferOwner
-            );
-        }
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectTransferAmount
         );
-        let balance = match &owner {
-            Some(owner) => self.balances.get_mut_or_default(owner).await?,
+        let sender = sender.without_authentication();
+        let balance = match sender {
+            Some(owner) => self.balances.get_mut_or_default(&owner).await?,
             None => self.balance.get_mut(),
         };
         balance
@@ -694,7 +683,7 @@ where
                     kind: MessageKind::Tracked,
                     message: SystemMessage::Credit {
                         amount,
-                        source: owner,
+                        source: sender,
                         target: account.owner,
                     },
                 };
@@ -707,23 +696,21 @@ where
 
     pub async fn claim(
         &self,
-        authenticated_signer: Option<Owner>,
-        owner: Owner,
-        target_id: ChainId,
+        source: AuthenticatedAccount,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
         ensure!(
-            authenticated_signer.as_ref() == Some(&owner),
-            SystemExecutionError::UnauthenticatedClaimOwner
-        );
-        ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectClaimAmount
         );
+        let owner = source
+            .owner()
+            .without_authentication()
+            .expect("Claims should never authorize access to the shared chain balance");
 
         Ok(RawOutgoingMessage {
-            destination: Destination::Recipient(target_id),
+            destination: Destination::Recipient(source.chain_id()),
             authenticated: true,
             grant: Amount::ZERO,
             kind: MessageKind::Simple,
@@ -767,9 +754,11 @@ where
                 owner,
                 recipient,
             } => {
-                ensure!(
-                    context.authenticated_signer == Some(owner),
-                    SystemExecutionError::UnauthenticatedClaimOwner
+                assert_eq!(
+                    context.authenticated_signer,
+                    Some(owner),
+                    "Message should be sent after checking the claimer's authentication \
+                    and include the `authenticated_signer`"
                 );
 
                 let balance = self.balances.get_mut_or_default(&owner).await?;

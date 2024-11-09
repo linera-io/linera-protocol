@@ -24,9 +24,10 @@ use reqwest::{header::CONTENT_TYPE, Client};
 use crate::{
     system::{OpenChainConfig, Recipient},
     util::RespondExt,
-    ExecutionError, ExecutionRuntimeContext, ExecutionStateView, RawExecutionOutcome,
-    RawOutgoingMessage, SystemExecutionError, SystemMessage, UserApplicationDescription,
-    UserApplicationId, UserContractCode, UserServiceCode,
+    AuthenticatedAccount, AuthenticatedAccountOwner, ExecutionError, ExecutionRuntimeContext,
+    ExecutionStateView, RawExecutionOutcome, RawOutgoingMessage, SystemExecutionError,
+    SystemMessage, UserApplicationDescription, UserApplicationId, UserContractCode,
+    UserServiceCode,
 };
 
 #[cfg(with_metrics)]
@@ -128,13 +129,12 @@ where
                 source,
                 destination,
                 amount,
-                signer,
                 callback,
             } => {
                 let mut execution_outcome = RawExecutionOutcome::default();
                 let message = self
                     .system
-                    .transfer(signer, source, Recipient::Account(destination), amount)
+                    .transfer(source, Recipient::Account(destination), amount)
                     .await?;
 
                 if let Some(message) = message {
@@ -147,20 +147,12 @@ where
                 source,
                 destination,
                 amount,
-                signer,
                 callback,
             } => {
-                let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
                 let mut execution_outcome = RawExecutionOutcome::default();
                 let message = self
                     .system
-                    .claim(
-                        signer,
-                        owner,
-                        source.chain_id,
-                        Recipient::Account(destination),
-                        amount,
-                    )
+                    .claim(source, Recipient::Account(destination), amount)
                     .await?;
 
                 execution_outcome.messages.push(message);
@@ -354,18 +346,16 @@ pub enum ExecutionRequest {
     },
 
     Transfer {
-        source: Option<Owner>,
+        source: AuthenticatedAccountOwner,
         destination: Account,
         amount: Amount,
-        signer: Option<Owner>,
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
 
     Claim {
-        source: Account,
+        source: AuthenticatedAccount,
         destination: Account,
         amount: Amount,
-        signer: Option<Owner>,
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
 
@@ -489,28 +479,24 @@ impl Debug for ExecutionRequest {
                 source,
                 destination,
                 amount,
-                signer,
                 ..
             } => formatter
                 .debug_struct("ExecutionRequest::Transfer")
                 .field("source", source)
                 .field("destination", destination)
                 .field("amount", amount)
-                .field("signer", signer)
                 .finish_non_exhaustive(),
 
             ExecutionRequest::Claim {
                 source,
                 destination,
                 amount,
-                signer,
                 ..
             } => formatter
                 .debug_struct("ExecutionRequest::Claim")
                 .field("source", source)
                 .field("destination", destination)
                 .field("amount", amount)
-                .field("signer", signer)
                 .finish_non_exhaustive(),
 
             ExecutionRequest::SystemTimestamp { .. } => formatter

@@ -30,10 +30,10 @@ use crate::{
     execution_state_actor::{ExecutionRequest, ExecutionStateSender},
     resources::ResourceController,
     util::{ReceiverExt, UnboundedSenderExt},
-    BaseRuntime, ContractRuntime, ExecutionError, FinalizeContext, MessageContext,
-    OperationContext, QueryContext, RawExecutionOutcome, ServiceRuntime, TransactionTracker,
-    UserApplicationDescription, UserApplicationId, UserContractInstance, UserServiceInstance,
-    MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
+    AuthenticatedAccount, AuthenticatedAccountOwner, BaseRuntime, ContractRuntime, ExecutionError,
+    FinalizeContext, MessageContext, OperationContext, QueryContext, RawExecutionOutcome,
+    ServiceRuntime, TransactionTracker, UserApplicationDescription, UserApplicationId,
+    UserContractInstance, UserServiceInstance, MAX_EVENT_KEY_LEN, MAX_STREAM_NAME_LEN,
 };
 
 #[cfg(test)]
@@ -101,7 +101,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
 
 /// The runtime status of an application.
 #[derive(Debug)]
-struct ApplicationStatus {
+pub(crate) struct ApplicationStatus {
     /// The caller application ID, if forwarded during the call.
     caller_id: Option<UserApplicationId>,
     /// The application ID.
@@ -112,6 +112,13 @@ struct ApplicationStatus {
     signer: Option<Owner>,
     /// The current execution outcome of the application.
     outcome: RawExecutionOutcome<Vec<u8>>,
+}
+
+impl ApplicationStatus {
+    /// Returns the authenticated signer for the execution thread, if any.
+    pub fn authenticated_signer(&self) -> Option<Owner> {
+        self.signer
+    }
 }
 
 /// A loaded application instance.
@@ -1212,7 +1219,10 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let signer = self.inner().current_application().signer;
+        let source = AuthenticatedAccountOwner::new_in_user_application(
+            self.inner().current_application(),
+            source,
+        )?;
         let execution_outcome = self
             .inner()
             .execution_state_sender
@@ -1220,7 +1230,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 source,
                 destination,
                 amount,
-                signer,
                 callback,
             })?
             .recv_response()?;
@@ -1237,6 +1246,10 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         amount: Amount,
     ) -> Result<(), ExecutionError> {
         let signer = self.inner().current_application().signer;
+        let source = AuthenticatedAccount::new_in_user_application(
+            self.inner().current_application(),
+            source,
+        )?;
         let execution_outcome = self
             .inner()
             .execution_state_sender
@@ -1244,7 +1257,6 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 source,
                 destination,
                 amount,
-                signer,
                 callback,
             })?
             .recv_response()?
