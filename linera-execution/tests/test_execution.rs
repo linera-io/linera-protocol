@@ -1670,6 +1670,13 @@ async fn test_close_chain() {
     "works if sender is a receiving chain owner"
 )]
 #[test_case(
+    Some(PublicKey::test_key(1)), None
+    => matches Ok(Err(
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
+    ));
+    "fails if unauthenticated"
+)]
+#[test_case(
     None, None
     => matches Ok(Err(
         ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
