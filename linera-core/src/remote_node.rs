@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt, future::Future};
+use std::{collections::HashMap, fmt};
 
-use futures::{future, stream::FuturesUnordered};
+use futures::{stream::FuturesUnordered, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
@@ -144,21 +144,22 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificate)
     }
 
+    /// Tries to download the given blobs from this node. Returns `None` if not all could be found.
     #[instrument(level = "trace")]
-    pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Vec<Blob> {
-        future::join_all(
-            blob_ids
-                .iter()
-                .map(|blob_id| self.try_download_blob(*blob_id)),
-        )
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
+    pub(crate) async fn try_download_blobs(&self, blob_ids: &[BlobId]) -> Option<Vec<Blob>> {
+        let mut stream = blob_ids
+            .iter()
+            .map(|blob_id| self.try_download_blob(*blob_id))
+            .collect::<FuturesUnordered<_>>();
+        let mut blobs = Vec::new();
+        while let Some(maybe_blob) = stream.next().await {
+            blobs.push(maybe_blob?);
+        }
+        Some(blobs)
     }
 
     #[instrument(level = "trace")]
-    pub(crate) async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
+    async fn try_download_blob(&self, blob_id: BlobId) -> Option<Blob> {
         match self.node.download_blob_content(blob_id).await {
             Ok(blob) => {
                 let blob = blob.with_blob_id_checked(blob_id);
@@ -180,18 +181,19 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     /// Downloads the blobs from the specified validator and returns them, including blobs that
-    /// are still pending the the validator's chain manager.
+    /// are still pending in the validator's chain manager. Returns `None` if not all of them
+    /// could be found.
     pub(crate) async fn find_missing_blobs(
         &self,
         blob_ids: Vec<BlobId>,
         chain_id: ChainId,
-    ) -> Result<Vec<Blob>, NodeError> {
+    ) -> Result<Option<Vec<Blob>>, NodeError> {
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let info = match self.handle_chain_info_query(query).await {
             Ok(info) => Some(info),
             Err(err) => {
                 warn!("Got error from validator {}: {}", self.name, err);
-                return Ok(Vec::new());
+                return Ok(None);
             }
         };
 
@@ -208,9 +210,12 @@ impl<N: ValidatorNode> RemoteNode<N> {
             Vec::new()
         };
 
-        found_blobs.extend(self.try_download_blobs(&missing_blobs).await);
-
-        Ok(found_blobs)
+        if let Some(blobs) = self.try_download_blobs(&missing_blobs).await {
+            found_blobs.extend(blobs);
+            Ok(Some(found_blobs))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Returns the list of certificate hashes on the given chain in the given range of heights.
@@ -253,37 +258,19 @@ impl<N: ValidatorNode> RemoteNode<N> {
         None
     }
 
+    /// Downloads the blobs with the given IDs. This is done in one concurrent task per block.
+    /// Each task goes through the validators sequentially in random order and tries to download
+    /// it. Returns `None` if it couldn't find all blobs.
     #[instrument(level = "trace", skip(validators))]
-    pub async fn download_certificate_for_blob_from_validators_futures(
-        validators: &[Self],
-        blob_id: BlobId,
-    ) -> FuturesUnordered<impl Future<Output = Option<Certificate>> + '_> {
-        let futures = FuturesUnordered::new();
-
-        let mut validators = validators.iter().collect::<Vec<_>>();
-        validators.shuffle(&mut rand::thread_rng());
-        for remote_node in validators {
-            futures.push(async move {
-                remote_node
-                    .download_certificate_for_blob(blob_id)
-                    .await
-                    .ok()
-            });
+    pub async fn download_blobs(blob_ids: &[BlobId], validators: &[Self]) -> Option<Vec<Blob>> {
+        let mut stream = blob_ids
+            .iter()
+            .map(|blob_id| Self::download_blob(validators, *blob_id))
+            .collect::<FuturesUnordered<_>>();
+        let mut blobs = Vec::new();
+        while let Some(maybe_blob) = stream.next().await {
+            blobs.push(maybe_blob?);
         }
-
-        futures
-    }
-
-    #[instrument(level = "trace", skip(validators))]
-    pub async fn download_blobs(blob_ids: &[BlobId], validators: &[Self]) -> Vec<Blob> {
-        future::join_all(
-            blob_ids
-                .iter()
-                .map(|blob_id| Self::download_blob(validators, *blob_id)),
-        )
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
+        Some(blobs)
     }
 }
