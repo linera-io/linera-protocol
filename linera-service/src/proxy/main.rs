@@ -325,7 +325,7 @@ where
                     .read_blob_states(&blob_ids)
                     .await?
                     .into_iter()
-                    .map(|x| x.last_used_by)
+                    .map(|blob_state| blob_state.last_used_by)
                     .collect::<Vec<_>>(),
             )))),
             BlockProposal(_)

@@ -70,7 +70,7 @@ service ValidatorNode {
   // Returns the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
-  // Returns the hash of the `Certificate` that last used a blob.
+  // Returns the hashes of the certificates that last used each of the blobs.
   rpc BlobsLastUsedBy(BlobIds) returns (CryptoHashes);
 }
 
@@ -279,7 +279,7 @@ message BlobId {
   bytes bytes = 1;
 }
 
-// A content-addressed blob ID i.e. the hash of the `BlobContent`.
+// Content-addressed blob IDs i.e. the hashes of the `BlobContent`s.
 message BlobIds {
   repeated bytes bytes = 1;
 }

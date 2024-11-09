@@ -546,7 +546,7 @@ where
             .map_err(|err| Status::from_error(Box::new(err)))?;
         let results = blob_states
             .into_iter()
-            .map(|result| result.last_used_by)
+            .map(|blob_statet| blob_state.last_used_by)
             .collect::<Vec<_>>();
         Ok(Response::new(results.into()))
     }
