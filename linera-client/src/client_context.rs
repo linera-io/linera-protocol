@@ -42,11 +42,8 @@ use {
         Operation,
     },
     linera_rpc::{
-        config::NetworkProtocol,
-        grpc::{transport::create_channel, GrpcClient},
-        mass_client::MassClient,
-        simple::SimpleMassClient,
-        RpcMessage,
+        config::NetworkProtocol, grpc::GrpcClient, mass_client::MassClient,
+        simple::SimpleMassClient, RpcMessage,
     },
     linera_sdk::abis::fungible,
     std::{collections::HashMap, iter},
@@ -893,15 +890,8 @@ where
                 }
                 NetworkProtocol::Grpc { .. } => {
                     let node_options = self.make_node_options();
-                    let options = (&node_options).into();
                     let address = config.network.http_address();
-                    let channel = create_channel(address.clone(), &options).unwrap();
-                    Box::new(GrpcClient::new(
-                        address,
-                        channel,
-                        node_options.retry_delay,
-                        node_options.max_retries,
-                    ))
+                    Box::new(GrpcClient::create(address, node_options))
                 }
             };
 

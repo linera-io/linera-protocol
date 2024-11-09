@@ -9,7 +9,7 @@ use linera_core::node::{NodeError, ValidatorNodeProvider};
 use super::GrpcClient;
 use crate::{
     config::ValidatorPublicNetworkConfig,
-    grpc::{pool::GrpcConnectionPool, transport::Options},
+    grpc::{pool::GrpcConnectionPool, transport},
     node_provider::NodeOptions,
 };
 
@@ -22,7 +22,7 @@ pub struct GrpcNodeProvider {
 
 impl GrpcNodeProvider {
     pub fn new(options: NodeOptions) -> Self {
-        let transport_options = Options::from(&options);
+        let transport_options = transport::Options::from(&options);
         let retry_delay = options.retry_delay;
         let max_retries = options.max_retries;
         let pool = GrpcConnectionPool::new(transport_options);
