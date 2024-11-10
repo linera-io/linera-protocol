@@ -1150,7 +1150,7 @@ impl Job {
     {
         let node_provider = context.make_node_provider();
         let client = client::Client::new(
-            node_provider,
+            node_provider.clone(),
             storage,
             100,
             CrossChainMessageDelivery::Blocking,

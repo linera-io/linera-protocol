@@ -888,9 +888,11 @@ where
                         self.recv_timeout,
                     ))
                 }
-                NetworkProtocol::Grpc { .. } => Box::new(
-                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
-                ),
+                NetworkProtocol::Grpc { .. } => {
+                    let node_options = self.make_node_options();
+                    let address = config.network.http_address();
+                    Box::new(GrpcClient::create(address, node_options))
+                }
             };
 
             validator_clients.push(client);
