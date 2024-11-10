@@ -241,10 +241,9 @@ impl CrossChainMessageDelivery {
     }
 
     pub fn wait_for_outgoing_messages(self) -> bool {
-        use CrossChainMessageDelivery::*;
         match self {
-            NonBlocking => false,
-            Blocking => true,
+            CrossChainMessageDelivery::NonBlocking => false,
+            CrossChainMessageDelivery::Blocking => true,
         }
     }
 }
