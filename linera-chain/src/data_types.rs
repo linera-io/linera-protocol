@@ -819,10 +819,9 @@ impl MessageBundle {
 
 impl PostedMessage {
     pub fn is_skippable(&self) -> bool {
-        use MessageKind::*;
         match self.kind {
-            Protected | Tracked => false,
-            Simple | Bouncing => self.grant == Amount::ZERO,
+            MessageKind::Protected | MessageKind::Tracked => false,
+            MessageKind::Simple | MessageKind::Bouncing => self.grant == Amount::ZERO,
         }
     }
 

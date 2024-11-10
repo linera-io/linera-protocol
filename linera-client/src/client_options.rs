@@ -949,13 +949,12 @@ pub enum ResourceControlPolicyConfig {
 
 impl ResourceControlPolicyConfig {
     pub fn into_policy(self) -> ResourceControlPolicy {
-        use ResourceControlPolicyConfig::*;
         match self {
-            Default => ResourceControlPolicy::default(),
-            OnlyFuel => ResourceControlPolicy::only_fuel(),
-            FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
-            AllCategories => ResourceControlPolicy::all_categories(),
-            Devnet => ResourceControlPolicy::devnet(),
+            ResourceControlPolicyConfig::Default => ResourceControlPolicy::default(),
+            ResourceControlPolicyConfig::OnlyFuel => ResourceControlPolicy::only_fuel(),
+            ResourceControlPolicyConfig::FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
+            ResourceControlPolicyConfig::AllCategories => ResourceControlPolicy::all_categories(),
+            ResourceControlPolicyConfig::Devnet => ResourceControlPolicy::devnet(),
         }
     }
 }
