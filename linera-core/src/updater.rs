@@ -26,6 +26,7 @@ use thiserror::Error;
 use tracing::{error, warn};
 
 use crate::{
+    client::ChainClientError,
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -82,7 +83,9 @@ where
 pub enum CommunicationError<E: fmt::Debug> {
     /// No consensus is possible since validators returned different possibilities
     /// for the next block
-    #[error("No error but failed to find a consensus block. Consensus threshold: {}, Proposals: {:?}", .0, .1)]
+    #[error(
+        "No error but failed to find a consensus block. Consensus threshold: {0}, Proposals: {1:?}"
+    )]
     NoConsensus(u64, Vec<(u64, usize)>),
     /// A single error that was returned by a sufficient number of nodes to be trusted as
     /// valid.
@@ -104,7 +107,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     committee: &Committee,
     group_by: G,
     execute: F,
-) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
+) -> Result<(K, Vec<V>), ChainClientError>
 where
     A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(RemoteNode<A>) -> R,
@@ -155,7 +158,7 @@ where
                 if *entry >= committee.validity_threshold() {
                     // At least one honest node returned this error.
                     // No quorum can be reached, so return early.
-                    return Err(CommunicationError::Trusted(err));
+                    return Err(CommunicationError::Trusted(err).into());
                 }
             }
         }
@@ -182,17 +185,14 @@ where
     }
 
     if error_scores.is_empty() {
-        return Err(CommunicationError::NoConsensus(
-            committee.quorum_threshold(),
-            scores,
-        ));
+        return Err(CommunicationError::NoConsensus(committee.quorum_threshold(), scores).into());
     }
 
     // No specific error is available to report reliably.
     let mut sample = error_scores.into_iter().collect::<Vec<_>>();
     sample.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
     sample.truncate(4);
-    Err(CommunicationError::Sample(sample))
+    Err(CommunicationError::Sample(sample).into())
 }
 
 impl<A, S> ValidatorUpdater<A, S>
