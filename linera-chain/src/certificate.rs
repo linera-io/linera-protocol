@@ -206,11 +206,10 @@ impl From<TimeoutCertificate> for Certificate {
     }
 }
 
-// In practice, it should be HashedCertificateValue = Hashed<CertificateValue>
-// but [`HashedCertificateValue`] is used in too many places to change it now.
 /// Wrapper type around hashed instance of `T` type.
 pub struct Hashed<T> {
     value: T,
+    /// Hash of the value (used as key for storage).
     hash: CryptoHash,
 }
 
