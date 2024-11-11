@@ -13,10 +13,13 @@ use linera_base::{
     identifiers::BlobId,
 };
 use linera_execution::committee::{Committee, ValidatorName};
-use serde::{ser::Serializer, Deserialize, Deserializer, Serialize};
+use serde::{
+    ser::{Serialize, SerializeStruct, Serializer},
+    Deserialize, Deserializer,
+};
 
 use crate::{
-    block::{ConfirmedBlock, ValidatedBlock},
+    block::{ConfirmedBlock, Timeout, ValidatedBlock},
     data_types::{
         Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue, LiteCertificate,
         LiteValue,
@@ -29,6 +32,9 @@ pub type ValidatedBlockCertificate = GenericCertificate<ValidatedBlock>;
 
 /// Certificate for a [`ConfirmedBlock`] instance.
 pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
+
+/// Certificate for a Timeout instance.
+pub type TimeoutCertificate = GenericCertificate<Timeout>;
 
 /// Generic type representing a certificate for `value` of type `T`.
 pub struct GenericCertificate<T> {
@@ -69,13 +75,33 @@ impl<T: Debug> Debug for GenericCertificate<T> {
     }
 }
 
-// NOTE: For backwards compatiblity reasons we serialize the new `Certificate` type as the old
-// one. Otherwise we would be breaking the RPC API schemas. We can't implement generic serialization
-// for `Certificate<T>` since only specific `T`s have corresponding `CertificateValue` variants.
 impl Serialize for ValidatedBlockCertificate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let cert = Certificate::from(self.clone());
-        cert.serialize(serializer)
+        let ValidatedBlockCertificate {
+            value,
+            round,
+            signatures,
+        } = self;
+        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 4)?;
+        state.serialize_field("value", value.inner())?;
+        state.serialize_field("round", &round)?;
+        state.serialize_field("signatures", &signatures)?;
+        state.end()
+    }
+}
+
+impl Serialize for TimeoutCertificate {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let TimeoutCertificate {
+            value,
+            round,
+            signatures,
+        } = self;
+        let mut state = serializer.serialize_struct("TimeoutCertificate", 4)?;
+        state.serialize_field("value", value.inner())?;
+        state.serialize_field("round", &round)?;
+        state.serialize_field("signatures", &signatures)?;
+        state.end()
     }
 }
 
@@ -84,7 +110,42 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
     where
         D: Deserializer<'de>,
     {
-        Certificate::deserialize(deserializer).map(ValidatedBlockCertificate::from)
+        #[derive(Deserialize)]
+        #[serde(rename = "ValidatedBlockCertificate")]
+        struct Inner {
+            value: ValidatedBlock,
+            round: Round,
+            signatures: Vec<(ValidatorName, Signature)>,
+        }
+        let inner = Inner::deserialize(deserializer)?;
+        let validated_hashed: HashedCertificateValue = inner.value.clone().into();
+        Ok(Self {
+            value: Hashed::unchecked_new(inner.value, validated_hashed.hash()),
+            round: inner.round,
+            signatures: inner.signatures,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for TimeoutCertificate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename = "TimeoutCertificate")]
+        struct Inner {
+            value: Timeout,
+            round: Round,
+            signatures: Vec<(ValidatorName, Signature)>,
+        }
+        let inner = Inner::deserialize(deserializer)?;
+        let timeout_hashed: HashedCertificateValue = inner.value.clone().into();
+        Ok(Self {
+            value: Hashed::unchecked_new(inner.value, timeout_hashed.hash()),
+            round: inner.round,
+            signatures: inner.signatures,
+        })
     }
 }
 
@@ -129,7 +190,23 @@ impl From<ValidatedBlockCertificate> for Certificate {
     }
 }
 
-// TODO(#2842): In practice, it should be HashedCertificateValue = Hashed<CertificateValue>
+impl From<TimeoutCertificate> for Certificate {
+    fn from(cert: TimeoutCertificate) -> Certificate {
+        let TimeoutCertificate {
+            value,
+            round,
+            signatures,
+        } = cert;
+        let timeout = value.into_inner();
+        Certificate::new(
+            HashedCertificateValue::new_timeout(timeout.chain_id, timeout.height, timeout.epoch),
+            round,
+            signatures,
+        )
+    }
+}
+
+// In practice, it should be HashedCertificateValue = Hashed<CertificateValue>
 // but [`HashedCertificateValue`] is used in too many places to change it now.
 /// Wrapper type around hashed instance of `T` type.
 pub struct Hashed<T> {
@@ -316,6 +393,25 @@ impl TryFrom<Certificate> for ConfirmedBlockCertificate {
                 signatures,
             }),
             _ => Err("Expected a confirmed block certificate"),
+        }
+    }
+}
+
+impl From<Certificate> for TimeoutCertificate {
+    fn from(cert: Certificate) -> Self {
+        let signatures = cert.signatures().clone();
+        let hash = cert.value.hash();
+        match cert.value.into_inner() {
+            CertificateValue::Timeout {
+                chain_id,
+                epoch,
+                height,
+            } => Self {
+                value: Hashed::unchecked_new(Timeout::new(chain_id, height, epoch), hash),
+                round: cert.round,
+                signatures,
+            },
+            _ => panic!("Expected a timeout certificate"),
         }
     }
 }

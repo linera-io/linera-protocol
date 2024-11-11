@@ -16,10 +16,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
-        Origin, Target,
+        Block, BlockProposal, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
     },
-    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -45,7 +44,8 @@ where
     #[cfg(with_testing)]
     ReadCertificate {
         height: BlockHeight,
-        callback: oneshot::Sender<Result<Option<Certificate>, WorkerError>>,
+        callback:
+            oneshot::Sender<Result<Option<linera_chain::data_types::Certificate>, WorkerError>>,
     },
 
     /// Search for a bundle in one of the chain's inboxes.
@@ -84,7 +84,7 @@ where
 
     /// Process a leader timeout issued for this multi-owner chain.
     ProcessTimeout {
-        certificate: Certificate,
+        certificate: TimeoutCertificate,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 

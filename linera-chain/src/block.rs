@@ -4,7 +4,8 @@
 
 use std::fmt::Debug;
 
-use linera_base::crypto::BcsHashable;
+use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::ChainId};
+use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 
 use crate::data_types::{ExecutedBlock, HashedCertificateValue};
@@ -77,5 +78,28 @@ impl ConfirmedBlock {
     /// Consumes this `ConfirmedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
+pub struct Timeout {
+    pub chain_id: ChainId,
+    pub height: BlockHeight,
+    pub epoch: Epoch,
+}
+
+impl Timeout {
+    pub fn new(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> Self {
+        Self {
+            chain_id,
+            height,
+            epoch,
+        }
+    }
+}
+
+impl From<Timeout> for HashedCertificateValue {
+    fn from(value: Timeout) -> Self {
+        HashedCertificateValue::new_timeout(value.chain_id, value.height, value.epoch)
     }
 }
