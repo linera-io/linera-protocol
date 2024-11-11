@@ -1498,9 +1498,8 @@ where
             validator_manager
                 .requested_locked
                 .unwrap()
-                .value()
-                .block()
-                .unwrap()
+                .executed_block()
+                .block
                 .operations,
             blob_0_1_operations
         );
@@ -1820,7 +1819,7 @@ where
     let resubmission_result = builder
         .node(2)
         .handle_certificate(
-            validated_block_certificate,
+            validated_block_certificate.into(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1849,9 +1848,8 @@ where
                 validator_manager
                     .requested_locked
                     .unwrap()
-                    .value()
-                    .block()
-                    .unwrap()
+                    .executed_block()
+                    .block
                     .operations,
                 blob_0_1_operations,
             );
@@ -1893,7 +1891,7 @@ where
     let resubmission_result = builder
         .node(3)
         .handle_certificate(
-            validated_block_certificate,
+            validated_block_certificate.into(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1919,9 +1917,8 @@ where
         validator_manager
             .requested_locked
             .unwrap()
-            .value()
-            .block()
-            .unwrap()
+            .executed_block()
+            .block
             .operations,
         blob_2_3_operations,
     );
@@ -2301,7 +2298,7 @@ where
     builder
         .node(0)
         .handle_certificate(
-            validated_block_certificate,
+            validated_block_certificate.into(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )

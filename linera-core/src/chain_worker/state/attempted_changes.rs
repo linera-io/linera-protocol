@@ -15,7 +15,9 @@ use linera_chain::{
         BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, MessageBundle, Origin,
         Target,
     },
-    manager, ChainStateView,
+    manager,
+    types::ValidatedBlockCertificate,
+    ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -154,13 +156,10 @@ where
     /// Processes a validated block issued for this multi-owner chain.
     pub(super) async fn process_validated_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let executed_block = match certificate.value() {
-            CertificateValue::ValidatedBlock { executed_block } => executed_block,
-            _ => panic!("Expecting a validation certificate"),
-        };
+        let executed_block = certificate.executed_block();
 
         let block = &executed_block.block;
         let height = block.height;
@@ -199,9 +198,13 @@ where
                 true,
             ));
         }
+
+        // NOTE: Turn back to `Certificate` type to extract `HashedCertificateValue`
+        // as the `recent_hashed_cerificate_values` cache works on old types still.
+        let cert = Certificate::from(certificate.clone());
         self.state
             .recent_hashed_certificate_values
-            .insert(Cow::Borrowed(&certificate.value))
+            .insert(Cow::Borrowed(&cert.value))
             .await;
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.

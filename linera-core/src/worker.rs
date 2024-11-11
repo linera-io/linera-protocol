@@ -25,6 +25,7 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
         HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
     },
+    types::ValidatedBlockCertificate,
     ChainStateView,
 };
 use linera_execution::{committee::Epoch, Query, Response};
@@ -497,16 +498,12 @@ where
     #[instrument(level = "trace", skip(self, certificate))]
     async fn process_validated_block(
         &self,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let CertificateValue::ValidatedBlock {
-            executed_block: ExecutedBlock { block, .. },
-        } = certificate.value()
-        else {
-            panic!("Expecting a validation certificate");
-        };
-        self.query_chain_worker(block.chain_id, move |callback| {
+        let chain_id = certificate.executed_block().block.chain_id;
+
+        self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
                 blobs: blobs.to_owned(),
@@ -765,7 +762,11 @@ where
         let (info, actions) = match certificate.value() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let validation_outcomes = self.process_validated_block(certificate, &blobs).await?;
+                // Note: This conversion panics if `certificate` is not a validated block certificate.
+                let validated_block_certificate: ValidatedBlockCertificate = certificate.into();
+                let validation_outcomes = self
+                    .process_validated_block(validated_block_certificate, &blobs)
+                    .await?;
                 #[cfg(with_metrics)]
                 {
                     duplicated = validation_outcomes.2;

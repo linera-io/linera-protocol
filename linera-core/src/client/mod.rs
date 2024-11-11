@@ -44,6 +44,7 @@ use linera_chain::{
         HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
     },
     manager::ChainManagerInfo,
+    types::ValidatedBlockCertificate,
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
@@ -1035,19 +1036,16 @@ where
     async fn finalize_block(
         &self,
         committee: &Committee,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<Certificate, ChainClientError> {
-        let value = certificate.value.validated_to_confirmed().ok_or_else(|| {
-            ChainClientError::InternalError(
-                "Certificate for finalization must be a validated block",
-            )
-        })?;
+        let hashed_value =
+            HashedCertificateValue::new_confirmed(certificate.executed_block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
-            certificate,
+            certificate: certificate.into(),
             delivery: self.options.cross_chain_message_delivery,
         };
         let certificate = self
-            .communicate_chain_action(committee, finalize_action, value)
+            .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
         self.receive_certificate_and_update_validators_internal(
             certificate.clone(),
@@ -1085,7 +1083,9 @@ where
         if certificate.value().is_confirmed() {
             Ok(certificate)
         } else {
-            self.finalize_block(committee, certificate).await
+            let validated_block_certificate = certificate.into();
+            self.finalize_block(committee, validated_block_certificate)
+                .await
         }
     }
 
@@ -1743,7 +1743,10 @@ where
         if let Some(cert) = info.manager.requested_locked {
             let hash = cert.hash();
             let mut blobs = vec![];
-            while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
+            while let Err(original_err) = self
+                .client
+                .handle_certificate(Certificate::from(*cert.clone()), blobs)
+                .await
             {
                 if let LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) =
                     &original_err
@@ -1971,16 +1974,12 @@ where
         // Make sure that we follow the steps in the multi-round protocol.
         let executed_block = if let Some(validated_block_certificate) = &manager.requested_locked {
             ensure!(
-                validated_block_certificate.value().block() == Some(&block),
+                validated_block_certificate.executed_block().block == block,
                 ChainClientError::BlockProposalError(
                     "A different block has already been validated at this height"
                 )
             );
-            validated_block_certificate
-                .value()
-                .executed_block()
-                .unwrap()
-                .clone()
+            validated_block_certificate.executed_block().clone()
         } else {
             self.stage_block_execution_and_discard_failing_messages(block)
                 .await?

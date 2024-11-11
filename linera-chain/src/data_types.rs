@@ -21,7 +21,7 @@ use linera_execution::{
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
-use crate::ChainError;
+use crate::{types::ValidatedBlockCertificate, ChainError};
 
 #[cfg(test)]
 #[path = "unit_tests/data_types_tests.rs"]
@@ -1006,10 +1006,7 @@ impl HashedCertificateValue {
     pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
         match &self.value {
             CertificateValue::ValidatedBlock { executed_block } => Some(
-                CertificateValue::ConfirmedBlock {
-                    executed_block: executed_block.clone(),
-                }
-                .into(),
+                HashedCertificateValue::new_confirmed(executed_block.clone()),
             ),
             CertificateValue::ConfirmedBlock { .. } | CertificateValue::Timeout { .. } => None,
         }
@@ -1055,16 +1052,12 @@ impl BlockProposal {
 
     pub fn new_retry(
         round: Round,
-        validated_block_certificate: Certificate,
+        validated_block_certificate: ValidatedBlockCertificate,
         secret: &KeyPair,
         blobs: Vec<Blob>,
     ) -> Self {
         let lite_cert = validated_block_certificate.lite_certificate().cloned();
-        let CertificateValue::ValidatedBlock { executed_block } =
-            validated_block_certificate.value.into_inner()
-        else {
-            panic!("called new_retry with a certificate without a validated block");
-        };
+        let executed_block = validated_block_certificate.into_inner().into_inner();
         let content = ProposalContent {
             block: executed_block.block,
             round,
@@ -1161,7 +1154,7 @@ impl<'a> SignatureAggregator<'a> {
 
 // Checks if the array slice is strictly ordered. That means that if the array
 // has duplicates, this will return False, even if the array is sorted
-fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
+pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool {
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
 }
 
@@ -1306,7 +1299,7 @@ impl Certificate {
 }
 
 /// Verifies certificate signatures.
-fn check_signatures(
+pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     round: Round,
     signatures: &[(ValidatorName, Signature)],

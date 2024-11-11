@@ -22,6 +22,7 @@ use linera_chain::{
         Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, Medium,
         MessageBundle, Origin, Target,
     },
+    types::ValidatedBlockCertificate,
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -224,7 +225,7 @@ where
     /// Processes a validated block issued for this multi-owner chain.
     pub(super) async fn process_validated_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)

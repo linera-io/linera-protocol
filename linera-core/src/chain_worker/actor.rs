@@ -19,6 +19,7 @@ use linera_chain::{
         Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
         Origin, Target,
     },
+    types::ValidatedBlockCertificate,
     ChainStateView,
 };
 use linera_execution::{
@@ -95,7 +96,7 @@ where
 
     /// Process a validated block issued for this multi-owner chain.
     ProcessValidatedBlock {
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: Vec<Blob>,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
