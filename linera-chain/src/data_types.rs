@@ -21,7 +21,10 @@ use linera_execution::{
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 
-use crate::{types::ValidatedBlockCertificate, ChainError};
+use crate::{
+    types::{Hashed, ValidatedBlockCertificate},
+    ChainError,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/data_types_tests.rs"]
@@ -423,25 +426,30 @@ impl CertificateValue {
 }
 
 /// A statement to be certified by the validators, with its hash.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct HashedCertificateValue {
-    value: CertificateValue,
-    /// Hash of the value (used as key for storage).
-    hash: CryptoHash,
-}
+pub type HashedCertificateValue = Hashed<CertificateValue>;
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl HashedCertificateValue {
     #[graphql(derived(name = "hash"))]
     async fn _hash(&self) -> CryptoHash {
-        self.hash
+        self.hash()
     }
 
     #[graphql(derived(name = "value"))]
     async fn _value(&self) -> CertificateValue {
-        self.value.clone()
+        self.inner().clone()
     }
 }
+
+#[cfg(with_testing)]
+impl<T> PartialEq for Hashed<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash() == other.hash()
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> Eq for Hashed<T> {}
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -465,7 +473,7 @@ pub struct Vote {
 impl Vote {
     /// Use signing key to create a signed object.
     pub fn new(value: HashedCertificateValue, round: Round, key_pair: &KeyPair) -> Self {
-        let hash_and_round = ValueHashAndRound(value.hash, round);
+        let hash_and_round = ValueHashAndRound(value.hash(), round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -656,7 +664,7 @@ impl Serialize for HashedCertificateValue {
     where
         S: serde::Serializer,
     {
-        self.value.serialize(serializer)
+        self.inner().serialize(serializer)
     }
 }
 
@@ -677,7 +685,7 @@ impl From<CertificateValue> for HashedCertificateValue {
 
 impl From<HashedCertificateValue> for CertificateValue {
     fn from(hv: HashedCertificateValue) -> CertificateValue {
-        hv.value
+        hv.into_inner()
     }
 }
 
@@ -714,10 +722,10 @@ impl CertificateValue {
     pub fn with_hash_checked(self, hash: CryptoHash) -> Result<HashedCertificateValue, ChainError> {
         let hashed_certificate_value = self.with_hash();
         ensure!(
-            hashed_certificate_value.hash == hash,
+            hashed_certificate_value.hash() == hash,
             ChainError::CertificateValueHashMismatch {
                 expected: hash,
-                actual: hashed_certificate_value.hash
+                actual: hashed_certificate_value.hash()
             }
         );
         Ok(hashed_certificate_value)
@@ -726,12 +734,12 @@ impl CertificateValue {
     /// Creates a `HashedCertificateValue` by hashing `self`. No hash checks are made!
     pub fn with_hash(self) -> HashedCertificateValue {
         let hash = CryptoHash::new(&self);
-        HashedCertificateValue { value: self, hash }
+        HashedCertificateValue::unchecked_new(self, hash)
     }
 
     /// Creates a `HashedCertificateValue` without checking that this is the correct hash!
     pub fn with_hash_unchecked(self, hash: CryptoHash) -> HashedCertificateValue {
-        HashedCertificateValue { value: self, hash }
+        HashedCertificateValue::unchecked_new(self, hash)
     }
 
     /// Returns whether this value contains the message with the specified ID.
@@ -991,33 +999,21 @@ impl HashedCertificateValue {
         .into()
     }
 
-    pub fn hash(&self) -> CryptoHash {
-        self.hash
-    }
-
     pub fn lite(&self) -> LiteValue {
         LiteValue {
             value_hash: self.hash(),
-            chain_id: self.value.chain_id(),
+            chain_id: self.inner().chain_id(),
         }
     }
 
     /// Returns the corresponding `ConfirmedBlock`, if this is a `ValidatedBlock`.
     pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
-        match &self.value {
+        match self.inner() {
             CertificateValue::ValidatedBlock { executed_block } => Some(
                 HashedCertificateValue::new_confirmed(executed_block.clone()),
             ),
             CertificateValue::ConfirmedBlock { .. } | CertificateValue::Timeout { .. } => None,
         }
-    }
-
-    pub fn inner(&self) -> &CertificateValue {
-        &self.value
-    }
-
-    pub fn into_inner(self) -> CertificateValue {
-        self.value
     }
 }
 
@@ -1250,12 +1246,12 @@ impl Certificate {
 
     /// Returns the certified value.
     pub fn value(&self) -> &CertificateValue {
-        &self.value.value
+        self.value.inner()
     }
 
     /// Returns the certified value's hash.
     pub fn hash(&self) -> CryptoHash {
-        self.value.hash
+        self.value.hash()
     }
 
     /// Returns whether the validator is among the signatories of this certificate.
