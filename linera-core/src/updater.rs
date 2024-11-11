@@ -302,7 +302,7 @@ where
                             .or_insert(block_height);
                     }
 
-                    self.send_chain_information_to_chain_heights(
+                    self.send_chain_info_up_to_heights(
                         chain_heights,
                         CrossChainMessageDelivery::NonBlocking,
                     )
@@ -359,7 +359,7 @@ where
         Ok(())
     }
 
-    async fn send_chain_information_to_chain_heights(
+    async fn send_chain_info_up_to_heights(
         &mut self,
         chain_heights: BTreeMap<ChainId, BlockHeight>,
         delivery: CrossChainMessageDelivery,
@@ -395,11 +395,8 @@ where
             }
         }
 
-        self.send_chain_information_to_chain_heights(
-            sender_heights,
-            CrossChainMessageDelivery::Blocking,
-        )
-        .await?;
+        self.send_chain_info_up_to_heights(sender_heights, CrossChainMessageDelivery::Blocking)
+            .await?;
         Ok(())
     }
 
