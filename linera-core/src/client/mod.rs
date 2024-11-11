@@ -57,6 +57,7 @@ use linera_execution::{
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::ViewError;
+use rand::prelude::SliceRandom as _;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::OwnedRwLockReadGuard;
@@ -293,26 +294,115 @@ where
     P: ValidatorNodeProvider + Sync + 'static,
     S: Storage + Sync + Send + Clone + 'static,
 {
-    async fn download_certificates(
+    /// Downloads and processes all certificates up to (excluding) the specified height.
+    #[instrument(level = "trace", skip(self, validators))]
+    pub async fn download_certificates(
         &self,
-        nodes: &[RemoteNode<P::Node>],
+        validators: &[RemoteNode<impl ValidatorNode>],
         chain_id: ChainId,
-        height: BlockHeight,
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        self.local_node
-            .download_certificates(nodes, chain_id, height, &self.notifier)
-            .await
+        target_next_block_height: BlockHeight,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        // Sequentially try each validator in random order.
+        let mut validators = validators.iter().collect::<Vec<_>>();
+        validators.shuffle(&mut rand::thread_rng());
+        for remote_node in validators {
+            let info = self.local_node.local_chain_info(chain_id).await?;
+            if target_next_block_height <= info.next_block_height {
+                return Ok(info);
+            }
+            self.try_download_certificates_from(
+                remote_node,
+                chain_id,
+                info.next_block_height,
+                target_next_block_height,
+            )
+            .await?;
+        }
+        let info = self.local_node.local_chain_info(chain_id).await?;
+        if target_next_block_height <= info.next_block_height {
+            Ok(info)
+        } else {
+            Err(ChainClientError::CannotDownloadCertificates {
+                chain_id,
+                target_next_block_height,
+            })
+        }
     }
 
-    async fn try_process_certificates(
+    /// Downloads and processes all certificates up to (excluding) the specified height from the
+    /// given validator.
+    #[instrument(level = "trace", skip_all)]
+    async fn try_download_certificates_from(
         &self,
-        remote_node: &RemoteNode<P::Node>,
+        remote_node: &RemoteNode<impl ValidatorNode>,
+        chain_id: ChainId,
+        mut start: BlockHeight,
+        stop: BlockHeight,
+    ) -> Result<(), ChainClientError> {
+        while start < stop {
+            // TODO(#2045): Analyze network errors instead of guessing the batch size.
+            let limit = u64::from(stop)
+                .checked_sub(u64::from(start))
+                .ok_or(ArithmeticError::Overflow)?
+                .min(1000);
+            let Some(certificates) = remote_node
+                .try_query_certificates_from(chain_id, start, limit)
+                .await?
+            else {
+                break;
+            };
+            let Some(info) = self
+                .try_process_certificates(remote_node, chain_id, certificates)
+                .await
+            else {
+                break;
+            };
+            assert!(info.next_block_height > start);
+            start = info.next_block_height;
+        }
+        Ok(())
+    }
+
+    /// Tries to process all the certificates, requesting any missing blobs from the given node.
+    /// Returns the chain info of the last successfully processed certificate.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn try_process_certificates(
+        &self,
+        remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
         certificates: Vec<Certificate>,
     ) -> Option<Box<ChainInfo>> {
-        self.local_node
-            .try_process_certificates(remote_node, chain_id, certificates, &self.notifier)
-            .await
+        let mut info = None;
+        for certificate in certificates {
+            let hash = certificate.hash();
+            if !certificate.value().is_confirmed() || certificate.value().chain_id() != chain_id {
+                // The certificate is not as expected. Give up.
+                warn!("Failed to process network certificate {}", hash);
+                return info;
+            }
+            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
+
+            if let Some(blob_ids) = result
+                .as_ref()
+                .err()
+                .and_then(LocalNodeError::get_blobs_not_found)
+            {
+                if let Some(blobs) = remote_node.try_download_blobs(&blob_ids).await {
+                    result = self.handle_certificate(certificate, blobs).await;
+                }
+            }
+
+            match result {
+                Ok(response) => info = Some(response.info),
+                Err(error) => {
+                    // The certificate is not as expected. Give up.
+                    warn!("Failed to process network certificate {}: {}", hash, error);
+                    return info;
+                }
+            };
+        }
+        // Done with all certificates.
+        info
     }
 
     async fn handle_certificate(
@@ -499,6 +589,15 @@ pub enum ChainClientError {
 
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+
+    #[error(
+        "Failed to download certificates and update local node to the next height \
+         {target_next_block_height} of chain {chain_id:?}"
+    )]
+    CannotDownloadCertificates {
+        chain_id: ChainId,
+        target_next_block_height: BlockHeight,
+    },
 }
 
 impl From<Infallible> for ChainClientError {
@@ -882,7 +981,7 @@ where
     }
 
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
-    /// its current height.
+    /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
     async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
@@ -897,6 +996,15 @@ where
             let nodes = self.validator_nodes().await?;
             info = self.synchronize_chain_state(&nodes, self.chain_id).await?;
         }
+
+        let result = self
+            .chain_state_view()
+            .await?
+            .validate_incoming_bundles()
+            .await;
+        if matches!(result, Err(ChainError::MissingCrossChainUpdate { .. })) {
+            self.find_received_certificates().await?;
+        }
         self.update_from_info(&info);
         Ok(info)
     }
@@ -904,7 +1012,7 @@ where
     // Verifies that our local storage contains enough history compared to the
     // expected block height. Otherwise, downloads the missing history from the
     // network.
-    async fn synchronize_until(
+    pub async fn synchronize_until(
         &self,
         next_block_height: BlockHeight,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
@@ -1129,9 +1237,9 @@ where
         if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
-                    let blobs = LocalNodeClient::<S>::download_blobs(blob_ids, &nodes).await;
-
-                    ensure!(blobs.len() == blob_ids.len(), err);
+                    let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
+                        .await
+                        .ok_or(err)?;
                     self.process_certificate(certificate.clone(), blobs).await?;
                 }
                 _ => {
@@ -1263,16 +1371,6 @@ where
             certificates,
             other_sender_chains,
         })
-    }
-
-    async fn local_query(&self, query: ChainInfoQuery) -> Result<ChainInfoResponse, NodeError> {
-        self.client
-            .local_node
-            .handle_chain_info_query(query)
-            .await
-            .map_err(|error| NodeError::LocalNodeQuery {
-                error: error.to_string(),
-            })
     }
 
     #[instrument(
@@ -1653,12 +1751,12 @@ where
                 if let LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) =
                     &original_err
                 {
-                    blobs = remote_node
+                    if let Some(new_blobs) = remote_node
                         .find_missing_blobs(blob_ids.clone(), chain_id)
-                        .await?;
-
-                    if blobs.len() == blob_ids.len() {
-                        continue; // We found the missing blobs: retry.
+                        .await?
+                    {
+                        blobs = new_blobs;
+                        continue;
                     }
                 }
                 warn!(
@@ -1703,38 +1801,26 @@ where
         &self,
         blob_ids: Vec<BlobId>,
     ) -> Result<(), ChainClientError> {
+        // Deduplicate IDs.
+        let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         let validators = self.validator_nodes().await?;
-        let mut tasks = BTreeMap::new();
-
-        for blob_id in blob_ids {
-            if tasks.contains_key(&blob_id) {
-                continue;
-            }
-
-            tasks.insert(
-                blob_id,
-                LocalNodeClient::<S>::download_certificate_for_blob_from_validators_futures(
-                    &validators,
-                    blob_id,
-                )
-                .await,
-            );
-        }
 
         let mut missing_blobs = Vec::new();
-        for (blob_id, mut blob_id_tasks) in tasks {
-            let mut found_blob = false;
-            while let Some(result) = blob_id_tasks.next().await {
-                if let Some(cert) = result {
+        for blob_id in blob_ids {
+            let mut certificate_stream = validators
+                .iter()
+                .map(|remote_node| remote_node.download_certificate_for_blob(blob_id))
+                .collect::<FuturesUnordered<_>>();
+            loop {
+                let Some(result) = certificate_stream.next().await else {
+                    missing_blobs.push(blob_id);
+                    break;
+                };
+                if let Ok(cert) = result {
                     if self.receive_certificate(cert).await.is_ok() {
-                        found_blob = true;
                         break;
                     }
                 }
-            }
-
-            if !found_blob {
-                missing_blobs.push(blob_id);
             }
         }
 
@@ -2229,13 +2315,13 @@ where
             Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(error),
             ))) if matches!(
-                *error,
+                &*error,
                 ChainError::ExecutionError(
-                    ExecutionError::SystemError(
-                        SystemExecutionError::InsufficientFundingForFees { .. }
-                    ),
+                    execution_error,
                     ChainExecutionContext::Block
-                )
+                ) if matches!(**execution_error, ExecutionError::SystemError(
+                    SystemExecutionError::InsufficientFundingForFees { .. }
+                ))
             ) =>
             {
                 // We can't even pay for the execution of one empty block. Let's return zero.
@@ -3230,14 +3316,17 @@ where
         let futures = chain_ids
             .into_iter()
             .map(|chain_id| async move {
-                let local_response = self.local_query(ChainInfoQuery::new(*chain_id)).await?;
-                Ok::<_, NodeError>((*chain_id, local_response.info.next_block_height))
+                let local_info = self.client.local_node.local_chain_info(*chain_id).await?;
+                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
             })
             .collect::<Vec<_>>();
         stream::iter(futures)
             .buffer_unordered(chain_worker_limit)
             .try_collect()
             .await
+            .map_err(|error| NodeError::LocalNodeQuery {
+                error: error.to_string(),
+            })
     }
 
     /// Given a set of chain ID-block height pairs, returns a map that assigns to each chain ID

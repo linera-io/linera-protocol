@@ -34,13 +34,21 @@ if ! docker_compose_plugin_installed; then
     exit 1
 fi
 
+HOST=$1
+
 # Check if the host is provided as an argument
-if [ -z "$1" ]; then
-  echo "Usage: $0 <host>"
+if [ -z "$HOST" ]; then
+  echo "Usage: $0 <host> [--remote-image]"
   exit 1
 fi
 
-HOST="$1"
+if [ -n "$2" ]; then
+  if [ "$2" != "--remote-image" ]; then
+    echo "Usage: $0 <host> [--remote-image]"
+    exit 1
+  fi
+  REMOTE_IMAGE="$2"
+fi
 
 # Get the current branch name and replace underscores with dashes
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
@@ -56,6 +64,14 @@ GENESIS_CONFIG="docker/genesis.json"
 
 echo "Building Linera binaries"
 cargo install --locked --path linera-service
+
+if [ -z "$REMOTE_IMAGE" ]; then
+  echo "Building local image from commit $GIT_COMMIT..."
+  docker build --build-arg git_commit="$GIT_COMMIT" -f  docker/Dockerfile . -t linera
+else
+  export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:$BRANCH_NAME"
+  echo "Using remote image $LINERA_IMAGE..."
+fi
 
 # Create validator configuration file
 echo "Creating validator configuration..."
@@ -110,7 +126,6 @@ PUBLIC_KEY=$(linera-server generate --validators validator-config.toml)
 echo "Validator setup completed successfully."
 echo "Starting docker compose..."
 
-export LINERA_IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:$BRANCH_NAME"
 docker compose up --wait
 
 echo "Public Key: $PUBLIC_KEY"

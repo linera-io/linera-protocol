@@ -162,9 +162,9 @@ async fn test_block_size_limit() {
     assert_matches!(
         result,
         Err(ChainError::ExecutionError(
-            ExecutionError::ExecutedBlockTooLarge,
+            execution_error,
             ChainExecutionContext::Operation(1),
-        ))
+        )) if matches!(*execution_error, ExecutionError::ExecutedBlockTooLarge)
     );
 
     // The valid block is accepted...

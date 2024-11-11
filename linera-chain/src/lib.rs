@@ -41,7 +41,7 @@ pub enum ChainError {
     #[error("Error in view operation: {0}")]
     ViewError(#[from] ViewError),
     #[error("Execution error: {0} during {1:?}")]
-    ExecutionError(ExecutionError, ChainExecutionContext),
+    ExecutionError(Box<ExecutionError>, ChainExecutionContext),
 
     #[error("The chain being queried is not active {0:?}")]
     InactiveChain(ChainId),
@@ -61,8 +61,8 @@ pub enum ChainError {
     UnexpectedMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        bundle: MessageBundle,
-        previous_bundle: MessageBundle,
+        bundle: Box<MessageBundle>,
+        previous_bundle: Box<MessageBundle>,
     },
     #[error(
         "Message in block proposed to {chain_id:?} is out of order compared to previous messages \
@@ -72,7 +72,7 @@ pub enum ChainError {
     IncorrectMessageOrder {
         chain_id: ChainId,
         origin: Box<Origin>,
-        bundle: MessageBundle,
+        bundle: Box<MessageBundle>,
         next_height: BlockHeight,
         next_index: u32,
     },
@@ -83,7 +83,7 @@ pub enum ChainError {
     CannotRejectMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        posted_message: PostedMessage,
+        posted_message: Box<PostedMessage>,
     },
     #[error(
         "Block proposed to {chain_id:?} is attempting to skip a message bundle \
@@ -92,7 +92,7 @@ pub enum ChainError {
     CannotSkipMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        bundle: MessageBundle,
+        bundle: Box<MessageBundle>,
     },
     #[error(
         "Incoming message bundle in block proposed to {chain_id:?} has timestamp \
@@ -166,4 +166,17 @@ pub enum ChainExecutionContext {
     IncomingBundle(u32),
     Operation(u32),
     Block,
+}
+
+trait ExecutionResultExt<T> {
+    fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError>;
+}
+
+impl<T, E> ExecutionResultExt<T> for Result<T, E>
+where
+    E: Into<ExecutionError>,
+{
+    fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError> {
+        self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context))
+    }
 }

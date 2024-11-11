@@ -327,7 +327,6 @@ impl<T> ClientOutcome<T> {
         }
     }
 
-    #[expect(clippy::result_large_err)]
     pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
     where
         F: FnOnce(T) -> Result<S, ChainClientError>,

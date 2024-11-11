@@ -586,7 +586,7 @@ pub enum RocksDbStoreInternalError {
     AlreadyExistingDatabase,
 
     /// Filesystem error
-    #[error("Filesystem error")]
+    #[error("Filesystem error: {0}")]
     FsError(#[from] std::io::Error),
 
     /// BCS serialization error.

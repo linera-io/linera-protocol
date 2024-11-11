@@ -29,12 +29,9 @@ use super::{
         self, chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
         SubscriptionRequest,
     },
-    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
+    transport, GRPC_MAX_MESSAGE_SIZE,
 };
-use crate::{
-    config::ValidatorPublicNetworkConfig, node_provider::NodeOptions, HandleCertificateRequest,
-    HandleLiteCertRequest,
-};
+use crate::{HandleCertificateRequest, HandleLiteCertRequest, NodeOptions};
 
 #[derive(Clone)]
 pub struct GrpcClient {
@@ -46,23 +43,31 @@ pub struct GrpcClient {
 
 impl GrpcClient {
     pub fn new(
-        network: ValidatorPublicNetworkConfig,
-        options: NodeOptions,
-    ) -> Result<Self, GrpcError> {
-        let address = network.http_address();
-
-        let channel =
-            transport::create_channel(address.clone(), &transport::Options::from(&options))?;
+        address: String,
+        channel: transport::Channel,
+        retry_delay: Duration,
+        max_retries: u32,
+    ) -> Self {
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-
-        Ok(Self {
+        Self {
             address,
             client,
-            retry_delay: options.retry_delay,
-            max_retries: options.max_retries,
-        })
+            retry_delay,
+            max_retries,
+        }
+    }
+
+    pub fn create(address: String, node_options: NodeOptions) -> Self {
+        let options = (&node_options).into();
+        let channel = transport::create_channel(address.clone(), &options).unwrap();
+        Self::new(
+            address,
+            channel,
+            node_options.retry_delay,
+            node_options.max_retries,
+        )
     }
 
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.

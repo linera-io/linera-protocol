@@ -346,8 +346,8 @@ where
         ensure!(
             executed_block.outcome == verified_outcome,
             WorkerError::IncorrectOutcome {
-                submitted: executed_block.outcome.clone(),
-                computed: verified_outcome,
+                submitted: Box::new(executed_block.outcome.clone()),
+                computed: Box::new(verified_outcome),
             }
         );
         // Advance to next block height.

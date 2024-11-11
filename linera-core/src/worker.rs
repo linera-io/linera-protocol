@@ -189,8 +189,8 @@ pub enum WorkerError {
     "
     )]
     IncorrectOutcome {
-        computed: BlockExecutionOutcome,
-        submitted: BlockExecutionOutcome,
+        computed: Box<BlockExecutionOutcome>,
+        submitted: Box<BlockExecutionOutcome>,
     },
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,

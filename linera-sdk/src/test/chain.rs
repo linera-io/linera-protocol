@@ -431,8 +431,11 @@ impl ActiveChain {
                 if matches!(
                     &*boxed_chain_error,
                     ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::UnknownApplicationId(_)),
+                        execution_error,
                         ChainExecutionContext::DescribeApplication,
+                    ) if matches!(
+                        **execution_error,
+                        ExecutionError::SystemError(SystemExecutionError::UnknownApplicationId(_))
                     )
                 ) =>
             {
