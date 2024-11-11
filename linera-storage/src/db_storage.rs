@@ -137,17 +137,6 @@ pub static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
     )
 });
 
-/// The metric counting how often a hashed certificate value is written to storage.
-#[cfg(with_metrics)]
-#[doc(hidden)]
-pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "write_hashed_certificate_value",
-        "The metric counting how often a hashed certificate value is written to storage",
-        &[],
-    )
-});
-
 /// The metric counting how often a blob is written to storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
@@ -525,15 +514,6 @@ where
         Ok(values)
     }
 
-    async fn write_hashed_certificate_value(
-        &self,
-        value: &HashedCertificateValue,
-    ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
-        self.write_batch(batch).await
-    }
-
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         Self::add_blob_to_batch(blob, &mut batch)?;
@@ -608,17 +588,6 @@ where
         Self::add_blob_state_to_batch(blob_id, blob_state, &mut batch)?;
         self.write_batch(batch).await?;
         Ok(())
-    }
-
-    async fn write_hashed_certificate_values(
-        &self,
-        values: &[HashedCertificateValue],
-    ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        for value in values {
-            Self::add_hashed_cert_value_to_batch(value, &mut batch)?;
-        }
-        self.write_batch(batch).await
     }
 
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError> {
@@ -719,19 +688,6 @@ where
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?;
         Ok(certificate)
-    }
-
-    fn add_hashed_cert_value_to_batch(
-        value: &HashedCertificateValue,
-        batch: &mut Batch,
-    ) -> Result<(), ViewError> {
-        #[cfg(with_metrics)]
-        WRITE_HASHED_CERTIFICATE_VALUE_COUNTER
-            .with_label_values(&[])
-            .inc();
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(value.hash()))?;
-        batch.put_key_value(value_key.to_vec(), value)?;
-        Ok(())
     }
 
     fn add_blob_to_batch(blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {

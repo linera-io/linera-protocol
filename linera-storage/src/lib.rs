@@ -44,7 +44,6 @@ pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
-    WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -109,12 +108,6 @@ pub trait Storage: Sized {
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError>;
 
-    /// Writes the given hashed certificate value.
-    async fn write_hashed_certificate_value(
-        &self,
-        value: &HashedCertificateValue,
-    ) -> Result<(), ViewError>;
-
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
@@ -145,12 +138,6 @@ pub trait Storage: Sized {
         blob_ids: &[BlobId],
         blob_state: BlobState,
     ) -> Result<Vec<Epoch>, ViewError>;
-
-    /// Writes several hashed certificate values.
-    async fn write_hashed_certificate_values(
-        &self,
-        values: &[HashedCertificateValue],
-    ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
