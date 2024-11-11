@@ -172,9 +172,11 @@ impl Runnable for Job {
                     } => block.timestamp,
                     _ => panic!("Unexpected certificate."),
                 };
-                context
-                    .update_wallet_for_new_chain(id, key_pair, timestamp)
-                    .await?;
+                if key_pair.is_some() {
+                    context
+                        .update_wallet_for_new_chain(id, key_pair, timestamp)
+                        .await?;
+                }
                 let time_total = time_start.elapsed();
                 info!("Operation confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
