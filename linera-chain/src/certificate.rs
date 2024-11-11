@@ -78,7 +78,6 @@ impl<T: Debug> Debug for GenericCertificate<T> {
 impl Serialize for ValidatedBlockCertificate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 4)?;
-        state.serialize_field("hash", &self.value.hash())?;
         state.serialize_field("value", &self.inner())?;
         state.serialize_field("round", &self.round)?;
         state.serialize_field("signatures", &self.signatures)?;
@@ -89,7 +88,6 @@ impl Serialize for ValidatedBlockCertificate {
 impl Serialize for TimeoutCertificate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("TimeoutCertificate", 4)?;
-        state.serialize_field("hash", &self.value.hash())?;
         state.serialize_field("value", &self.inner())?;
         state.serialize_field("round", &self.round)?;
         state.serialize_field("signatures", &self.signatures)?;
@@ -105,16 +103,16 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
         #[derive(Deserialize)]
         #[serde(rename = "ValidatedBlockCertificate")]
         struct Inner {
-            hash: CryptoHash,
             value: ValidatedBlock,
             round: Round,
             signatures: Vec<(ValidatorName, Signature)>,
         }
-        let value = Inner::deserialize(deserializer)?;
+        let inner = Inner::deserialize(deserializer)?;
+        let validated_hashed: HashedCertificateValue = inner.value.clone().into();
         Ok(Self {
-            value: Hashed::unchecked_new(value.value, value.hash),
-            round: value.round,
-            signatures: value.signatures,
+            value: Hashed::unchecked_new(inner.value, validated_hashed.hash()),
+            round: inner.round,
+            signatures: inner.signatures,
         })
     }
 }
@@ -127,16 +125,16 @@ impl<'de> Deserialize<'de> for TimeoutCertificate {
         #[derive(Deserialize)]
         #[serde(rename = "TimeoutCertificate")]
         struct Inner {
-            hash: CryptoHash,
             value: Timeout,
             round: Round,
             signatures: Vec<(ValidatorName, Signature)>,
         }
-        let value = Inner::deserialize(deserializer)?;
+        let inner = Inner::deserialize(deserializer)?;
+        let timeout_hashed: HashedCertificateValue = inner.value.clone().into();
         Ok(Self {
-            value: Hashed::unchecked_new(value.value, value.hash),
-            round: value.round,
-            signatures: value.signatures,
+            value: Hashed::unchecked_new(inner.value, timeout_hashed.hash()),
+            round: inner.round,
+            signatures: inner.signatures,
         })
     }
 }

@@ -97,3 +97,9 @@ impl Timeout {
         }
     }
 }
+
+impl From<Timeout> for HashedCertificateValue {
+    fn from(value: Timeout) -> Self {
+        HashedCertificateValue::new_timeout(value.chain_id, value.height, value.epoch)
+    }
+}
