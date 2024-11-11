@@ -347,7 +347,7 @@ where
         receiver
             .for_each_concurrent(max_concurrent_tasks, |(cross_chain_request, shard_id)| {
                 let shard = network.shard(shard_id);
-                let remote_address = format!("http://{}", shard.address());
+                let remote_address = shard.http_address();
 
                 let pool = pool.clone();
                 let nickname = nickname.clone();
