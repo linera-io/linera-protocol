@@ -801,51 +801,61 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     9:
-      VersionInfoQuery: UNIT
+      BlobsLastUsedBy:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
     10:
-      GenesisConfigHashQuery: UNIT
+      VersionInfoQuery: UNIT
     11:
+      GenesisConfigHashQuery: UNIT
+    12:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    12:
+    13:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    13:
+    14:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    14:
+    15:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    15:
+    16:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    16:
+    17:
       DownloadBlobContentResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    17:
+    18:
       DownloadCertificateValueResponse:
         NEWTYPE:
           TYPENAME: CertificateValue
-    18:
+    19:
       DownloadCertificateResponse:
         NEWTYPE:
           TYPENAME: Certificate
-    19:
+    20:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: Certificate
-    20:
+    21:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    21:
+    22:
+      BlobsLastUsedByResponse:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: CryptoHash
+    23:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

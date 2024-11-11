@@ -320,6 +320,14 @@ where
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
             )))),
+            BlobsLastUsedBy(blob_ids) => Ok(Some(RpcMessage::BlobsLastUsedByResponse(Box::new(
+                self.storage
+                    .read_blob_states(&blob_ids)
+                    .await?
+                    .into_iter()
+                    .map(|blob_state| blob_state.last_used_by)
+                    .collect::<Vec<_>>(),
+            )))),
             BlockProposal(_)
             | LiteCertificate(_)
             | Certificate(_)
@@ -332,6 +340,7 @@ where
             | GenesisConfigHashResponse(_)
             | DownloadBlobContentResponse(_)
             | BlobLastUsedByResponse(_)
+            | BlobsLastUsedByResponse(_)
             | DownloadCertificateValueResponse(_)
             | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {

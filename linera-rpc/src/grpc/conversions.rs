@@ -551,6 +551,18 @@ impl TryFrom<api::BlobId> for BlobId {
     }
 }
 
+impl TryFrom<api::BlobIds> for Vec<BlobId> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_ids: api::BlobIds) -> Result<Self, Self::Error> {
+        Ok(blob_ids
+            .bytes
+            .into_iter()
+            .map(|x| bincode::deserialize(x.as_slice()))
+            .collect::<Result<_, _>>()?)
+    }
+}
+
 impl TryFrom<BlobId> for api::BlobId {
     type Error = GrpcProtoConversionError;
 
@@ -561,11 +573,35 @@ impl TryFrom<BlobId> for api::BlobId {
     }
 }
 
+impl TryFrom<Vec<BlobId>> for api::BlobIds {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_ids: Vec<BlobId>) -> Result<Self, Self::Error> {
+        let bytes = blob_ids
+            .into_iter()
+            .map(|blob_id| bincode::serialize(&blob_id))
+            .collect::<Result<_, _>>()?;
+        Ok(Self { bytes })
+    }
+}
+
 impl TryFrom<api::CryptoHash> for CryptoHash {
     type Error = GrpcProtoConversionError;
 
     fn try_from(hash: api::CryptoHash) -> Result<Self, Self::Error> {
         Ok(CryptoHash::try_from(hash.bytes.as_slice())?)
+    }
+}
+
+impl TryFrom<api::CryptoHashes> for Vec<CryptoHash> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(hashes: api::CryptoHashes) -> Result<Self, Self::Error> {
+        Ok(hashes
+            .bytes
+            .into_iter()
+            .map(|hash| CryptoHash::try_from(hash.as_slice()))
+            .collect::<Result<_, _>>()?)
     }
 }
 
@@ -618,6 +654,16 @@ impl From<CryptoHash> for api::CryptoHash {
         Self {
             bytes: hash.as_bytes().to_vec(),
         }
+    }
+}
+
+impl From<Vec<CryptoHash>> for api::CryptoHashes {
+    fn from(hashes: Vec<CryptoHash>) -> Self {
+        let bytes = hashes
+            .into_iter()
+            .map(|hash| hash.as_bytes().to_vec())
+            .collect::<Vec<_>>();
+        Self { bytes }
     }
 }
 
