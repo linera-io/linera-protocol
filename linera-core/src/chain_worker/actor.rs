@@ -19,7 +19,7 @@ use linera_chain::{
         Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, MessageBundle,
         Origin, Target,
     },
-    types::ValidatedBlockCertificate,
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -103,7 +103,7 @@ where
 
     /// Process a confirmed block (a commit).
     ProcessConfirmedBlock {
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,

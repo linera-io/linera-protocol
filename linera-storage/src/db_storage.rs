@@ -14,6 +14,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
+    types::ConfirmedBlockCertificate,
     ChainStateView,
 };
 use linera_execution::{
@@ -631,7 +632,7 @@ where
     async fn write_blobs_and_certificate(
         &self,
         blobs: &[Blob],
-        certificate: &Certificate,
+        certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         for blob in blobs {
@@ -678,20 +679,6 @@ where
             certificates.push(certificate);
         }
         Ok(certificates)
-    }
-
-    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        Self::add_certificate_to_batch(certificate, &mut batch)?;
-        self.write_batch(batch).await
-    }
-
-    async fn write_certificates(&self, certificates: &[Certificate]) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
-        for certificate in certificates {
-            Self::add_certificate_to_batch(certificate, &mut batch)?;
-        }
-        self.write_batch(batch).await
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
@@ -766,7 +753,7 @@ where
     }
 
     fn add_certificate_to_batch(
-        certificate: &Certificate,
+        certificate: &ConfirmedBlockCertificate,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
@@ -774,8 +761,9 @@ where
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
-        batch.put_key_value(value_key.to_vec(), &certificate.value)?;
+        let old_certificate: Certificate = certificate.clone().into();
+        batch.put_key_value(cert_key.to_vec(), &old_certificate.lite_certificate())?;
+        batch.put_key_value(value_key.to_vec(), &old_certificate.value)?;
         Ok(())
     }
 

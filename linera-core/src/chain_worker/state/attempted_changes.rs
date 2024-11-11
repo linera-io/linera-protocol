@@ -16,7 +16,7 @@ use linera_chain::{
         Target,
     },
     manager,
-    types::ValidatedBlockCertificate,
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -238,15 +238,13 @@ where
     /// Processes a confirmed block (aka a commit).
     pub(super) async fn process_confirmed_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            panic!("Expecting a confirmation certificate");
-        };
+        let executed_block = certificate.executed_block();
         let block = &executed_block.block;
-        let block_height = block.height;
+        let block_height = executed_block.block.height;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
         if tip.next_block_height < block_height {
@@ -323,7 +321,7 @@ where
         // Update the blob state with last used certificate hash.
         let blob_state = BlobState {
             last_used_by: certificate_hash,
-            epoch: certificate.value().epoch(),
+            epoch: block.epoch,
         };
         self.state
             .storage
@@ -370,7 +368,7 @@ where
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
                 height: block_height,
-                hash: certificate.value.hash(),
+                hash: certificate.hash(),
             },
         });
         // Persist chain.
@@ -378,7 +376,7 @@ where
 
         self.state
             .recent_hashed_certificate_values
-            .insert(Cow::Owned(certificate.value))
+            .insert(Cow::Owned(certificate.into_inner().into()))
             .await;
 
         self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)

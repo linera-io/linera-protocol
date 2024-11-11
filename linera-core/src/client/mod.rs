@@ -40,11 +40,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, Certificate, CertificateValue, ChainAndHeight, ExecutedBlock,
-        HashedCertificateValue, IncomingBundle, LiteCertificate, LiteVote, MessageAction,
+        Block, BlockProposal, Certificate, ChainAndHeight, ExecutedBlock, HashedCertificateValue,
+        IncomingBundle, LiteCertificate, LiteVote, MessageAction,
     },
     manager::ChainManagerInfo,
-    types::ValidatedBlockCertificate,
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
@@ -1032,16 +1032,18 @@ where
         &self,
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let hashed_value =
             HashedCertificateValue::new_confirmed(certificate.executed_block().clone());
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: certificate.into(),
             delivery: self.options.cross_chain_message_delivery,
         };
-        let certificate = self
+        let certificate: ConfirmedBlockCertificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
-            .await?;
+            .await?
+            .try_into()
+            .expect("Finalized block should be confirmed");
         self.receive_certificate_and_update_validators_internal(
             certificate.clone(),
             ReceiveCertificateMode::AlreadyChecked,
@@ -1058,7 +1060,7 @@ where
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: HashedCertificateValue,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let required_blob_ids = value
             .inner()
             .executed_block()
@@ -1076,11 +1078,9 @@ where
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
         if certificate.value().is_confirmed() {
-            Ok(certificate)
+            Ok(certificate.try_into().unwrap()) // shouldn't panic, we just checked.
         } else {
-            let validated_block_certificate = certificate.into();
-            self.finalize_block(committee, validated_block_certificate)
-                .await
+            self.finalize_block(committee, certificate.into()).await
         }
     }
 
@@ -1173,11 +1173,11 @@ where
     #[instrument(level = "trace", skip(certificate, mode))]
     async fn receive_certificate_and_update_validators_internal(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
-        let block_chain_id = certificate.value().chain_id();
-        let block_height = certificate.value().height();
+        let block_chain_id = certificate.executed_block().block.chain_id;
+        let block_height = certificate.executed_block().block.height;
 
         self.receive_certificate_internal(certificate, mode).await?;
 
@@ -1199,15 +1199,10 @@ where
     #[instrument(level = "trace", skip(certificate, mode))]
     async fn receive_certificate_internal(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         mode: ReceiveCertificateMode,
     ) -> Result<(), ChainClientError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            return Err(ChainClientError::InternalError(
-                "Was expecting a confirmed chain operation",
-            ));
-        };
-        let block = &executed_block.block;
+        let block = &certificate.executed_block().block;
 
         // Verify the certificate before doing any expensive networking.
         let (committees, max_epoch) = self.known_committees().await?;
@@ -1229,13 +1224,16 @@ where
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
+        if let Err(err) = self
+            .process_certificate(certificate.clone().into(), vec![])
+            .await
+        {
             match &err {
                 LocalNodeError::WorkerError(WorkerError::BlobsNotFound(blob_ids)) => {
                     let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
                         .await
                         .ok_or(err)?;
-                    self.process_certificate(certificate.clone(), blobs).await?;
+                    self.process_certificate(certificate.into(), blobs).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1322,7 +1320,10 @@ where
             let sender_chain_id = certificate.value().chain_id();
             let height = certificate.value().height();
             let epoch = certificate.value().epoch();
-            match self.check_certificate(max_epoch, &committees, &certificate)? {
+            let confirmed_block_certificate = certificate
+                .try_into()
+                .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+            match self.check_certificate(max_epoch, &committees, &confirmed_block_certificate)? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
                         "Postponing received certificate from {sender_chain_id:.8} at height \
@@ -1343,7 +1344,7 @@ where
                         .entry(sender_chain_id)
                         .and_modify(|h| *h = height.max(*h))
                         .or_insert(height);
-                    certificates.push(certificate);
+                    certificates.push(confirmed_block_certificate);
                 }
             }
         }
@@ -1376,13 +1377,9 @@ where
         &self,
         highest_known_epoch: Epoch,
         committees: &BTreeMap<Epoch, Committee>,
-        incoming_certificate: &Certificate,
+        incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = incoming_certificate.value()
-        else {
-            return Err(NodeError::InvalidChainInfoResponse);
-        };
-        let block = &executed_block.block;
+        let block = &incoming_certificate.executed_block().block;
         // Check that certificates are valid w.r.t one of our trusted committees.
         if block.epoch > highest_known_epoch {
             return Ok(CheckCertificateResult::FutureEpoch);
@@ -1390,7 +1387,7 @@ where
         if let Some(known_committee) = committees.get(&block.epoch) {
             // This epoch is recognized by our chain. Let's verify the
             // certificate.
-            let _ = incoming_certificate.check(known_committee)?;
+            incoming_certificate.check(known_committee)?;
             Ok(CheckCertificateResult::New)
         } else {
             // We don't accept a certificate from a committee that was retired.
@@ -1407,16 +1404,17 @@ where
     ) {
         let validator_count = received_certificates_batches.len();
         let mut other_sender_chains = BTreeSet::new();
-        let mut certificates = BTreeMap::<ChainId, BTreeMap<BlockHeight, Certificate>>::new();
+        let mut certificates =
+            BTreeMap::<ChainId, BTreeMap<BlockHeight, ConfirmedBlockCertificate>>::new();
         let mut new_trackers = BTreeMap::new();
         for response in received_certificates_batches {
             other_sender_chains.extend(response.other_sender_chains);
             new_trackers.insert(response.name, response.tracker);
             for certificate in response.certificates {
                 certificates
-                    .entry(certificate.value().chain_id())
+                    .entry(certificate.executed_block().block.chain_id)
                     .or_default()
-                    .insert(certificate.value().height(), certificate);
+                    .insert(certificate.executed_block().block.height, certificate);
             }
         }
         let certificate_count = certificates.values().map(BTreeMap::len).sum::<usize>();
@@ -1534,7 +1532,7 @@ where
         owner: Option<Owner>,
         amount: Amount,
         recipient: Recipient,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         // TODO(#467): check the balance of `owner` before signing any block proposal.
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
@@ -1550,7 +1548,7 @@ where
     pub async fn read_data_blob(
         &self,
         hash: CryptoHash,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let blob_id = BlobId {
             hash,
             blob_type: BlobType::Data,
@@ -1567,7 +1565,7 @@ where
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Claim {
             owner,
             target_id,
@@ -1937,7 +1935,7 @@ where
         block: Block,
         round: Round,
         manager: ChainManagerInfo,
-    ) -> Result<Certificate, ChainClientError> {
+    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
         let next_block_height;
         let block_hash;
         {
@@ -2053,7 +2051,7 @@ where
     pub async fn execute_operations(
         &self,
         operations: Vec<Operation>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.prepare_chain().await?;
         self.execute_without_prepare(operations).await
     }
@@ -2063,7 +2061,7 @@ where
     pub async fn execute_without_prepare(
         &self,
         operations: Vec<Operation>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone())).await? {
@@ -2075,7 +2073,7 @@ where
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
-                        height = %certificate.value().height(),
+                        height = %certificate.executed_block().block.height,
                         "Another block was committed; retrying."
                     );
                 }
@@ -2088,7 +2086,7 @@ where
     pub async fn execute_operation(
         &self,
         operation: Operation,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operations(vec![operation]).await
     }
 
@@ -2118,7 +2116,7 @@ where
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if certificate.value().block() == confirmed_value.inner().block() =>
+                if Some(&certificate.executed_block().block) == confirmed_value.inner().block() =>
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
@@ -2395,7 +2393,7 @@ where
         &self,
         application_id: UserApplicationId,
         chain_id: Option<ChainId>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let chain_id = chain_id.unwrap_or(application_id.creation.chain_id);
         self.execute_operation(Operation::System(SystemOperation::RequestApplication {
             application_id,
@@ -2411,7 +2409,7 @@ where
         owner: Option<Owner>,
         amount: Amount,
         account: Account,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Account(account))
             .await
     }
@@ -2422,7 +2420,7 @@ where
         &self,
         owner: Option<Owner>,
         amount: Amount,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.transfer(owner, amount, Recipient::Burn).await
     }
 
@@ -2441,7 +2439,7 @@ where
     #[instrument(level = "trace")]
     pub async fn process_pending_block(
         &self,
-    ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         self.synchronize_from_validators().await?;
         self.process_pending_block_without_prepare().await
     }
@@ -2450,7 +2448,7 @@ where
     #[instrument(level = "trace")]
     async fn process_pending_block_without_prepare(
         &self,
-    ) -> Result<ClientOutcome<Option<Certificate>>, ChainClientError> {
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         let identity = self.identity().await?;
         let mut info = self.chain_info_with_manager_values().await?;
         // If the current round has timed out, we request a timeout certificate and retry in
@@ -2552,7 +2550,7 @@ where
     )]
     pub async fn receive_certificate_and_update_validators(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
         self.receive_certificate_and_update_validators_internal(
             certificate,
@@ -2569,7 +2567,7 @@ where
     )]
     pub async fn receive_certificate(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
     ) -> Result<(), ChainClientError> {
         self.receive_certificate_internal(certificate, ReceiveCertificateMode::NeedsCheck)
             .await
@@ -2580,7 +2578,7 @@ where
     pub async fn rotate_key_pair(
         &self,
         key_pair: KeyPair,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let new_public_key = self.state_mut().insert_known_key_pair(key_pair);
         self.transfer_ownership(new_public_key).await
     }
@@ -2590,7 +2588,7 @@ where
     pub async fn transfer_ownership(
         &self,
         new_public_key: PublicKey,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
             super_owners: vec![new_public_key],
             owners: Vec::new(),
@@ -2606,7 +2604,7 @@ where
         &self,
         new_public_key: PublicKey,
         new_weight: u64,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             let ownership = self.prepare_chain().await?.manager.ownership;
             ensure!(
@@ -2634,7 +2632,7 @@ where
                 }
                 ExecuteBlockOutcome::Conflict(certificate) => {
                     info!(
-                        height = %certificate.value().height(),
+                        height = %certificate.executed_block().block.height,
                         "Another block was committed; retrying."
                     );
                 }
@@ -2651,7 +2649,7 @@ where
     pub async fn change_ownership(
         &self,
         ownership: ChainOwnership,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::ChangeOwnership {
             super_owners: ownership.super_owners.values().cloned().collect(),
             owners: ownership.owners.values().cloned().collect(),
@@ -2666,7 +2664,7 @@ where
     pub async fn change_application_permissions(
         &self,
         application_permissions: ApplicationPermissions,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let operation = SystemOperation::ChangeApplicationPermissions(application_permissions);
         self.execute_operation(operation.into()).await
     }
@@ -2678,7 +2676,7 @@ where
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
         balance: Amount,
-    ) -> Result<ClientOutcome<(MessageId, Certificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(MessageId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.prepare_chain().await?;
         loop {
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
@@ -2701,11 +2699,8 @@ where
             };
             // The first message of the only operation created the new chain.
             let message_id = certificate
-                .value()
                 .executed_block()
-                .and_then(|executed_block| {
-                    executed_block.message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
-                })
+                .message_id_for_operation(0, OPEN_CHAIN_MESSAGE_INDEX)
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create new chain"))?;
             // Add the new chain to the list of tracked chains
             self.client.track_chain(ChainId::child(message_id));
@@ -2719,7 +2714,9 @@ where
 
     /// Closes the chain (and loses everything in it!!).
     #[instrument(level = "trace")]
-    pub async fn close_chain(&self) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    pub async fn close_chain(
+        &self,
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::CloseChain))
             .await
     }
@@ -2731,7 +2728,7 @@ where
         &self,
         contract: Bytecode,
         service: Bytecode,
-    ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
         let (contract_blob, service_blob, bytecode_id) =
             create_bytecode_blobs(contract, service).await;
         self.publish_bytecode_blobs(contract_blob, service_blob, bytecode_id)
@@ -2746,7 +2743,7 @@ where
         contract_blob: Blob,
         service_blob: Blob,
         bytecode_id: BytecodeId,
-    ) -> Result<ClientOutcome<(BytecodeId, Certificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(BytecodeId, ConfirmedBlockCertificate)>, ChainClientError> {
         self.add_pending_blobs([contract_blob, service_blob]).await;
         self.execute_operation(Operation::System(SystemOperation::PublishBytecode {
             bytecode_id,
@@ -2760,7 +2757,7 @@ where
     pub async fn publish_data_blobs(
         &self,
         bytes: Vec<Vec<u8>>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let blobs = bytes.into_iter().map(Blob::new_data);
         let publish_blob_operations = blobs
             .clone()
@@ -2779,7 +2776,7 @@ where
     pub async fn publish_data_blob(
         &self,
         bytes: Vec<u8>,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.publish_data_blobs(vec![bytes]).await
     }
 
@@ -2805,7 +2802,8 @@ where
         parameters: &Parameters,
         instantiation_argument: &InstantiationArgument,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ClientOutcome<(UserApplicationId<A>, Certificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(UserApplicationId<A>, ConfirmedBlockCertificate)>, ChainClientError>
+    {
         let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
         let parameters = serde_json::to_vec(parameters)?;
         Ok(self
@@ -2836,7 +2834,8 @@ where
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<UserApplicationId>,
-    ) -> Result<ClientOutcome<(UserApplicationId, Certificate)>, ChainClientError> {
+    ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
+    {
         self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             bytecode_id,
             parameters,
@@ -2847,11 +2846,8 @@ where
         .try_map(|certificate| {
             // The first message of the only operation created the application.
             let creation = certificate
-                .value()
                 .executed_block()
-                .and_then(|executed_block| {
-                    executed_block.message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
-                })
+                .message_id_for_operation(0, CREATE_APPLICATION_MESSAGE_INDEX)
                 .ok_or_else(|| ChainClientError::InternalError("Failed to create application"))?;
             let id = ApplicationId {
                 creation,
@@ -2880,7 +2876,7 @@ where
                 .await?
             {
                 ExecuteBlockOutcome::Executed(certificate) => {
-                    return Ok(ClientOutcome::Committed(certificate))
+                    return Ok(ClientOutcome::Committed(certificate.into()))
                 }
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {
@@ -2898,7 +2894,7 @@ where
     #[instrument(level = "trace")]
     pub async fn process_inbox(
         &self,
-    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
+    ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), ChainClientError> {
         self.prepare_chain().await?;
         self.process_inbox_without_prepare().await
     }
@@ -2911,7 +2907,7 @@ where
     #[instrument(level = "trace")]
     pub async fn process_inbox_without_prepare(
         &self,
-    ) -> Result<(Vec<Certificate>, Option<RoundTimeout>), ChainClientError> {
+    ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PROCESS_INBOX_WITHOUT_PREPARE_LATENCY.measure_latency();
 
@@ -2937,7 +2933,7 @@ where
     #[instrument(level = "trace")]
     pub async fn subscribe_to_new_committees(
         &self,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let operation = SystemOperation::Subscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -2950,7 +2946,7 @@ where
     #[instrument(level = "trace")]
     pub async fn unsubscribe_from_new_committees(
         &self,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         let operation = SystemOperation::Unsubscribe {
             chain_id: self.admin_id,
             channel: SystemChannel::Admin,
@@ -2963,7 +2959,9 @@ where
     /// this command. However, it is expected that deprecated validators stop functioning
     /// shortly after such command is issued.
     #[instrument(level = "trace")]
-    pub async fn finalize_committee(&self) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    pub async fn finalize_committee(
+        &self,
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.prepare_chain().await?;
         let (current_epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
         let current_epoch = current_epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -2991,7 +2989,7 @@ where
         owner: Option<Owner>,
         amount: Amount,
         account: Account,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         self.execute_operation(Operation::System(SystemOperation::Transfer {
             owner,
             recipient: Recipient::Account(account),
@@ -3344,10 +3342,10 @@ where
 #[derive(Debug)]
 enum ExecuteBlockOutcome {
     /// A block with the messages and operations was committed.
-    Executed(Certificate),
+    Executed(ConfirmedBlockCertificate),
     /// A different block was already proposed and got committed. Check whether the messages and
     /// operations are still suitable, and try again at the next block height.
-    Conflict(Certificate),
+    Conflict(ConfirmedBlockCertificate),
     /// We are not the round leader and cannot do anything. Try again at the specified time or
     /// or whenever the round or block height changes.
     WaitForTimeout(RoundTimeout),
@@ -3372,7 +3370,7 @@ struct ReceivedCertificatesFromValidator {
     tracker: u64,
     /// The downloaded certificates. The signatures were already checked and they are ready
     /// to be processed.
-    certificates: Vec<Certificate>,
+    certificates: Vec<ConfirmedBlockCertificate>,
     /// Sender chains that were already up to date locally. We need to ensure their messages
     /// are delivered.
     other_sender_chains: Vec<ChainId>,

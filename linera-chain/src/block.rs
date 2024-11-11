@@ -56,6 +56,10 @@ impl From<ConfirmedBlock> for HashedCertificateValue {
 impl BcsHashable for ConfirmedBlock {}
 
 impl ConfirmedBlock {
+    pub(super) fn new(executed_block: ExecutedBlock) -> Self {
+        Self { executed_block }
+    }
+
     /// Creates a new `ConfirmedBlock` from a `ValidatedBlock`.
     /// Note: There's no `new` method for `ConfirmedBlock` because it's
     /// only created from a `ValidatedBlock`.

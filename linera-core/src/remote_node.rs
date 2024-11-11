@@ -10,7 +10,10 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteCertificate};
+use linera_chain::{
+    data_types::{BlockProposal, Certificate, LiteCertificate},
+    types::ConfirmedBlockCertificate,
+};
 use linera_execution::committee::ValidatorName;
 use rand::seq::SliceRandom as _;
 use tracing::{instrument, warn};
@@ -131,7 +134,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub(crate) async fn download_certificate_for_blob(
         &self,
         blob_id: BlobId,
-    ) -> Result<Certificate, NodeError> {
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
         let last_used_hash = self.node.blob_last_used_by(blob_id).await?;
         let certificate = self.node.download_certificate(last_used_hash).await?;
         if !certificate.requires_blob(&blob_id) {
@@ -141,7 +144,9 @@ impl<N: ValidatorNode> RemoteNode<N> {
             );
             return Err(NodeError::InvalidCertificateForBlob(blob_id));
         }
-        Ok(certificate)
+        certificate.try_into().map_err(|_| NodeError::ChainError {
+            error: "Expected ConfirmedBlock certificate".to_string(),
+        })
     }
 
     /// Tries to download the given blobs from this node. Returns `None` if not all could be found.

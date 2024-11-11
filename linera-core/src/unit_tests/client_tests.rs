@@ -14,10 +14,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{
-        CertificateValue, ExecutedBlock, IncomingBundle, Medium, MessageBundle, Origin,
-        PostedMessage,
-    },
+    data_types::{CertificateValue, IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -118,9 +115,8 @@ where
             builder
                 .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
                 .await
-                .unwrap()
-                .value,
-            certificate.value
+                .unwrap(),
+            certificate
         );
     }
     assert_matches!(
@@ -238,7 +234,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages = &cert.value().block().unwrap().incoming_bundles;
+        let messages = &cert.executed_block().block.incoming_bundles;
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
@@ -287,9 +283,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -341,9 +336,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -391,9 +385,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -583,21 +576,17 @@ where
     assert_eq!(parent.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
+    assert_matches!(
+        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        Operation::System(SystemOperation::OpenChain(_)),
+        "Unexpected certificate value",
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
-    );
-    assert_matches!(
-        certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
-            executed_block.block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
-        ),
-        "Unexpected certificate value",
+            .unwrap(),
+        certificate
     );
     // Make a client to try the new chain.
     let client = builder
@@ -677,21 +666,17 @@ where
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
+    assert_matches!(
+        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        Operation::System(SystemOperation::OpenChain(_)),
+        "Unexpected certificate value",
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
-    );
-    assert_matches!(
-        &certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
-        ),
-        "Unexpected certificate value",
+            .unwrap(),
+        certificate
     );
     // Make a client to try the new chain.
     let client = builder
@@ -810,10 +795,8 @@ where
 
     let certificate = client1.close_chain().await.unwrap().unwrap();
     assert_matches!(
-        certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            &block.operations[..], &[Operation::System(SystemOperation::CloseChain)]
-        ),
+        certificate.executed_block().block.operations[..],
+        [Operation::System(SystemOperation::CloseChain)],
         "Unexpected certificate value",
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
@@ -823,9 +806,8 @@ where
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     // Cannot use the chain for operations any more.
     let result = client1
@@ -858,7 +840,7 @@ where
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
-    let block = certificates[0].value().block().unwrap();
+    let block = &certificates[0].executed_block().block;
     assert!(block.operations.is_empty());
     assert_eq!(block.incoming_bundles.len(), 1);
     assert_matches!(
@@ -979,9 +961,8 @@ where
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1441,9 +1422,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     // Validators goes back up
@@ -1459,11 +1438,7 @@ where
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .requires_blob(&blob0_id));
+    assert!(certificate.executed_block().requires_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)
@@ -1516,7 +1491,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1603,9 +1578,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     builder
@@ -1659,7 +1632,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1758,9 +1731,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate0
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
@@ -1777,9 +1748,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate2
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob2_id));
 
     builder
@@ -1934,7 +1903,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client3_c
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 3)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 3)
         .await
         .unwrap();
 
@@ -2466,7 +2435,7 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = certificate.value().executed_block().unwrap();
+    let executed_block = certificate.executed_block();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
 

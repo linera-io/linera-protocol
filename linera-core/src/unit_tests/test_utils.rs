@@ -18,8 +18,9 @@ use linera_base::{
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId, UserApplicationId},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+use linera_chain::{
+    data_types::{BlockProposal, Certificate, HashedCertificateValue, LiteCertificate},
+    types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -853,7 +854,7 @@ where
         chain_id: ChainId,
         block_height: BlockHeight,
         target_count: usize,
-    ) -> Option<Certificate> {
+    ) -> Option<ConfirmedBlockCertificate> {
         let query =
             ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(BlockHeightRange {
                 start: block_height,
@@ -877,7 +878,7 @@ where
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;
-                                certificate = Some(cert);
+                                certificate = Some(cert.try_into().unwrap());
                             }
                         }
                     }

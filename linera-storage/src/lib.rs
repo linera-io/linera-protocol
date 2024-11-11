@@ -19,6 +19,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Certificate, ChannelFullName, HashedCertificateValue},
+    types::ConfirmedBlockCertificate,
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -121,7 +122,7 @@ pub trait Storage: Sized {
     async fn write_blobs_and_certificate(
         &self,
         blobs: &[Blob],
-        certificate: &Certificate,
+        certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError>;
 
     /// Writes the given blob state.
@@ -165,12 +166,6 @@ pub trait Storage: Sized {
         &self,
         hashes: I,
     ) -> Result<Vec<Certificate>, ViewError>;
-
-    /// Writes the given certificate.
-    async fn write_certificate(&self, certificate: &Certificate) -> Result<(), ViewError>;
-
-    /// Writes a vector of certificates.
-    async fn write_certificates(&self, certificate: &[Certificate]) -> Result<(), ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     ///

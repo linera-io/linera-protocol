@@ -22,7 +22,7 @@ use linera_chain::{
         Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, Medium,
         MessageBundle, Origin, Target,
     },
-    types::ValidatedBlockCertificate,
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -237,7 +237,7 @@ where
     /// Processes a confirmed block (aka a commit).
     pub(super) async fn process_confirmed_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {

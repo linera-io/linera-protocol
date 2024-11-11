@@ -302,3 +302,20 @@ impl ConfirmedBlockCertificate {
         self.inner().inner()
     }
 }
+
+impl TryFrom<Certificate> for ConfirmedBlockCertificate {
+    type Error = &'static str;
+
+    fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
+        let signatures = cert.signatures().clone();
+        let hash = cert.value.hash();
+        match cert.value.into_inner() {
+            CertificateValue::ConfirmedBlock { executed_block } => Ok(Self {
+                value: Hashed::unchecked_new(ConfirmedBlock::new(executed_block), hash),
+                round: cert.round,
+                signatures,
+            }),
+            _ => Err("Expected a confirmed block certificate"),
+        }
+    }
+}

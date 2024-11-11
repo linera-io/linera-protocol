@@ -18,7 +18,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
-use linera_chain::data_types::{CertificateValue, ExecutedBlock};
+use linera_chain::data_types::CertificateValue;
 use linera_client::{
     chain_listener::ClientContext as _,
     client_context::ClientContext,
@@ -165,13 +165,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let id = ChainId::child(message_id);
-                let timestamp = match certificate.value() {
-                    CertificateValue::ConfirmedBlock {
-                        executed_block: ExecutedBlock { block, .. },
-                        ..
-                    } => block.timestamp,
-                    _ => panic!("Unexpected certificate."),
-                };
+                let timestamp = certificate.executed_block().block.timestamp;
                 context
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
@@ -215,13 +209,7 @@ impl Runnable for Job {
                 // No key pair. This chain can be assigned explicitly using the assign command.
                 let key_pair = None;
                 let id = ChainId::child(message_id);
-                let timestamp = match certificate.value() {
-                    CertificateValue::ConfirmedBlock {
-                        executed_block: ExecutedBlock { block, .. },
-                        ..
-                    } => block.timestamp,
-                    _ => panic!("Unexpected certificate."),
-                };
+                let timestamp = certificate.executed_block().block.timestamp;
                 context
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
@@ -527,7 +515,7 @@ impl Runnable for Job {
                     .await
                     .unwrap()
                     .into_iter()
-                    .filter_map(|c| c.value().executed_block().map(|e| e.messages().len()))
+                    .map(|c| c.executed_block().messages().len())
                     .sum::<usize>();
                 info!("Subscribed {} chains to new committees", n);
                 let maybe_certificate = context
