@@ -383,7 +383,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         namespace: &str,
         root_key: &[u8],
     ) -> Result<Self, ServiceStoreError> {
-        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let channel = endpoint.connect_lazy();
         let semaphore = config
@@ -426,7 +426,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
         let query = RequestListAll {};
         let request = tonic::Request::new(query);
-        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let response = client.process_list_all(request).await?;
@@ -442,7 +442,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     async fn delete_all(config: &Self::Config) -> Result<(), ServiceStoreError> {
         let query = RequestDeleteAll {};
         let request = tonic::Request::new(query);
-        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_delete_all(request).await?;
@@ -453,7 +453,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestExistsNamespace { namespace };
         let request = tonic::Request::new(query);
-        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let response = client.process_exists_namespace(request).await?;
@@ -466,7 +466,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestCreateNamespace { namespace };
         let request = tonic::Request::new(query);
-        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_create_namespace(request).await?;
@@ -477,7 +477,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let namespace = bcs::to_bytes(namespace)?;
         let query = RequestDeleteNamespace { namespace };
         let request = tonic::Request::new(query);
-        let endpoint = format!("http://{}", config.endpoint);
+        let endpoint = config.http_address();
         let endpoint = Endpoint::from_shared(endpoint)?;
         let mut client = StoreProcessorClient::connect(endpoint).await?;
         let _response = client.process_delete_namespace(request).await?;

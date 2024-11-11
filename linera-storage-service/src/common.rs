@@ -107,6 +107,12 @@ pub struct ServiceStoreConfig {
     pub common_config: CommonStoreConfig,
 }
 
+impl ServiceStoreConfig {
+    pub fn http_address(&self) -> String {
+        format!("http://{}", self.endpoint)
+    }
+}
+
 /// Obtains the binary of the executable.
 /// The path depends whether the test are run in the directory "linera-storage-service"
 /// or in the main directory
