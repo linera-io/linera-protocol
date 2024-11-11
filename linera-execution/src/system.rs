@@ -59,7 +59,6 @@ static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The number of times the `OpenChain` operation was executed",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// A view accessing the execution state of the system of a chain.

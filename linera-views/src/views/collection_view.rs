@@ -41,7 +41,6 @@ static COLLECTION_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 /// A view that supports accessing a collection of views of the same kind, indexed by a

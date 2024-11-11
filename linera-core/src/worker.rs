@@ -63,7 +63,6 @@ static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
             0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
         ]),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -76,19 +75,16 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
             0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
         ]),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 static TRANSACTION_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
-        .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
-        .expect("Counter creation should not fail")
 });
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.

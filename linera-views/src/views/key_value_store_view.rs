@@ -37,7 +37,6 @@ static KEY_VALUE_STORE_VIEW_HASH_LATENCY: LazyLock<HistogramVec> = LazyLock::new
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 #[cfg(with_metrics)]
@@ -51,7 +50,6 @@ static KEY_VALUE_STORE_VIEW_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 #[cfg(with_metrics)]
@@ -65,7 +63,6 @@ static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: LazyLock<HistogramVec> = LazyLock
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 #[cfg(with_metrics)]
@@ -79,7 +76,6 @@ static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: LazyLock<HistogramVec> = LazyL
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 #[cfg(with_metrics)]
@@ -93,7 +89,6 @@ static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> = Lazy
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 #[cfg(with_metrics)]
@@ -108,7 +103,6 @@ static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> 
                 0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
             ]),
         )
-        .expect("Histogram can be created")
     });
 
 #[cfg(with_metrics)]
@@ -123,7 +117,6 @@ static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: LazyLock<Histogra
                 0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
             ]),
         )
-        .expect("Histogram can be created")
     });
 
 #[cfg(with_metrics)]
@@ -137,7 +130,6 @@ static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> = LazyLo
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 #[cfg(with_testing)]

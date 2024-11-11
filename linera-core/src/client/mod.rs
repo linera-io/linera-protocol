@@ -101,7 +101,6 @@ mod metrics {
                     25.0, 50.0, 100.0, 250.0, 500.0,
                 ]),
             )
-            .expect("Histogram creation should not fail")
         });
 
     pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -114,7 +113,6 @@ mod metrics {
                 25.0, 50.0, 100.0, 250.0, 500.0,
             ]),
         )
-        .expect("Histogram creation should not fail")
     });
 
     pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -127,7 +125,6 @@ mod metrics {
                 25.0, 50.0, 100.0, 250.0, 500.0,
             ]),
         )
-        .expect("Histogram creation should not fail")
     });
 
     pub static EXECUTE_BLOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -140,7 +137,6 @@ mod metrics {
                 25.0, 50.0, 100.0, 250.0, 500.0,
             ]),
         )
-        .expect("Histogram creation should not fail")
     });
 
     pub static FIND_RECEIVED_CERTIFICATES_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -153,7 +149,6 @@ mod metrics {
                 25.0, 50.0, 100.0, 250.0, 500.0,
             ]),
         )
-        .expect("Histogram creation should not fail")
     });
 }
 

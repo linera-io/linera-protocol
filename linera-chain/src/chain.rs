@@ -66,7 +66,6 @@ static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Number of blocks executed",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -80,7 +79,6 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             1.0, 2.5, 5.0, 10.0, 25.0, 50.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -94,7 +92,6 @@ static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             1.0, 2.5,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -108,7 +105,6 @@ static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             1.0, 2.5,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -122,7 +118,6 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             100_000.0, 250_000.0, 500_000.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -133,7 +128,6 @@ static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         &[],
         Some(vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -160,7 +154,6 @@ static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             8_388_608.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -187,7 +180,6 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
             8_388_608.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -200,7 +192,6 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
             0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
         ]),
     )
-    .expect("Histogram can be created")
 });
 
 /// The BCS-serialized size of an empty `ExecutedBlock`.

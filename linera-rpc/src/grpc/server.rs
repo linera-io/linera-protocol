@@ -61,13 +61,11 @@ static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         &[],
         Some(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("server_request_count", "Server request count", &[])
-        .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -77,7 +75,6 @@ static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Server request success",
         &["method_name"],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -87,7 +84,6 @@ static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Server request error",
         &["method_name"],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -98,7 +94,6 @@ static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLoc
         &["method_name"],
         Some(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[derive(Clone)]

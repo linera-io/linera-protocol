@@ -72,13 +72,11 @@ static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             50.0, 100.0, 200.0, 300.0, 400.0,
         ]),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
-        .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -88,7 +86,6 @@ static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Proxy request success",
         &["method_name"],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -98,7 +95,6 @@ static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Proxy request error",
         &["method_name"],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[derive(Clone)]

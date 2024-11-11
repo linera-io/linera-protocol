@@ -41,7 +41,6 @@ static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             100.0, 250.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -56,7 +55,6 @@ static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             100.0, 250.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;

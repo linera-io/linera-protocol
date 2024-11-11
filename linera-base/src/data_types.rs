@@ -1221,7 +1221,6 @@ static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             1.0, 2.5, 5.0, 10.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 /// The time it takes to decompress a bytecode.
@@ -1236,7 +1235,6 @@ static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
             1.0, 2.5, 5.0, 10.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(test)]

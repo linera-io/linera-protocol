@@ -31,7 +31,6 @@ static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Cache hits in `ValueCache`",
         &["key_type", "value_type"],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// A counter metric for the number of cache misses in the [`ValueCache`].
@@ -42,7 +41,6 @@ static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "Cache misses in `ValueCache`",
         &["key_type", "value_type"],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// A least-recently used cache of a value.

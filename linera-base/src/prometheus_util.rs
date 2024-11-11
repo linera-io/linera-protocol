@@ -4,8 +4,8 @@
 //! This module defines util functions for interacting with Prometheus (logging metrics, etc)
 
 use prometheus::{
-    histogram_opts, register_histogram_vec, register_int_counter_vec, Error, HistogramVec,
-    IntCounterVec, Opts,
+    histogram_opts, register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
+    Opts,
 };
 
 use crate::time::Instant;
@@ -17,9 +17,9 @@ pub fn register_int_counter_vec(
     name: &str,
     description: &str,
     label_names: &[&str],
-) -> Result<IntCounterVec, Error> {
+) -> IntCounterVec {
     let counter_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_int_counter_vec!(counter_opts, label_names)
+    register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
 }
 
 /// Wrapper arount prometheus register_histogram_vec! macro which also sets the linera namespace
@@ -28,14 +28,14 @@ pub fn register_histogram_vec(
     description: &str,
     label_names: &[&str],
     buckets: Option<Vec<f64>>,
-) -> Result<HistogramVec, Error> {
+) -> HistogramVec {
     let histogram_opts = if let Some(buckets) = buckets {
         histogram_opts!(name, description, buckets).namespace(LINERA_NAMESPACE)
     } else {
         histogram_opts!(name, description).namespace(LINERA_NAMESPACE)
     };
 
-    register_histogram_vec!(histogram_opts, label_names)
+    register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
 }
 
 /// A guard for an active latency measurement.
