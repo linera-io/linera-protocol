@@ -1049,7 +1049,7 @@ Timeout:
         TYPENAME: Epoch
 TimeoutCertificate:
   STRUCT:
-    - timeout:
+    - value:
         TYPENAME: Timeout
     - round:
         TYPENAME: Round
@@ -1087,7 +1087,7 @@ ValidatedBlock:
         TYPENAME: ExecutedBlock
 ValidatedBlockCertificate:
   STRUCT:
-    - block:
+    - value:
         TYPENAME: ValidatedBlock
     - round:
         TYPENAME: Round
