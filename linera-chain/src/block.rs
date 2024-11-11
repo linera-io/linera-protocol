@@ -4,7 +4,8 @@
 
 use std::fmt::Debug;
 
-use linera_base::crypto::BcsHashable;
+use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::ChainId};
+use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 
 use crate::data_types::{ExecutedBlock, HashedCertificateValue};
@@ -79,9 +80,6 @@ impl ConfirmedBlock {
         self.executed_block
     }
 }
-
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
-use linera_execution::committee::Epoch;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub struct Timeout {
