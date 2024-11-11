@@ -50,7 +50,6 @@ static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = Lazy
         "The metric counting how often a hashed certificate value is tested for existence from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a blob is tested for existence from storage
@@ -61,7 +60,6 @@ static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The metric counting how often a blob is tested for existence from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often multiple blobs are tested for existence from storage
@@ -72,7 +70,6 @@ static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The metric counting how often multiple blobs are tested for existence from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a blob state is tested for existence from storage
@@ -83,7 +80,6 @@ static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The metric counting how often a blob state is tested for existence from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a certificate is tested for existence from storage.
@@ -94,7 +90,6 @@ static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
         "The metric counting how often a certificate is tested for existence from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a hashed certificate value is read from storage.
@@ -106,7 +101,6 @@ pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = Lazy
         "The metric counting how often a hashed certificate value is read from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a blob is read from storage.
@@ -118,7 +112,6 @@ pub static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The metric counting how often a blob is read from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a blob state is read from storage.
@@ -130,7 +123,6 @@ pub static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The metric counting how often a blob state is read from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often blob states are read from storage.
@@ -142,7 +134,6 @@ pub static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
         "The metric counting how often blob states are read from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a hashed certificate value is written to storage.
@@ -154,7 +145,6 @@ pub static WRITE_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = Laz
         "The metric counting how often a hashed certificate value is written to storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a blob is written to storage.
@@ -166,7 +156,6 @@ pub static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
         "The metric counting how often a blob is written to storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a certificate is read from storage.
@@ -178,7 +167,6 @@ pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
         "The metric counting how often a certificate is read from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often certificates are read from storage.
@@ -190,7 +178,6 @@ pub static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(||
         "The metric counting how often certificate are read from storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The metric counting how often a certificate is written to storage.
@@ -202,7 +189,6 @@ pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(||
         "The metric counting how often a certificate is written to storage",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// The latency to load a chain state.
@@ -217,7 +203,6 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
             0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 /// Main implementation of the [`Storage`] trait.

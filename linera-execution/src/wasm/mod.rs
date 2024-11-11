@@ -53,7 +53,6 @@ static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
             0.000_1, 0.000_3, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
@@ -66,7 +65,6 @@ static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| 
             0.000_1, 0.000_3, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
         ]),
     )
-    .expect("Histogram creation should not fail")
 });
 
 /// A user contract in a compiled WebAssembly module.

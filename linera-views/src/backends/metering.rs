@@ -82,63 +82,52 @@ impl KeyValueStoreMetrics {
         let read_value_bytes1 = format!("{}_read_value_bytes_latency", var_name);
         let read_value_bytes2 = format!("{} read value bytes latency", title_name);
         let read_value_bytes =
-            register_histogram_vec(&read_value_bytes1, &read_value_bytes2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&read_value_bytes1, &read_value_bytes2, &[], None);
 
         let contains_key1 = format!("{}_contains_key_latency", var_name);
         let contains_key2 = format!("{} contains key latency", title_name);
-        let contains_key = register_histogram_vec(&contains_key1, &contains_key2, &[], None)
-            .expect("Counter creation should not fail");
+        let contains_key = register_histogram_vec(&contains_key1, &contains_key2, &[], None);
 
         let contains_keys1 = format!("{}_contains_keys_latency", var_name);
         let contains_keys2 = format!("{} contains keys latency", title_name);
-        let contains_keys = register_histogram_vec(&contains_keys1, &contains_keys2, &[], None)
-            .expect("Counter creation should not fail");
+        let contains_keys = register_histogram_vec(&contains_keys1, &contains_keys2, &[], None);
 
         let read_multi_values1 = format!("{}_read_multi_value_bytes_latency", var_name);
         let read_multi_values2 = format!("{} read multi value bytes latency", title_name);
         let read_multi_values_bytes =
-            register_histogram_vec(&read_multi_values1, &read_multi_values2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&read_multi_values1, &read_multi_values2, &[], None);
 
         let find_keys1 = format!("{}_find_keys_by_prefix_latency", var_name);
         let find_keys2 = format!("{} find keys by prefix latency", title_name);
-        let find_keys_by_prefix = register_histogram_vec(&find_keys1, &find_keys2, &[], None)
-            .expect("Counter creation should not fail");
+        let find_keys_by_prefix = register_histogram_vec(&find_keys1, &find_keys2, &[], None);
 
         let find_key_values1 = format!("{}_find_key_values_by_prefix_latency", var_name);
         let find_key_values2 = format!("{} find key values by prefix latency", title_name);
         let find_key_values_by_prefix =
-            register_histogram_vec(&find_key_values1, &find_key_values2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&find_key_values1, &find_key_values2, &[], None);
 
         let write_batch1 = format!("{}_write_batch_latency", var_name);
         let write_batch2 = format!("{} write batch latency", title_name);
-        let write_batch = register_histogram_vec(&write_batch1, &write_batch2, &[], None)
-            .expect("Counter creation should not fail");
+        let write_batch = register_histogram_vec(&write_batch1, &write_batch2, &[], None);
 
         let clear_journal1 = format!("{}_clear_journal_latency", var_name);
         let clear_journal2 = format!("{} clear journal latency", title_name);
-        let clear_journal = register_histogram_vec(&clear_journal1, &clear_journal2, &[], None)
-            .expect("Counter creation should not fail");
+        let clear_journal = register_histogram_vec(&clear_journal1, &clear_journal2, &[], None);
 
         let read_value_none_cases1 = format!("{}_read_value_number_none_cases", var_name);
         let read_value_none_cases2 = format!("{} read value number none cases", title_name);
         let read_value_none_cases =
-            register_int_counter_vec(&read_value_none_cases1, &read_value_none_cases2, &[])
-                .expect("Counter creation should not fail");
+            register_int_counter_vec(&read_value_none_cases1, &read_value_none_cases2, &[]);
 
         let read_value_key_size1 = format!("{}_read_value_key_size", var_name);
         let read_value_key_size2 = format!("{} read value key size", title_name);
         let read_value_key_size =
-            register_histogram_vec(&read_value_key_size1, &read_value_key_size2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&read_value_key_size1, &read_value_key_size2, &[], None);
 
         let read_value_value_size1 = format!("{}_read_value_value_size", var_name);
         let read_value_value_size2 = format!("{} read value value size", title_name);
         let read_value_value_size =
-            register_histogram_vec(&read_value_value_size1, &read_value_value_size2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&read_value_value_size1, &read_value_value_size2, &[], None);
 
         let read_multi_values_num_entries1 = format!("{}_read_multi_values_num_entries", var_name);
         let read_multi_values_num_entries2 =
@@ -148,8 +137,7 @@ impl KeyValueStoreMetrics {
             &read_multi_values_num_entries2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let read_multi_values_key_sizes1 = format!("{}_read_multi_values_key_sizes", var_name);
         let read_multi_values_key_sizes2 = format!("{} read multi values key sizes", title_name);
@@ -158,8 +146,7 @@ impl KeyValueStoreMetrics {
             &read_multi_values_key_sizes2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let contains_keys_num_entries1 = format!("{}_contains_keys_num_entries", var_name);
         let contains_keys_num_entries2 = format!("{} contains keys num entries", title_name);
@@ -168,8 +155,7 @@ impl KeyValueStoreMetrics {
             &contains_keys_num_entries2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let contains_keys_key_sizes1 = format!("{}_contains_keys_key_sizes", var_name);
         let contains_keys_key_sizes2 = format!("{} contains keys key sizes", title_name);
@@ -178,14 +164,12 @@ impl KeyValueStoreMetrics {
             &contains_keys_key_sizes2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let contains_key_key_size1 = format!("{}_contains_key_key_size", var_name);
         let contains_key_key_size2 = format!("{} contains key key size", title_name);
         let contains_key_key_size =
-            register_histogram_vec(&contains_key_key_size1, &contains_key_key_size2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&contains_key_key_size1, &contains_key_key_size2, &[], None);
 
         let find_keys_by_prefix_prefix_size1 =
             format!("{}_find_keys_by_prefix_prefix_size", var_name);
@@ -196,8 +180,7 @@ impl KeyValueStoreMetrics {
             &find_keys_by_prefix_prefix_size2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let find_keys_by_prefix_num_keys1 = format!("{}_find_keys_by_prefix_num_keys", var_name);
         let find_keys_by_prefix_num_keys2 = format!("{} find keys by prefix num keys", title_name);
@@ -206,8 +189,7 @@ impl KeyValueStoreMetrics {
             &find_keys_by_prefix_num_keys2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let find_keys_by_prefix_keys_size1 = format!("{}_find_keys_by_prefix_keys_size", var_name);
         let find_keys_by_prefix_keys_size2 =
@@ -217,8 +199,7 @@ impl KeyValueStoreMetrics {
             &find_keys_by_prefix_keys_size2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let find_key_values_by_prefix_prefix_size1 =
             format!("{}_find_key_values_by_prefix_prefix_size", var_name);
@@ -229,8 +210,7 @@ impl KeyValueStoreMetrics {
             &find_key_values_by_prefix_prefix_size2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let find_key_values_by_prefix_num_keys1 =
             format!("{}_find_key_values_by_prefix_num_keys", var_name);
@@ -241,8 +221,7 @@ impl KeyValueStoreMetrics {
             &find_key_values_by_prefix_num_keys2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let find_key_values_by_prefix_key_values_size1 =
             format!("{}_find_key_values_by_prefix_key_values_size", var_name);
@@ -253,14 +232,12 @@ impl KeyValueStoreMetrics {
             &find_key_values_by_prefix_key_values_size2,
             &[],
             None,
-        )
-        .expect("Counter creation should not fail");
+        );
 
         let write_batch_size1 = format!("{}_write_batch_size", var_name);
         let write_batch_size2 = format!("{} write batch size", title_name);
         let write_batch_size =
-            register_histogram_vec(&write_batch_size1, &write_batch_size2, &[], None)
-                .expect("Counter creation should not fail");
+            register_histogram_vec(&write_batch_size1, &write_batch_size2, &[], None);
 
         KeyValueStoreMetrics {
             read_value_bytes,
