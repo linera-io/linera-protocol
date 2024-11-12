@@ -43,16 +43,6 @@ use {
 
 use crate::{ChainRuntimeContext, Clock, Storage};
 
-/// The metric counting how often a hashed certificate value is tested for existence from storage.
-#[cfg(with_metrics)]
-static CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "contains_hashed_certificate_value",
-        "The metric counting how often a hashed certificate value is tested for existence from storage",
-        &[],
-    )
-});
-
 /// The metric counting how often a blob is tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -370,16 +360,6 @@ where
         let store = self.store.clone_with_root_key(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
-    }
-
-    async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        let test = self.store.contains_key(&value_key).await?;
-        #[cfg(with_metrics)]
-        CONTAINS_HASHED_CERTIFICATE_VALUE_COUNTER
-            .with_label_values(&[])
-            .inc();
-        Ok(test)
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

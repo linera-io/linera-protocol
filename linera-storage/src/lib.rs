@@ -71,9 +71,6 @@ pub trait Storage: Sized {
     /// [`create_chain`][`Self::create_chain`].
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
-    /// Tests existence of a hashed certificate value with the given hash.
-    async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
-
     /// Tests the existence of a blob with the given blob ID.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
