@@ -596,9 +596,9 @@ NodeError:
         NEWTYPE:
           TYPENAME: BlobId
     21:
-      LocalError:
-        STRUCT:
-          - error: STR
+      DuplicatesInBlobsNotFound: UNIT
+    22:
+      UnexpectedEntriesInBlobsNotFound: UNIT
 OpenChainConfig:
   STRUCT:
     - ownership:

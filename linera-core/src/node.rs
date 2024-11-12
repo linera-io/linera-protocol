@@ -222,8 +222,10 @@ pub enum NodeError {
 
     #[error("Node failed to provide a 'last used by' certificate for the blob")]
     InvalidCertificateForBlob(BlobId),
-    #[error("Local error handling validator response")]
-    LocalError { error: String },
+    #[error("Node returned a BlobsNotFound error with duplicates")]
+    DuplicatesInBlobsNotFound,
+    #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
+    UnexpectedEntriesInBlobsNotFound,
 }
 
 impl From<tonic::Status> for NodeError {
