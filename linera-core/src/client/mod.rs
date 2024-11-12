@@ -184,11 +184,15 @@ where
     storage: Storage,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
+    /// The amount of time we wait for additional validators to contribute to the result,
+    /// as a fraction of how long it took to reach a quorum.
+    grace_period: f64,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         validator_node_provider: P,
         storage: S,
@@ -197,6 +201,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
+        grace_period: f64,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -220,6 +225,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
+            grace_period,
         }
     }
 
@@ -279,6 +285,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
                 max_pending_message_bundles: self.max_pending_message_bundles,
                 message_policy: self.message_policy.clone(),
                 cross_chain_message_delivery: self.cross_chain_message_delivery,
+                grace_period: self.grace_period,
             },
         }
     }
@@ -483,6 +490,9 @@ pub struct ChainClientOptions {
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
+    /// The amount of time we wait for additional validators to contribute to the result,
+    /// as a fraction of how long it took to reach a quorum.
+    pub grace_period: f64,
 }
 
 /// Client to operate a chain by interacting with validators and the given local storage
@@ -1115,6 +1125,7 @@ where
                         .await
                 })
             },
+            self.options.grace_period,
         )
         .await?;
         Ok(())
@@ -1149,6 +1160,7 @@ where
                 let action = action.clone();
                 Box::pin(async move { updater.send_chain_update(action).await })
             },
+            self.options.grace_period,
         )
         .await?;
         ensure!(
@@ -1509,6 +1521,7 @@ where
                         .await
                 })
             },
+            self.options.grace_period,
         )
         .await;
         let received_certificate_batches = match result {
@@ -1672,6 +1685,7 @@ where
                         })
                 }
             },
+            self.options.grace_period,
         )
         .await?;
 

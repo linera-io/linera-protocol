@@ -29,9 +29,6 @@ use crate::{
     remote_node::RemoteNode,
 };
 
-/// The amount of time we wait for additional validators to contribute to the result, as a fraction
-/// of how long it took to reach a quorum.
-const GRACE_PERIOD: f64 = 0.2;
 /// The maximum timeout for `communicate_with_quorum` if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
@@ -101,6 +98,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
     committee: &Committee,
     group_by: G,
     execute: F,
+    grace_period: f64,
 ) -> Result<(K, Vec<V>), CommunicationError<NodeError>>
 where
     A: ValidatorNode + Clone + 'static,
@@ -162,7 +160,7 @@ where
             && (highest_key_score >= committee.quorum_threshold()
                 || highest_key_score + remaining_votes < committee.quorum_threshold())
         {
-            end_time = Some(Instant::now() + start_time.elapsed().mul_f64(GRACE_PERIOD));
+            end_time = Some(Instant::now() + start_time.elapsed().mul_f64(grace_period));
         }
     }
 

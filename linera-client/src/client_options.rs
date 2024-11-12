@@ -146,6 +146,11 @@ pub struct ClientOptions {
     /// an empty string.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+
+    /// The amount of time we wait for additional validators to contribute to the result,
+    /// as a fraction of how long it took to reach a quorum.
+    #[arg(long, default_value = "0.1")]
+    pub grace_period: f64,
 }
 
 impl ClientOptions {
