@@ -2992,53 +2992,51 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
     client2.assign(client2_key, message_id).await?;
     client2.sync(chain2).await?;
 
-    let (mut tx1, mut rx) = mpsc::channel(8);
-    let mut tx2 = tx1.clone();
+    let (tx, mut rx) = mpsc::channel(8);
     let drop_barrier = Arc::new(Barrier::new(3));
-    let handle1: JoinHandle<Result<()>> = tokio::spawn({
-        let drop_barrier = drop_barrier.clone();
-        async move {
-            let result = async {
-                loop {
-                    client1.transfer(Amount::ONE, chain2, chain1).await?;
-                    tx1.send(()).await?;
-                }
+    let handle1 = tokio::spawn(run_client(
+        drop_barrier.clone(),
+        client1,
+        tx.clone(),
+        chain2,
+        chain1,
+    ));
+    let handle2 = tokio::spawn(run_client(
+        drop_barrier.clone(),
+        client2,
+        tx,
+        chain2,
+        chain1,
+    ));
+
+    /// Runs the `client` in a task, so that it can race to produce blocks transferring tokens.
+    ///
+    /// Stops when transferring fails or the `notifier` channel is closed. When exiting, it will
+    /// drop the client in a separate thread so that the synchronous `Drop` implementation
+    /// can close the chains without blocking the asynchronous worker thread, which might be
+    /// shared with the other client's task. If the asynchronous thread is blocked, the
+    /// other client might have the round but not be able to execute and propose a block,
+    /// deadlocking the test.
+    async fn run_client(
+        drop_barrier: Arc<Barrier>,
+        client: ClientWrapper,
+        mut notifier: mpsc::Sender<()>,
+        source: ChainId,
+        target: ChainId,
+    ) -> Result<JoinHandle<Result<()>>> {
+        let result = async {
+            loop {
+                client.transfer(Amount::ONE, source, target).await?;
+                notifier.send(()).await?;
             }
-            .await;
-            // Drop the client in a separate thread so that the synchronous `Drop` implementation
-            // can close the chains without blocking the asynchronous worker thread, which might be
-            // shared with the other client's task. If the asynchronous thread is blocked, the
-            // other client might have the round but not be able to execute and propose a block,
-            // deadlocking the test.
-            thread::spawn(move || {
-                drop(client1);
-                drop_barrier.wait();
-            });
-            result
         }
-    });
-    let handle2: JoinHandle<Result<()>> = tokio::spawn({
-        let drop_barrier = drop_barrier.clone();
-        async move {
-            let result = async {
-                loop {
-                    client2.transfer(Amount::ONE, chain2, chain1).await?;
-                    tx2.send(()).await?;
-                }
-            }
-            .await;
-            // Drop the client in a separate thread so that the synchronous `Drop` implementation
-            // can close the chains without blocking the asynchronous worker thread, which might be
-            // shared with the other client's task. If the asynchronous thread is blocked, the
-            // other client might have the round but not be able to execute and propose a block,
-            // deadlocking the test.
-            thread::spawn(move || {
-                drop(client2);
-                drop_barrier.wait();
-            });
-            result
-        }
-    });
+        .await;
+        thread::spawn(move || {
+            drop(client);
+            drop_barrier.wait();
+        });
+        result
+    }
 
     for _ in 0..8 {
         let () = rx.next().await.unwrap();
