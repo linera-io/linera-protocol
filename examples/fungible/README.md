@@ -13,7 +13,7 @@ instance represents a different fungible token.
 
 Individual chains have a set of accounts, where each account has an owner and a balance. The
 same owner can have accounts on multiple chains, with a different balance on each chain. This
-means that an account's balance is shared across one or more chains.
+means that an account's balance is sharded across one or more chains.
 
 There are two operations: `Transfer` and `Claim`. `Transfer` sends tokens from an account on the
 chain where the operation is executed, while `Claim` sends a message from the current chain to
