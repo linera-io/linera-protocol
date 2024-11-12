@@ -68,8 +68,8 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 * `sync-balance` — (DEPRECATED) Synchronize the local state of the chain with a quorum validators, then query the local balance
 * `sync` — Synchronize the local state of the chain with a quorum validators
 * `process-inbox` — Process all pending incoming messages from the inbox of the given chain by creating as many blocks as needed to execute all (non-failing) messages. Failing messages will be marked as rejected and may bounce to their sender depending on their configuration
-* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are it
-* `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are it
+* `query-validator` — Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
+* `query-validators` — Show the current set of validators for a chain. Also print some information about the given chain while we are at it
 * `set-validator` — Add or modify a validator (admin only)
 * `remove-validator` — Remove a validator (admin only)
 * `finalize-committee` — Deprecates all committees except the last one
@@ -274,7 +274,7 @@ NOTE: The local balance does not reflect messages that are waiting to be picked 
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -288,7 +288,7 @@ NOTE: The balance does not reflect messages that have not been synchronized from
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -302,7 +302,7 @@ This command is deprecated. Use `linera sync && linera query-balance` instead.
 
 ###### **Arguments:**
 
-* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By defaults, we read the chain balance of the default chain in the wallet
+* `<ACCOUNT>` — The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the chain balance. By default, we read the chain balance of the default chain in the wallet
 
 
 
@@ -332,7 +332,7 @@ Process all pending incoming messages from the inbox of the given chain by creat
 
 ## `linera query-validator`
 
-Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are it
+Show the version and genesis config hash of a new validator, and print a warning if it is incompatible. Also print some information about the given chain while we are at it
 
 **Usage:** `linera query-validator [OPTIONS] <ADDRESS> [CHAIN_ID]`
 
@@ -349,7 +349,7 @@ Show the version and genesis config hash of a new validator, and print a warning
 
 ## `linera query-validators`
 
-Show the current set of validators for a chain. Also print some information about the given chain while we are it
+Show the current set of validators for a chain. Also print some information about the given chain while we are at it
 
 **Usage:** `linera query-validators [CHAIN_ID]`
 
@@ -411,7 +411,7 @@ View or update the resource control policy
 * `--byte-read <BYTE_READ>` — Set the price per byte read
 * `--byte-written <BYTE_WRITTEN>` — Set the price per byte written
 * `--byte-stored <BYTE_STORED>` — Set the price per byte stored
-* `--operation <OPERATION>` — Set the base price of sending a operation from a block..
+* `--operation <OPERATION>` — Set the base price of sending an operation from a block..
 * `--operation-byte <OPERATION_BYTE>` — Set the additional price for each byte in the argument of a user operation
 * `--message <MESSAGE>` — Set the base price of sending a message from a block..
 * `--message-byte <MESSAGE_BYTE>` — Set the additional price for each byte in the argument of a user message
@@ -466,7 +466,7 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 * `--byte-stored-price <BYTE_STORED_PRICE>` — Set the price per byte stored
 
   Default value: `0`
-* `--operation-price <OPERATION_PRICE>` — Set the base price of sending a operation from a block..
+* `--operation-price <OPERATION_PRICE>` — Set the base price of sending an operation from a block..
 
   Default value: `0`
 * `--operation-byte-price <OPERATION_BYTE_PRICE>` — Set the additional price for each byte in the argument of a user operation
