@@ -14,7 +14,6 @@ use linera_chain::{
         HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
-    types::ConfirmedBlockCertificate,
 };
 use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};
@@ -22,7 +21,10 @@ use linera_views::views::View;
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::data_types::{MessageBundle, Origin},
+    linera_chain::{
+        data_types::{MessageBundle, Origin},
+        types::ConfirmedBlockCertificate,
+    },
 };
 
 use super::{check_block_epoch, ChainWorkerState};
