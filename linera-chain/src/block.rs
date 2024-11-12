@@ -57,7 +57,13 @@ impl From<ConfirmedBlock> for HashedCertificateValue {
 impl BcsHashable for ConfirmedBlock {}
 
 impl ConfirmedBlock {
+    #[cfg(not(feature = "benchmark"))]
     pub(super) fn new(executed_block: ExecutedBlock) -> Self {
+        Self { executed_block }
+    }
+
+    #[cfg(feature = "benchmark")]
+    pub fn new(executed_block: ExecutedBlock) -> Self {
         Self { executed_block }
     }
 

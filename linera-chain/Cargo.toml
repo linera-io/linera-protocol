@@ -15,6 +15,7 @@ version.workspace = true
 test = ["tokio/macros", "linera-base/test", "linera-execution/test"]
 metrics = ["prometheus", "linera-views/metrics", "linera-execution/metrics"]
 web = ["linera-base/web", "linera-views/web", "linera-execution/web"]
+benchmark = ["linera-base/test"]
 
 [dependencies]
 async-graphql.workspace = true
