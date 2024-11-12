@@ -9,14 +9,15 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyIterable, KeyValueIterable, KeyValueStoreError, ReadableKeyValueStore,
-        RestrictedKeyValueStore, WithError, WritableKeyValueStore,
+        AdminKeyValueStore, KeyIterable, KeyValueIterable, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
 use crate::{
     memory::{MemoryStore, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
     random::generate_test_namespace,
+    store::TestKeyValueStore,
 };
 
 /// The composed error type built from the inner error type.
@@ -59,7 +60,7 @@ impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError
 #[derive(Clone)]
 pub struct ValueSplittingStore<K> {
     /// The underlying store of the transformed store.
-    pub store: K,
+    store: K,
 }
 
 impl<K> WithError for ValueSplittingStore<K>
@@ -72,7 +73,7 @@ where
 
 impl<K> ReadableKeyValueStore for ValueSplittingStore<K>
 where
-    K: RestrictedKeyValueStore + Send + Sync,
+    K: ReadableKeyValueStore + Send + Sync,
     K::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE - 4;
@@ -234,7 +235,7 @@ where
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
 where
-    K: RestrictedKeyValueStore + Send + Sync,
+    K: WritableKeyValueStore + Send + Sync,
     K::Error: 'static,
 {
     const MAX_VALUE_SIZE: usize = usize::MAX;
@@ -277,23 +278,70 @@ where
     }
 }
 
+impl<K> AdminKeyValueStore for ValueSplittingStore<K>
+where
+    K: AdminKeyValueStore + Send + Sync,
+    K::Error: 'static,
+{
+    type Config = K::Config;
+
+    fn get_name() -> String {
+        format!("value splitting {}", K::get_name())
+    }
+
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
+        let store = K::connect(config, namespace, root_key).await?;
+        Ok(Self { store })
+    }
+
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
+        let store = self.store.clone_with_root_key(root_key)?;
+        Ok(Self { store })
+    }
+
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error> {
+        Ok(K::list_all(config).await?)
+    }
+
+    async fn delete_all(config: &Self::Config) -> Result<(), Self::Error> {
+        Ok(K::delete_all(config).await?)
+    }
+
+    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error> {
+        Ok(K::exists(config, namespace).await?)
+    }
+
+    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        Ok(K::create(config, namespace).await?)
+    }
+
+    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error> {
+        Ok(K::delete(config, namespace).await?)
+    }
+}
+
+#[cfg(with_testing)]
+impl<K> TestKeyValueStore for ValueSplittingStore<K>
+where
+    K: TestKeyValueStore + Send + Sync,
+    K::Error: 'static,
+{
+    async fn new_test_config() -> Result<K::Config, Self::Error> {
+        Ok(K::new_test_config().await?)
+    }
+}
+
 impl<K> ValueSplittingStore<K>
 where
-    K: RestrictedKeyValueStore + Send + Sync,
-    K::Error: 'static,
+    K: WithError,
 {
     /// Creates a new store that deals with big values from one that does not.
     pub fn new(store: K) -> Self {
         ValueSplittingStore { store }
-    }
-
-    fn read_count_from_value(value: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
-        if value.len() < 4 {
-            return Err(ValueSplittingError::NoCountAvailable);
-        }
-        let mut bytes = value[0..4].to_vec();
-        bytes.reverse();
-        Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
     fn get_segment_key(key: &[u8], index: u32) -> Result<Vec<u8>, ValueSplittingError<K::Error>> {
@@ -302,16 +350,6 @@ where
         bytes.reverse();
         big_key_segment.extend(bytes);
         Ok(big_key_segment)
-    }
-
-    fn read_index_from_key(key: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
-        let len = key.len();
-        if len < 4 {
-            return Err(ValueSplittingError::TooShortKey);
-        }
-        let mut bytes = key[len - 4..len].to_vec();
-        bytes.reverse();
-        Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 
     fn get_initial_count_first_chunk(
@@ -324,6 +362,25 @@ where
         value_ext.extend(bytes);
         value_ext.extend(first_chunk);
         Ok(value_ext)
+    }
+
+    fn read_count_from_value(value: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
+        if value.len() < 4 {
+            return Err(ValueSplittingError::NoCountAvailable);
+        }
+        let mut bytes = value[0..4].to_vec();
+        bytes.reverse();
+        Ok(bcs::from_bytes::<u32>(&bytes)?)
+    }
+
+    fn read_index_from_key(key: &[u8]) -> Result<u32, ValueSplittingError<K::Error>> {
+        let len = key.len();
+        if len < 4 {
+            return Err(ValueSplittingError::TooShortKey);
+        }
+        let mut bytes = key[len - 4..len].to_vec();
+        bytes.reverse();
+        Ok(bcs::from_bytes::<u32>(&bytes)?)
     }
 }
 

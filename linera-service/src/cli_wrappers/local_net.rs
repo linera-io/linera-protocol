@@ -85,7 +85,9 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             #[cfg(feature = "scylladb")]
             {
                 let config = ScyllaDbStore::new_test_config().await?;
-                Ok(StorageConfig::ScyllaDb { uri: config.uri })
+                Ok(StorageConfig::ScyllaDb {
+                    uri: config.inner_config.uri,
+                })
             }
             #[cfg(not(feature = "scylladb"))]
             panic!("Database::ScyllaDb is selected without the feature sctlladb");

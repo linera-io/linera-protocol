@@ -14,7 +14,10 @@ use linera_views::{
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{
+        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
+        RocksDbStoreInternalConfig,
+    },
     store::AdminKeyValueStore as _,
 };
 use serde::Serialize;
@@ -585,10 +588,14 @@ async fn main() {
             let path_with_guard = PathWithGuard::new(path_buf);
             // The server is run in multi-threaded mode so we can use the block_in_place.
             let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
-            let config = RocksDbStoreConfig {
+            let inner_config = RocksDbStoreInternalConfig {
                 path_with_guard,
                 spawn_mode,
-                common_config,
+                common_config: common_config.reduced(),
+            };
+            let config = RocksDbStoreConfig {
+                inner_config,
+                cache_size: common_config.cache_size,
             };
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
                 .await
