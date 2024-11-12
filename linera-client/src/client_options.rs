@@ -923,6 +923,20 @@ pub enum DatabaseToolCommand {
     },
 }
 
+impl DatabaseToolCommand {
+    pub fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+        let storage_config = match self {
+            DatabaseToolCommand::DeleteAll { storage_config } => storage_config,
+            DatabaseToolCommand::DeleteNamespace { storage_config } => storage_config,
+            DatabaseToolCommand::CheckExistence { storage_config } => storage_config,
+            DatabaseToolCommand::CheckAbsence { storage_config } => storage_config,
+            DatabaseToolCommand::Initialize { storage_config } => storage_config,
+            DatabaseToolCommand::ListNamespaces { storage_config } => storage_config,
+        };
+        Ok(storage_config.parse::<StorageConfigNamespace>()?)
+    }
+}
+
 #[derive(Clone, clap::Parser)]
 pub enum NetCommand {
     /// Start a Local Linera Network

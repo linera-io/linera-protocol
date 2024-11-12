@@ -28,7 +28,7 @@ use linera_client::{
     },
     config::{CommitteeConfig, GenesisConfig},
     persistent::{self, Persist},
-    storage::{Runnable, StorageConfigNamespace},
+    storage::Runnable,
     wallet::{UserChain, Wallet},
 };
 use linera_core::{
@@ -1559,24 +1559,17 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
         },
 
         ClientCommand::Storage(command) => {
+            let storage_config = command.storage_config()?;
             let common_config = CommonStoreConfig::default();
+            let full_storage_config = storage_config.add_common_config(common_config).await?;
             match command {
-                DatabaseToolCommand::DeleteAll { storage_config } => {
-                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
-                    let full_storage_config =
-                        storage_config.add_common_config(common_config).await?;
+                DatabaseToolCommand::DeleteAll { .. } => {
                     full_storage_config.delete_all().await?;
                 }
-                DatabaseToolCommand::DeleteNamespace { storage_config } => {
-                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
-                    let full_storage_config =
-                        storage_config.add_common_config(common_config).await?;
+                DatabaseToolCommand::DeleteNamespace { .. } => {
                     full_storage_config.delete_namespace().await?;
                 }
-                DatabaseToolCommand::CheckExistence { storage_config } => {
-                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
-                    let full_storage_config =
-                        storage_config.add_common_config(common_config).await?;
+                DatabaseToolCommand::CheckExistence { .. } => {
                     let test = full_storage_config.test_existence().await?;
                     if test {
                         tracing::info!("The database does exist");
@@ -1586,10 +1579,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                         return Ok(1);
                     }
                 }
-                DatabaseToolCommand::CheckAbsence { storage_config } => {
-                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
-                    let full_storage_config =
-                        storage_config.add_common_config(common_config).await?;
+                DatabaseToolCommand::CheckAbsence { .. } => {
                     let test = full_storage_config.test_existence().await?;
                     if test {
                         tracing::info!("The database does exist");
@@ -1599,16 +1589,10 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                         return Ok(0);
                     }
                 }
-                DatabaseToolCommand::Initialize { storage_config } => {
-                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
-                    let full_storage_config =
-                        storage_config.add_common_config(common_config).await?;
+                DatabaseToolCommand::Initialize { .. } => {
                     full_storage_config.initialize().await?;
                 }
-                DatabaseToolCommand::ListNamespaces { storage_config } => {
-                    let storage_config = storage_config.parse::<StorageConfigNamespace>()?;
-                    let full_storage_config =
-                        storage_config.add_common_config(common_config).await?;
+                DatabaseToolCommand::ListNamespaces { .. } => {
                     let namespaces = full_storage_config.list_all().await?;
                     println!("The list of namespaces is {:?}", namespaces);
                 }
