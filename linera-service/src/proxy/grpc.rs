@@ -464,12 +464,13 @@ where
         request: Request<CryptoHash>,
     ) -> Result<Response<Certificate>, Status> {
         let hash = request.into_inner().try_into()?;
-        let certificate = self
+        let certificate: linera_chain::data_types::Certificate = self
             .0
             .storage
             .read_certificate(hash)
             .await
-            .map_err(|err| Status::from_error(Box::new(err)))?;
+            .map_err(|err| Status::from_error(Box::new(err)))?
+            .into();
         Ok(Response::new(certificate.try_into()?))
     }
 
@@ -500,8 +501,8 @@ where
                 .await
                 .map_err(|err| Status::from_error(Box::new(err)))?
             {
-                if grpc_message_limiter.fits::<Certificate>(certificate.clone())? {
-                    certificates.push(certificate);
+                if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
+                    certificates.push(linera_chain::data_types::Certificate::from(certificate));
                 } else {
                     break 'outer;
                 }

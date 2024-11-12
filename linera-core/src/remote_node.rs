@@ -112,7 +112,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
-    ) -> Result<Option<Vec<Certificate>>, NodeError> {
+    ) -> Result<Option<Vec<ConfirmedBlockCertificate>>, NodeError> {
         tracing::debug!(name = ?self.name, ?chain_id, ?start, ?limit, "Querying certificates");
         let range = BlockHeightRange {
             start,
@@ -123,7 +123,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
             let certificates = self
                 .node
                 .download_certificates(info.requested_sent_certificate_hashes)
-                .await?;
+                .await?
+                .into_iter()
+                .map(|c| {
+                    ConfirmedBlockCertificate::try_from(c)
+                        .map_err(|_| NodeError::InvalidChainInfoResponse)
+                })
+                .collect::<Result<_, _>>()?;
             Ok(Some(certificates))
         } else {
             Ok(None)

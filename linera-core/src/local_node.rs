@@ -15,6 +15,7 @@ use linera_chain::{
     data_types::{
         Block, BlockProposal, Certificate, CertificateValue, ExecutedBlock, LiteCertificate,
     },
+    types::ConfirmedBlockCertificate,
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionError, Query, Response, SystemExecutionError};
@@ -304,7 +305,7 @@ where
     pub async fn certificate_for(
         &self,
         message_id: &MessageId,
-    ) -> Result<Certificate, LocalNodeError> {
+    ) -> Result<ConfirmedBlockCertificate, LocalNodeError> {
         let query = ChainInfoQuery::new(message_id.chain_id)
             .with_sent_certificate_hashes_in_range(BlockHeightRange::single(message_id.height));
         let info = self.handle_chain_info_query(query).await?.info;
@@ -314,7 +315,7 @@ where
             .await?;
         let certificate = certificates
             .into_iter()
-            .find(|certificate| certificate.value().has_message(message_id))
+            .find(|certificate| certificate.has_message(message_id))
             .ok_or_else(|| {
                 ViewError::not_found("could not find certificate with message {}", message_id)
             })?;

@@ -18,7 +18,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{Certificate, ChannelFullName, HashedCertificateValue},
+    data_types::{ChannelFullName, HashedCertificateValue},
     types::ConfirmedBlockCertificate,
     ChainError, ChainStateView,
 };
@@ -44,7 +44,6 @@ pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
 #[cfg(with_metrics)]
 pub use crate::db_storage::{
     READ_CERTIFICATE_COUNTER, READ_HASHED_CERTIFICATE_VALUE_COUNTER, WRITE_CERTIFICATE_COUNTER,
-    WRITE_HASHED_CERTIFICATE_VALUE_COUNTER,
 };
 
 /// Communicate with a persistent storage using the "views" abstraction.
@@ -71,9 +70,6 @@ pub trait Storage: Sized {
     /// [`load_active_chain`][`Self::load_active_chain`] and
     /// [`create_chain`][`Self::create_chain`].
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
-
-    /// Tests existence of a hashed certificate value with the given hash.
-    async fn contains_hashed_certificate_value(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
     /// Tests the existence of a blob with the given blob ID.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
@@ -109,12 +105,6 @@ pub trait Storage: Sized {
         limit: u32,
     ) -> Result<Vec<HashedCertificateValue>, ViewError>;
 
-    /// Writes the given hashed certificate value.
-    async fn write_hashed_certificate_value(
-        &self,
-        value: &HashedCertificateValue,
-    ) -> Result<(), ViewError>;
-
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
@@ -146,12 +136,6 @@ pub trait Storage: Sized {
         blob_state: BlobState,
     ) -> Result<Vec<Epoch>, ViewError>;
 
-    /// Writes several hashed certificate values.
-    async fn write_hashed_certificate_values(
-        &self,
-        values: &[HashedCertificateValue],
-    ) -> Result<(), ViewError>;
-
     /// Writes several blobs.
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
 
@@ -159,13 +143,16 @@ pub trait Storage: Sized {
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
     /// Reads the certificate with the given hash.
-    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
+    async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Certificate>, ViewError>;
+    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     ///

@@ -365,17 +365,19 @@ where
         &self,
         remote_node: &RemoteNode<impl ValidatorNode>,
         chain_id: ChainId,
-        certificates: Vec<Certificate>,
+        certificates: Vec<ConfirmedBlockCertificate>,
     ) -> Option<Box<ChainInfo>> {
         let mut info = None;
         for certificate in certificates {
             let hash = certificate.hash();
-            if !certificate.value().is_confirmed() || certificate.value().chain_id() != chain_id {
+            if certificate.executed_block().block.chain_id != chain_id {
                 // The certificate is not as expected. Give up.
                 warn!("Failed to process network certificate {}", hash);
                 return info;
             }
-            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
+            let mut result = self
+                .handle_certificate(certificate.clone().into(), vec![])
+                .await;
 
             if let Some(blob_ids) = result
                 .as_ref()
@@ -383,7 +385,7 @@ where
                 .and_then(LocalNodeError::get_blobs_not_found)
             {
                 if let Some(blobs) = remote_node.try_download_blobs(&blob_ids).await {
-                    result = self.handle_certificate(certificate, blobs).await;
+                    result = self.handle_certificate(certificate.into(), blobs).await;
                 }
             }
 
@@ -1698,10 +1700,16 @@ where
             .with_manager_values();
         let info = remote_node.handle_chain_info_query(query).await?;
 
-        let certificates = remote_node
+        let certificates: Vec<ConfirmedBlockCertificate> = remote_node
             .node
             .download_certificates(info.requested_sent_certificate_hashes)
-            .await?;
+            .await?
+            .into_iter()
+            .map(|c| {
+                ConfirmedBlockCertificate::try_from(c)
+                    .map_err(|_| NodeError::InvalidChainInfoResponse)
+            })
+            .collect::<Result<_, _>>()?;
 
         if !certificates.is_empty()
             && self

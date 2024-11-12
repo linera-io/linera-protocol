@@ -7,7 +7,10 @@ use linera_base::{
     data_types::BlobContent,
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, CertificateValue, LiteVote};
+use linera_chain::{
+    data_types::{BlockProposal, Certificate, CertificateValue, LiteVote},
+    types::ConfirmedBlockCertificate,
+};
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     node::NodeError,
@@ -291,8 +294,22 @@ impl From<Certificate> for RpcMessage {
     }
 }
 
+impl From<ConfirmedBlockCertificate> for RpcMessage {
+    fn from(certificate: ConfirmedBlockCertificate) -> Self {
+        RpcMessage::DownloadCertificateResponse(Box::new(certificate.into()))
+    }
+}
+
 impl From<Vec<Certificate>> for RpcMessage {
     fn from(certificates: Vec<Certificate>) -> Self {
         RpcMessage::DownloadCertificatesResponse(Box::new(certificates))
+    }
+}
+
+impl From<Vec<ConfirmedBlockCertificate>> for RpcMessage {
+    fn from(certificates: Vec<ConfirmedBlockCertificate>) -> Self {
+        RpcMessage::DownloadCertificatesResponse(Box::new(
+            certificates.into_iter().map(|c| c.into()).collect(),
+        ))
     }
 }

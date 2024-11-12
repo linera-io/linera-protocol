@@ -21,7 +21,10 @@ use linera_views::views::View;
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::data_types::{Certificate, MessageBundle, Origin},
+    linera_chain::{
+        data_types::{MessageBundle, Origin},
+        types::ConfirmedBlockCertificate,
+    },
 };
 
 use super::{check_block_epoch, ChainWorkerState};
@@ -57,7 +60,7 @@ where
     pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
-    ) -> Result<Option<Certificate>, WorkerError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
         self.0.ensure_is_active()?;
         let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
