@@ -34,7 +34,9 @@ use tonic_health::pb::{
 use tracing::{info, warn};
 
 use crate::{
-    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig},
+    cli_wrappers::{
+        ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
+    },
     util::ChildExt,
 };
 
@@ -317,6 +319,7 @@ impl LineraNet for LocalNet {
             self.network.external,
             self.testing_prng_seed,
             self.next_client_id,
+            OnClientDrop::LeakChains,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);

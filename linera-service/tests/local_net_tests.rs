@@ -23,7 +23,7 @@ use linera_base::{
 use linera_service::{
     cli_wrappers::{
         local_net::{get_node_port, Database, LocalNetConfig, PathProvider, ProcessInbox},
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
     },
     test_name,
 };
@@ -417,7 +417,13 @@ async fn test_project_new() -> Result<()> {
     let _rustflags_override = override_disable_warnings_as_errors();
     let path_provider = PathProvider::create_temporary_directory()?;
     let id = 0;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
+    let client = ClientWrapper::new(
+        path_provider,
+        Network::Grpc,
+        None,
+        id,
+        OnClientDrop::LeakChains,
+    );
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -435,7 +441,13 @@ async fn test_project_new() -> Result<()> {
 async fn test_project_test() -> Result<()> {
     let path_provider = PathProvider::create_temporary_directory()?;
     let id = 0;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
+    let client = ClientWrapper::new(
+        path_provider,
+        Network::Grpc,
+        None,
+        id,
+        OnClientDrop::LeakChains,
+    );
     client
         .project_test(&ClientWrapper::example_path("counter")?)
         .await?;
