@@ -174,7 +174,7 @@ where
             options.long_lived_services,
             chain_ids,
             name,
-            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+            options.max_loaded_chains,
         );
 
         ClientContext {

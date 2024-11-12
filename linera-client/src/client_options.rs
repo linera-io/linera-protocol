@@ -1,7 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, env, fmt, iter, num::NonZeroU16, path::PathBuf, time::Duration};
+use std::{
+    collections::HashSet,
+    env, fmt, iter,
+    num::{NonZeroU16, NonZeroUsize},
+    path::PathBuf,
+    time::Duration,
+};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -95,6 +101,10 @@ pub struct ClientOptions {
     /// The WebAssembly runtime to use.
     #[arg(long)]
     pub wasm_runtime: Option<WasmRuntime>,
+
+    /// The maximal number of chains loaded in memory at a given time.
+    #[arg(long, default_value = "40")]
+    pub max_loaded_chains: NonZeroUsize,
 
     /// The maximal number of simultaneous queries to the database
     #[arg(long)]
