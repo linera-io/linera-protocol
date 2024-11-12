@@ -20,7 +20,12 @@ test = [
     "linera-execution/test",
     "dep:stdext",
 ]
-benchmark = ["linera-base/test", "linera-client/benchmark", "linera-chain/benchmark", "dep:linera-sdk"]
+benchmark = [
+    "linera-base/test",
+    "linera-client/benchmark",
+    "linera-chain/benchmark",
+    "dep:linera-sdk",
+]
 wasmer = ["linera-client/wasmer", "linera-execution/wasmer", "linera-storage/wasmer"]
 wasmtime = [
     "linera-client/wasmtime",
