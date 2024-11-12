@@ -747,12 +747,7 @@ impl CertificateValue {
         let Some(executed_block) = self.executed_block() else {
             return false;
         };
-        let Ok(index) = usize::try_from(message_id.index) else {
-            return false;
-        };
-        self.height() == message_id.height
-            && self.chain_id() == message_id.chain_id
-            && executed_block.messages().len() > index
+        executed_block.message_by_id(message_id).is_some()
     }
 
     pub fn is_confirmed(&self) -> bool {
