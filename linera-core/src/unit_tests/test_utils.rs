@@ -178,6 +178,7 @@ where
             validator.do_download_certificate(hash, sender)
         })
         .await
+        .map(Into::into)
     }
 
     async fn download_certificates(
@@ -188,6 +189,7 @@ where
             validator.do_download_certificates(hashes, sender)
         })
         .await
+        .map(|certs| certs.into_iter().map(Certificate::from).collect())
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
@@ -468,15 +470,14 @@ where
     async fn do_download_certificate(
         self,
         hash: CryptoHash,
-        sender: oneshot::Sender<Result<Certificate, NodeError>>,
-    ) -> Result<(), Result<Certificate, NodeError>> {
+        sender: oneshot::Sender<Result<ConfirmedBlockCertificate, NodeError>>,
+    ) -> Result<(), Result<ConfirmedBlockCertificate, NodeError>> {
         let validator = self.client.lock().await;
         let certificate = validator
             .state
             .storage_client()
             .read_certificate(hash)
             .await
-            .map(Into::into)
             .map_err(Into::into);
 
         sender.send(certificate)
@@ -485,8 +486,8 @@ where
     async fn do_download_certificates(
         self,
         hashes: Vec<CryptoHash>,
-        sender: oneshot::Sender<Result<Vec<Certificate>, NodeError>>,
-    ) -> Result<(), Result<Vec<Certificate>, NodeError>> {
+        sender: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>, NodeError>>,
+    ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
         let validator = self.client.lock().await;
         let certificates = validator
             .state

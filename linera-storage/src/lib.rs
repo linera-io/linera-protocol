@@ -18,7 +18,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{Certificate, ChannelFullName, HashedCertificateValue},
+    data_types::{ChannelFullName, HashedCertificateValue},
     types::ConfirmedBlockCertificate,
     ChainError, ChainStateView,
 };
@@ -146,13 +146,16 @@ pub trait Storage: Sized {
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
     /// Reads the certificate with the given hash.
-    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError>;
+    async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Certificate>, ViewError>;
+    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError>;
 
     /// Loads the view of a chain state and checks that it is active.
     ///

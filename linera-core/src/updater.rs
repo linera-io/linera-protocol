@@ -294,8 +294,9 @@ where
                         .await?;
                     let mut chain_heights = BTreeMap::new();
                     for certificate in certificates {
-                        let block_chain_id = certificate.value().chain_id();
-                        let block_height = certificate.value().height().try_add_one()?;
+                        let block_chain_id = certificate.executed_block().block.chain_id;
+                        let block_height =
+                            certificate.executed_block().block.height.try_add_one()?;
                         chain_heights
                             .entry(block_chain_id)
                             .and_modify(|h| *h = block_height.max(*h))
@@ -347,7 +348,7 @@ where
             let storage = self.local_node.storage_client();
             let certs = storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
-                self.send_certificate(cert, delivery).await?;
+                self.send_certificate(cert.into(), delivery).await?;
             }
         }
         if let Some(cert) = manager.timeout {

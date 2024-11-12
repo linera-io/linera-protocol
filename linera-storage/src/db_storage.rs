@@ -619,7 +619,10 @@ where
         Ok(results[0] && results[1])
     }
 
-    async fn read_certificate(&self, hash: CryptoHash) -> Result<Certificate, ViewError> {
+    async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, ViewError> {
         let keys = Self::get_keys_for_certificates(&[hash])?;
         let values = self.store.read_multi_values_bytes(keys).await;
         if values.is_ok() {
@@ -633,7 +636,7 @@ where
     async fn read_certificates<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Certificate>, ViewError> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         let keys = Self::get_keys_for_certificates(&hashes)?;
         let values = self.store.read_multi_values_bytes(keys).await;
@@ -675,7 +678,7 @@ where
     fn deserialize_certificate(
         pair: &[Option<Vec<u8>>],
         hash: CryptoHash,
-    ) -> Result<Certificate, ViewError> {
+    ) -> Result<ConfirmedBlockCertificate, ViewError> {
         let cert_bytes = pair[0]
             .as_ref()
             .ok_or_else(|| ViewError::not_found("certificate bytes for hash", hash))?;
@@ -687,7 +690,9 @@ where
         let certificate = cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?;
-        Ok(certificate)
+        Ok(certificate
+            .try_into()
+            .expect("To store only confirmed certificates"))
     }
 
     fn add_blob_to_batch(blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {

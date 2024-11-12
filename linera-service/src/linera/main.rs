@@ -20,6 +20,7 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
+#[cfg(feature = "benchmark")]
 use linera_chain::data_types::CertificateValue;
 use linera_client::{
     chain_listener::ClientContext as _,
@@ -1190,12 +1191,7 @@ impl Job {
             .certificate_for(&message_id)
             .await
             .context("could not find OpenChain message")?;
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            bail!(
-                "Unexpected certificate. Please make sure you are connecting to the right \
-                network and are using a current software version."
-            );
-        };
+        let executed_block = certificate.executed_block();
         let Some(Message::System(SystemMessage::OpenChain(config))) = executed_block
             .message_by_id(&message_id)
             .map(|msg| &msg.message)
@@ -1257,7 +1253,7 @@ impl Job {
             };
             let certificate = storage.read_certificate(hash).await?;
             let committee = committees
-                .get(&certificate.value().epoch())
+                .get(&certificate.executed_block().block.epoch)
                 .ok_or_else(|| anyhow!("tip of chain {chain_id} is outdated."))?;
             certificate.check(committee)?;
         }

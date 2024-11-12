@@ -130,7 +130,7 @@ where
     pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
-    ) -> Result<Option<linera_chain::data_types::Certificate>, WorkerError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .read_certificate(height)

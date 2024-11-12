@@ -546,7 +546,7 @@ where
         &self,
         chain_id: ChainId,
         height: BlockHeight,
-    ) -> Result<Option<Certificate>, WorkerError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ReadCertificate { height, callback }
         })

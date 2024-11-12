@@ -44,8 +44,7 @@ where
     #[cfg(with_testing)]
     ReadCertificate {
         height: BlockHeight,
-        callback:
-            oneshot::Sender<Result<Option<linera_chain::data_types::Certificate>, WorkerError>>,
+        callback: oneshot::Sender<Result<Option<ConfirmedBlockCertificate>, WorkerError>>,
     },
 
     /// Search for a bundle in one of the chain's inboxes.
