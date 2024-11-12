@@ -5,7 +5,9 @@
 #![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
-use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, process, sync::Arc, time::Instant};
+use std::{
+    borrow::Cow, collections::HashMap, env, path::PathBuf, process, sync::Arc, time::Instant,
+};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
@@ -1609,7 +1611,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 } else {
                     wallet::pretty_print(&*options.wallet().await?, *chain_id);
                 }
-                Ok(())
+                Ok(0)
             }
 
             WalletCommand::SetDefault { chain_id } => {
