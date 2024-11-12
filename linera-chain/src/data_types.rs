@@ -742,14 +742,6 @@ impl CertificateValue {
         HashedCertificateValue::unchecked_new(self, hash)
     }
 
-    /// Returns whether this value contains the message with the specified ID.
-    pub fn has_message(&self, message_id: &MessageId) -> bool {
-        let Some(executed_block) = self.executed_block() else {
-            return false;
-        };
-        executed_block.message_by_id(message_id).is_some()
-    }
-
     pub fn is_confirmed(&self) -> bool {
         matches!(self, CertificateValue::ConfirmedBlock { .. })
     }

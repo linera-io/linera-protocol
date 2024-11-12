@@ -380,12 +380,7 @@ impl ConfirmedBlockCertificate {
 
     /// Returns whether this value contains the message with the specified ID.
     pub fn has_message(&self, message_id: &MessageId) -> bool {
-        let Ok(index) = usize::try_from(message_id.index) else {
-            return false;
-        };
-        self.executed_block().block.height == message_id.height
-            && self.executed_block().block.chain_id == message_id.chain_id
-            && self.executed_block().messages().len() > index
+        self.executed_block().message_by_id(message_id).is_some()
     }
 
     /// Returns the bundles of messages sent via the given medium to the specified
