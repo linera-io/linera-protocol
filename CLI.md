@@ -256,11 +256,11 @@ Close an existing chain.
 
 A closed chain cannot execute operations or accept messages anymore. It can still reject incoming messages, so they bounce back to the sender.
 
-**Usage:** `linera close-chain --from <CHAIN_ID>`
+**Usage:** `linera close-chain <CHAIN_ID>`
 
-###### **Options:**
+###### **Arguments:**
 
-* `--from <CHAIN_ID>` — Chain ID (must be one of our chains)
+* `<CHAIN_ID>` — Chain ID (must be one of our chains)
 
 
 
@@ -708,11 +708,15 @@ Show the contents of the wallet
 
 Show the contents of the wallet
 
-**Usage:** `linera wallet show [CHAIN_ID]`
+**Usage:** `linera wallet show [OPTIONS] [CHAIN_ID]`
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to show the metadata
+
+###### **Options:**
+
+* `--short` — Only print a non-formatted list of the wallet's chain IDs
 
 
 

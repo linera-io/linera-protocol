@@ -12,7 +12,7 @@ use tempfile::{tempdir, TempDir};
 
 use super::{
     local_net::PathProvider, ClientWrapper, Faucet, FaucetOption, LineraNet, LineraNetConfig,
-    Network,
+    Network, OnClientDrop,
 };
 
 pub struct RemoteNetTestingConfig {
@@ -103,6 +103,7 @@ impl LineraNet for RemoteNet {
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
+            OnClientDrop::CloseChains,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
