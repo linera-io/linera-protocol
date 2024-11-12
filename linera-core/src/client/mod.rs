@@ -184,10 +184,13 @@ where
     storage: Storage,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
+    /// The maximum active chain workers.
+    max_loaded_chains: NonZeroUsize,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
+    #[allow(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         validator_node_provider: P,
@@ -197,6 +200,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
+        max_loaded_chains: NonZeroUsize,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
@@ -220,6 +224,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
+            max_loaded_chains,
         }
     }
 

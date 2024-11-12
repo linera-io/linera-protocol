@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_futures)]
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{lock::Mutex, FutureExt as _};
@@ -134,6 +134,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             false,
             [chain_id0],
             format!("Client node for {:.8}", chain_id0),
+            NonZeroUsize::new(20).expect("Chain worker LRU cache size must be non-zero"),
         )),
     };
     let key_pair = KeyPair::generate_from(&mut rng);

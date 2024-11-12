@@ -6,7 +6,8 @@
 #![deny(clippy::large_futures)]
 
 use std::{
-    borrow::Cow, collections::HashMap, env, path::PathBuf, process, sync::Arc, time::Instant,
+    borrow::Cow, collections::HashMap, env, num::NonZeroUsize, path::PathBuf, process, sync::Arc,
+    time::Instant,
 };
 
 use anyhow::{anyhow, bail, ensure, Context};
@@ -1157,6 +1158,7 @@ impl Job {
             false,
             vec![message_id.chain_id, chain_id],
             "Temporary client for fetching the parent chain",
+            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
         );
 
         // Take the latest committee we know of.
