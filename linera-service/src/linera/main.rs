@@ -21,10 +21,7 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 #[cfg(feature = "benchmark")]
-use linera_chain::{
-    data_types::CertificateValue,
-    types::ConfirmedBlock,
-};
+use linera_chain::{data_types::CertificateValue, types::ConfirmedBlock};
 use linera_client::{
     chain_listener::ClientContext as _,
     client_context::ClientContext,
