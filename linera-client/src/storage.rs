@@ -8,8 +8,8 @@ use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::{
-    client::{ServiceStoreClient, ServiceStoreConfig},
-    common::ServiceStoreInternalConfig,
+    client::ServiceStoreClient,
+    common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
 use linera_views::dynamo_db::{

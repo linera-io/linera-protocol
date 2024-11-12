@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
 use linera_views::{
+    lru_caching::LruSplittingConfig,
     store::{CommonStoreInternalConfig, KeyValueStoreError},
     views::MIN_VIEW_TAG,
 };
@@ -72,11 +73,14 @@ pub fn storage_service_test_endpoint() -> Result<String, ServiceStoreError> {
 pub struct ServiceStoreInternalConfig {
     /// The endpoint used by the shared store
     pub endpoint: String,
-    /// The common configuration of the key value store
+    /// The common configuration code
     pub common_config: CommonStoreInternalConfig,
 }
 
-impl ServiceStoreConfig {
+/// The config type
+pub type ServiceStoreConfig = LruSplittingConfig<ServiceStoreInternalConfig>;
+
+impl ServiceStoreInternalConfig {
     pub fn http_address(&self) -> String {
         format!("http://{}", self.endpoint)
     }

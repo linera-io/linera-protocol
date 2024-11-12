@@ -11,7 +11,7 @@ use linera_views::metering::MeteredStore;
 use linera_views::store::TestKeyValueStore;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::LruCachingStore,
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
@@ -530,6 +530,3 @@ pub type ServiceStoreClient =
 /// The service store client without metrics
 #[cfg(not(with_metrics))]
 pub type ServiceStoreClient = LruCachingStore<ServiceStoreClientInternal>;
-
-/// The config type
-pub type ServiceStoreConfig = LruSplittingConfig<ServiceStoreInternalConfig>;

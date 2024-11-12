@@ -95,7 +95,7 @@ impl KeyValueStoreMetrics {
 
         let entry1 = format!("{}_read_value_bytes_latency", var_name);
         let entry2 = format!("{} read value bytes latency", title_name);
-        let read_value_bytes_latency = register_histogram_vec(&entry1, &entry2, &[], None):
+        let read_value_bytes_latency = register_histogram_vec(&entry1, &entry2, &[], None);
 
         let entry1 = format!("{}_contains_key_latency", var_name);
         let entry2 = format!("{} contains key latency", title_name);
