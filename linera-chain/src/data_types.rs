@@ -22,6 +22,7 @@ use linera_execution::{
 use serde::{de::Deserializer, Deserialize, Serialize};
 
 use crate::{
+    block::{ConfirmedBlock, Timeout, ValidatedBlock},
     types::{Hashed, ValidatedBlockCertificate},
     ChainError,
 };
@@ -396,17 +397,9 @@ pub struct EventRecord {
 /// A statement to be certified by the validators.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub enum CertificateValue {
-    ValidatedBlock {
-        executed_block: ExecutedBlock,
-    },
-    ConfirmedBlock {
-        executed_block: ExecutedBlock,
-    },
-    Timeout {
-        chain_id: ChainId,
-        height: BlockHeight,
-        epoch: Epoch,
-    },
+    ValidatedBlock(ValidatedBlock),
+    ConfirmedBlock(ConfirmedBlock),
+    Timeout(Timeout),
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
@@ -692,29 +685,25 @@ impl From<HashedCertificateValue> for CertificateValue {
 impl CertificateValue {
     pub fn chain_id(&self) -> ChainId {
         match self {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.block.chain_id
-            }
-            CertificateValue::Timeout { chain_id, .. } => *chain_id,
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.chain_id,
+            CertificateValue::ValidatedBlock(validated) => validated.inner().block.chain_id,
+            CertificateValue::Timeout(Timeout { chain_id, .. }) => *chain_id,
         }
     }
 
     pub fn height(&self) -> BlockHeight {
         match self {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.block.height
-            }
-            CertificateValue::Timeout { height, .. } => *height,
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.height,
+            CertificateValue::ValidatedBlock(validated) => validated.inner().block.height,
+            CertificateValue::Timeout(Timeout { height, .. }) => *height,
         }
     }
 
     pub fn epoch(&self) -> Epoch {
         match self {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => executed_block.block.epoch,
-            CertificateValue::Timeout { epoch, .. } => *epoch,
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.epoch,
+            CertificateValue::ValidatedBlock(validated) => validated.inner().block.epoch,
+            CertificateValue::Timeout(Timeout { epoch, .. }) => *epoch,
         }
     }
 
@@ -761,9 +750,9 @@ impl CertificateValue {
 
     pub fn executed_block(&self) -> Option<&ExecutedBlock> {
         match self {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => Some(executed_block),
-            CertificateValue::Timeout { .. } => None,
+            CertificateValue::ConfirmedBlock(confirmed) => Some(confirmed.inner()),
+            CertificateValue::ValidatedBlock(validated) => Some(validated.inner()),
+            CertificateValue::Timeout(_) => None,
         }
     }
 
@@ -964,12 +953,12 @@ impl BlockExecutionOutcome {
 impl HashedCertificateValue {
     /// Creates a [`ConfirmedBlock`](CertificateValue::ConfirmedBlock) value.
     pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedCertificateValue {
-        CertificateValue::ConfirmedBlock { executed_block }.into()
+        CertificateValue::ConfirmedBlock(ConfirmedBlock::new(executed_block)).into()
     }
 
     /// Creates a [`ValidatedBlock`](CertificateValue::ValidatedBlock) value.
     pub fn new_validated(executed_block: ExecutedBlock) -> HashedCertificateValue {
-        CertificateValue::ValidatedBlock { executed_block }.into()
+        CertificateValue::ValidatedBlock(ValidatedBlock::new(executed_block)).into()
     }
 
     /// Creates a [`Timeout`](CertificateValue::Timeout) value.
@@ -978,12 +967,7 @@ impl HashedCertificateValue {
         height: BlockHeight,
         epoch: Epoch,
     ) -> HashedCertificateValue {
-        CertificateValue::Timeout {
-            chain_id,
-            height,
-            epoch,
-        }
-        .into()
+        CertificateValue::Timeout(Timeout::new(chain_id, height, epoch)).into()
     }
 
     pub fn lite(&self) -> LiteValue {
@@ -996,10 +980,10 @@ impl HashedCertificateValue {
     /// Returns the corresponding `ConfirmedBlock`, if this is a `ValidatedBlock`.
     pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
         match self.inner() {
-            CertificateValue::ValidatedBlock { executed_block } => Some(
-                HashedCertificateValue::new_confirmed(executed_block.clone()),
-            ),
-            CertificateValue::ConfirmedBlock { .. } | CertificateValue::Timeout { .. } => None,
+            CertificateValue::ValidatedBlock(validated) => {
+                Some(ConfirmedBlock::from_validated(validated.clone()).into())
+            }
+            CertificateValue::ConfirmedBlock(_) | CertificateValue::Timeout(_) => None,
         }
     }
 }

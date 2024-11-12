@@ -720,10 +720,9 @@ impl Runnable for Job {
                         let executed_block = context
                             .stage_block_execution(proposal.content.block.clone())
                             .await?;
-                        let value =
-                            HashedCertificateValue::from(CertificateValue::ConfirmedBlock {
-                                executed_block,
-                            });
+                        let value = HashedCertificateValue::from(CertificateValue::ConfirmedBlock(
+                            ConfirmedBlock::new(executed_block),
+                        ));
                         values.insert(value.hash(), value);
                     }
                 }

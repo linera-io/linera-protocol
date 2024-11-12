@@ -346,8 +346,8 @@ impl From<Certificate> for ValidatedBlockCertificate {
         let signatures = cert.signatures().clone();
         let hash = cert.value.hash();
         match cert.value.into_inner() {
-            CertificateValue::ValidatedBlock { executed_block } => Self {
-                value: Hashed::unchecked_new(ValidatedBlock::new(executed_block), hash),
+            CertificateValue::ValidatedBlock(validated) => Self {
+                value: Hashed::unchecked_new(validated, hash),
                 round: cert.round,
                 signatures,
             },
@@ -409,8 +409,8 @@ impl TryFrom<Certificate> for ConfirmedBlockCertificate {
         let signatures = cert.signatures().clone();
         let hash = cert.value.hash();
         match cert.value.into_inner() {
-            CertificateValue::ConfirmedBlock { executed_block } => Ok(Self {
-                value: Hashed::unchecked_new(ConfirmedBlock::new(executed_block), hash),
+            CertificateValue::ConfirmedBlock(confirmed) => Ok(Self {
+                value: Hashed::unchecked_new(confirmed, hash),
                 round: cert.round,
                 signatures,
             }),
@@ -424,12 +424,8 @@ impl From<Certificate> for TimeoutCertificate {
         let signatures = cert.signatures().clone();
         let hash = cert.value.hash();
         match cert.value.into_inner() {
-            CertificateValue::Timeout {
-                chain_id,
-                epoch,
-                height,
-            } => Self {
-                value: Hashed::unchecked_new(Timeout::new(chain_id, height, epoch), hash),
+            CertificateValue::Timeout(timeout) => Self {
+                value: Hashed::unchecked_new(timeout, hash),
                 round: cert.round,
                 signatures,
             },
