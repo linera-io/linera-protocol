@@ -1706,10 +1706,10 @@ where
             .await?
             .into_iter()
             .map(|c| {
-                c.try_into()
-                    .expect("Downloaded certificate should be confirmed")
+                ConfirmedBlockCertificate::try_from(c)
+                    .map_err(|_| NodeError::InvalidChainInfoResponse)
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         if !certificates.is_empty()
             && self

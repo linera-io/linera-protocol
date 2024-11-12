@@ -125,8 +125,11 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 .download_certificates(info.requested_sent_certificate_hashes)
                 .await?
                 .into_iter()
-                .map(|c| c.try_into().expect("Expected ConfirmedBlock certificate"))
-                .collect();
+                .map(|c| {
+                    ConfirmedBlockCertificate::try_from(c)
+                        .map_err(|_| NodeError::InvalidChainInfoResponse)
+                })
+                .collect::<Result<_, _>>()?;
             Ok(Some(certificates))
         } else {
             Ok(None)
