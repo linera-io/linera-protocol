@@ -31,7 +31,7 @@ to the GGUF format where it can be used for inference.
 
 # Usage
 
-We're assuming that a local wallet is set up and connected to running a test network
+We're assuming that a local wallet is set up and connected to a running test network
 (local or otherwise).
 
 If you use `linera net up`, the value of the default chain ID is:

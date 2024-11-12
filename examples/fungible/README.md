@@ -55,7 +55,7 @@ linera_spawn_and_read_wallet_variables linera net up --testing-prng-seed 37
 ```
 
 A new test network is now running and the environment variables `LINERA_WALLET` and
-`LINERA_STORAGE` are now be defined for the duration of the shell session. We used the
+`LINERA_STORAGE` are now defined for the duration of the shell session. We used the
 test-only CLI option `--testing-prng-seed` to make keys deterministic and simplify our
 presentation.
 
@@ -218,7 +218,7 @@ Web UIs for specific accounts can be opened by navigating URLs of the form
 
 - the path is the ID of the chain where the account is located.
 - the argument `app` is the token application ID obtained when creating the token.
-- `owner` is the address of the chosen user account (owner must be have permissions to create blocks in the given chain).
+- `owner` is the address of the chosen user account (owner must have permissions to create blocks in the given chain).
 - `port` is the port of the wallet service (the wallet must know the secret key of `owner`).
 
 In this example, two web pages for OWNER_1 and OWNER_2 can be opened by navigating these URLs:

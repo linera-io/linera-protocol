@@ -381,7 +381,7 @@ pub enum ClientCommand {
     /// linera local-balance` for a consolidated balance.
     LocalBalance {
         /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
     },
@@ -393,7 +393,7 @@ pub enum ClientCommand {
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
     },
@@ -404,7 +404,7 @@ pub enum ClientCommand {
     /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
     },
@@ -425,7 +425,7 @@ pub enum ClientCommand {
     },
 
     /// Show the version and genesis config hash of a new validator, and print a warning if it is
-    /// incompatible. Also print some information about the given chain while we are it.
+    /// incompatible. Also print some information about the given chain while we are at it.
     QueryValidator {
         /// The new validator's address.
         address: String,
@@ -438,7 +438,7 @@ pub enum ClientCommand {
     },
 
     /// Show the current set of validators for a chain. Also print some information about
-    /// the given chain while we are it.
+    /// the given chain while we are at it.
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
@@ -503,7 +503,7 @@ pub enum ClientCommand {
         #[arg(long)]
         byte_stored: Option<Amount>,
 
-        /// Set the base price of sending a operation from a block..
+        /// Set the base price of sending an operation from a block..
         #[arg(long)]
         operation: Option<Amount>,
 
@@ -626,7 +626,7 @@ pub enum ClientCommand {
         #[arg(long, default_value = "0")]
         byte_stored_price: Amount,
 
-        /// Set the base price of sending a operation from a block..
+        /// Set the base price of sending an operation from a block..
         #[arg(long, default_value = "0")]
         operation_price: Amount,
 
