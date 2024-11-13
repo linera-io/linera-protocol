@@ -292,7 +292,7 @@ where
                     let mut chain_heights = BTreeMap::new();
                     for blob_state in blob_states {
                         let block_chain_id = blob_state.chain_id;
-                        let block_height = blob_state.block_height;
+                        let block_height = blob_state.block_height.try_add_one()?;
                         chain_heights
                             .entry(block_chain_id)
                             .and_modify(|h| *h = block_height.max(*h))
