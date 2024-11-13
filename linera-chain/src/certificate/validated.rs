@@ -57,7 +57,7 @@ impl From<Certificate> for GenericCertificate<ValidatedBlock> {
         let (value, round, signatures) = cert.destructure();
         let value_hash = value.hash();
         match value.into_inner() {
-            CertificateValue::ValidatedBlock(validated) => Self::unchecked_new(
+            CertificateValue::ValidatedBlock(validated) => Self::new(
                 Hashed::unchecked_new(validated, value_hash),
                 round,
                 signatures,
@@ -70,7 +70,7 @@ impl From<Certificate> for GenericCertificate<ValidatedBlock> {
 impl From<GenericCertificate<ValidatedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ValidatedBlock>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
-        Certificate::unchecked_new(
+        Certificate::new(
             HashedCertificateValue::new_validated(value.into_inner().into_inner()),
             round,
             signatures,
@@ -102,7 +102,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
         }
         let inner = Inner::deserialize(deserializer)?;
         let validated_hashed: HashedCertificateValue = inner.value.clone().into();
-        Ok(Self::unchecked_new(
+        Ok(Self::new(
             Hashed::unchecked_new(inner.value, validated_hashed.hash()),
             inner.round,
             inner.signatures,

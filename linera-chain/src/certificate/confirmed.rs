@@ -21,7 +21,7 @@ impl GenericCertificate<ConfirmedBlock> {
         let confirmed = ConfirmedBlock::from_validated(validated_block);
         let hashed = Hashed::unchecked_new(confirmed, old_confirmed.hash());
 
-        Self::unchecked_new(hashed, round, vec![])
+        Self::new(hashed, round, vec![])
     }
 
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
@@ -60,7 +60,7 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
         let hash = cert.hash();
         let (value, round, signatures) = cert.destructure();
         match value.into_inner() {
-            CertificateValue::ConfirmedBlock(confirmed) => Ok(Self::unchecked_new(
+            CertificateValue::ConfirmedBlock(confirmed) => Ok(Self::new(
                 Hashed::unchecked_new(confirmed, hash),
                 round,
                 signatures,
@@ -73,7 +73,7 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
 impl From<GenericCertificate<ConfirmedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ConfirmedBlock>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
-        Certificate::unchecked_new(
+        Certificate::new(
             HashedCertificateValue::new_confirmed(value.into_inner().into_inner()),
             round,
             signatures,

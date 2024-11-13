@@ -43,16 +43,16 @@ impl Serialize for Certificate {
     {
         #[derive(Debug, Serialize)]
         #[serde(rename = "Certificate")]
-        struct CertificateHelper {
-            value: CertificateValue,
+        struct CertificateHelper<'a> {
+            value: &'a CertificateValue,
             round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
+            signatures: &'a Vec<(ValidatorName, Signature)>,
         }
 
         let helper = CertificateHelper {
-            value: self.inner().clone(),
+            value: self.inner(),
             round: self.round,
-            signatures: self.signatures().clone(),
+            signatures: self.signatures(),
         };
 
         helper.serialize(serializer)
@@ -76,11 +76,7 @@ impl<'de> Deserialize<'de> for Certificate {
         if !is_strictly_ordered(&helper.signatures) {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
-            Ok(Self::unchecked_new(
-                helper.value,
-                helper.round,
-                helper.signatures,
-            ))
+            Ok(Self::new(helper.value, helper.round, helper.signatures))
         }
     }
 }

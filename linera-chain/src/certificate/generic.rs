@@ -5,7 +5,7 @@
 use std::fmt::{Debug, Formatter};
 
 use linera_base::{
-    crypto::{BcsHashable, CryptoHash, Signature},
+    crypto::{CryptoHash, Signature},
     data_types::Round,
 };
 use linera_execution::committee::{Committee, ValidatorName};
@@ -21,25 +21,15 @@ pub struct GenericCertificate<T> {
 }
 
 impl<T> GenericCertificate<T> {
-    pub fn unchecked_new(
+    pub fn new(
         value: Hashed<T>,
         round: Round,
-        signatures: Vec<(ValidatorName, Signature)>,
+        mut signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
+        signatures.sort_by_key(|&(validator_name, _)| validator_name);
+
         Self {
             value,
-            round,
-            signatures,
-        }
-    }
-
-    pub fn new(value: T, round: Round, mut signatures: Vec<(ValidatorName, Signature)>) -> Self
-    where
-        T: BcsHashable,
-    {
-        signatures.sort_by_key(|&(validator_name, _)| validator_name);
-        Self {
-            value: Hashed::new(value),
             round,
             signatures,
         }
@@ -72,6 +62,7 @@ impl<T> GenericCertificate<T> {
         &self.signatures
     }
 
+    #[cfg(with_testing)]
     pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
         &mut self.signatures
     }
