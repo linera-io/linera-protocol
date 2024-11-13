@@ -434,16 +434,6 @@ impl HashedCertificateValue {
     }
 }
 
-#[cfg(with_testing)]
-impl<T> PartialEq for Hashed<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash() == other.hash()
-    }
-}
-
-#[cfg(with_testing)]
-impl<T> Eq for Hashed<T> {}
-
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct LiteValue {
