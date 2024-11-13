@@ -3,9 +3,11 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ops::Not,
     sync::Arc,
 };
 
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Timestamp},
@@ -39,9 +41,11 @@ pub struct SystemExecutionState {
     pub committees: BTreeMap<Epoch, Committee>,
     pub ownership: ChainOwnership,
     pub balance: Amount,
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub balances: BTreeMap<Owner, Amount>,
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
+    #[debug(skip_if = Not::not)]
     pub closed: bool,
     pub application_permissions: ApplicationPermissions,
 }

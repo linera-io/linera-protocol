@@ -3,6 +3,7 @@
 
 use std::vec;
 
+use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError, OracleResponse},
     ensure,
@@ -17,8 +18,11 @@ use crate::{
 /// as replayed oracle responses.
 #[derive(Debug, Default)]
 pub struct TransactionTracker {
+    #[debug(skip_if = Option::is_none)]
     replaying_oracle_responses: Option<vec::IntoIter<OracleResponse>>,
+    #[debug(skip_if = Vec::is_empty)]
     oracle_responses: Vec<OracleResponse>,
+    #[debug(skip_if = Vec::is_empty)]
     outcomes: Vec<ExecutionOutcome>,
     next_message_index: u32,
 }

@@ -5,10 +5,11 @@
 use std::{collections::HashSet, fmt};
 
 use async_graphql::SimpleObject;
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
-    doc_scalar, ensure,
+    doc_scalar, ensure, hex_debug,
     identifiers::{
         Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
         MessageId, Owner, StreamId,
@@ -48,8 +49,10 @@ pub struct Block {
     pub epoch: Epoch,
     /// A selection of incoming messages to be executed first. Successive messages of same
     /// sender and height are grouped together for conciseness.
+    #[debug(skip_if = Vec::is_empty)]
     pub incoming_bundles: Vec<IncomingBundle>,
     /// The operations to execute.
+    #[debug(skip_if = Vec::is_empty)]
     pub operations: Vec<Operation>,
     /// The block height.
     pub height: BlockHeight,
@@ -60,6 +63,7 @@ pub struct Block {
     /// fees. If set, this must be the `owner` in the block proposal. `None` means that
     /// the default account of the chain is used. This value is also used as recipient of
     /// potential refunds for the message grants created by the operations.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// Certified hash (see `Certificate` below) of the previous block in the
     /// chain, if any.
@@ -286,7 +290,9 @@ pub struct BlockProposal {
     pub content: ProposalContent,
     pub owner: Owner,
     pub signature: Signature,
+    #[debug(skip_if = Vec::is_empty)]
     pub blobs: Vec<Blob>,
+    #[debug(skip_if = Option::is_none)]
     pub validated_block_certificate: Option<LiteCertificate<'static>>,
 }
 
@@ -296,10 +302,13 @@ pub struct OutgoingMessage {
     /// The destination of the message.
     pub destination: Destination,
     /// The user authentication carried by the message, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// A grant to pay for the message execution.
+    #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
     /// Where to send a refund for the unused part of the grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
     /// The kind of message being sent.
     pub kind: MessageKind,
@@ -311,10 +320,13 @@ pub struct OutgoingMessage {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct PostedMessage {
     /// The user authentication carried by the message, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// A grant to pay for the message execution.
+    #[debug(skip_if = Amount::is_zero)]
     pub grant: Amount,
     /// Where to send a refund for the unused part of the grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
     /// The kind of message being sent.
     pub kind: MessageKind,
@@ -391,8 +403,10 @@ pub struct EventRecord {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
     /// The event key.
+    #[debug(with = "hex_debug")]
     pub key: Vec<u8>,
     /// The payload data.
+    #[debug(with = "hex_debug")]
     pub value: Vec<u8>,
 }
 
@@ -699,6 +713,7 @@ pub struct ProposalContent {
     pub round: Round,
     /// If this is a retry from an earlier round, the oracle responses from when the block was
     /// first validated. These are reused so the execution outcome remains the same.
+    #[debug(skip_if = Option::is_none)]
     pub forced_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
 }
 

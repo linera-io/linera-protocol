@@ -67,8 +67,10 @@ pub struct SyncRuntimeInternal<UserInstance> {
     /// The current local time.
     local_time: Timestamp,
     /// The authenticated signer of the operation or message, if any.
+    #[debug(skip_if = Option::is_none)]
     authenticated_signer: Option<Owner>,
     /// The current message being executed, if there is one.
+    #[debug(skip_if = Option::is_none)]
     executing_message: Option<ExecutingMessage>,
 
     /// How to interact with the storage view of the execution state.
@@ -94,6 +96,7 @@ pub struct SyncRuntimeInternal<UserInstance> {
     view_user_states: BTreeMap<UserApplicationId, ViewUserState>,
 
     /// Where to send a refund for the unused part of the grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
     refund_grant_to: Option<Account>,
     /// Controller to track fuel and storage consumption.
     resource_controller: ResourceController,
