@@ -357,7 +357,7 @@ where
             BlobContent::ContractBytecode(compressed_bytecode)
             | BlobContent::ServiceBytecode(compressed_bytecode) => {
                 ensure!(
-                    compressed_bytecode.decompressed_size_at_most(policy.maximum_bytecode_size)?,
+                    compressed_bytecode.decompressed_size_at_most(*policy.maximum_bytecode_size)?,
                     WorkerError::BytecodeTooLarge
                 );
             }

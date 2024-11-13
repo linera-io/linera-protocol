@@ -28,7 +28,8 @@ use linera_base::{
 };
 use linera_chain::data_types::{EventRecord, MessageAction, OutgoingMessage};
 use linera_execution::{
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemMessage, WasmRuntime,
+    Message, MessageKind, Operation, ResourceControlPolicy, ResourceLimit, SystemMessage,
+    WasmRuntime,
 };
 use serde_json::json;
 use test_case::test_case;
@@ -101,11 +102,14 @@ where
     let service_compressed_len = service_bytecode.compress().compressed_bytes.len();
 
     let mut policy = ResourceControlPolicy::all_categories();
-    policy.maximum_bytecode_size = contract_bytecode
-        .bytes
-        .len()
-        .max(service_bytecode.bytes.len()) as u64;
-    policy.maximum_blob_size = contract_compressed_len.max(service_compressed_len) as u64;
+    policy.maximum_bytecode_size = ResourceLimit(
+        contract_bytecode
+            .bytes
+            .len()
+            .max(service_bytecode.bytes.len()) as u64,
+    );
+    policy.maximum_blob_size =
+        ResourceLimit(contract_compressed_len.max(service_compressed_len) as u64);
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(policy.clone());
@@ -158,7 +162,7 @@ where
     let balance_after_init = creator.local_balance().await?;
     assert!(balance_after_init < balance_after_messaging);
 
-    let large_bytecode = Bytecode::new(vec![0; policy.maximum_bytecode_size as usize + 1]);
+    let large_bytecode = Bytecode::new(vec![0; *policy.maximum_bytecode_size as usize + 1]);
     let small_bytecode = Bytecode::new(vec![]);
     // Publishing bytecode that exceeds the limit fails.
     let result = publisher
@@ -886,7 +890,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
         TestBuilder::new(storage_builder, 4, 1)
             .await?
             .with_policy(ResourceControlPolicy {
-                maximum_fuel_per_block: 30_000,
+                maximum_fuel_per_block: ResourceLimit(30_000),
                 ..ResourceControlPolicy::default()
             });
     let publisher = builder

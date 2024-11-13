@@ -20,7 +20,8 @@ use linera_execution::{
     system::{OpenChainConfig, Recipient},
     test_utils::{ExpectedCall, MockApplication},
     ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, Message, MessageKind,
-    Operation, ResourceControlPolicy, SystemMessage, SystemOperation, TestExecutionRuntimeContext,
+    Operation, ResourceControlPolicy, ResourceLimit, SystemMessage, SystemOperation,
+    TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext},
@@ -110,7 +111,7 @@ async fn test_block_size_limit() {
     let mut chain = ChainStateView::new(chain_id).await;
 
     // The size of the executed valid block below.
-    let maximum_executed_block_size = 691;
+    let maximum_executed_block_size = ResourceLimit(691);
 
     // Initialize the chain.
     let mut config = make_open_chain_config();
@@ -174,7 +175,7 @@ async fn test_block_size_limit() {
     // ...because its size is exactly at the allowed limit.
     assert_eq!(
         bcs::serialized_size(&executed_block).unwrap(),
-        maximum_executed_block_size as usize
+        maximum_executed_block_size.0 as usize
     );
 }
 

@@ -21,8 +21,8 @@ use linera_chain::{
 use linera_execution::{
     committee::{Committee, Epoch},
     system::{Recipient, SystemOperation},
-    ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, SystemExecutionError,
-    SystemMessage, SystemQuery, SystemResponse,
+    ExecutionError, Message, MessageKind, Operation, ResourceControlPolicy, ResourceLimit,
+    SystemExecutionError, SystemMessage, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
@@ -2407,7 +2407,7 @@ where
     let blob_bytes = b"blob".to_vec();
     let large_blob_bytes = b"blob+".to_vec();
     let policy = ResourceControlPolicy {
-        maximum_blob_size: blob_bytes.len() as u64,
+        maximum_blob_size: ResourceLimit(blob_bytes.len() as u64),
         ..ResourceControlPolicy::default()
     };
     let mut builder = TestBuilder::new(storage_builder, 4, 0)

@@ -18,7 +18,7 @@ use linera_base::{
 use serde::{Deserialize, Serialize};
 
 /// A collection of prices and limits associated with block execution.
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, InputObject)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default, Serialize, Deserialize, InputObject)]
 pub struct ResourceControlPolicy {
     /// The base price for creating a new block.
     pub block: Amount,
@@ -47,18 +47,18 @@ pub struct ResourceControlPolicy {
     // TODO(#1538): Cap the number of transactions per block and the total size of their
     // arguments.
     /// The maximum amount of fuel a block can consume.
-    pub maximum_fuel_per_block: u64,
+    pub maximum_fuel_per_block: ResourceLimit,
     /// The maximum size of an executed block. This includes the block proposal itself as well as
     /// the execution outcome.
-    pub maximum_executed_block_size: u64,
+    pub maximum_executed_block_size: ResourceLimit,
     /// The maximum size of decompressed contract or service bytecode, in bytes.
-    pub maximum_bytecode_size: u64,
+    pub maximum_bytecode_size: ResourceLimit,
     /// The maximum size of a blob.
-    pub maximum_blob_size: u64,
+    pub maximum_blob_size: ResourceLimit,
     /// The maximum data to read per block
-    pub maximum_bytes_read_per_block: u64,
+    pub maximum_bytes_read_per_block: ResourceLimit,
     /// The maximum data to write per block
-    pub maximum_bytes_written_per_block: u64,
+    pub maximum_bytes_written_per_block: ResourceLimit,
 }
 
 impl Display for ResourceControlPolicy {
@@ -103,30 +103,6 @@ impl Display for ResourceControlPolicy {
             {maximum_bytes_read_per_block} maximum number bytes read per block\n\
             {maximum_bytes_written_per_block} maximum number bytes written per block",
         )
-    }
-}
-
-impl Default for ResourceControlPolicy {
-    fn default() -> Self {
-        Self {
-            block: Amount::default(),
-            fuel_unit: Amount::default(),
-            read_operation: Amount::default(),
-            write_operation: Amount::default(),
-            byte_read: Amount::default(),
-            byte_written: Amount::default(),
-            byte_stored: Amount::default(),
-            operation: Amount::default(),
-            operation_byte: Amount::default(),
-            message: Amount::default(),
-            message_byte: Amount::default(),
-            maximum_fuel_per_block: u64::MAX,
-            maximum_executed_block_size: u64::MAX,
-            maximum_blob_size: u64::MAX,
-            maximum_bytecode_size: u64::MAX,
-            maximum_bytes_read_per_block: u64::MAX,
-            maximum_bytes_written_per_block: u64::MAX,
-        }
     }
 }
 
@@ -241,12 +217,12 @@ impl ResourceControlPolicy {
             operation_byte: Amount::from_nanos(10),
             operation: Amount::from_micros(10),
             message: Amount::from_micros(10),
-            maximum_fuel_per_block: 100_000_000,
-            maximum_executed_block_size: 1_000_000,
-            maximum_blob_size: 1_000_000,
-            maximum_bytecode_size: 10_000_000,
-            maximum_bytes_read_per_block: 100_000_000,
-            maximum_bytes_written_per_block: 10_000_000,
+            maximum_fuel_per_block: ResourceLimit(100_000_000),
+            maximum_executed_block_size: ResourceLimit(1_000_000),
+            maximum_blob_size: ResourceLimit(1_000_000),
+            maximum_bytecode_size: ResourceLimit(10_000_000),
+            maximum_bytes_read_per_block: ResourceLimit(100_000_000),
+            maximum_bytes_written_per_block: ResourceLimit(10_000_000),
         }
     }
 }
