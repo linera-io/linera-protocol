@@ -2,11 +2,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Formatter};
-
+use custom_debug_derive::Debug;
 use linera_base::crypto::{BcsHashable, CryptoHash};
 
 /// Wrapper type around hashed instance of `T` type.
+#[derive(Debug)]
 pub struct Hashed<T> {
     value: T,
     /// Hash of the value (used as key for storage).
@@ -45,15 +45,6 @@ impl<T> Hashed<T> {
 
     pub fn into_inner(self) -> T {
         self.value
-    }
-}
-
-impl<T: Debug> Debug for Hashed<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HashedT")
-            .field("value", &self.value)
-            .field("hash", &self.hash())
-            .finish()
     }
 }
 

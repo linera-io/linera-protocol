@@ -70,6 +70,7 @@
 
 use std::collections::BTreeMap;
 
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
@@ -106,24 +107,33 @@ pub struct ChainManager {
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
+    #[debug(skip_if = Option::is_none)]
     pub distribution: Option<WeightedAliasIndex<u64>>,
     /// The probability distribution for choosing a fallback round leader.
+    #[debug(skip_if = Option::is_none)]
     pub fallback_distribution: Option<WeightedAliasIndex<u64>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
+    #[debug(skip_if = Option::is_none)]
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
+    #[debug(skip_if = Option::is_none)]
     pub locked: Option<ValidatedBlockCertificate>,
     /// Latest leader timeout certificate we have received.
+    #[debug(skip_if = Option::is_none)]
     pub timeout: Option<TimeoutCertificate>,
     /// Latest vote we have cast, to validate or confirm.
+    #[debug(skip_if = Option::is_none)]
     pub pending: Option<Vote>,
     /// Latest timeout vote we cast.
+    #[debug(skip_if = Option::is_none)]
     pub timeout_vote: Option<Vote>,
     /// Fallback vote we cast.
+    #[debug(skip_if = Option::is_none)]
     pub fallback_vote: Option<Vote>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
+    #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
     /// The lowest round where we can still vote to validate or confirm a block. This is
     /// the round to which the timeout applies.
@@ -133,8 +143,10 @@ pub struct ChainManager {
     /// round to become current, unless a higher one already is.
     pub current_round: Round,
     /// The owners that take over in fallback mode.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
     /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
@@ -558,28 +570,38 @@ pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,
     /// Latest authenticated block that we have received, if requested.
+    #[debug(skip_if = Option::is_none)]
     pub requested_proposed: Option<Box<BlockProposal>>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
+    #[debug(skip_if = Option::is_none)]
     pub requested_locked: Option<Box<ValidatedBlockCertificate>>,
     /// Latest timeout certificate we have seen.
+    #[debug(skip_if = Option::is_none)]
     pub timeout: Option<Box<TimeoutCertificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
+    #[debug(skip_if = Option::is_none)]
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
+    #[debug(skip_if = Option::is_none)]
     pub timeout_vote: Option<LiteVote>,
     /// Fallback vote we cast.
+    #[debug(skip_if = Option::is_none)]
     pub fallback_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
+    #[debug(skip_if = Option::is_none)]
     pub requested_pending_value: Option<Box<HashedCertificateValue>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
+    #[debug(skip_if = Option::is_none)]
     pub leader: Option<Owner>,
     /// The timestamp when the current round times out.
+    #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
     /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 

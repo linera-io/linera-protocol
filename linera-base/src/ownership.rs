@@ -6,6 +6,7 @@
 
 use std::{collections::BTreeMap, iter};
 
+use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,6 +22,7 @@ use crate::{
 #[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize, WitLoad, WitStore, WitType)]
 pub struct TimeoutConfig {
     /// The duration of the fast round.
+    #[debug(skip_if = Option::is_none)]
     pub fast_round_duration: Option<TimeDelta>,
     /// The duration of the first single-leader and all multi-leader rounds.
     pub base_timeout: TimeDelta,
@@ -48,8 +50,10 @@ impl Default for TimeoutConfig {
 )]
 pub struct ChainOwnership {
     /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub super_owners: BTreeMap<Owner, PublicKey>,
     /// The regular owners, with their weights that determine how often they are round leader.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub owners: BTreeMap<Owner, (PublicKey, u64)>,
     /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: u32,

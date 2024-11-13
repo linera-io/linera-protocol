@@ -5,10 +5,11 @@
 
 use std::{
     collections::HashSet,
-    fmt::{self, Debug, Formatter},
+    fmt,
     sync::{Arc, RwLock},
 };
 
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, Timestamp, UserApplicationDescription},
@@ -37,6 +38,7 @@ use crate::{
 };
 
 /// A request for the [`ChainWorkerActor`].
+#[derive(Debug)]
 pub enum ChainWorkerRequest<Context>
 where
     Context: linera_views::context::Context + Clone + Send + Sync + 'static,
@@ -45,6 +47,7 @@ where
     #[cfg(with_testing)]
     ReadCertificate {
         height: BlockHeight,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<Option<ConfirmedBlockCertificate>, WorkerError>>,
     },
 
@@ -55,11 +58,13 @@ where
         certificate_hash: CryptoHash,
         height: BlockHeight,
         index: u32,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<Option<MessageBundle>, WorkerError>>,
     },
 
     /// Request a read-only view of the [`ChainStateView`].
     GetChainStateView {
+        #[debug(skip)]
         callback:
             oneshot::Sender<Result<OwnedRwLockReadGuard<ChainStateView<Context>>, WorkerError>>,
     },
@@ -67,30 +72,35 @@ where
     /// Query an application's state.
     QueryApplication {
         query: Query,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<Response, WorkerError>>,
     },
 
     /// Describe an application.
     DescribeApplication {
         application_id: UserApplicationId,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<UserApplicationDescription, WorkerError>>,
     },
 
     /// Execute a block but discard any changes to the chain state.
     StageBlockExecution {
         block: Block,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(ExecutedBlock, ChainInfoResponse), WorkerError>>,
     },
 
     /// Process a leader timeout issued for this multi-owner chain.
     ProcessTimeout {
         certificate: TimeoutCertificate,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
     /// Handle a proposal for the next block on this chain.
     HandleBlockProposal {
         proposal: BlockProposal,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
@@ -98,6 +108,7 @@ where
     ProcessValidatedBlock {
         certificate: ValidatedBlockCertificate,
         blobs: Vec<Blob>,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions, bool), WorkerError>>,
     },
 
@@ -105,7 +116,9 @@ where
     ProcessConfirmedBlock {
         certificate: ConfirmedBlockCertificate,
         blobs: Vec<Blob>,
+        #[debug(with = "elide_option")]
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 
@@ -113,18 +126,21 @@ where
     ProcessCrossChainUpdate {
         origin: Origin,
         bundles: Vec<(Epoch, MessageBundle)>,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<Option<(BlockHeight, NetworkActions)>, WorkerError>>,
     },
 
     /// Handle cross-chain request to confirm that the recipient was updated.
     ConfirmUpdatedRecipient {
         latest_heights: Vec<(Target, BlockHeight)>,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(), WorkerError>>,
     },
 
     /// Handle a [`ChainInfoQuery`].
     HandleChainInfoQuery {
         query: ChainInfoQuery,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
     },
 }
@@ -332,120 +348,10 @@ where
     }
 }
 
-impl<Context> Debug for ChainWorkerRequest<Context>
-where
-    Context: linera_views::context::Context + Clone + Send + Sync + 'static,
-{
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        match self {
-            #[cfg(with_testing)]
-            ChainWorkerRequest::ReadCertificate {
-                height,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::ReadCertificate")
-                .field("height", &height)
-                .finish_non_exhaustive(),
-            #[cfg(with_testing)]
-            ChainWorkerRequest::FindBundleInInbox {
-                inbox_id,
-                certificate_hash,
-                height,
-                index,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::FindBundleInInbox")
-                .field("inbox_id", &inbox_id)
-                .field("certificate_hash", &certificate_hash)
-                .field("height", &height)
-                .field("index", &index)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::GetChainStateView {
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::GetChainStateView")
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::QueryApplication {
-                query,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::QueryApplication")
-                .field("query", &query)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::DescribeApplication {
-                application_id,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::DescribeApplication")
-                .field("application_id", &application_id)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::StageBlockExecution {
-                block,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::StageBlockExecution")
-                .field("block", &block)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::ProcessTimeout {
-                certificate,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::ProcessTimeout")
-                .field("certificate", &certificate)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::HandleBlockProposal {
-                proposal,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::HandleBlockProposal")
-                .field("proposal", &proposal)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::ProcessValidatedBlock {
-                certificate,
-                blobs,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::ProcessValidatedBlock")
-                .field("certificate", &certificate)
-                .field("blobs", &blobs)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::ProcessConfirmedBlock {
-                certificate,
-                blobs,
-                notify_when_messages_are_delivered,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::ProcessConfirmedBlock")
-                .field("certificate", &certificate)
-                .field("blobs", &blobs)
-                .field(
-                    "notify_when_messages_are_delivered",
-                    &notify_when_messages_are_delivered.as_ref().map(|_| "..."),
-                )
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::ProcessCrossChainUpdate {
-                origin,
-                bundles,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::ProcessCrossChainUpdate")
-                .field("origin", &origin)
-                .field("bundles", &bundles)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::ConfirmUpdatedRecipient {
-                latest_heights,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::ConfirmUpdatedRecipient")
-                .field("latest_heights", &latest_heights)
-                .finish_non_exhaustive(),
-            ChainWorkerRequest::HandleChainInfoQuery {
-                query,
-                callback: _callback,
-            } => formatter
-                .debug_struct("ChainWorkerRequest::HandleChainInfoQuery")
-                .field("query", &query)
-                .finish_non_exhaustive(),
-        }
+/// Writes an option as `Some(..)` or `None`.
+fn elide_option<T>(option: &Option<T>, f: &mut fmt::Formatter) -> fmt::Result {
+    match option {
+        Some(_) => write!(f, "Some(..)"),
+        None => write!(f, "None"),
     }
 }

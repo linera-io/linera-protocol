@@ -4,7 +4,7 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{self, Debug, Display, Formatter},
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
     marker::PhantomData,
     str::FromStr,
@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
+use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -19,7 +20,7 @@ use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
     data_types::{BlobContent, BlockHeight},
-    doc_scalar,
+    doc_scalar, hex_debug,
 };
 
 /// The owner of a chain. This is currently the hash of the owner's public key used to
@@ -45,6 +46,7 @@ pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
     /// The owner of the account, or `None` for the chain balance.
+    #[debug(skip_if = Option::is_none)]
     pub owner: Option<Owner>,
 }
 
@@ -301,7 +303,7 @@ pub struct MessageId {
 }
 
 /// A unique identifier for a user application.
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
@@ -355,7 +357,7 @@ impl From<ApplicationId> for GenericApplicationId {
 }
 
 /// A unique identifier for an application bytecode.
-#[derive(WitLoad, WitStore, WitType)]
+#[derive(Debug, WitLoad, WitStore, WitType)]
 #[cfg_attr(with_testing, derive(Default))]
 pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the contract bytecode.
@@ -363,6 +365,7 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the service bytecode.
     pub service_blob_hash: CryptoHash,
     #[witty(skip)]
+    #[debug(skip)]
     _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
@@ -381,7 +384,11 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     WitStore,
     WitType,
 )]
-pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
+pub struct ChannelName(
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    Vec<u8>,
+);
 
 /// The name of an event stream.
 #[derive(
@@ -398,7 +405,11 @@ pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
     WitStore,
     WitType,
 )]
-pub struct StreamName(#[serde(with = "serde_bytes")] pub Vec<u8>);
+pub struct StreamName(
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub Vec<u8>,
+);
 
 /// An event stream ID.
 #[derive(
@@ -559,22 +570,6 @@ impl<Abi, Parameters, InstantiationArgument> Hash
     }
 }
 
-impl<Abi, Parameters, InstantiationArgument> Debug
-    for BytecodeId<Abi, Parameters, InstantiationArgument>
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let BytecodeId {
-            contract_blob_hash: contract_blob_id,
-            service_blob_hash: service_blob_id,
-            _phantom,
-        } = self;
-        f.debug_struct("BytecodeId")
-            .field("contract_blob_id", contract_blob_id)
-            .field("service_blob_id", service_blob_id)
-            .finish_non_exhaustive()
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "BytecodeId")]
 struct SerializableBytecodeId {
@@ -728,19 +723,6 @@ impl<A> Hash for ApplicationId<A> {
         } = self;
         bytecode_id.hash(state);
         creation.hash(state);
-    }
-}
-
-impl<A> Debug for ApplicationId<A> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ApplicationId {
-            bytecode_id,
-            creation,
-        } = self;
-        f.debug_struct("ApplicationId")
-            .field("bytecode_id", bytecode_id)
-            .field("creation", creation)
-            .finish()
     }
 }
 

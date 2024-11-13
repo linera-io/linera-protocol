@@ -675,6 +675,11 @@ impl Amount {
     pub fn saturating_div(self, other: Amount) -> u128 {
         self.0.checked_div(other.0).unwrap_or(u128::MAX)
     }
+
+    /// Returns whether this amount is 0.
+    pub fn is_zero(&self) -> bool {
+        *self == Amount::ZERO
+    }
 }
 
 /// Permissions for applications on a chain.
@@ -696,13 +701,16 @@ pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.
     /// If it is `Some`, only operations from the specified applications are allowed, and
     /// no system operations.
+    #[debug(skip_if = Option::is_none)]
     pub execute_operations: Option<Vec<ApplicationId>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
     #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
     pub mandatory_applications: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
     #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
     pub close_chain: Vec<ApplicationId>,
 }
 
@@ -736,9 +744,9 @@ impl ApplicationPermissions {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum OracleResponse {
     /// The response from a service query.
-    Service(Vec<u8>),
+    Service(#[debug(with = "hex_debug")] Vec<u8>),
     /// The response from an HTTP POST request.
-    Post(Vec<u8>),
+    Post(#[debug(with = "hex_debug")] Vec<u8>),
     /// A successful read or write of a blob.
     Blob(BlobId),
     /// An assertion oracle that passed.
@@ -815,10 +823,11 @@ impl From<&UserApplicationDescription> for UserApplicationId {
 }
 
 /// A WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode {
     /// Bytes of the bytecode.
     #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub bytes: Vec<u8>,
 }
 
@@ -852,12 +861,6 @@ impl AsRef<[u8]> for Bytecode {
     }
 }
 
-impl fmt::Debug for Bytecode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("Bytecode").finish_non_exhaustive()
-    }
-}
-
 /// A type for errors happening during decompression.
 #[derive(Error, Debug)]
 pub enum DecompressionError {
@@ -867,11 +870,12 @@ pub enum DecompressionError {
 }
 
 /// A compressed WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Hash, Serialize, WitType, WitStore)]
+#[derive(Clone, Debug, Deserialize, Hash, Serialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct CompressedBytecode {
     /// Compressed bytes of the bytecode.
     #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub compressed_bytes: Vec<u8>,
 }
 
@@ -943,12 +947,6 @@ impl CompressedBytecode {
     }
 }
 
-impl fmt::Debug for CompressedBytecode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CompressedBytecode").finish_non_exhaustive()
-    }
-}
-
 /// Internal bytes of a blob.
 #[derive(Clone, Serialize, Deserialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -964,25 +962,19 @@ impl Hash for BlobBytes {
 }
 
 /// A blob of binary data.
-#[derive(Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
+#[derive(Hash, Clone, Debug, Serialize, Deserialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum BlobContent {
     /// A generic data blob.
-    Data(#[serde(with = "serde_bytes")] Vec<u8>),
+    Data(
+        #[serde(with = "serde_bytes")]
+        #[debug(skip)]
+        Vec<u8>,
+    ),
     /// A blob containing contract bytecode.
-    ContractBytecode(CompressedBytecode),
+    ContractBytecode(#[debug(skip)] CompressedBytecode),
     /// A blob containing service bytecode.
-    ServiceBytecode(CompressedBytecode),
-}
-
-impl fmt::Debug for BlobContent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BlobContent::Data(_) => write!(f, "BlobContent::Data"),
-            BlobContent::ContractBytecode(_) => write!(f, "BlobContent::ContractBytecode"),
-            BlobContent::ServiceBytecode(_) => write!(f, "BlobContent::ServiceBytecode"),
-        }
-    }
+    ServiceBytecode(#[debug(skip)] CompressedBytecode),
 }
 
 impl BlobContent {

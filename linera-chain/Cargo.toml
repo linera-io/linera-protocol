@@ -20,6 +20,7 @@ benchmark = ["linera-base/test"]
 [dependencies]
 async-graphql.workspace = true
 async-trait.workspace = true
+custom_debug_derive.workspace = true
 futures.workspace = true
 hex.workspace = true
 linera-base.workspace = true
@@ -29,6 +30,7 @@ prometheus = { workspace = true, optional = true }
 rand_chacha.workspace = true
 rand_distr = { workspace = true, features = ["alloc", "serde1"] }
 serde.workspace = true
+serde_bytes.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -42,4 +44,4 @@ linera-chain = { path = ".", default-features = false, features = ["test"] }
 cfg_aliases.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["async-trait"]
+ignored = ["async-trait", "serde_bytes"]

@@ -356,13 +356,16 @@ pub struct OperationContext {
     /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
+    #[debug(skip_if = Option::is_none)]
     pub index: Option<u32>,
 }
 
@@ -373,8 +376,10 @@ pub struct MessageContext {
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
     /// The current block height.
     pub height: BlockHeight,
@@ -390,6 +395,7 @@ pub struct FinalizeContext {
     /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,

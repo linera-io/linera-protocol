@@ -2,8 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Formatter};
-
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, Signature},
     data_types::Round,
@@ -14,6 +13,7 @@ use super::hashed::Hashed;
 use crate::ChainError;
 
 /// Generic type representing a certificate for `value` of type `T`.
+#[derive(Debug)]
 pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
@@ -102,16 +102,6 @@ impl<T: Clone> Clone for GenericCertificate<T> {
             round: self.round,
             signatures: self.signatures.clone(),
         }
-    }
-}
-
-impl<T: Debug> Debug for GenericCertificate<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CertificateT")
-            .field("value", &self.value)
-            .field("round", &self.round)
-            .field("signatures", &self.signatures)
-            .finish()
     }
 }
 
