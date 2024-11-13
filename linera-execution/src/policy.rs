@@ -3,6 +3,10 @@
 
 //! This module contains types related to fees and pricing.
 
+#[cfg(test)]
+#[path = "unit_tests/policy_tests.rs"]
+mod tests;
+
 use std::{
     cmp,
     fmt::{self, Display, Formatter},
