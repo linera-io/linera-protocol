@@ -7,9 +7,12 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
-    LiteValue, ProposalContent,
+use linera_chain::{
+    data_types::{
+        BlockProposal, CertificateValue, HashedCertificateValue, LiteCertificate, LiteValue,
+        ProposalContent,
+    },
+    types::Certificate,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},

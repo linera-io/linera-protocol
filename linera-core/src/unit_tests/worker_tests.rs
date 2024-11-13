@@ -27,11 +27,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, Certificate, ChainAndHeight, ChannelFullName,
+        Block, BlockExecutionOutcome, BlockProposal, ChainAndHeight, ChannelFullName,
         HashedCertificateValue, IncomingBundle, LiteVote, Medium, MessageAction, MessageBundle,
         Origin, OutgoingMessage, PostedMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
+    types::Certificate,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{

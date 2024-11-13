@@ -11,9 +11,12 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
     ownership::TimeoutConfig,
 };
-use linera_chain::data_types::{
-    Block, Certificate, ChannelFullName, HashedCertificateValue, IncomingBundle, LiteVote, Medium,
-    MessageAction, Origin, SignatureAggregator,
+use linera_chain::{
+    data_types::{
+        Block, ChannelFullName, HashedCertificateValue, IncomingBundle, LiteVote, Medium,
+        MessageAction, Origin, SignatureAggregator,
+    },
+    types::Certificate,
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation},

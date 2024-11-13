@@ -14,9 +14,12 @@ use linera_execution::{
     Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };
 
-use crate::data_types::{
-    Block, BlockProposal, Certificate, HashedCertificateValue, IncomingBundle, PostedMessage,
-    SignatureAggregator, Vote,
+use crate::{
+    data_types::{
+        Block, BlockProposal, HashedCertificateValue, IncomingBundle, PostedMessage,
+        SignatureAggregator, Vote,
+    },
+    types::Certificate,
 };
 
 /// Creates a new child of the given block, with the same timestamp.

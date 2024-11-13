@@ -464,7 +464,7 @@ where
         request: Request<CryptoHash>,
     ) -> Result<Response<Certificate>, Status> {
         let hash = request.into_inner().try_into()?;
-        let certificate: linera_chain::data_types::Certificate = self
+        let certificate: linera_chain::types::Certificate = self
             .0
             .storage
             .read_certificate(hash)
@@ -488,7 +488,7 @@ where
 
         // Use 70% of the max message size as a buffer capacity.
         // Leave 30% as overhead.
-        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::data_types::Certificate> =
+        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
             GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
         let mut certificates = vec![];
@@ -502,7 +502,7 @@ where
                 .map_err(|err| Status::from_error(Box::new(err)))?
             {
                 if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
-                    certificates.push(linera_chain::data_types::Certificate::from(certificate));
+                    certificates.push(linera_chain::types::Certificate::from(certificate));
                 } else {
                     break 'outer;
                 }
@@ -603,8 +603,9 @@ impl<T> GrpcMessageLimiter<T> {
 #[cfg(test)]
 mod proto_message_cap {
     use linera_base::crypto::{KeyPair, Signature};
-    use linera_chain::data_types::{
-        BlockExecutionOutcome, Certificate, ExecutedBlock, HashedCertificateValue,
+    use linera_chain::{
+        data_types::{BlockExecutionOutcome, ExecutedBlock, HashedCertificateValue},
+        types::Certificate,
     };
     use linera_execution::committee::ValidatorName;
     use linera_sdk::base::{ChainId, TestString};

@@ -13,8 +13,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
-    types::ConfirmedBlockCertificate,
+    data_types::{CertificateValue, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{

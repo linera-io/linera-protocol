@@ -36,9 +36,8 @@ use {
         data_types::Amount,
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
-    linera_chain::data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, SignatureAggregator, Vote,
-    },
+    linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
+    linera_chain::types::Certificate,
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,

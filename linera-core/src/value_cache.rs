@@ -12,7 +12,10 @@ use std::{any::type_name, sync::LazyLock};
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
 use linera_base::{crypto::CryptoHash, data_types::Blob, identifiers::BlobId};
-use linera_chain::data_types::{Certificate, HashedCertificateValue, LiteCertificate};
+use linera_chain::{
+    data_types::{HashedCertificateValue, LiteCertificate},
+    types::Certificate,
+};
 use lru::LruCache;
 use tokio::sync::Mutex;
 #[cfg(with_metrics)]

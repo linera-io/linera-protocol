@@ -10,7 +10,10 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
     time::Duration,
 };
-use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
+use linera_chain::{
+    data_types::{self, CertificateValue, HashedCertificateValue},
+    types::Certificate,
+};
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,

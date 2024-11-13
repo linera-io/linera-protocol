@@ -12,8 +12,9 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
     time::{timer, Duration},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
+use linera_chain::{
+    data_types::{BlockProposal, CertificateValue, HashedCertificateValue, LiteCertificate},
+    types::Certificate,
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},

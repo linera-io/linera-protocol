@@ -5,12 +5,10 @@
 use linera_base::identifiers::{BlobId, ChainId, MessageId};
 use linera_execution::committee::Epoch;
 
-use super::{generic::GenericCertificate, hashed::Hashed};
+use super::{generic::GenericCertificate, hashed::Hashed, Certificate};
 use crate::{
     block::{ConfirmedBlock, ValidatedBlock},
-    data_types::{
-        Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue, Medium, MessageBundle,
-    },
+    data_types::{CertificateValue, ExecutedBlock, HashedCertificateValue, Medium, MessageBundle},
 };
 
 impl GenericCertificate<ConfirmedBlock> {

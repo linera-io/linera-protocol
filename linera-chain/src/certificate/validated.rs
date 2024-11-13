@@ -11,12 +11,11 @@ use serde::{
     Deserialize, Deserializer,
 };
 
-use super::{generic::GenericCertificate, hashed::Hashed};
+use super::{generic::GenericCertificate, hashed::Hashed, Certificate};
 use crate::{
     block::ValidatedBlock,
     data_types::{
-        Certificate, CertificateValue, ExecutedBlock, HashedCertificateValue, LiteCertificate,
-        LiteValue,
+        CertificateValue, ExecutedBlock, HashedCertificateValue, LiteCertificate, LiteValue,
     },
 };
 
