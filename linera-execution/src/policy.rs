@@ -3,10 +3,18 @@
 
 //! This module contains types related to fees and pricing.
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    cmp,
+    fmt::{self, Display, Formatter},
+    ops::{Deref, DerefMut},
+    str::FromStr,
+};
 
 use async_graphql::InputObject;
-use linera_base::data_types::{Amount, ArithmeticError, Resources};
+use linera_base::{
+    data_types::{Amount, ArithmeticError, Resources},
+    doc_scalar,
+};
 use serde::{Deserialize, Serialize};
 
 /// A collection of prices and limits associated with block execution.
@@ -242,3 +250,106 @@ impl ResourceControlPolicy {
         }
     }
 }
+
+/// A wrapper type representing a resource limit.
+///
+/// The limit is serialized as a string in human-readable serialization formats in order to support
+/// 64 bit integers in JSON without having to use floating point numbers.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ResourceLimit(pub u64);
+
+/// Private helper type to handle serialization of a [`ResourceLimit`] as a [`String`].
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "ResourceLimit")]
+struct ResourceLimitAsString(String);
+
+/// Private helper type to handle serialization of a [`ResourceLimit`] as an [`u64`].
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "ResourceLimit")]
+struct ResourceLimitAsU64(u64);
+
+impl Default for ResourceLimit {
+    fn default() -> Self {
+        ResourceLimit(u64::MAX)
+    }
+}
+
+impl Deref for ResourceLimit {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ResourceLimit {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl FromStr for ResourceLimit {
+    type Err = <u64 as FromStr>::Err;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        Ok(ResourceLimit(string.parse()?))
+    }
+}
+
+impl Display for ResourceLimit {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl PartialEq<u64> for ResourceLimit {
+    fn eq(&self, other: &u64) -> bool {
+        self.0.eq(other)
+    }
+}
+
+impl PartialEq<ResourceLimit> for u64 {
+    fn eq(&self, other: &ResourceLimit) -> bool {
+        self.eq(&other.0)
+    }
+}
+
+impl PartialOrd<u64> for ResourceLimit {
+    fn partial_cmp(&self, other: &u64) -> Option<cmp::Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
+impl PartialOrd<ResourceLimit> for u64 {
+    fn partial_cmp(&self, other: &ResourceLimit) -> Option<cmp::Ordering> {
+        self.partial_cmp(&other.0)
+    }
+}
+
+impl Serialize for ResourceLimit {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            ResourceLimitAsString(self.0.to_string()).serialize(serializer)
+        } else {
+            ResourceLimitAsU64(self.0).serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ResourceLimit {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let limit = if deserializer.is_human_readable() {
+            let ResourceLimitAsString(string) = ResourceLimitAsString::deserialize(deserializer)?;
+            string.parse().map_err(serde::de::Error::custom)?
+        } else {
+            ResourceLimitAsU64::deserialize(deserializer)?.0
+        };
+
+        Ok(ResourceLimit(limit))
+    }
+}
+
+doc_scalar!(
+    ResourceLimit,
+    "A maximal value for the usage of a resource."
+);
