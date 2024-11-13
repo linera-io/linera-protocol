@@ -11,8 +11,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, LiteCertificate},
-    types::{Certificate, ConfirmedBlockCertificate},
+    data_types::BlockProposal,
+    types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
 };
 use linera_execution::committee::ValidatorName;
 use rand::seq::SliceRandom as _;

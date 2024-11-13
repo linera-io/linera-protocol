@@ -8,8 +8,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId, Owner},
 };
 use linera_chain::{
-    data_types::{BlockProposal, LiteCertificate, LiteValue, ProposalContent},
-    types::{Certificate, CertificateValue, HashedCertificateValue},
+    data_types::{BlockProposal, LiteValue, ProposalContent},
+    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},

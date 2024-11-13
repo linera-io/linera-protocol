@@ -12,12 +12,12 @@ use serde::{
 };
 
 use super::{
-    generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
-    HashedCertificateValue,
+    generic::GenericCertificate, hashed::Hashed, lite::LiteCertificate, Certificate,
+    CertificateValue, HashedCertificateValue,
 };
 use crate::{
     block::ValidatedBlock,
-    data_types::{ExecutedBlock, LiteCertificate, LiteValue},
+    data_types::{ExecutedBlock, LiteValue},
 };
 
 impl GenericCertificate<ValidatedBlock> {

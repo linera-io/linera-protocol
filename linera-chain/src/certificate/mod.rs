@@ -5,6 +5,7 @@
 mod confirmed;
 mod generic;
 mod hashed;
+mod lite;
 mod timeout;
 mod validated;
 mod value;
@@ -19,11 +20,12 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_execution::committee::{Epoch, ValidatorName};
+pub use lite::LiteCertificate;
 use serde::{Deserialize, Deserializer, Serialize};
 pub use value::{CertificateValue, HashedCertificateValue};
 
 use crate::{
-    data_types::{is_strictly_ordered, LiteCertificate, LiteValue, Medium, MessageBundle},
+    data_types::{is_strictly_ordered, LiteValue, Medium, MessageBundle},
     types::{ConfirmedBlock, Timeout, ValidatedBlock},
 };
 

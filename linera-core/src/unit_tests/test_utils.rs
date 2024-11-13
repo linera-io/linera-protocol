@@ -19,8 +19,8 @@ use linera_base::{
     identifiers::{BlobId, ChainDescription, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, LiteCertificate},
-    types::{Certificate, ConfirmedBlockCertificate, HashedCertificateValue},
+    data_types::BlockProposal,
+    types::{Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},

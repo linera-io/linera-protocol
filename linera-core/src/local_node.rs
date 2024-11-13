@@ -12,8 +12,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{Block, BlockProposal, ExecutedBlock, LiteCertificate},
-    types::{Certificate, CertificateValue, ConfirmedBlockCertificate},
+    data_types::{Block, BlockProposal, ExecutedBlock},
+    types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{ExecutionError, Query, Response, SystemExecutionError};

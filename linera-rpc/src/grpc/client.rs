@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{self},
-    types::{Certificate, CertificateValue, HashedCertificateValue},
+    types::{self, Certificate, CertificateValue, HashedCertificateValue},
 };
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -187,7 +187,7 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, fields(address = self.address))]
     async fn handle_lite_certificate(
         &self,
-        certificate: data_types::LiteCertificate<'_>,
+        certificate: types::LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();

@@ -40,12 +40,13 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteCertificate,
-        LiteVote, MessageAction,
+        Block, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote,
+        MessageAction,
     },
     manager::ChainManagerInfo,
     types::{
-        Certificate, ConfirmedBlockCertificate, HashedCertificateValue, ValidatedBlockCertificate,
+        Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
