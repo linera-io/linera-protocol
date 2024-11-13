@@ -13,8 +13,8 @@ use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
 use linera_base::{crypto::CryptoHash, data_types::Blob, identifiers::BlobId};
 use linera_chain::{
-    data_types::{HashedCertificateValue, LiteCertificate},
-    types::Certificate,
+    data_types::LiteCertificate,
+    types::{Certificate, HashedCertificateValue},
 };
 use lru::LruCache;
 use tokio::sync::Mutex;

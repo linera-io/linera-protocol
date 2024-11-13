@@ -8,8 +8,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{CertificateValue, HashedCertificateValue, Medium, MessageAction},
+    data_types::{Medium, MessageAction},
     manager::ChainManagerInfo,
+    types::{CertificateValue, HashedCertificateValue},
 };
 use linera_core::{data_types::CrossChainRequest, node::NodeError};
 use linera_execution::{

@@ -30,8 +30,9 @@ use linera_views::{
 };
 
 use crate::{
-    data_types::{HashedCertificateValue, IncomingBundle, MessageAction, MessageBundle, Origin},
+    data_types::{IncomingBundle, MessageAction, MessageBundle, Origin},
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt},
+    types::HashedCertificateValue,
     ChainError, ChainExecutionContext, ChainStateView,
 };
 

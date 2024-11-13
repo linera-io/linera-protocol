@@ -13,10 +13,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, ChannelFullName, HashedCertificateValue, IncomingBundle, LiteVote, Medium,
-        MessageAction, Origin, SignatureAggregator,
+        Block, ChannelFullName, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
+        SignatureAggregator,
     },
-    types::Certificate,
+    types::{Certificate, HashedCertificateValue},
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation},

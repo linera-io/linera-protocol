@@ -604,8 +604,8 @@ impl<T> GrpcMessageLimiter<T> {
 mod proto_message_cap {
     use linera_base::crypto::{KeyPair, Signature};
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, ExecutedBlock, HashedCertificateValue},
-        types::Certificate,
+        data_types::{BlockExecutionOutcome, ExecutedBlock},
+        types::{Certificate, HashedCertificateValue},
     };
     use linera_execution::committee::ValidatorName;
     use linera_sdk::base::{ChainId, TestString};

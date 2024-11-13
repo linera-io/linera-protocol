@@ -83,11 +83,11 @@ use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, CertificateValue, HashedCertificateValue,
-        LiteVote, ProposalContent, Vote,
+    data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
+    types::{
+        CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue, TimeoutCertificate,
+        ValidatedBlockCertificate,
     },
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
 

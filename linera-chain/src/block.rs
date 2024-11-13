@@ -8,7 +8,7 @@ use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::Cha
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 
-use crate::data_types::{ExecutedBlock, HashedCertificateValue};
+use crate::{data_types::ExecutedBlock, types::HashedCertificateValue};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]

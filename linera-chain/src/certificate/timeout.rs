@@ -9,11 +9,11 @@ use serde::{
     Deserialize, Deserializer,
 };
 
-use super::{generic::GenericCertificate, hashed::Hashed, Certificate};
-use crate::{
-    block::Timeout,
-    data_types::{CertificateValue, HashedCertificateValue},
+use super::{
+    generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
+    HashedCertificateValue,
 };
+use crate::block::Timeout;
 
 impl From<Certificate> for GenericCertificate<Timeout> {
     fn from(cert: Certificate) -> Self {

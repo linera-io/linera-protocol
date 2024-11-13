@@ -21,8 +21,6 @@ use linera_base::{
     identifiers::{ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
-#[cfg(feature = "benchmark")]
-use linera_chain::{data_types::CertificateValue, types::ConfirmedBlock};
 use linera_client::{
     chain_listener::ClientContext as _,
     client_context::ClientContext,
@@ -64,7 +62,7 @@ mod net_up_utils;
 
 #[cfg(feature = "benchmark")]
 use {
-    linera_chain::data_types::HashedCertificateValue,
+    linera_chain::types::{CertificateValue, ConfirmedBlock, HashedCertificateValue},
     linera_core::data_types::ChainInfoResponse,
     linera_rpc::{HandleCertificateRequest, RpcMessage},
     std::collections::HashSet,

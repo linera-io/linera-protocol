@@ -7,6 +7,7 @@ mod generic;
 mod hashed;
 mod timeout;
 mod validated;
+mod value;
 
 use std::borrow::Cow;
 
@@ -19,12 +20,10 @@ use linera_base::{
 };
 use linera_execution::committee::{Epoch, ValidatorName};
 use serde::{Deserialize, Deserializer, Serialize};
+pub use value::{CertificateValue, HashedCertificateValue};
 
 use crate::{
-    data_types::{
-        is_strictly_ordered, CertificateValue, HashedCertificateValue, LiteCertificate, LiteValue,
-        Medium, MessageBundle,
-    },
+    data_types::{is_strictly_ordered, LiteCertificate, LiteValue, Medium, MessageBundle},
     types::{ConfirmedBlock, Timeout, ValidatedBlock},
 };
 

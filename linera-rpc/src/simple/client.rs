@@ -13,8 +13,8 @@ use linera_base::{
     time::{timer, Duration},
 };
 use linera_chain::{
-    data_types::{BlockProposal, CertificateValue, HashedCertificateValue, LiteCertificate},
-    types::Certificate,
+    data_types::{BlockProposal, LiteCertificate},
+    types::{Certificate, CertificateValue, HashedCertificateValue},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},

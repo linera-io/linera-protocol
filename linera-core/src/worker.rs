@@ -22,11 +22,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, CertificateValue, ExecutedBlock,
-        HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
+        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, LiteCertificate, MessageBundle,
+        Origin, Target,
     },
     types::{
-        Certificate, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate,
+        Certificate, CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue,
+        TimeoutCertificate, ValidatedBlockCertificate,
     },
     ChainStateView,
 };

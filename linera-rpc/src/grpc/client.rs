@@ -11,8 +11,8 @@ use linera_base::{
     time::Duration,
 };
 use linera_chain::{
-    data_types::{self, CertificateValue, HashedCertificateValue},
-    types::Certificate,
+    data_types::{self},
+    types::{Certificate, CertificateValue, HashedCertificateValue},
 };
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},

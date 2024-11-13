@@ -15,11 +15,8 @@ use linera_execution::{
 };
 
 use crate::{
-    data_types::{
-        Block, BlockProposal, HashedCertificateValue, IncomingBundle, PostedMessage,
-        SignatureAggregator, Vote,
-    },
-    types::Certificate,
+    data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
+    types::{Certificate, HashedCertificateValue},
 };
 
 /// Creates a new child of the given block, with the same timestamp.
