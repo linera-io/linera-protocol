@@ -55,7 +55,7 @@ mod chain_tests;
 
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, register_int_counter_vec, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, bucket_interval, register_histogram_vec, register_int_counter_vec, MeasureLatency},
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -104,10 +104,7 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
         &[],
-        Some(vec![
-            50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10_000.0, 25_000.0, 50_000.0,
-            100_000.0, 250_000.0, 500_000.0,
-        ]),
+        bucket_interval(10.0, 500_000.0),
     )
 });
 
@@ -117,7 +114,7 @@ static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
         &[],
-        Some(vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0]),
+        bucket_interval(0.1, 100.0),
     )
 });
 
@@ -127,23 +124,7 @@ static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
         &[],
-        Some(vec![
-            0.5,
-            1.0,
-            10.0,
-            100.0,
-            256.0,
-            512.0,
-            1024.0,
-            2048.0,
-            4096.0,
-            8192.0,
-            16384.0,
-            65_536.0,
-            524_288.0,
-            1_048_576.0,
-            8_388_608.0,
-        ]),
+        bucket_interval(0.1, 10_000_000.0),
     )
 });
 
@@ -153,23 +134,7 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",
         &[],
-        Some(vec![
-            0.5,
-            1.0,
-            10.0,
-            100.0,
-            256.0,
-            512.0,
-            1024.0,
-            2048.0,
-            4096.0,
-            8192.0,
-            16384.0,
-            65_536.0,
-            524_288.0,
-            1_048_576.0,
-            8_388_608.0,
-        ]),
+        bucket_interval(0.1, 10_000_000.0),
     )
 });
 

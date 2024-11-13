@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{register_histogram_vec, register_int_counter_vec},
+    linera_base::prometheus_util::{bucket_interval, register_histogram_vec, register_int_counter_vec},
     prometheus::{HistogramVec, IntCounterVec},
     std::sync::LazyLock,
 };
@@ -60,9 +60,7 @@ static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
         &["certificate_value", "round_type"],
-        Some(vec![
-            0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
-        ]),
+        bucket_interval(0.1, 50.0),
     )
 });
 
@@ -72,9 +70,7 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
         &["round_type"],
-        Some(vec![
-            0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
-        ]),
+        bucket_interval(0.1, 50.0),
     )
 });
 

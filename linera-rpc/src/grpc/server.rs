@@ -30,7 +30,7 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{register_histogram_vec, register_int_counter_vec},
+    linera_base::prometheus_util::{bucket_interval, register_histogram_vec, register_int_counter_vec},
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -59,7 +59,7 @@ static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "server_request_latency",
         "Server request latency",
         &[],
-        Some(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]),
+        bucket_interval(0.1, 50.0),
     )
 });
 
@@ -92,7 +92,7 @@ static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLoc
         "server_request_latency_per_request_type",
         "Server request latency per request type",
         &["method_name"],
-        Some(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0]),
+        bucket_interval(0.1, 50.0),
     )
 });
 
