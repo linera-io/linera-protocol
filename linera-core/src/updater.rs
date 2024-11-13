@@ -237,7 +237,7 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 let blobs = self
                     .local_node
-                    .find_missing_blobs(&certificate, blob_ids, certificate.value().chain_id())
+                    .find_missing_blobs(&certificate, blob_ids, certificate.inner().chain_id())
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node
@@ -411,7 +411,7 @@ where
                 (block.height, block.chain_id)
             }
             CommunicateAction::FinalizeBlock { certificate, .. } => {
-                let value = certificate.value();
+                let value = certificate.inner();
                 (value.height(), value.chain_id())
             }
             CommunicateAction::RequestTimeout {

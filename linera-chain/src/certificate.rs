@@ -8,7 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{CryptoHash, Signature},
+    crypto::{BcsHashable, CryptoHash, Signature},
     data_types::Round,
     identifiers::{BlobId, ChainId, MessageId},
 };
@@ -167,7 +167,7 @@ impl From<ConfirmedBlockCertificate> for Certificate {
             round,
             signatures,
         } = cert;
-        Certificate::new(
+        Certificate::unchecked_new(
             HashedCertificateValue::new_confirmed(value.into_inner().into_inner()),
             round,
             signatures,
@@ -182,7 +182,7 @@ impl From<ValidatedBlockCertificate> for Certificate {
             round,
             signatures,
         } = cert;
-        Certificate::new(
+        Certificate::unchecked_new(
             HashedCertificateValue::new_validated(value.into_inner().into_inner()),
             round,
             signatures,
@@ -198,7 +198,7 @@ impl From<TimeoutCertificate> for Certificate {
             signatures,
         } = cert;
         let timeout = value.into_inner();
-        Certificate::new(
+        Certificate::unchecked_new(
             HashedCertificateValue::new_timeout(timeout.chain_id, timeout.height, timeout.epoch),
             round,
             signatures,
@@ -220,6 +220,18 @@ impl<T> Hashed<T> {
     /// with a hash that doesn't match the value. This is necessary for the rewrite state when
     /// signers sign over old `Certificate` type.
     pub fn unchecked_new(value: T, hash: CryptoHash) -> Self {
+        Self { value, hash }
+    }
+
+    /// Creates an instance of [`Hashed`] with the given `value`.
+    ///
+    /// Note: Contrary to its `unchecked_new` counterpart, this method is safe because it
+    /// calculates the hash from the value.
+    pub fn new(value: T) -> Self
+    where
+        T: BcsHashable,
+    {
+        let hash = CryptoHash::new(&value);
         Self { value, hash }
     }
 
@@ -255,15 +267,25 @@ impl<T: Clone> Clone for Hashed<T> {
 }
 
 impl<T> GenericCertificate<T> {
-    pub fn new(
-        value: T,
-        old_hash: CryptoHash,
+    pub fn unchecked_new(
+        value: Hashed<T>,
         round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
+        signatures: Vec<(ValidatorName, Signature)>,
     ) -> Self {
+        Self {
+            value,
+            round,
+            signatures,
+        }
+    }
+
+    pub fn new(value: T, round: Round, mut signatures: Vec<(ValidatorName, Signature)>) -> Self
+    where
+        T: BcsHashable,
+    {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
         Self {
-            value: Hashed::unchecked_new(value, old_hash),
+            value: Hashed::new(value),
             round,
             signatures,
         }
@@ -271,6 +293,10 @@ impl<T> GenericCertificate<T> {
 
     pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
         &self.signatures
+    }
+
+    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
+        &mut self.signatures
     }
 
     /// Adds a signature to the certificate's list of signatures
@@ -293,9 +319,7 @@ impl<T> GenericCertificate<T> {
             .binary_search_by(|(name, _)| name.cmp(validator_name))
             .is_ok()
     }
-}
 
-impl<T> GenericCertificate<T> {
     /// Returns the certified value's hash.
     pub fn hash(&self) -> CryptoHash {
         self.value.hash()
@@ -305,6 +329,10 @@ impl<T> GenericCertificate<T> {
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         crate::data_types::check_signatures(self.hash(), self.round, &self.signatures, committee)?;
         Ok(())
+    }
+
+    pub fn value(&self) -> &Hashed<T> {
+        &self.value
     }
 }
 

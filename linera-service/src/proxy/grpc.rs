@@ -620,7 +620,7 @@ mod proto_message_cap {
             outcome: BlockExecutionOutcome::default(),
         };
         let signatures = vec![(validator, signature)];
-        Certificate::new(
+        Certificate::unchecked_new(
             HashedCertificateValue::new_confirmed(executed_block),
             Default::default(),
             signatures,

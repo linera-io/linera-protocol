@@ -2012,7 +2012,7 @@ where
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
-        *certificate.value(),
+        *certificate.inner(),
         CertificateValue::Timeout(Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO))
     );
     assert_eq!(certificate.round, Round::SingleLeader(0));

@@ -209,7 +209,7 @@ impl ActiveChain {
             .await;
 
         let executed_block = certificate
-            .value()
+            .inner()
             .executed_block()
             .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);
@@ -319,7 +319,7 @@ impl ActiveChain {
             .await
             .as_ref()
             .expect("Block was not successfully added")
-            .value()
+            .inner()
             .height()
     }
 
@@ -364,7 +364,7 @@ impl ActiveChain {
             .await;
 
         let executed_block = creation_certificate
-            .value()
+            .inner()
             .executed_block()
             .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);

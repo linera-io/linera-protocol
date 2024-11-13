@@ -196,7 +196,7 @@ where
         let cert = Certificate::from(certificate.clone());
         self.state
             .recent_hashed_certificate_values
-            .insert(Cow::Borrowed(&cert.value))
+            .insert(Cow::Borrowed(cert.value()))
             .await;
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.

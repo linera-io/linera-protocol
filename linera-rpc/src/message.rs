@@ -64,7 +64,7 @@ impl RpcMessage {
         let chain_id = match self {
             BlockProposal(proposal) => proposal.content.block.chain_id,
             LiteCertificate(request) => request.certificate.value.chain_id,
-            Certificate(request) => request.certificate.value().chain_id(),
+            Certificate(request) => request.certificate.inner().chain_id(),
             ChainInfoQuery(query) => query.chain_id,
             CrossChainRequest(request) => request.target_chain_id(),
             Vote(_)
