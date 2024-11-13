@@ -1174,6 +1174,10 @@ impl From<Vec<u8>> for Response {
 pub struct BlobState {
     /// Hash of the last `Certificate` that published or used this blob.
     pub last_used_by: CryptoHash,
+    /// The `ChainId` of the chain that published the change
+    pub chain_id: ChainId,
+    /// The `BlockHeight` of the chain that published the change
+    pub block_height: BlockHeight,
     /// Epoch of the `last_used_by` certificate.
     pub epoch: Epoch,
 }
