@@ -609,31 +609,31 @@ impl Runnable for Job {
                                         policy.message_byte = message_byte;
                                     }
                                     if let Some(maximum_fuel_per_block) = maximum_fuel_per_block {
-                                        policy.maximum_fuel_per_block = maximum_fuel_per_block;
+                                        policy.maximum_fuel_per_block = *maximum_fuel_per_block;
                                     }
                                     if let Some(maximum_executed_block_size) =
                                         maximum_executed_block_size
                                     {
                                         policy.maximum_executed_block_size =
-                                            maximum_executed_block_size;
+                                            *maximum_executed_block_size;
                                     }
                                     if let Some(maximum_bytecode_size) = maximum_bytecode_size {
-                                        policy.maximum_bytecode_size = maximum_bytecode_size;
+                                        policy.maximum_bytecode_size = *maximum_bytecode_size;
                                     }
                                     if let Some(maximum_blob_size) = maximum_blob_size {
-                                        policy.maximum_blob_size = maximum_blob_size;
+                                        policy.maximum_blob_size = *maximum_blob_size;
                                     }
                                     if let Some(maximum_bytes_read_per_block) =
                                         maximum_bytes_read_per_block
                                     {
                                         policy.maximum_bytes_read_per_block =
-                                            maximum_bytes_read_per_block;
+                                            *maximum_bytes_read_per_block;
                                     }
                                     if let Some(maximum_bytes_written_per_block) =
                                         maximum_bytes_written_per_block
                                     {
                                         policy.maximum_bytes_written_per_block =
-                                            maximum_bytes_written_per_block;
+                                            *maximum_bytes_written_per_block;
                                     }
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -1394,13 +1394,6 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
         } => {
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
-            let maximum_fuel_per_block = maximum_fuel_per_block.unwrap_or(u64::MAX);
-            let maximum_bytes_read_per_block = maximum_bytes_read_per_block.unwrap_or(u64::MAX);
-            let maximum_bytes_written_per_block =
-                maximum_bytes_written_per_block.unwrap_or(u64::MAX);
-            let maximum_executed_block_size = maximum_executed_block_size.unwrap_or(u64::MAX);
-            let maximum_blob_size = maximum_blob_size.unwrap_or(u64::MAX);
-            let maximum_bytecode_size = maximum_bytecode_size.unwrap_or(u64::MAX);
             let policy = ResourceControlPolicy {
                 block: *block_price,
                 fuel_unit: *fuel_unit_price,
@@ -1413,12 +1406,12 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 operation: *operation_price,
                 message_byte: *message_byte_price,
                 message: *message_price,
-                maximum_fuel_per_block,
-                maximum_executed_block_size,
-                maximum_blob_size,
-                maximum_bytecode_size,
-                maximum_bytes_read_per_block,
-                maximum_bytes_written_per_block,
+                maximum_fuel_per_block: maximum_fuel_per_block.0,
+                maximum_executed_block_size: maximum_executed_block_size.0,
+                maximum_blob_size: maximum_blob_size.0,
+                maximum_bytecode_size: maximum_bytecode_size.0,
+                maximum_bytes_read_per_block: maximum_bytes_read_per_block.0,
+                maximum_bytes_written_per_block: maximum_bytes_written_per_block.0,
             };
             let timestamp = start_timestamp
                 .map(|st| {

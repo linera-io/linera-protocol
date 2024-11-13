@@ -66,7 +66,7 @@ pub use crate::{
     applications::ApplicationRegistryView,
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::ExecutionRequest,
-    policy::ResourceControlPolicy,
+    policy::{ResourceControlPolicy, ResourceLimit},
     resources::{ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,

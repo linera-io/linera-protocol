@@ -20,7 +20,8 @@ use linera_base::{
 };
 use linera_core::client::BlanketMessagePolicy;
 use linera_execution::{
-    committee::ValidatorName, ResourceControlPolicy, WasmRuntime, WithWasmDefault as _,
+    committee::ValidatorName, ResourceControlPolicy, ResourceLimit, WasmRuntime,
+    WithWasmDefault as _,
 };
 use linera_views::store::CommonStoreConfig;
 
@@ -531,28 +532,28 @@ pub enum ClientCommand {
 
         /// Set the maximum amount of fuel per block.
         #[arg(long)]
-        maximum_fuel_per_block: Option<u64>,
+        maximum_fuel_per_block: Option<ResourceLimit>,
 
         /// Set the maximum size of an executed block, in bytes.
         #[arg(long)]
-        maximum_executed_block_size: Option<u64>,
+        maximum_executed_block_size: Option<ResourceLimit>,
 
         /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
         /// in bytes.
         #[arg(long)]
-        maximum_blob_size: Option<u64>,
+        maximum_blob_size: Option<ResourceLimit>,
 
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
         #[arg(long)]
-        maximum_bytecode_size: Option<u64>,
+        maximum_bytecode_size: Option<ResourceLimit>,
 
         /// Set the maximum read data per block.
         #[arg(long)]
-        maximum_bytes_read_per_block: Option<u64>,
+        maximum_bytes_read_per_block: Option<ResourceLimit>,
 
         /// Set the maximum write data per block.
         #[arg(long)]
-        maximum_bytes_written_per_block: Option<u64>,
+        maximum_bytes_written_per_block: Option<ResourceLimit>,
     },
 
     /// Send one transfer per chain in bulk mode
@@ -654,28 +655,28 @@ pub enum ClientCommand {
 
         /// Set the maximum amount of fuel per block.
         #[arg(long)]
-        maximum_fuel_per_block: Option<u64>,
+        maximum_fuel_per_block: ResourceLimit,
 
         /// Set the maximum size of an executed block.
         #[arg(long)]
-        maximum_executed_block_size: Option<u64>,
+        maximum_executed_block_size: ResourceLimit,
 
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
         #[arg(long)]
-        maximum_bytecode_size: Option<u64>,
+        maximum_bytecode_size: ResourceLimit,
 
         /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
         /// in bytes.
         #[arg(long)]
-        maximum_blob_size: Option<u64>,
+        maximum_blob_size: ResourceLimit,
 
         /// Set the maximum read data per block.
         #[arg(long)]
-        maximum_bytes_read_per_block: Option<u64>,
+        maximum_bytes_read_per_block: ResourceLimit,
 
         /// Set the maximum write data per block.
         #[arg(long)]
-        maximum_bytes_written_per_block: Option<u64>,
+        maximum_bytes_written_per_block: ResourceLimit,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.
