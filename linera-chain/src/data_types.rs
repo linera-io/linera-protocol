@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     types::{
-        Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
+        CertificateValue, GenericCertificate, Hashed, HashedCertificateValue, LiteCertificate,
         ValidatedBlockCertificate,
     },
     ChainError,
@@ -782,21 +782,21 @@ impl LiteVote {
     }
 }
 
-pub struct SignatureAggregator<'a> {
+pub struct SignatureAggregator<'a, T> {
     committee: &'a Committee,
     weight: u64,
     used_validators: HashSet<ValidatorName>,
-    partial: Certificate,
+    partial: GenericCertificate<T>,
 }
 
-impl<'a> SignatureAggregator<'a> {
+impl<'a, T> SignatureAggregator<'a, T> {
     /// Starts aggregating signatures for the given value into a certificate.
-    pub fn new(value: HashedCertificateValue, round: Round, committee: &'a Committee) -> Self {
+    pub fn new(value: Hashed<T>, round: Round, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
             used_validators: HashSet::new(),
-            partial: Certificate::new(value, round, Vec::new()),
+            partial: GenericCertificate::new(value, round, Vec::new()),
         }
     }
 
@@ -807,7 +807,10 @@ impl<'a> SignatureAggregator<'a> {
         &mut self,
         validator: ValidatorName,
         signature: Signature,
-    ) -> Result<Option<Certificate>, ChainError> {
+    ) -> Result<Option<GenericCertificate<T>>, ChainError>
+    where
+        T: Clone,
+    {
         let hash_and_round = ValueHashAndRound(self.partial.hash(), self.partial.round);
         signature.check(&hash_and_round, validator.0)?;
         // Check that each validator only appears once.
