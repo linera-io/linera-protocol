@@ -1752,6 +1752,7 @@ where
                         .update_local_node_with_blobs_from(blob_ids.clone(), remote_node)
                         .await
                     {
+                        // TODO(#2875): Distinguish local and remote errors properly.
                         warn!("Error updating local node with blobs: {error}");
                     } else {
                         continue; // We found the missing blobs: retry.
