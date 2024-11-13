@@ -110,6 +110,7 @@ pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
+        #[debug(skip_if = Option::is_none)]
         owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
@@ -131,8 +132,10 @@ pub enum SystemOperation {
     /// Changes the ownership of the chain.
     ChangeOwnership {
         /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
+        #[debug(skip_if = Vec::is_empty)]
         super_owners: Vec<PublicKey>,
         /// The regular owners, with their weights that determine how often they are round leader.
+        #[debug(skip_if = Vec::is_empty)]
         owners: Vec<(PublicKey, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
@@ -165,8 +168,9 @@ pub enum SystemOperation {
         #[debug(with = "hex_debug")]
         parameters: Vec<u8>,
         #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug")]
+        #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
         instantiation_argument: Vec<u8>,
+        #[debug(skip_if = Vec::is_empty)]
         required_application_ids: Vec<UserApplicationId>,
     },
     /// Requests a message from another chain to register a user application on this chain.
@@ -197,8 +201,10 @@ pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
     Credit {
+        #[debug(skip_if = Option::is_none)]
         target: Option<Owner>,
         amount: Amount,
+        #[debug(skip_if = Option::is_none)]
         source: Option<Owner>,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit

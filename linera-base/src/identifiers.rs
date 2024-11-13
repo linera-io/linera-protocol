@@ -4,7 +4,7 @@
 //! Core identifiers used by the Linera protocol.
 
 use std::{
-    fmt::{self, Debug, Display, Formatter},
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
     marker::PhantomData,
     str::FromStr,
@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use async_graphql::SimpleObject;
+use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -19,7 +20,7 @@ use crate::{
     bcs_scalar,
     crypto::{BcsHashable, CryptoError, CryptoHash, PublicKey},
     data_types::{BlobContent, BlockHeight},
-    doc_scalar,
+    doc_scalar, hex_debug,
 };
 
 /// The owner of a chain. This is currently the hash of the owner's public key used to
@@ -45,6 +46,7 @@ pub struct Account {
     /// The chain of the account.
     pub chain_id: ChainId,
     /// The owner of the account, or `None` for the chain balance.
+    #[debug(skip_if = Option::is_none)]
     pub owner: Option<Owner>,
 }
 
@@ -381,7 +383,11 @@ pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     WitStore,
     WitType,
 )]
-pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
+pub struct ChannelName(
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    Vec<u8>,
+);
 
 /// The name of an event stream.
 #[derive(
@@ -398,7 +404,11 @@ pub struct ChannelName(#[serde(with = "serde_bytes")] Vec<u8>);
     WitStore,
     WitType,
 )]
-pub struct StreamName(#[serde(with = "serde_bytes")] pub Vec<u8>);
+pub struct StreamName(
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
+    pub Vec<u8>,
+);
 
 /// An event stream ID.
 #[derive(
@@ -559,7 +569,7 @@ impl<Abi, Parameters, InstantiationArgument> Hash
     }
 }
 
-impl<Abi, Parameters, InstantiationArgument> Debug
+impl<Abi, Parameters, InstantiationArgument> fmt::Debug
     for BytecodeId<Abi, Parameters, InstantiationArgument>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -731,7 +741,7 @@ impl<A> Hash for ApplicationId<A> {
     }
 }
 
-impl<A> Debug for ApplicationId<A> {
+impl<A> fmt::Debug for ApplicationId<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ApplicationId {
             bytecode_id,

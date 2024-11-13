@@ -675,6 +675,11 @@ impl Amount {
     pub fn saturating_div(self, other: Amount) -> u128 {
         self.0.checked_div(other.0).unwrap_or(u128::MAX)
     }
+
+    /// Returns whether this amount is 0.
+    pub fn is_zero(&self) -> bool {
+        *self == Amount::ZERO
+    }
 }
 
 /// Permissions for applications on a chain.
@@ -696,13 +701,16 @@ pub struct ApplicationPermissions {
     /// If this is `None`, all system operations and application operations are allowed.
     /// If it is `Some`, only operations from the specified applications are allowed, and
     /// no system operations.
+    #[debug(skip_if = Option::is_none)]
     pub execute_operations: Option<Vec<ApplicationId>>,
     /// At least one operation or incoming message from each of these applications must occur in
     /// every block.
     #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
     pub mandatory_applications: Vec<ApplicationId>,
     /// These applications are allowed to close the current chain using the system API.
     #[graphql(default)]
+    #[debug(skip_if = Vec::is_empty)]
     pub close_chain: Vec<ApplicationId>,
 }
 

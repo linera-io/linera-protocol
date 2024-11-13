@@ -32,6 +32,7 @@ pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
     /// Optional limit on the number of elements.
+    #[debug(skip_if = Option::is_none)]
     pub limit: Option<u64>,
 }
 
