@@ -836,6 +836,7 @@ where
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
+            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
         ));
         Ok(builder.create_chain_client(
             chain_id,

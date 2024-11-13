@@ -114,6 +114,9 @@ A Byzantine-fault tolerant sidechain with low-latency finality and high throughp
 
   Default value: `10`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
+* `--max-loaded-chains <MAX_LOADED_CHAINS>` — The maximal number of chains loaded in memory at a given time
+
+  Default value: `40`
 * `--max-concurrent-queries <MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
 * `--max-stream-queries <MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
 

@@ -153,11 +153,6 @@ mod metrics {
     });
 }
 
-/// The number of chain workers that can be in memory at the same time. More workers improve
-/// perfomance whenever the client interacts with multiple chains at the same time, but also
-/// increases memory usage.
-const CHAIN_WORKER_LIMIT: usize = 20;
-
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<ValidatorNodeProvider, Storage>
 where
@@ -184,10 +179,13 @@ where
     storage: Storage,
     /// Chain state for the managed chains.
     chains: DashMap<ChainId, ChainClientState>,
+    /// The maximum active chain workers.
+    max_loaded_chains: NonZeroUsize,
 }
 
 impl<P, S: Storage + Clone> Client<P, S> {
     /// Creates a new `Client` with a new cache and notifiers.
+    #[allow(clippy::too_many_arguments)]
     #[instrument(level = "trace", skip_all)]
     pub fn new(
         validator_node_provider: P,
@@ -197,13 +195,14 @@ impl<P, S: Storage + Clone> Client<P, S> {
         long_lived_services: bool,
         tracked_chains: impl IntoIterator<Item = ChainId>,
         name: impl Into<String>,
+        max_loaded_chains: NonZeroUsize,
     ) -> Self {
         let tracked_chains = Arc::new(RwLock::new(tracked_chains.into_iter().collect()));
         let state = WorkerState::new_for_client(
             name.into(),
             storage.clone(),
             tracked_chains.clone(),
-            NonZeroUsize::new(CHAIN_WORKER_LIMIT).expect("Chain worker limit should not be zero"),
+            max_loaded_chains,
         )
         .with_long_lived_services(long_lived_services)
         .with_allow_inactive_chains(true)
@@ -220,6 +219,7 @@ impl<P, S: Storage + Clone> Client<P, S> {
             tracked_chains,
             notifier: Arc::new(ChannelNotifier::default()),
             storage,
+            max_loaded_chains,
         }
     }
 
@@ -1098,7 +1098,8 @@ where
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         let n_validators = nodes.len();
-        let chain_worker_count = std::cmp::max(1, CHAIN_WORKER_LIMIT / n_validators);
+        let chain_worker_count =
+            std::cmp::max(1, self.client.max_loaded_chains.get() / n_validators);
         communicate_with_quorum(
             &nodes,
             committee,
@@ -1135,7 +1136,8 @@ where
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         let n_validators = nodes.len();
-        let chain_worker_count = std::cmp::max(1, CHAIN_WORKER_LIMIT / n_validators);
+        let chain_worker_count =
+            std::cmp::max(1, self.client.max_loaded_chains.get() / n_validators);
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
@@ -1428,7 +1430,7 @@ where
         // We would like to use all chain workers, but we need to keep some of them free, because
         // handling the certificates can trigger messages to other chains, and putting these in
         // the inbox requires the recipient chain's worker, too.
-        let chain_worker_limit = (CHAIN_WORKER_LIMIT / 2).max(1);
+        let chain_worker_limit = (self.client.max_loaded_chains.get() / 2).max(1);
 
         // Process the certificates sorted by chain and in ascending order of block height.
         let stream = stream::iter(certificates.into_values().map(|certificates| {
@@ -1492,7 +1494,8 @@ where
         let client = self.clone();
         // Proceed to downloading received certificates. Split the available chain workers so that
         // the tasks don't use more than the limit in total.
-        let chain_worker_limit = (CHAIN_WORKER_LIMIT / local_committee.validators().len()).max(1);
+        let chain_worker_limit =
+            (self.client.max_loaded_chains.get() / local_committee.validators().len()).max(1);
         let result = communicate_with_quorum(
             &nodes,
             &local_committee,
@@ -3295,7 +3298,7 @@ where
             .synchronize_received_certificates_from_validator(
                 chain_id,
                 &remote_node,
-                CHAIN_WORKER_LIMIT,
+                self.client.max_loaded_chains.into(),
             )
             .await?;
         // Process received certificates. If the client state has changed during the
