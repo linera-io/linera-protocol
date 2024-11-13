@@ -313,6 +313,8 @@ where
         // Update the blob state with last used certificate hash.
         let blob_state = BlobState {
             last_used_by: certificate_hash,
+            chain_id: block.chain_id,
+            block_height,
             epoch: block.epoch,
         };
         self.state

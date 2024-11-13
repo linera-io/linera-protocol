@@ -292,14 +292,10 @@ where
                         .await;
                     let local_storage = self.local_node.storage_client();
                     let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
-                    let certificates = local_storage
-                        .read_certificates(blob_states.into_iter().map(|x| x.last_used_by))
-                        .await?;
                     let mut chain_heights = BTreeMap::new();
-                    for certificate in certificates {
-                        let block_chain_id = certificate.executed_block().block.chain_id;
-                        let block_height =
-                            certificate.executed_block().block.height.try_add_one()?;
+                    for blob_state in blob_states {
+                        let block_chain_id = blob_state.chain_id;
+                        let block_height = blob_state.block_height.try_add_one()?;
                         chain_heights
                             .entry(block_chain_id)
                             .and_modify(|h| *h = block_height.max(*h))
