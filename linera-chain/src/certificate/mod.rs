@@ -13,7 +13,7 @@ mod value;
 use std::borrow::Cow;
 
 pub use generic::GenericCertificate;
-pub use hashed::Hashed;
+pub use hashed::{Has, Hashed};
 use linera_base::{
     crypto::Signature,
     data_types::Round,

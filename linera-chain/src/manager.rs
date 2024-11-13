@@ -125,13 +125,13 @@ pub struct ChainManager {
     pub timeout: Option<TimeoutCertificate>,
     /// Latest vote we have cast, to validate or confirm.
     #[debug(skip_if = Option::is_none)]
-    pub pending: Option<Vote>,
+    pub pending: Option<Vote<CertificateValue>>,
     /// Latest timeout vote we cast.
     #[debug(skip_if = Option::is_none)]
-    pub timeout_vote: Option<Vote>,
+    pub timeout_vote: Option<Vote<CertificateValue>>,
     /// Fallback vote we cast.
     #[debug(skip_if = Option::is_none)]
-    pub fallback_vote: Option<Vote>,
+    pub fallback_vote: Option<Vote<CertificateValue>>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
@@ -221,7 +221,7 @@ impl ChainManager {
     }
 
     /// Returns the most recent vote we cast.
-    pub fn pending(&self) -> Option<&Vote> {
+    pub fn pending(&self) -> Option<&Vote<CertificateValue>> {
         self.pending.as_ref()
     }
 

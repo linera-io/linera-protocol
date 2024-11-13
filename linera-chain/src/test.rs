@@ -16,7 +16,7 @@ use linera_execution::{
 
 use crate::{
     data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
-    types::{Certificate, HashedCertificateValue},
+    types::{GenericCertificate, HashedCertificateValue},
 };
 
 /// Creates a new child of the given block, with the same timestamp.
@@ -124,13 +124,13 @@ impl BlockTestExt for Block {
     }
 }
 
-pub trait VoteTestExt: Sized {
+pub trait VoteTestExt<T>: Sized {
     /// Returns a certificate for a committee consisting only of this validator.
-    fn into_certificate(self) -> Certificate;
+    fn into_certificate(self) -> GenericCertificate<T>;
 }
 
-impl VoteTestExt for Vote {
-    fn into_certificate(self) -> Certificate {
+impl<T: Clone> VoteTestExt<T> for Vote<T> {
+    fn into_certificate(self) -> GenericCertificate<T> {
         let state = ValidatorState {
             network_address: "".to_string(),
             votes: 100,

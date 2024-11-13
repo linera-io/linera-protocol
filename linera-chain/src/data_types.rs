@@ -20,11 +20,12 @@ use linera_execution::{
     system::OpenChainConfig,
     Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 
 use crate::{
+    block::Timeout,
     types::{
-        CertificateValue, GenericCertificate, Hashed, HashedCertificateValue, LiteCertificate,
+        CertificateValue, GenericCertificate, Has, Hashed, LiteCertificate,
         ValidatedBlockCertificate,
     },
     ChainError,
@@ -421,17 +422,56 @@ pub struct LiteValue {
 struct ValueHashAndRound(CryptoHash, Round);
 
 /// A vote on a statement from a validator.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Vote {
-    pub value: HashedCertificateValue,
+#[derive(Clone, Debug, Serialize)]
+pub struct Vote<T> {
+    pub value: Hashed<T>,
     pub round: Round,
     pub validator: ValidatorName,
     pub signature: Signature,
 }
 
-impl Vote {
+impl<'de, T: DeserializeOwned + BcsHashable> Deserialize<'de> for Vote<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Vote<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        struct VoteHelper<T> {
+            value: T,
+            round: Round,
+            validator: ValidatorName,
+            signature: Signature,
+        }
+
+        let VoteHelper {
+            value,
+            round,
+            validator,
+            signature,
+        } = VoteHelper::deserialize(deserializer)?;
+
+        Ok(Vote {
+            value: Hashed::new(value),
+            round,
+            validator,
+            signature,
+        })
+    }
+}
+
+impl Has<ChainId> for CertificateValue {
+    fn get(&self) -> &ChainId {
+        match self {
+            CertificateValue::ConfirmedBlock(confirmed) => &confirmed.inner().block.chain_id,
+            CertificateValue::ValidatedBlock(validated) => &validated.inner().block.chain_id,
+            CertificateValue::Timeout(Timeout { chain_id, .. }) => chain_id,
+        }
+    }
+}
+
+impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: HashedCertificateValue, round: Round, key_pair: &KeyPair) -> Self {
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self {
         let hash_and_round = ValueHashAndRound(value.hash(), round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
@@ -443,7 +483,10 @@ impl Vote {
     }
 
     /// Returns the vote, with a `LiteValue` instead of the full value.
-    pub fn lite(&self) -> LiteVote {
+    pub fn lite(&self) -> LiteVote
+    where
+        T: Has<ChainId>,
+    {
         LiteVote {
             value: self.value.lite(),
             round: self.round,
@@ -453,7 +496,7 @@ impl Vote {
     }
 
     /// Returns the value this vote is for.
-    pub fn value(&self) -> &CertificateValue {
+    pub fn value(&self) -> &T {
         self.value.inner()
     }
 }
@@ -470,8 +513,9 @@ pub struct LiteVote {
 
 impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
-    pub fn with_value(self, value: HashedCertificateValue) -> Option<Vote> {
-        if self.value != value.lite() {
+    #[cfg(with_testing)]
+    pub fn with_value<T>(self, value: Hashed<T>) -> Option<Vote<T>> {
+        if self.value.value_hash != value.hash() {
             return None;
         }
         Some(Vote {
@@ -876,8 +920,6 @@ pub(crate) fn check_signatures(
 impl BcsSignable for ProposalContent {}
 
 impl BcsSignable for ValueHashAndRound {}
-
-impl BcsHashable for CertificateValue {}
 
 doc_scalar!(
     MessageAction,

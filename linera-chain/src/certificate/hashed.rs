@@ -3,7 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use custom_debug_derive::Debug;
-use linera_base::crypto::{BcsHashable, CryptoHash};
+use linera_base::{
+    crypto::{BcsHashable, CryptoHash},
+    identifiers::ChainId,
+};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use crate::data_types::LiteValue;
 
 /// Wrapper type around hashed instance of `T` type.
 #[derive(Debug)]
@@ -46,6 +52,34 @@ impl<T> Hashed<T> {
     pub fn into_inner(self) -> T {
         self.value
     }
+
+    pub fn lite(&self) -> LiteValue
+    where
+        T: Has<ChainId>,
+    {
+        LiteValue {
+            value_hash: self.hash,
+            chain_id: *Has::<ChainId>::get(&self.value),
+        }
+    }
+}
+
+impl<T: Serialize> Serialize for Hashed<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.value.serialize(serializer)
+    }
+}
+
+impl<'de, T: DeserializeOwned + BcsHashable> Deserialize<'de> for Hashed<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Hashed<T>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Hashed::new(T::deserialize(deserializer)?))
+    }
 }
 
 impl<T: Clone> Clone for Hashed<T> {
@@ -66,3 +100,8 @@ impl<T> PartialEq for Hashed<T> {
 
 #[cfg(with_testing)]
 impl<T> Eq for Hashed<T> {}
+
+//TODO: Move
+pub trait Has<T> {
+    fn get(&self) -> &T;
+}
