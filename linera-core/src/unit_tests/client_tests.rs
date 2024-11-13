@@ -14,8 +14,8 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{CertificateValue, IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
-    types::Timeout,
+    data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
+    types::{CertificateValue, Timeout},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{

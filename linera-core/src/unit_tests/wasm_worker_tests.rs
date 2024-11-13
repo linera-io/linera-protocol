@@ -21,8 +21,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, HashedCertificateValue, OutgoingMessage},
+    data_types::{BlockExecutionOutcome, OutgoingMessage},
     test::{make_child_block, make_first_block, BlockTestExt},
+    types::HashedCertificateValue,
 };
 use linera_execution::{
     committee::Epoch,

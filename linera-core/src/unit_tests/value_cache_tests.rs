@@ -9,10 +9,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{
-        Block, BlockExecutionOutcome, CertificateValue, ExecutedBlock, HashedCertificateValue,
-    },
-    types::{Timeout, ValidatedBlock},
+    data_types::{Block, BlockExecutionOutcome, ExecutedBlock},
+    types::{CertificateValue, HashedCertificateValue, Timeout, ValidatedBlock},
 };
 use linera_execution::committee::Epoch;
 

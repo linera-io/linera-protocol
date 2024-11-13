@@ -11,9 +11,10 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
-        HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
+        IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
+    types::HashedCertificateValue,
 };
 use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};

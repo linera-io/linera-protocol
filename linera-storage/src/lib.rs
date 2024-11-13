@@ -18,8 +18,8 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{ChannelFullName, HashedCertificateValue},
-    types::ConfirmedBlockCertificate,
+    data_types::ChannelFullName,
+    types::{ConfirmedBlockCertificate, HashedCertificateValue},
     ChainError, ChainStateView,
 };
 use linera_execution::{

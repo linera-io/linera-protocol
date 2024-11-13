@@ -15,10 +15,11 @@ use linera_base::{
     identifiers::{ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{
-        Block, BlockProposal, ExecutedBlock, HashedCertificateValue, MessageBundle, Origin, Target,
+    data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
+    types::{
+        ConfirmedBlockCertificate, HashedCertificateValue, TimeoutCertificate,
+        ValidatedBlockCertificate,
     },
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{

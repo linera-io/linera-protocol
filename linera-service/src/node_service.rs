@@ -27,7 +27,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
-use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
+use linera_chain::{types::HashedCertificateValue, ChainStateView};
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError},

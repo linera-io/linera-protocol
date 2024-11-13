@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
-use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
+use linera_chain::{types::Certificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},

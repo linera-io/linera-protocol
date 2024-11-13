@@ -18,11 +18,11 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{
-        Block, BlockProposal, ExecutedBlock, HashedCertificateValue, Medium, MessageBundle, Origin,
-        Target,
+    data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
+    types::{
+        ConfirmedBlockCertificate, HashedCertificateValue, TimeoutCertificate,
+        ValidatedBlockCertificate,
     },
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{

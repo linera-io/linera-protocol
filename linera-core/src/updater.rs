@@ -16,7 +16,10 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
-use linera_chain::data_types::{BlockProposal, Certificate, LiteVote};
+use linera_chain::{
+    data_types::{BlockProposal, LiteVote},
+    types::Certificate,
+};
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;

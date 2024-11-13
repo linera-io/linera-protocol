@@ -7,9 +7,9 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
-    LiteValue, ProposalContent,
+use linera_chain::{
+    data_types::{BlockProposal, LiteValue, ProposalContent},
+    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -709,8 +709,9 @@ pub mod tests {
         data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{Block, BlockExecutionOutcome, HashedCertificateValue},
+        data_types::{Block, BlockExecutionOutcome},
         test::make_first_block,
+        types::HashedCertificateValue,
     };
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};

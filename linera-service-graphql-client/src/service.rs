@@ -131,9 +131,12 @@ pub struct Transfer;
 #[cfg(not(target_arch = "wasm32"))]
 mod from {
     use linera_base::identifiers::StreamId;
-    use linera_chain::data_types::{
-        BlockExecutionOutcome, EventRecord, ExecutedBlock, HashedCertificateValue, IncomingBundle,
-        MessageBundle, OutgoingMessage, PostedMessage,
+    use linera_chain::{
+        data_types::{
+            BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, MessageBundle,
+            OutgoingMessage, PostedMessage,
+        },
+        types::HashedCertificateValue,
     };
 
     use super::*;

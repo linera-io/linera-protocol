@@ -11,11 +11,11 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
 };
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, Certificate, MessageBundle, Origin, Target,
-    },
+    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, Target},
     manager,
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Certificate, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate,
+    },
     ChainStateView,
 };
 use linera_execution::{

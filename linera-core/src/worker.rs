@@ -22,10 +22,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
+        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{
+        Certificate, CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue,
+        LiteCertificate, TimeoutCertificate, ValidatedBlockCertificate,
+    },
     ChainStateView,
 };
 use linera_execution::{committee::Epoch, Query, Response};

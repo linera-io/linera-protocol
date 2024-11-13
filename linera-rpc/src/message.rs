@@ -8,8 +8,8 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, Certificate, CertificateValue, LiteVote},
-    types::ConfirmedBlockCertificate,
+    data_types::{BlockProposal, LiteVote},
+    types::{Certificate, CertificateValue, ConfirmedBlockCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},

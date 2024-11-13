@@ -9,7 +9,7 @@ use async_graphql::{EmptyMutation, EmptySubscription, Schema, SimpleObject};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{extract::Extension, routing::get, Router};
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
-use linera_chain::data_types::HashedCertificateValue;
+use linera_chain::types::HashedCertificateValue;
 use linera_views::{
     context::{Context, ViewContext},
     map_view::MapView,
