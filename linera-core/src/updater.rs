@@ -278,8 +278,8 @@ where
                     // synchronize them now and retry.
                     self.send_chain_information_for_senders(chain_id).await?;
                 }
-                Err(NodeError::BlobNotFoundOnRead(_)) if !blob_ids.is_empty() => {
-                    // For `BlobNotFoundOnRead`, we assume that the local node should already be
+                Err(NodeError::BlobsNotFound(_)) if !blob_ids.is_empty() => {
+                    // For `BlobsNotFound`, we assume that the local node should already be
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
                     let missing_blob_ids = stream::iter(mem::take(&mut blob_ids))
