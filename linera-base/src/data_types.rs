@@ -736,9 +736,17 @@ impl ApplicationPermissions {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum OracleResponse {
     /// The response from a service query.
-    Service(Vec<u8>),
+    Service(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
     /// The response from an HTTP POST request.
-    Post(Vec<u8>),
+    Post(
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        Vec<u8>,
+    ),
     /// A successful read or write of a blob.
     Blob(BlobId),
     /// An assertion oracle that passed.
@@ -815,10 +823,11 @@ impl From<&UserApplicationDescription> for UserApplicationId {
 }
 
 /// A WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Bytecode {
     /// Bytes of the bytecode.
     #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub bytes: Vec<u8>,
 }
 
@@ -852,12 +861,6 @@ impl AsRef<[u8]> for Bytecode {
     }
 }
 
-impl fmt::Debug for Bytecode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("Bytecode").finish_non_exhaustive()
-    }
-}
-
 /// A type for errors happening during decompression.
 #[derive(Error, Debug)]
 pub enum DecompressionError {
@@ -867,11 +870,12 @@ pub enum DecompressionError {
 }
 
 /// A compressed WebAssembly module's bytecode.
-#[derive(Clone, Deserialize, Hash, Serialize, WitType, WitStore)]
+#[derive(Clone, Debug, Deserialize, Hash, Serialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct CompressedBytecode {
     /// Compressed bytes of the bytecode.
     #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub compressed_bytes: Vec<u8>,
 }
 
@@ -940,12 +944,6 @@ impl CompressedBytecode {
         }
 
         Ok(Bytecode { bytes })
-    }
-}
-
-impl fmt::Debug for CompressedBytecode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CompressedBytecode").finish_non_exhaustive()
     }
 }
 

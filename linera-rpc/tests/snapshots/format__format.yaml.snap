@@ -394,10 +394,8 @@ EventRecord:
   STRUCT:
     - stream_id:
         TYPENAME: StreamId
-    - key:
-        SEQ: U8
-    - value:
-        SEQ: U8
+    - key: BYTES
+    - value: BYTES
 ExecutedBlock:
   STRUCT:
     - block:
@@ -639,12 +637,10 @@ OracleResponse:
   ENUM:
     0:
       Service:
-        NEWTYPE:
-          SEQ: U8
+        NEWTYPE: BYTES
     1:
       Post:
-        NEWTYPE:
-          SEQ: U8
+        NEWTYPE: BYTES
     2:
       Blob:
         NEWTYPE:

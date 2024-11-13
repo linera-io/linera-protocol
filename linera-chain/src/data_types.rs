@@ -5,10 +5,11 @@
 use std::{borrow::Cow, collections::HashSet, fmt};
 
 use async_graphql::SimpleObject;
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
-    doc_scalar, ensure,
+    doc_scalar, ensure, hex_debug,
     identifiers::{
         Account, BlobId, BlobType, ChainId, ChannelName, Destination, GenericApplicationId,
         MessageId, Owner, StreamId,
@@ -389,8 +390,12 @@ pub struct EventRecord {
     /// The ID of the stream this event belongs to.
     pub stream_id: StreamId,
     /// The event key.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub key: Vec<u8>,
     /// The payload data.
+    #[serde(with = "serde_bytes")]
+    #[debug(with = "hex_debug")]
     pub value: Vec<u8>,
 }
 
