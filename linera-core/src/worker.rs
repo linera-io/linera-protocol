@@ -37,7 +37,9 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_interval, register_histogram_vec, register_int_counter_vec},
+    linera_base::prometheus_util::{
+        bucket_interval, register_histogram_vec, register_int_counter_vec,
+    },
     prometheus::{HistogramVec, IntCounterVec},
     std::sync::LazyLock,
 };
@@ -75,9 +77,8 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
 });
 
 #[cfg(with_metrics)]
-static TRANSACTION_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("transaction_count", "Transaction count", &[])
-});
+static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
+    LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {

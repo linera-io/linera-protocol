@@ -74,8 +74,6 @@ pub fn bucket_interval(start_value: f64, end_value: f64) -> Option<Vec<f64>> {
     }
 }
 
-
-
 /// A guard for an active latency measurement.
 ///
 /// Finishes the measurement when dropped, and then updates the `Metric`.

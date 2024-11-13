@@ -55,17 +55,16 @@ mod chain_tests;
 
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{bucket_latencies, bucket_interval, register_histogram_vec, register_int_counter_vec, MeasureLatency},
+    linera_base::prometheus_util::{
+        bucket_interval, bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        MeasureLatency,
+    },
     prometheus::{HistogramVec, IntCounterVec},
 };
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec(
-        "num_blocks_executed",
-        "Number of blocks executed",
-        &[],
-    )
+    register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
 });
 
 #[cfg(with_metrics)]

@@ -27,15 +27,13 @@ use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
 #[cfg(with_metrics)]
 /// The total number of cache faults
-static NUM_CACHE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("num_cache_fault", "Number of cache faults", &[])
-});
+static NUM_CACHE_FAULT: LazyLock<IntCounterVec> =
+    LazyLock::new(|| register_int_counter_vec("num_cache_fault", "Number of cache faults", &[]));
 
 #[cfg(with_metrics)]
 /// The total number of cache successes
-static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    register_int_counter_vec("num_cache_success", "Number of cache success", &[])
-});
+static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> =
+    LazyLock::new(|| register_int_counter_vec("num_cache_success", "Number of cache success", &[]));
 
 /// The `LruPrefixCache` stores the data for simple `read_values` queries
 /// It is inspired by the crate `lru-cache`.
