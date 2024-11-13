@@ -167,7 +167,7 @@ impl From<ConfirmedBlockCertificate> for Certificate {
             round,
             signatures,
         } = cert;
-        Certificate::unchecked_new(
+        Certificate::new(
             HashedCertificateValue::new_confirmed(value.into_inner().into_inner()),
             round,
             signatures,
@@ -182,7 +182,7 @@ impl From<ValidatedBlockCertificate> for Certificate {
             round,
             signatures,
         } = cert;
-        Certificate::unchecked_new(
+        Certificate::new(
             HashedCertificateValue::new_validated(value.into_inner().into_inner()),
             round,
             signatures,
@@ -198,7 +198,7 @@ impl From<TimeoutCertificate> for Certificate {
             signatures,
         } = cert;
         let timeout = value.into_inner();
-        Certificate::unchecked_new(
+        Certificate::new(
             HashedCertificateValue::new_timeout(timeout.chain_id, timeout.height, timeout.epoch),
             round,
             signatures,
@@ -267,25 +267,17 @@ impl<T: Clone> Clone for Hashed<T> {
 }
 
 impl<T> GenericCertificate<T> {
-    pub fn unchecked_new(
+    pub fn new(
         value: Hashed<T>,
         round: Round,
-        signatures: Vec<(ValidatorName, Signature)>,
-    ) -> Self {
-        Self {
-            value,
-            round,
-            signatures,
-        }
-    }
-
-    pub fn new(value: T, round: Round, mut signatures: Vec<(ValidatorName, Signature)>) -> Self
+        mut signatures: Vec<(ValidatorName, Signature)>,
+    ) -> Self
     where
         T: BcsHashable,
     {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
         Self {
-            value: Hashed::new(value),
+            value,
             round,
             signatures,
         }
@@ -295,6 +287,7 @@ impl<T> GenericCertificate<T> {
         &self.signatures
     }
 
+    #[cfg(with_testing)]
     pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
         &mut self.signatures
     }

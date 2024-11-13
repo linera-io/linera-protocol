@@ -864,7 +864,7 @@ pub mod tests {
     #[test]
     pub fn test_certificate() {
         let key_pair = KeyPair::generate();
-        let certificate = Certificate::unchecked_new(
+        let certificate = Certificate::new(
             HashedCertificateValue::new_validated(
                 BlockExecutionOutcome {
                     state_hash: CryptoHash::new(&Foo("test".into())),
@@ -913,7 +913,7 @@ pub mod tests {
     #[test]
     pub fn test_block_proposal() {
         let key_pair = KeyPair::generate();
-        let cert = Certificate::unchecked_new(
+        let cert = Certificate::new(
             HashedCertificateValue::new_validated(
                 BlockExecutionOutcome {
                     state_hash: CryptoHash::new(&Foo("validated".into())),
