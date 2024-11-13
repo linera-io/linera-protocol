@@ -151,23 +151,16 @@ CertificateValue:
   ENUM:
     0:
       ValidatedBlock:
-        STRUCT:
-          - executed_block:
-              TYPENAME: ExecutedBlock
+        NEWTYPE:
+          TYPENAME: ValidatedBlock
     1:
       ConfirmedBlock:
-        STRUCT:
-          - executed_block:
-              TYPENAME: ExecutedBlock
+        NEWTYPE:
+          TYPENAME: ConfirmedBlock
     2:
       Timeout:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - height:
-              TYPENAME: BlockHeight
-          - epoch:
-              TYPENAME: Epoch
+        NEWTYPE:
+          TYPENAME: Timeout
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -342,6 +335,10 @@ Committee:
 CompressedBytecode:
   STRUCT:
     - compressed_bytes: BYTES
+ConfirmedBlock:
+  STRUCT:
+    - executed_block:
+        TYPENAME: ExecutedBlock
 CrateVersion:
   STRUCT:
     - major: U32

@@ -8,8 +8,11 @@ use linera_base::{
     data_types::{Blob, BlockHeight, Timestamp},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{
-    Block, BlockExecutionOutcome, CertificateValue, ExecutedBlock, HashedCertificateValue,
+use linera_chain::{
+    data_types::{
+        Block, BlockExecutionOutcome, CertificateValue, ExecutedBlock, HashedCertificateValue,
+    },
+    types::{Timeout, ValidatedBlock},
 };
 use linera_execution::committee::Epoch;
 
@@ -518,11 +521,11 @@ fn create_dummy_blobs() -> Vec<Blob> {
 
 /// Creates a new dummy [`HashedCertificateValue`] to use in the tests.
 fn create_dummy_certificate_value(height: impl Into<BlockHeight>) -> HashedCertificateValue {
-    CertificateValue::Timeout {
-        chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
-        height: height.into(),
-        epoch: Epoch(0),
-    }
+    CertificateValue::Timeout(Timeout::new(
+        ChainId(CryptoHash::test_hash("Fake chain ID")),
+        height.into(),
+        Epoch(0),
+    ))
     .into()
 }
 
@@ -533,20 +536,18 @@ fn create_dummy_blob(id: usize) -> Blob {
 
 /// Creates a dummy [`HashedCertificateValue::ValidatedBlock`] to use in the tests.
 fn create_dummy_validated_block_value() -> HashedCertificateValue {
-    CertificateValue::ValidatedBlock {
-        executed_block: ExecutedBlock {
-            block: Block {
-                chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
-                epoch: Epoch::ZERO,
-                incoming_bundles: vec![],
-                operations: vec![],
-                height: BlockHeight::ZERO,
-                timestamp: Timestamp::from(0),
-                authenticated_signer: None,
-                previous_block_hash: None,
-            },
-            outcome: BlockExecutionOutcome::default(),
+    CertificateValue::ValidatedBlock(ValidatedBlock::new(ExecutedBlock {
+        block: Block {
+            chain_id: ChainId(CryptoHash::test_hash("Fake chain ID")),
+            epoch: Epoch::ZERO,
+            incoming_bundles: vec![],
+            operations: vec![],
+            height: BlockHeight::ZERO,
+            timestamp: Timestamp::from(0),
+            authenticated_signer: None,
+            previous_block_hash: None,
         },
-    }
+        outcome: BlockExecutionOutcome::default(),
+    }))
     .into()
 }

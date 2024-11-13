@@ -205,11 +205,9 @@ where
 
         // Find the missing blobs locally and retry.
         let required = match certificate.value() {
-            CertificateValue::ConfirmedBlock { executed_block, .. }
-            | CertificateValue::ValidatedBlock { executed_block, .. } => {
-                executed_block.required_blob_ids()
-            }
-            CertificateValue::Timeout { .. } => HashSet::new(),
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().required_blob_ids(),
+            CertificateValue::ValidatedBlock(validated) => validated.inner().required_blob_ids(),
+            CertificateValue::Timeout(_) => HashSet::new(),
         };
         for blob_id in missing_blob_ids {
             if !required.contains(blob_id) {

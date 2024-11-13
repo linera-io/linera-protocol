@@ -342,15 +342,15 @@ impl ChainManager {
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.pending {
             match value.inner() {
-                CertificateValue::ConfirmedBlock { executed_block } => {
-                    if &executed_block.block == new_block && *round == new_round {
+                CertificateValue::ConfirmedBlock(confirmed) => {
+                    if &confirmed.inner().block == new_block && *round == new_round {
                         return Ok(Outcome::Skip); // We already voted to confirm this block.
                     }
                 }
-                CertificateValue::ValidatedBlock { .. } => {
+                CertificateValue::ValidatedBlock(_) => {
                     ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
                 }
-                CertificateValue::Timeout { .. } => {
+                CertificateValue::Timeout(_) => {
                     // Unreachable: We only put validated or confirmed blocks in pending.
                     return Err(ChainError::InternalError(
                         "pending can only be validated or confirmed block".to_string(),

@@ -15,6 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{CertificateValue, IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
+    types::Timeout,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -2012,11 +2013,7 @@ where
     let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
         *certificate.value(),
-        CertificateValue::Timeout {
-            chain_id,
-            height: BlockHeight::from(1),
-            epoch: Epoch::ZERO
-        }
+        CertificateValue::Timeout(Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO))
     );
     assert_eq!(certificate.round, Round::SingleLeader(0));
 

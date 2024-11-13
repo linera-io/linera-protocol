@@ -765,13 +765,11 @@ where
                 let (info, actions, _) = validation_outcomes;
                 (info, actions)
             }
-            CertificateValue::ConfirmedBlock {
-                executed_block: _executed_block,
-            } => {
+            CertificateValue::ConfirmedBlock(_confirmed) => {
                 #[cfg(with_metrics)]
                 {
-                    confirmed_transactions = (_executed_block.block.incoming_bundles.len()
-                        + _executed_block.block.operations.len())
+                    confirmed_transactions = (_confirmed.inner().block.incoming_bundles.len()
+                        + _confirmed.inner().block.operations.len())
                         as u64;
                 }
                 let confirmed_block_certificate: ConfirmedBlockCertificate =
