@@ -37,7 +37,7 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util,
+    linera_base::prometheus_util::{register_histogram_vec, register_int_counter_vec},
     prometheus::{HistogramVec, IntCounterVec},
     std::sync::LazyLock,
 };
@@ -56,7 +56,7 @@ mod worker_tests;
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
         &["certificate_value", "round_type"],
@@ -68,7 +68,7 @@ static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
         &["round_type"],
@@ -80,12 +80,12 @@ static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static TRANSACTION_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
+    register_int_counter_vec("transaction_count", "Transaction count", &[])
 });
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
+    register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
 });
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.

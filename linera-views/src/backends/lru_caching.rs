@@ -15,7 +15,7 @@ use std::{
 
 use linked_hash_map::LinkedHashMap;
 #[cfg(with_metrics)]
-use {linera_base::prometheus_util, prometheus::IntCounterVec};
+use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 use crate::{
     batch::{Batch, WriteOperation},
@@ -28,13 +28,13 @@ use crate::{memory::MemoryStore, store::TestKeyValueStore};
 #[cfg(with_metrics)]
 /// The total number of cache faults
 static NUM_CACHE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("num_cache_fault", "Number of cache faults", &[])
+    register_int_counter_vec("num_cache_fault", "Number of cache faults", &[])
 });
 
 #[cfg(with_metrics)]
 /// The total number of cache successes
 static NUM_CACHE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("num_cache_success", "Number of cache success", &[])
+    register_int_counter_vec("num_cache_success", "Number of cache success", &[])
 });
 
 /// The `LruPrefixCache` stores the data for simple `read_values` queries

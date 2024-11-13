@@ -30,7 +30,7 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util,
+    linera_base::prometheus_util::{register_histogram_vec, register_int_counter_vec},
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -55,7 +55,7 @@ type NotificationSender = mpsc::Sender<Notification>;
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "server_request_latency",
         "Server request latency",
         &[],
@@ -65,12 +65,12 @@ static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("server_request_count", "Server request count", &[])
+    register_int_counter_vec("server_request_count", "Server request count", &[])
 });
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "server_request_success",
         "Server request success",
         &["method_name"],
@@ -79,7 +79,7 @@ static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "server_request_error",
         "Server request error",
         &["method_name"],
@@ -88,7 +88,7 @@ static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static SERVER_REQUEST_LATENCY_PER_REQUEST_TYPE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "server_request_latency_per_request_type",
         "Server request latency per request type",
         &["method_name"],

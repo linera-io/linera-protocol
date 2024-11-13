@@ -55,13 +55,13 @@ mod chain_tests;
 
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, bucket_latencies, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, register_int_counter_vec, MeasureLatency},
     prometheus::{HistogramVec, IntCounterVec},
 };
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "num_blocks_executed",
         "Number of blocks executed",
         &[],
@@ -70,7 +70,7 @@ static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "block_execution_latency",
         "Block execution latency",
         &[],
@@ -80,7 +80,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "message_execution_latency",
         "Message execution latency",
         &[],
@@ -90,7 +90,7 @@ static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "operation_execution_latency",
         "Operation execution latency",
         &[],
@@ -100,7 +100,7 @@ static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
         &[],
@@ -113,7 +113,7 @@ static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
         &[],
@@ -123,7 +123,7 @@ static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
         &[],
@@ -149,7 +149,7 @@ static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",
         &[],
@@ -175,7 +175,7 @@ static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],

@@ -33,7 +33,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(with_metrics)]
-use {linera_base::prometheus_util, prometheus::IntCounterVec};
+use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -54,7 +54,7 @@ pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
 static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "open_chain_count",
         "The number of times the `OpenChain` operation was executed",
         &[],

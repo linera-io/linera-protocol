@@ -16,7 +16,7 @@ use linera_chain::data_types::{Certificate, HashedCertificateValue, LiteCertific
 use lru::LruCache;
 use tokio::sync::Mutex;
 #[cfg(with_metrics)]
-use {linera_base::prometheus_util, prometheus::IntCounterVec};
+use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 use crate::worker::WorkerError;
 
@@ -26,7 +26,7 @@ pub const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
 /// A counter metric for the number of cache hits in the [`ValueCache`].
 #[cfg(with_metrics)]
 static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "value_cache_hit",
         "Cache hits in `ValueCache`",
         &["key_type", "value_type"],
@@ -36,7 +36,7 @@ static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
 /// A counter metric for the number of cache misses in the [`ValueCache`].
 #[cfg(with_metrics)]
 static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "value_cache_miss",
         "Cache misses in `ValueCache`",
         &["key_type", "value_type"],
