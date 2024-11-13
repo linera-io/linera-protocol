@@ -8,7 +8,7 @@ use std::{
 };
 
 use linera_base::{
-    crypto::{CryptoHash, Signature},
+    crypto::{BcsHashable, CryptoHash, Signature},
     data_types::Round,
     identifiers::{BlobId, ChainId, MessageId},
 };
@@ -223,6 +223,18 @@ impl<T> Hashed<T> {
         Self { value, hash }
     }
 
+    /// Creates an instance of [`Hashed`] with the given `value`.
+    ///
+    /// Note: Contrary to its `unchecked_new` counterpart, this method is safe because it
+    /// calculates the hash from the value.
+    pub fn new(value: T) -> Self
+    where
+        T: BcsHashable,
+    {
+        let hash = CryptoHash::new(&value);
+        Self { value, hash }
+    }
+
     pub fn hash(&self) -> CryptoHash {
         self.hash
     }
@@ -256,14 +268,16 @@ impl<T: Clone> Clone for Hashed<T> {
 
 impl<T> GenericCertificate<T> {
     pub fn new(
-        value: T,
-        old_hash: CryptoHash,
+        value: Hashed<T>,
         round: Round,
         mut signatures: Vec<(ValidatorName, Signature)>,
-    ) -> Self {
+    ) -> Self
+    where
+        T: BcsHashable,
+    {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
         Self {
-            value: Hashed::unchecked_new(value, old_hash),
+            value,
             round,
             signatures,
         }
@@ -271,6 +285,11 @@ impl<T> GenericCertificate<T> {
 
     pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
         &self.signatures
+    }
+
+    #[cfg(with_testing)]
+    pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorName, Signature)> {
+        &mut self.signatures
     }
 
     /// Adds a signature to the certificate's list of signatures
@@ -293,9 +312,7 @@ impl<T> GenericCertificate<T> {
             .binary_search_by(|(name, _)| name.cmp(validator_name))
             .is_ok()
     }
-}
 
-impl<T> GenericCertificate<T> {
     /// Returns the certified value's hash.
     pub fn hash(&self) -> CryptoHash {
         self.value.hash()
@@ -305,6 +322,10 @@ impl<T> GenericCertificate<T> {
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         crate::data_types::check_signatures(self.hash(), self.round, &self.signatures, committee)?;
         Ok(())
+    }
+
+    pub fn value(&self) -> &Hashed<T> {
+        &self.value
     }
 }
 

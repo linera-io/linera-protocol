@@ -23,7 +23,7 @@ use serde::{de::Deserializer, Deserialize, Serialize};
 
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    types::{Hashed, ValidatedBlockCertificate},
+    types::{GenericCertificate, Hashed, ValidatedBlockCertificate},
     ChainError,
 };
 
@@ -582,11 +582,11 @@ impl<'a> LiteCertificate<'a> {
         {
             return None;
         }
-        Some(Certificate {
+        Some(Certificate::new(
             value,
-            round: self.round,
-            signatures: self.signatures.into_owned(),
-        })
+            self.round,
+            self.signatures.into_owned(),
+        ))
     }
 
     /// Returns a `LiteCertificate` that owns the list of signatures.
@@ -600,15 +600,29 @@ impl<'a> LiteCertificate<'a> {
 }
 
 /// A certified statement from the committee.
-#[derive(Clone, Debug, Serialize)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct Certificate {
-    /// The certified value.
-    pub value: HashedCertificateValue,
-    /// The round in which the value was certified.
-    pub round: Round,
-    /// Signatures on the value.
-    signatures: Vec<(ValidatorName, Signature)>,
+pub type Certificate = GenericCertificate<CertificateValue>;
+
+impl Serialize for Certificate {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(Debug, Serialize)]
+        #[serde(rename = "Certificate")]
+        struct CertificateHelper<'a> {
+            value: &'a CertificateValue,
+            round: Round,
+            signatures: &'a Vec<(ValidatorName, Signature)>,
+        }
+
+        let helper = CertificateHelper {
+            value: self.inner(),
+            round: self.round,
+            signatures: self.signatures(),
+        };
+
+        helper.serialize(serializer)
+    }
 }
 
 impl fmt::Display for Origin {
@@ -1079,11 +1093,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_validators: HashSet::new(),
-            partial: Certificate {
-                value,
-                round,
-                signatures: Vec::new(),
-            },
+            partial: Certificate::new(value, round, Vec::new()),
         }
     }
 
@@ -1142,68 +1152,18 @@ impl<'de> Deserialize<'de> for Certificate {
         if !is_strictly_ordered(&helper.signatures) {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
-            Ok(Self {
-                value: helper.value,
-                round: helper.round,
-                signatures: helper.signatures,
-            })
+            Ok(Self::new(helper.value, helper.round, helper.signatures))
         }
     }
 }
 
 impl Certificate {
-    pub fn new(
-        value: HashedCertificateValue,
-        round: Round,
-        mut signatures: Vec<(ValidatorName, Signature)>,
-    ) -> Self {
-        signatures.sort_by_key(|&(validator_name, _)| validator_name);
-
-        Self {
-            value,
-            round,
-            signatures,
-        }
-    }
-
-    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
-        &self.signatures
-    }
-
-    // Adds a signature to the certificate's list of signatures
-    // It's the responsibility of the caller to not insert duplicates
-    pub fn add_signature(
-        &mut self,
-        signature: (ValidatorName, Signature),
-    ) -> &Vec<(ValidatorName, Signature)> {
-        let index = self
-            .signatures
-            .binary_search_by(|(name, _)| name.cmp(&signature.0))
-            .unwrap_or_else(std::convert::identity);
-        self.signatures.insert(index, signature);
-        &self.signatures
-    }
-
-    /// Verifies the certificate.
-    pub fn check<'a>(
-        &'a self,
-        committee: &Committee,
-    ) -> Result<&'a HashedCertificateValue, ChainError> {
-        check_signatures(
-            self.lite_value().value_hash,
-            self.round,
-            &self.signatures,
-            committee,
-        )?;
-        Ok(&self.value)
-    }
-
     /// Returns the certificate without the full value.
     pub fn lite_certificate(&self) -> LiteCertificate<'_> {
         LiteCertificate {
             value: self.lite_value(),
             round: self.round,
-            signatures: Cow::Borrowed(&self.signatures),
+            signatures: Cow::Borrowed(self.signatures()),
         }
     }
 
@@ -1211,25 +1171,8 @@ impl Certificate {
     pub fn lite_value(&self) -> LiteValue {
         LiteValue {
             value_hash: self.hash(),
-            chain_id: self.value().chain_id(),
+            chain_id: self.inner().chain_id(),
         }
-    }
-
-    /// Returns the certified value.
-    pub fn value(&self) -> &CertificateValue {
-        self.value.inner()
-    }
-
-    /// Returns the certified value's hash.
-    pub fn hash(&self) -> CryptoHash {
-        self.value.hash()
-    }
-
-    /// Returns whether the validator is among the signatories of this certificate.
-    pub fn is_signed_by(&self, validator_name: &ValidatorName) -> bool {
-        self.signatures
-            .binary_search_by(|(name, _)| name.cmp(validator_name))
-            .is_ok()
     }
 
     /// Returns the bundles of messages sent via the given medium to the specified
@@ -1242,7 +1185,7 @@ impl Certificate {
         recipient: ChainId,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
         let certificate_hash = self.hash();
-        self.value()
+        self.inner()
             .executed_block()
             .into_iter()
             .flat_map(move |executed_block| {
@@ -1251,14 +1194,14 @@ impl Certificate {
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.value()
+        self.inner()
             .executed_block()
             .is_some_and(|executed_block| executed_block.requires_blob(blob_id))
     }
 
     #[cfg(with_testing)]
     pub fn outgoing_message_count(&self) -> usize {
-        let Some(executed_block) = self.value().executed_block() else {
+        let Some(executed_block) = self.inner().executed_block() else {
             return 0;
         };
         executed_block.messages().iter().map(Vec::len).sum()

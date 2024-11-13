@@ -1079,7 +1079,7 @@ where
             .await?;
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
-        if certificate.value().is_confirmed() {
+        if certificate.inner().is_confirmed() {
             Ok(certificate.try_into().unwrap()) // shouldn't panic, we just checked.
         } else {
             self.finalize_block(committee, certificate.into()).await
@@ -1321,9 +1321,9 @@ where
         // Check the signatures and keep only the ones that are valid.
         let mut certificates = Vec::new();
         for certificate in remote_certificates {
-            let sender_chain_id = certificate.value().chain_id();
-            let height = certificate.value().height();
-            let epoch = certificate.value().epoch();
+            let sender_chain_id = certificate.inner().chain_id();
+            let height = certificate.inner().height();
+            let epoch = certificate.inner().epoch();
             let confirmed_block_certificate = certificate
                 .try_into()
                 .map_err(|_| NodeError::InvalidChainInfoResponse)?;

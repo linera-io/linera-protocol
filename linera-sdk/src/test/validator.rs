@@ -201,7 +201,7 @@ impl TestValidator {
             })
             .await;
         let executed_block = certificate
-            .value()
+            .inner()
             .executed_block()
             .expect("Failed to obtain executed block from certificate");
 

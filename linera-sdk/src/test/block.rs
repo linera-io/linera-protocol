@@ -52,7 +52,7 @@ impl BlockBuilder {
         let height = previous_block
             .map(|certificate| {
                 certificate
-                    .value()
+                    .inner()
                     .height()
                     .try_add_one()
                     .expect("Block height limit reached")
@@ -191,7 +191,7 @@ impl BlockBuilder {
         action: MessageAction,
     ) -> &mut Self {
         let origin = Origin {
-            sender: certificate.value().chain_id(),
+            sender: certificate.inner().chain_id(),
             medium: medium.clone(),
         };
         let bundles = certificate

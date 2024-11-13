@@ -66,7 +66,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        let chain_id = certificate.value().chain_id();
+        let chain_id = certificate.inner().chain_id();
         let response = self
             .node
             .handle_certificate(certificate, blobs, delivery)

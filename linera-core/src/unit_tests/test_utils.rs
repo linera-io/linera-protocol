@@ -321,7 +321,7 @@ where
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if certificate.value().is_validated() => None,
+            FaultType::DontProcessValidated if certificate.inner().is_validated() => None,
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -363,7 +363,7 @@ where
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let is_validated = certificate.value().is_validated();
+        let is_validated = certificate.inner().is_validated();
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
@@ -874,9 +874,9 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.value().is_confirmed()
-                                && cert.value().chain_id() == chain_id
-                                && cert.value().height() == block_height
+                            if cert.inner().is_confirmed()
+                                && cert.inner().chain_id() == chain_id
+                                && cert.inner().height() == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;

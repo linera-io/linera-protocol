@@ -704,7 +704,7 @@ where
         let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
         let old_certificate: Certificate = certificate.clone().into();
         batch.put_key_value(cert_key.to_vec(), &old_certificate.lite_certificate())?;
-        batch.put_key_value(value_key.to_vec(), &old_certificate.value)?;
+        batch.put_key_value(value_key.to_vec(), old_certificate.value())?;
         Ok(())
     }
 

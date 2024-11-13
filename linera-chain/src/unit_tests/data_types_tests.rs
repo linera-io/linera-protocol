@@ -64,7 +64,7 @@ fn test_certificates() {
         .is_none());
     let mut c = builder.append(v2.validator, v2.signature).unwrap().unwrap();
     assert!(c.check(&committee).is_ok());
-    c.signatures.pop();
+    c.signatures_mut().pop();
     assert!(c.check(&committee).is_err());
 
     let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);

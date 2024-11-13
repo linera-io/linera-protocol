@@ -731,8 +731,8 @@ where
     /// Processes a certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.value().chain_id()),
-        height = %certificate.value().height(),
+        chain_id = format!("{:.8}", certificate.inner().chain_id()),
+        height = %certificate.inner().height(),
     ))]
     pub async fn handle_certificate(
         &self,
@@ -745,12 +745,12 @@ where
         #[cfg(with_metrics)]
         let (round, log_str, mut confirmed_transactions, mut duplicated) = (
             certificate.round,
-            certificate.value().to_log_str(),
+            certificate.inner().to_log_str(),
             0u64,
             false,
         );
 
-        let (info, actions) = match certificate.value() {
+        let (info, actions) = match certificate.inner() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
                 // Note: This conversion panics if `certificate` is not a validated block certificate.

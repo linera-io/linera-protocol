@@ -267,7 +267,7 @@ where
     };
     let block_template = match &previous_confirmed_block {
         None => make_first_block(chain_id),
-        Some(cert) => make_child_block(&cert.value),
+        Some(cert) => make_child_block(cert.value()),
     };
 
     let mut messages = incoming_bundles
@@ -395,7 +395,7 @@ fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
 
 /// Creates a `CrossChainRequest` with the messages sent by the certificate to the recipient.
 fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> CrossChainRequest {
-    let sender = certificate.value().chain_id();
+    let sender = certificate.inner().chain_id();
     let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
     CrossChainRequest::UpdateRecipient {
         sender,
@@ -556,7 +556,7 @@ where
         .await?;
 
     {
-        let block_proposal = make_child_block(&certificate.value)
+        let block_proposal = make_child_block(certificate.value())
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_fast_proposal(&key_pair);
         // Timestamp older than previous one
@@ -645,7 +645,7 @@ where
         None,
     )
     .await;
-    let block_proposal1 = make_child_block(&certificate0.value)
+    let block_proposal1 = make_child_block(certificate0.value())
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2))
         .into_fast_proposal(&sender_key_pair);
 
@@ -764,7 +764,7 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(
-                make_child_block(&certificate0.value)
+                make_child_block(certificate0.value())
                     .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3))
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
@@ -842,7 +842,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -855,7 +855,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
@@ -867,7 +867,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate1.value.hash(),
+                    certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(1),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -893,7 +893,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
@@ -917,7 +917,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate1.value.hash(),
+                    certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(1),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -929,7 +929,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -942,7 +942,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
@@ -966,7 +966,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::ZERO,
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -1007,12 +1007,12 @@ where
             .await?;
 
         // Then receive the next two messages.
-        let block_proposal = make_child_block(&certificate.value)
+        let block_proposal = make_child_block(certificate.value())
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate0.value.hash(),
+                    certificate_hash: certificate0.hash(),
                     height: BlockHeight::from(0),
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
@@ -1024,7 +1024,7 @@ where
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
                 bundle: MessageBundle {
-                    certificate_hash: certificate1.value.hash(),
+                    certificate_hash: certificate1.hash(),
                     height: BlockHeight::from(1),
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
@@ -2365,7 +2365,7 @@ where
                 oracle_responses: vec![Vec::new(); 2],
             }
             .with(
-                make_child_block(&certificate0.value)
+                make_child_block(certificate0.value())
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
                         committee: committee.clone(),
@@ -2478,7 +2478,7 @@ where
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         bundle: MessageBundle {
-                            certificate_hash: certificate0.value.hash(),
+                            certificate_hash: certificate0.hash(),
                             height: BlockHeight::from(0),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
@@ -2499,7 +2499,7 @@ where
                     .with_incoming_bundle(IncomingBundle {
                         origin: admin_channel_origin.clone(),
                         bundle: MessageBundle {
-                            certificate_hash: certificate1.value.hash(),
+                            certificate_hash: certificate1.hash(),
                             height: BlockHeight::from(1),
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,
@@ -2514,7 +2514,7 @@ where
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(admin_id),
                         bundle: MessageBundle {
-                            certificate_hash: certificate1.value.hash(),
+                            certificate_hash: certificate1.hash(),
                             height: BlockHeight::from(1),
                             timestamp: Timestamp::from(0),
                             transaction_index: 1,
@@ -2853,12 +2853,12 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(
-                make_child_block(&certificate1.value)
+                make_child_block(certificate1.value())
                     .with_epoch(1)
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(user_id),
                         bundle: MessageBundle {
-                            certificate_hash: certificate0.value.hash(),
+                            certificate_hash: certificate0.hash(),
                             height: BlockHeight::ZERO,
                             timestamp: Timestamp::from(0),
                             transaction_index: 0,

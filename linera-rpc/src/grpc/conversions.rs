@@ -340,7 +340,7 @@ impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
 
     fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: Some(request.certificate.value().chain_id().into()),
+            chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -365,7 +365,7 @@ impl TryFrom<Certificate> for api::Certificate {
 
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
         Ok(Self {
-            value: bincode::serialize(&certificate.value)?,
+            value: bincode::serialize(certificate.inner())?,
             round: bincode::serialize(&certificate.round)?,
             signatures: bincode::serialize(certificate.signatures())?,
         })
