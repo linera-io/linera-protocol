@@ -3,7 +3,7 @@
 
 //! This module contains types related to fees and pricing.
 
-use std::fmt;
+use std::fmt::{self, Display, Formatter};
 
 use async_graphql::InputObject;
 use linera_base::data_types::{Amount, ArithmeticError, Resources};
@@ -53,8 +53,8 @@ pub struct ResourceControlPolicy {
     pub maximum_bytes_written_per_block: u64,
 }
 
-impl fmt::Display for ResourceControlPolicy {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for ResourceControlPolicy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let ResourceControlPolicy {
             block,
             fuel_unit,
