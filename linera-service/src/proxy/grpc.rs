@@ -54,7 +54,9 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util,
+    linera_base::prometheus_util::{
+        bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    },
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -63,25 +65,21 @@ use crate::prometheus_server;
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "proxy_request_latency",
         "Proxy request latency",
         &[],
-        Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            50.0, 100.0, 200.0, 300.0, 400.0,
-        ]),
+        bucket_latencies(500.0),
     )
 });
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
-});
+static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> =
+    LazyLock::new(|| register_int_counter_vec("proxy_request_count", "Proxy request count", &[]));
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "proxy_request_success",
         "Proxy request success",
         &["method_name"],
@@ -90,7 +88,7 @@ static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "proxy_request_error",
         "Proxy request error",
         &["method_name"],

@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 
 use futures::channel::mpsc;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::{self, MeasureLatency as _};
+use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
     identifiers::{Account, BlobId, MessageId, Owner},
@@ -32,28 +32,22 @@ use crate::{
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.
 static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "load_contract_latency",
         "Load contract latency",
         &[],
-        Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            100.0, 250.0,
-        ]),
+        bucket_latencies(250.0),
     )
 });
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a service bytecode.
 static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "load_service_latency",
         "Load service latency",
         &[],
-        Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            100.0, 250.0,
-        ]),
+        bucket_latencies(250.0),
     )
 });
 

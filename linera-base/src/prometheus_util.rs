@@ -38,6 +38,24 @@ pub fn register_histogram_vec(
     register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
 }
 
+/// Construct the latencies starting from 0.0001 and ending at the maximum latency
+pub fn bucket_latencies(max_latency: f64) -> Option<Vec<f64>> {
+    let mut latencies = Vec::new();
+    let mut latency = 0.0001_f64;
+    let max_delta = 0.01;
+    loop {
+        for mult in [1.0_f64, 2.5_f64, 5.0_f64] {
+            let target_latency = latency * mult;
+            latencies.push(target_latency);
+            let delta = (target_latency - max_latency).abs() / max_latency;
+            if delta < max_delta {
+                return Some(latencies);
+            }
+        }
+        latency *= 10_f64;
+    }
+}
+
 /// A guard for an active latency measurement.
 ///
 /// Finishes the measurement when dropped, and then updates the `Metric`.

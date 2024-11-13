@@ -29,7 +29,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::prometheus_util::{self, MeasureLatency};
+use crate::prometheus_util::{self, bucket_latencies, MeasureLatency};
 use crate::{
     crypto::BcsHashable,
     doc_scalar, hex_debug,
@@ -1216,10 +1216,7 @@ static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "bytecode_compression_latency",
         "Bytecode compression latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5, 5.0, 10.0,
-        ]),
+        bucket_latencies(10.0),
     )
 });
 
@@ -1230,10 +1227,7 @@ static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "bytecode_decompression_latency",
         "Bytecode decompression latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5, 5.0, 10.0,
-        ]),
+        bucket_latencies(10.0),
     )
 });
 

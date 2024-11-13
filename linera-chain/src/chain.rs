@@ -55,7 +55,7 @@ mod chain_tests;
 
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::prometheus_util::{self, bucket_latencies, MeasureLatency},
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -74,10 +74,7 @@ static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "block_execution_latency",
         "Block execution latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5, 5.0, 10.0, 25.0, 50.0,
-        ]),
+        bucket_latencies(50.0),
     )
 });
 
@@ -87,10 +84,7 @@ static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "message_execution_latency",
         "Message execution latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5,
-        ]),
+        bucket_latencies(2.5),
     )
 });
 
@@ -100,10 +94,7 @@ static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         "operation_execution_latency",
         "Operation execution latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5,
-        ]),
+        bucket_latencies(2.5),
     )
 });
 
@@ -188,9 +179,7 @@ static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(||
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 
