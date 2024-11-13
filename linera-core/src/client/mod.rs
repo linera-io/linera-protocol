@@ -12,6 +12,7 @@ use std::{
 };
 
 use chain_client_state::ChainClientState;
+use custom_debug_derive::Debug;
 use dashmap::{
     mapref::one::{MappedRef as DashMapMappedRef, Ref as DashMapRef, RefMut as DashMapRefMut},
     DashMap,
@@ -490,17 +491,21 @@ pub struct ChainClientOptions {
 /// * The chain being operated is called the "local chain" or just the "chain".
 /// * As a rule, operations are considered successful (and communication may stop) when
 ///   they succeeded in gathering a quorum of responses.
+#[derive(Debug)]
 pub struct ChainClient<ValidatorNodeProvider, Storage>
 where
     Storage: linera_storage::Storage,
 {
     /// The Linera [`Client`] that manages operations for this chain client.
+    #[debug(skip)]
     client: Arc<Client<ValidatorNodeProvider, Storage>>,
     /// The off-chain chain ID.
     chain_id: ChainId,
     /// The ID of the admin chain.
+    #[debug(skip)]
     admin_id: ChainId,
     /// The client options.
+    #[debug(skip)]
     options: ChainClientOptions,
 }
 
@@ -515,18 +520,6 @@ where
             admin_id: self.admin_id,
             options: self.options.clone(),
         }
-    }
-}
-
-impl<P, S> std::fmt::Debug for ChainClient<P, S>
-where
-    S: linera_storage::Storage,
-{
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter
-            .debug_struct("ChainClient")
-            .field("chain_id", &format!("{:.8}", self.chain_id))
-            .finish_non_exhaustive()
     }
 }
 

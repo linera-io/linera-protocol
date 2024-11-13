@@ -970,25 +970,19 @@ impl Hash for BlobBytes {
 }
 
 /// A blob of binary data.
-#[derive(Hash, Clone, Serialize, Deserialize, WitType, WitStore)]
+#[derive(Hash, Clone, Debug, Serialize, Deserialize, WitType, WitStore)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum BlobContent {
     /// A generic data blob.
-    Data(#[serde(with = "serde_bytes")] Vec<u8>),
+    Data(
+        #[serde(with = "serde_bytes")]
+        #[debug(skip)]
+        Vec<u8>,
+    ),
     /// A blob containing contract bytecode.
-    ContractBytecode(CompressedBytecode),
+    ContractBytecode(#[debug(skip)] CompressedBytecode),
     /// A blob containing service bytecode.
-    ServiceBytecode(CompressedBytecode),
-}
-
-impl fmt::Debug for BlobContent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BlobContent::Data(_) => write!(f, "BlobContent::Data"),
-            BlobContent::ContractBytecode(_) => write!(f, "BlobContent::ContractBytecode"),
-            BlobContent::ServiceBytecode(_) => write!(f, "BlobContent::ServiceBytecode"),
-        }
-    }
+    ServiceBytecode(#[debug(skip)] CompressedBytecode),
 }
 
 impl BlobContent {

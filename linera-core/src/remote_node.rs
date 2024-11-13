@@ -1,8 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
+use custom_debug_derive::Debug;
 use futures::{stream::FuturesUnordered, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
@@ -24,18 +25,11 @@ use crate::{
 };
 
 /// A validator node together with the validator's name.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RemoteNode<N> {
     pub name: ValidatorName,
+    #[debug(skip)]
     pub node: N,
-}
-
-impl<N> fmt::Debug for RemoteNode<N> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RemoteNode")
-            .field("name", &self.name)
-            .finish_non_exhaustive()
-    }
 }
 
 #[allow(clippy::result_large_err)]

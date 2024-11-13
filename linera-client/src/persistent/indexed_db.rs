@@ -1,6 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use custom_debug_derive::Debug;
 use indexed_db_futures::prelude::*;
 use tracing::instrument;
 use wasm_bindgen::JsValue;
@@ -10,23 +11,15 @@ use web_sys::DomException;
 use super::{dirty::Dirty, LocalPersist};
 
 /// An implementation of [`Persist`] based on an IndexedDB record with a given key.
-#[derive(derive_more::Deref)]
+#[derive(derive_more::Deref, Debug)]
 pub struct IndexedDb<T> {
     key: String,
     #[deref]
+    #[debug(with = serde_json::to_string)]
     value: T,
+    #[debug(skip)]
     database: IdbDatabase,
     dirty: Dirty,
-}
-
-impl<T: serde::Serialize> std::fmt::Debug for IndexedDb<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("persistent::IndexedDb")
-            .field("key", &self.key)
-            .field("value", &serde_json::to_string(&self.value))
-            .field("dirty", &*self.dirty)
-            .finish_non_exhaustive()
-    }
 }
 
 const DATABASE_NAME: &str = "linera-client";

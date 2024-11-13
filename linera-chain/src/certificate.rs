@@ -2,11 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    borrow::Cow,
-    fmt::{Debug, Formatter},
-};
+use std::borrow::Cow;
 
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash, Signature},
     data_types::Round,
@@ -37,6 +35,7 @@ pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
 pub type TimeoutCertificate = GenericCertificate<Timeout>;
 
 /// Generic type representing a certificate for `value` of type `T`.
+#[derive(Debug)]
 pub struct GenericCertificate<T> {
     value: Hashed<T>,
     pub round: Round,
@@ -62,16 +61,6 @@ impl<T: Clone> Clone for GenericCertificate<T> {
             round: self.round,
             signatures: self.signatures.clone(),
         }
-    }
-}
-
-impl<T: Debug> Debug for GenericCertificate<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CertificateT")
-            .field("value", &self.value)
-            .field("round", &self.round)
-            .field("signatures", &self.signatures)
-            .finish()
     }
 }
 
@@ -207,6 +196,7 @@ impl From<TimeoutCertificate> for Certificate {
 }
 
 /// Wrapper type around hashed instance of `T` type.
+#[derive(Debug)]
 pub struct Hashed<T> {
     value: T,
     /// Hash of the value (used as key for storage).
@@ -245,15 +235,6 @@ impl<T> Hashed<T> {
 
     pub fn into_inner(self) -> T {
         self.value
-    }
-}
-
-impl<T: Debug> Debug for Hashed<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HashedT")
-            .field("value", &self.value)
-            .field("hash", &self.hash())
-            .finish()
     }
 }
 
