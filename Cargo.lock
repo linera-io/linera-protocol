@@ -4171,6 +4171,7 @@ dependencies = [
  "clap",
  "counter",
  "criterion",
+ "custom_debug_derive",
  "dashmap 5.5.3",
  "fungible",
  "futures",

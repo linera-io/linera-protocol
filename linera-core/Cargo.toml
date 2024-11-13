@@ -55,6 +55,7 @@ async-graphql.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
+custom_debug_derive.workspace = true
 dashmap.workspace = true
 futures.workspace = true
 linera-base.workspace = true
