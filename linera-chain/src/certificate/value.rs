@@ -7,9 +7,11 @@ use linera_execution::committee::Epoch;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::Hashed;
+#[cfg(with_testing)]
+use crate::data_types::OutgoingMessage;
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{Block, ExecutedBlock, LiteValue, OutgoingMessage},
+    data_types::{Block, ExecutedBlock, LiteValue},
     ChainError,
 };
 
