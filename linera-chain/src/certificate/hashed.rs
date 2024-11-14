@@ -59,7 +59,7 @@ impl<T> Hashed<T> {
     {
         LiteValue {
             value_hash: self.hash,
-            chain_id: *Has::<ChainId>::get(&self.value),
+            chain_id: *self.value.get(),
         }
     }
 }
