@@ -319,7 +319,11 @@ impl ChainManager {
             }
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
-        self.timeout_vote = Some(Vote::new(value.into(), current_round, key_pair));
+        self.timeout_vote = Some(Vote::new(
+            value.try_into().expect("Timeout certificate"),
+            current_round,
+            key_pair,
+        ));
         true
     }
 
@@ -342,7 +346,11 @@ impl ChainManager {
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
-        self.fallback_vote = Some(Vote::new(value.into(), last_regular_round, key_pair));
+        self.fallback_vote = Some(Vote::new(
+            value.try_into().expect("Timeout certificate"),
+            last_regular_round,
+            key_pair,
+        ));
         true
     }
 

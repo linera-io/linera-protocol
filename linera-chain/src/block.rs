@@ -113,12 +113,13 @@ impl From<Timeout> for HashedCertificateValue {
     }
 }
 
-impl From<HashedCertificateValue> for Hashed<Timeout> {
-    fn from(hv: HashedCertificateValue) -> Hashed<Timeout> {
-        let hash = hv.hash();
-        match hv.into_inner() {
-            CertificateValue::Timeout(timeout) => Hashed::unchecked_new(timeout, hash),
-            _ => panic!("Expected a Timeout value"),
+impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
+    type Error = &'static str;
+    fn try_from(value: HashedCertificateValue) -> Result<Hashed<Timeout>, Self::Error> {
+        let hash = value.hash();
+        match value.into_inner() {
+            CertificateValue::Timeout(timeout) => Ok(Hashed::unchecked_new(timeout, hash)),
+            _ => Err("Expected a Timeout value"),
         }
     }
 }
