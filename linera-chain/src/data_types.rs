@@ -404,9 +404,11 @@ pub struct EventRecord {
     pub stream_id: StreamId,
     /// The event key.
     #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
     pub key: Vec<u8>,
     /// The payload data.
     #[debug(with = "hex_debug")]
+    #[serde(with = "serde_bytes")]
     pub value: Vec<u8>,
 }
 

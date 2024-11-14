@@ -744,9 +744,17 @@ impl ApplicationPermissions {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum OracleResponse {
     /// The response from a service query.
-    Service(#[debug(with = "hex_debug")] Vec<u8>),
+    Service(
+        #[debug(with = "hex_debug")]
+        #[serde(with = "serde_bytes")]
+        Vec<u8>,
+    ),
     /// The response from an HTTP POST request.
-    Post(#[debug(with = "hex_debug")] Vec<u8>),
+    Post(
+        #[debug(with = "hex_debug")]
+        #[serde(with = "serde_bytes")]
+        Vec<u8>,
+    ),
     /// A successful read or write of a blob.
     Blob(BlobId),
     /// An assertion oracle that passed.
