@@ -133,6 +133,7 @@ where
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             } => {
                 let mut execution_outcome = RawExecutionOutcome::default();
@@ -140,7 +141,7 @@ where
                     .system
                     .transfer(
                         signer,
-                        None,
+                        Some(application_id),
                         source.map(AccountOwner::User),
                         Recipient::Account(destination),
                         amount,
@@ -376,6 +377,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
+        application_id: UserApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
