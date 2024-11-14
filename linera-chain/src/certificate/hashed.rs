@@ -101,7 +101,7 @@ impl<T> PartialEq for Hashed<T> {
 #[cfg(with_testing)]
 impl<T> Eq for Hashed<T> {}
 
-//TODO: Move
+/// A constraint summing a value of type `T`.
 pub trait Has<T> {
     fn get(&self) -> &T;
 }
