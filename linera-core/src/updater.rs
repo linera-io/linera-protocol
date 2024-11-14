@@ -238,9 +238,12 @@ where
 
         match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
+                self.remote_node
+                    .check_blobs_not_found_error(&certificate, blob_ids)?;
+
                 let blobs = self
                     .local_node
-                    .find_missing_blobs(&certificate, blob_ids, certificate.inner().chain_id())
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node

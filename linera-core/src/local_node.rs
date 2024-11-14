@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::Arc,
-};
+use std::{collections::VecDeque, sync::Arc};
 
 use linera_base::{
     data_types::{ArithmeticError, Blob, UserApplicationDescription},
@@ -13,7 +10,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock},
-    types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{Query, Response};
@@ -182,40 +179,16 @@ where
     }
 
     /// Given a list of missing `BlobId`s and a `Certificate` for a block:
-    /// - Makes sure they're required by the block provided
-    /// - Makes sure there's no duplicate blobs being requested
     /// - Searches for the blob in different places of the local node: blob cache,
     ///   chain manager's pending blobs, and blob storage.
     /// - Returns `None` if not all blobs could be found.
     pub async fn find_missing_blobs(
         &self,
-        certificate: &Certificate,
-        missing_blob_ids: &Vec<BlobId>,
+        mut missing_blob_ids: Vec<BlobId>,
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, NodeError> {
         if missing_blob_ids.is_empty() {
             return Ok(Some(Vec::new()));
-        }
-
-        // Find the missing blobs locally and retry.
-        let required = match certificate.inner() {
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().required_blob_ids(),
-            CertificateValue::ValidatedBlock(validated) => validated.inner().required_blob_ids(),
-            CertificateValue::Timeout(_) => HashSet::new(),
-        };
-        for blob_id in missing_blob_ids {
-            if !required.contains(blob_id) {
-                warn!(
-                    "validator requested blob {:?} but it is not required",
-                    blob_id
-                );
-                return Err(NodeError::InvalidChainInfoResponse);
-            }
-        }
-        let mut unique_missing_blob_ids = missing_blob_ids.iter().cloned().collect::<HashSet<_>>();
-        if missing_blob_ids.len() > unique_missing_blob_ids.len() {
-            warn!("blobs requested by validator contain duplicates");
-            return Err(NodeError::InvalidChainInfoResponse);
         }
 
         let mut chain_manager_pending_blobs = self
@@ -226,16 +199,18 @@ where
             .pending_blobs
             .clone();
         let mut found_blobs = Vec::new();
-        for blob_id in missing_blob_ids {
+        missing_blob_ids.retain(|blob_id| {
             if let Some(blob) = chain_manager_pending_blobs.remove(blob_id) {
                 found_blobs.push(blob);
-                unique_missing_blob_ids.remove(blob_id);
+                false
+            } else {
+                true
             }
-        }
+        });
 
         let storage = self.storage_client();
         let Some(read_blobs) = storage
-            .read_blobs(&unique_missing_blob_ids.into_iter().collect::<Vec<_>>())
+            .read_blobs(&missing_blob_ids)
             .await?
             .into_iter()
             .collect::<Option<Vec<_>>>()
