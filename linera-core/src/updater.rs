@@ -215,7 +215,7 @@ where
         match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
-                    .check_blobs_not_found_error(&certificate, blob_ids)?;
+                    .check_blobs_not_found(&certificate, blob_ids)?;
 
                 let blobs = self
                     .local_node

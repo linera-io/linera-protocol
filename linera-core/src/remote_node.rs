@@ -304,7 +304,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found_error(
+    pub fn check_blobs_not_found(
         &self,
         certificate: &Certificate,
         blob_ids: &[BlobId],
