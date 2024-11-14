@@ -32,9 +32,7 @@ async fn test_read_multi_values_memory() {
 #[tokio::test]
 async fn test_read_multi_values_dynamo_db() {
     use linera_views::dynamo_db::DynamoDbStore;
-    let config = DynamoDbStore::new_test_config()
-        .await
-        .unwrap();
+    let config = DynamoDbStore::new_test_config().await.unwrap();
     big_read_multi_values::<DynamoDbStore>(config, 22000000, 1000).await;
 }
 
@@ -43,9 +41,7 @@ async fn test_read_multi_values_dynamo_db() {
 #[tokio::test]
 async fn test_read_multi_values_scylla_db() {
     use linera_views::scylla_db::ScyllaDbStore;
-    let config = ScyllaDbStore::new_test_config()
-        .await
-        .unwrap();
+    let config = ScyllaDbStore::new_test_config().await.unwrap();
     big_read_multi_values::<ScyllaDbStore>(config, 22200000, 200).await;
 }
 

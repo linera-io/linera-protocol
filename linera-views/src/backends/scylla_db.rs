@@ -165,7 +165,10 @@ impl ScyllaDbClient {
         root_key: &[u8],
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreInternalError::KeyTooLong);
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            ScyllaDbStoreInternalError::KeyTooLong
+        );
         let session = &self.session;
         // Read the value of a key
         let values = (root_key.to_vec(), key);
@@ -191,7 +194,10 @@ impl ScyllaDbClient {
         let mut inputs = Vec::new();
         inputs.push(root_key.to_vec());
         for (i_key, key) in keys.into_iter().enumerate() {
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreInternalError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                ScyllaDbStoreInternalError::KeyTooLong
+            );
             match map.entry(key.clone()) {
                 Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
@@ -237,7 +243,10 @@ impl ScyllaDbClient {
         let mut inputs = Vec::new();
         inputs.push(root_key.to_vec());
         for (i_key, key) in keys.into_iter().enumerate() {
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreInternalError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                ScyllaDbStoreInternalError::KeyTooLong
+            );
             match map.entry(key.clone()) {
                 Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
@@ -273,7 +282,10 @@ impl ScyllaDbClient {
         root_key: &[u8],
         key: Vec<u8>,
     ) -> Result<bool, ScyllaDbStoreInternalError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreInternalError::KeyTooLong);
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            ScyllaDbStoreInternalError::KeyTooLong
+        );
         let session = &self.session;
         // Read the value of a key
         let values = (root_key.to_vec(), key);
@@ -293,8 +305,14 @@ impl ScyllaDbClient {
         let query1 = &self.write_batch_delete_prefix_unbounded;
         let query2 = &self.write_batch_delete_prefix_bounded;
         println!("|batch|={}", batch.len());
-        ensure!(batch.len() <= MAX_BATCH_SIZE, ScyllaDbStoreInternalError::TooLargeBatch);
-        println!("|key_prefix_deletions|={}", batch.key_prefix_deletions.len());
+        ensure!(
+            batch.len() <= MAX_BATCH_SIZE,
+            ScyllaDbStoreInternalError::TooLargeBatch
+        );
+        println!(
+            "|key_prefix_deletions|={}",
+            batch.key_prefix_deletions.len()
+        );
         for key_prefix in batch.key_prefix_deletions {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
@@ -314,7 +332,10 @@ impl ScyllaDbClient {
             }
         }
         let query3 = &self.write_batch_deletion;
-        println!("|deletions|={}", batch.simple_unordered_batch.deletions.len());
+        println!(
+            "|deletions|={}",
+            batch.simple_unordered_batch.deletions.len()
+        );
         for key in batch.simple_unordered_batch.deletions {
             ensure!(
                 key.len() <= MAX_KEY_SIZE,
@@ -325,12 +346,18 @@ impl ScyllaDbClient {
             batch_query.append_statement(query3.clone());
         }
         let query4 = &self.write_batch_insertion;
-        println!("|insertions|={}", batch.simple_unordered_batch.insertions.len());
+        println!(
+            "|insertions|={}",
+            batch.simple_unordered_batch.insertions.len()
+        );
         let mut total_size = 0;
         for (key, value) in batch.simple_unordered_batch.insertions {
             println!("|key|={} |value|={}", key.len(), value.len());
             total_size += key.len() + value.len();
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreInternalError::KeyTooLong);
+            ensure!(
+                key.len() <= MAX_KEY_SIZE,
+                ScyllaDbStoreInternalError::KeyTooLong
+            );
             ensure!(
                 value.len() <= RAW_MAX_VALUE_SIZE,
                 ScyllaDbStoreInternalError::ValueTooLong
@@ -485,7 +512,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
@@ -501,7 +531,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
+    async fn contains_keys(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
@@ -702,7 +735,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbStoreInternalError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<bool, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -746,7 +782,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreInternalError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -771,7 +810,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreInternalError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -828,12 +870,18 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
-pub type ScyllaDbStore =
-    MeteredStore<LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>>>;
+pub type ScyllaDbStore = MeteredStore<
+    LruCachingStore<
+        MeteredStore<
+            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
+        >,
+    >,
+>;
 
 /// The `ScyllaDbStore` composed type
 #[cfg(not(with_metrics))]
-pub type ScyllaDbStore = LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
+pub type ScyllaDbStore =
+    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;

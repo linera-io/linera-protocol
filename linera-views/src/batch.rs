@@ -153,6 +153,11 @@ impl UnorderedBatch {
     pub fn len(&self) -> usize {
         self.key_prefix_deletions.len() + self.simple_unordered_batch.len()
     }
+
+    /// Tests whether the batch is empty or not
+    pub fn is_empty(&self) -> bool {
+        self.key_prefix_deletions.len() == 0 && self.simple_unordered_batch.len() == 0
+    }
 }
 
 /// Checks if `key` is matched by any prefix in `key_prefix_set`.
