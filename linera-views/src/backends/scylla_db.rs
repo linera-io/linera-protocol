@@ -16,9 +16,11 @@ const MAX_MULTI_KEYS: usize = 99;
 /// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
 ///  at the database at any particular time"
 /// So, we set up the maximal size of 16M - 10K for the values and 10K for the keys
-const RAW_MAX_VALUE_SIZE: usize = 16766976;
+/// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
+/// taken internally by the database.
+const RAW_MAX_VALUE_SIZE: usize = 16762976;
 const MAX_KEY_SIZE: usize = 10240;
-const MAX_BATCH_TOTAL_SIZE: usize = 16777216;
+const MAX_BATCH_TOTAL_SIZE: usize = 16773216;
 
 /// The RAW_MAX_VALUE_SIZE is the maximum size on the ScyllaDb storage.
 /// However, the value being written can also be the serialization of a SimpleUnorderedBatch
@@ -29,7 +31,7 @@ const MAX_BATCH_TOTAL_SIZE: usize = 16777216;
 /// and so this simplifies to 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE
 /// (we write 4 because get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)
 /// and so to a maximal value of 408569;
-const VISIBLE_MAX_VALUE_SIZE: usize = 16756728;
+const VISIBLE_MAX_VALUE_SIZE: usize = 16754728;
 
 /// The constant 14000 is an empirical constant that was found to be necessary
 /// to make the ScyllaDb system work. We have not been able to find this or
