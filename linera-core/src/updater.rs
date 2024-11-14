@@ -262,7 +262,8 @@ where
                     // updated with the needed blobs, so sending the chain information about the
                     // certificates that last used the blobs to the validator node should be enough.
                     let blob_ids = mem::take(&mut blob_ids).into_iter().collect::<Vec<_>>();
-                    let missing_blob_ids = self.remote_node.node.missing_blob_states(blob_ids).await?;
+                    let missing_blob_ids =
+                        self.remote_node.node.missing_blob_states(blob_ids).await?;
                     let local_storage = self.local_node.storage_client();
                     let blob_states = local_storage.read_blob_states(&missing_blob_ids).await?;
                     let mut chain_heights = BTreeMap::new();

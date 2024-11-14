@@ -199,10 +199,7 @@ where
         .await
     }
 
-    async fn missing_blob_states(
-        &self,
-        blob_ids: Vec<BlobId>,
-    ) -> Result<Vec<BlobId>, NodeError> {
+    async fn missing_blob_states(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_missing_blob_states(blob_ids, sender)
         })

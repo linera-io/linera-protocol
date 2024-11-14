@@ -320,9 +320,9 @@ where
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
             )))),
-            MissingBlobStates(blob_ids) => Ok(Some(RpcMessage::MissingBlobStatesResponse(Box::new(
-                self.storage.missing_blob_states(&blob_ids).await?,
-            )))),
+            MissingBlobStates(blob_ids) => Ok(Some(RpcMessage::MissingBlobStatesResponse(
+                Box::new(self.storage.missing_blob_states(&blob_ids).await?),
+            ))),
             BlockProposal(_)
             | LiteCertificate(_)
             | Certificate(_)

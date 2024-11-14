@@ -187,10 +187,7 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn missing_blob_states(
-        &self,
-        blob_ids: Vec<BlobId>,
-    ) -> Result<Vec<BlobId>, NodeError> {
+    async fn missing_blob_states(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.missing_blob_states(blob_ids).await?,
 
