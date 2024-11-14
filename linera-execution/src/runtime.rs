@@ -1278,7 +1278,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let execution_outcome = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Transfer {
-                source,
+                source: source.map(AccountOwner::User),
                 destination,
                 amount,
                 signer,

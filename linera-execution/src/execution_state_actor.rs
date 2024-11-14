@@ -142,7 +142,7 @@ where
                     .transfer(
                         signer,
                         Some(application_id),
-                        source.map(AccountOwner::User),
+                        source,
                         Recipient::Account(destination),
                         amount,
                     )
@@ -372,7 +372,7 @@ pub enum ExecutionRequest {
 
     Transfer {
         #[debug(skip_if = Option::is_none)]
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
