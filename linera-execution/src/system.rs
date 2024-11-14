@@ -496,6 +496,7 @@ where
                 let message = self
                     .transfer(
                         context.authenticated_signer,
+                        None,
                         owner.map(AccountOwner::User),
                         recipient,
                         amount,
@@ -687,21 +688,29 @@ where
     pub async fn transfer(
         &mut self,
         authenticated_signer: Option<Owner>,
+        authenticated_application_id: Option<UserApplicationId>,
         source: Option<AccountOwner>,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        match (source, authenticated_signer) {
-            (Some(AccountOwner::User(owner)), Some(signer)) => ensure!(
+        match (source, authenticated_signer, authenticated_application_id) {
+            (Some(AccountOwner::User(owner)), Some(signer), _) => ensure!(
                 signer == owner,
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
-            (Some(AccountOwner::Application(_)), _) => todo!(),
-            (None, Some(signer)) => ensure!(
+            (
+                Some(AccountOwner::Application(account_application)),
+                _,
+                Some(authorized_application),
+            ) => ensure!(
+                account_application == authorized_application,
+                SystemExecutionError::UnauthenticatedTransferOwner
+            ),
+            (None, Some(signer), _) => ensure!(
                 self.ownership.get().verify_owner(&signer).is_some(),
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
-            (_, None) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
+            (_, _, _) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
         }
         ensure!(
             amount > Amount::ZERO,
