@@ -82,7 +82,9 @@ where
 pub enum CommunicationError<E: fmt::Debug> {
     /// No consensus is possible since validators returned different possibilities
     /// for the next block
-    #[error("No error but failed to find a consensus block. Consensus threshold: {}, Proposals: {:?}", .0, .1)]
+    #[error(
+        "No error but failed to find a consensus block. Consensus threshold: {0}, Proposals: {1:?}"
+    )]
     NoConsensus(u64, Vec<(u64, usize)>),
     /// A single error that was returned by a sufficient number of nodes to be trusted as
     /// valid.
