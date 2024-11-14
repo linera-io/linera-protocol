@@ -23,7 +23,7 @@ use linera_chain::{
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery},
@@ -200,40 +200,14 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_optimized_certificate(
-        &mut self,
-        certificate: &Certificate,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.remote_node.name) {
-            let result = self
-                .remote_node
-                .handle_lite_certificate(certificate.lite_certificate(), delivery)
-                .await;
-            match result {
-                Err(NodeError::MissingCertificateValue) => {
-                    warn!(
-                        "Validator {} forgot a certificate value that they signed before",
-                        self.remote_node.name
-                    );
-                }
-                _ => {
-                    return result;
-                }
-            }
-        }
-        self.remote_node
-            .handle_certificate(certificate.clone(), vec![], delivery)
-            .await
-    }
-
     async fn send_certificate(
         &mut self,
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let result = self
-            .send_optimized_certificate(&certificate, delivery)
+            .remote_node
+            .handle_optimized_certificate(&certificate, delivery)
             .await;
 
         match &result {
