@@ -670,7 +670,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;

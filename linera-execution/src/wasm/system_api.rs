@@ -247,7 +247,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .transfer(source, destination, amount)
+            .transfer(source.map(AccountOwner::User), destination, amount)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

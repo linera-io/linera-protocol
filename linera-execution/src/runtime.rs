@@ -1266,7 +1266,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn transfer(
         &mut self,
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
@@ -1278,7 +1278,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         let execution_outcome = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Transfer {
-                source: source.map(AccountOwner::User),
+                source,
                 destination,
                 amount,
                 signer,
