@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use custom_debug_derive::Debug;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -13,7 +13,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
+    types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
 };
 use linera_execution::committee::ValidatorName;
 use rand::seq::SliceRandom as _;
@@ -80,6 +80,29 @@ impl<N: ValidatorNode> RemoteNode<N> {
             .handle_lite_certificate(certificate, delivery)
             .await?;
         self.check_and_return_info(response, chain_id)
+    }
+
+    pub(crate) async fn handle_optimized_certificate(
+        &mut self,
+        certificate: &Certificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        if certificate.is_signed_by(&self.name) {
+            let result = self
+                .handle_lite_certificate(certificate.lite_certificate(), delivery)
+                .await;
+            match result {
+                Err(NodeError::MissingCertificateValue) => {
+                    warn!(
+                        "Validator {} forgot a certificate value that they signed before",
+                        self.name
+                    );
+                }
+                _ => return result,
+            }
+        }
+        self.handle_certificate(certificate.clone(), vec![], delivery)
+            .await
     }
 
     fn check_and_return_info(
@@ -277,5 +300,38 @@ impl<N: ValidatorNode> RemoteNode<N> {
             blobs.push(maybe_blob?);
         }
         Some(blobs)
+    }
+
+    /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
+    /// i.e. that there are no duplicates and the blobs are actually required.
+    pub fn check_blobs_not_found(
+        &self,
+        certificate: &Certificate,
+        blob_ids: &[BlobId],
+    ) -> Result<(), NodeError> {
+        // Find the missing blobs locally and retry.
+        let required = match certificate.inner() {
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().required_blob_ids(),
+            CertificateValue::ValidatedBlock(validated) => validated.inner().required_blob_ids(),
+            CertificateValue::Timeout(_) => HashSet::new(),
+        };
+        for blob_id in blob_ids {
+            if !required.contains(blob_id) {
+                warn!(
+                    "validator {} requested blob {blob_id:?} but it is not required",
+                    self.name
+                );
+                return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
+            }
+        }
+        let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
+        if blob_ids.len() > unique_missing_blob_ids.len() {
+            warn!(
+                "blobs requested by validator {} contain duplicates",
+                self.name
+            );
+            return Err(NodeError::DuplicatesInBlobsNotFound);
+        }
+        Ok(())
     }
 }

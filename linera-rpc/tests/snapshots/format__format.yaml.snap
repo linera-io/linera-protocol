@@ -596,6 +596,10 @@ NodeError:
         NEWTYPE:
           TYPENAME: BlobId
     21:
+      DuplicatesInBlobsNotFound: UNIT
+    22:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    23:
       LocalError:
         STRUCT:
           - error: STR
