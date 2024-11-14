@@ -296,7 +296,7 @@ where
         }
     }
 
-    async fn client_for_proxy_worker<R>(
+    async fn worker_client<R>(
         &self,
         request: Request<R>,
     ) -> Result<(ValidatorWorkerClient<Channel>, R), Status>
@@ -348,7 +348,7 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_block_proposal(inner).await,
             "handle_block_proposal",
@@ -360,7 +360,7 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_lite_certificate(inner).await,
             "handle_lite_certificate",
@@ -372,7 +372,7 @@ where
         &self,
         request: Request<HandleCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_certificate(inner).await,
             "handle_certificate",
@@ -384,7 +384,7 @@ where
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_chain_info_query(inner).await,
             "handle_chain_info_query",
