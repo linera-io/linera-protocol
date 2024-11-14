@@ -15,10 +15,21 @@ const MAX_MULTI_KEYS: usize = 99;
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
 /// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
 ///  at the database at any particular time"
-/// So, we set up the maximal size of 16M - 100K for the values and 100K for the keys
-const MAX_VALUE_SIZE: usize = 16674816;
-const MAX_KEY_SIZE: usize = 102400;
+/// So, we set up the maximal size of 16M - 10K for the values and 10K for the keys
+const RAW_MAX_VALUE_SIZE: usize = 16766976;
+const MAX_KEY_SIZE: usize = 10240;
 const MAX_BATCH_TOTAL_SIZE: usize = 16777216;
+
+/// The RAW_MAX_VALUE_SIZE is the maximum size on the ScyllaDb storage.
+/// However, the value being written can also be the serialization of a SimpleUnorderedBatch
+/// Therefore the actual MAX_VALUE_SIZE might be lower.
+/// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
+/// So if the key has 1024 bytes this gets us the inequality
+/// 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE
+/// and so this simplifies to 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE
+/// (we write 4 because get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)
+/// and so to a maximal value of 408569;
+const VISIBLE_MAX_VALUE_SIZE: usize = 16756728;
 
 /// The constant 14000 is an empirical constant that was found to be necessary
 /// to make the ScyllaDb system work. We have not been able to find this or
@@ -26,11 +37,6 @@ const MAX_BATCH_TOTAL_SIZE: usize = 16777216;
 /// An experimental approach gets us that 14796 is the latest value that is
 /// correct.
 const MAX_BATCH_SIZE: usize = 5000;
-
-
-
-
-
 
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -284,7 +290,9 @@ impl ScyllaDbClient {
         let mut batch_values = Vec::new();
         let query1 = &self.write_batch_delete_prefix_unbounded;
         let query2 = &self.write_batch_delete_prefix_bounded;
+        println!("|batch|={}", batch.len());
         ensure!(batch.len() <= MAX_BATCH_SIZE, ScyllaDbStoreInternalError::TooLargeBatch);
+        println!("|key_prefix_deletions|={}", batch.key_prefix_deletions.len());
         for key_prefix in batch.key_prefix_deletions {
             ensure!(
                 key_prefix.len() <= MAX_KEY_SIZE,
@@ -304,6 +312,7 @@ impl ScyllaDbClient {
             }
         }
         let query3 = &self.write_batch_deletion;
+        println!("|deletions|={}", batch.simple_unordered_batch.deletions.len());
         for key in batch.simple_unordered_batch.deletions {
             ensure!(
                 key.len() <= MAX_KEY_SIZE,
@@ -314,16 +323,21 @@ impl ScyllaDbClient {
             batch_query.append_statement(query3.clone());
         }
         let query4 = &self.write_batch_insertion;
+        println!("|insertions|={}", batch.simple_unordered_batch.insertions.len());
+        let mut total_size = 0;
         for (key, value) in batch.simple_unordered_batch.insertions {
+            println!("|key|={} |value|={}", key.len(), value.len());
+            total_size += key.len() + value.len();
             ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreInternalError::KeyTooLong);
             ensure!(
-                value.len() <= MAX_VALUE_SIZE,
+                value.len() <= RAW_MAX_VALUE_SIZE,
                 ScyllaDbStoreInternalError::ValueTooLong
             );
             let values = vec![root_key.to_vec(), key, value];
             batch_values.push(values);
             batch_query.append_statement(query4.clone());
         }
+        println!("total_size={}", total_size);
         session.batch(&batch_query, batch_values).await?;
         Ok(())
     }
@@ -547,7 +561,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_BATCH_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_BATCH_TOTAL_SIZE;
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
 
     // ScyllaDB cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
     // followed by a write, then the delete takes priority. See the sentence "The first
