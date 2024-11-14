@@ -20,7 +20,7 @@ use linera_execution::{
     system::OpenChainConfig,
     Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
-use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     block::Timeout,
@@ -422,41 +422,13 @@ pub struct LiteValue {
 struct ValueHashAndRound(CryptoHash, Round);
 
 /// A vote on a statement from a validator.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound(deserialize = "T: DeserializeOwned + BcsHashable"))]
 pub struct Vote<T> {
     pub value: Hashed<T>,
     pub round: Round,
     pub validator: ValidatorName,
     pub signature: Signature,
-}
-
-impl<'de, T: DeserializeOwned + BcsHashable> Deserialize<'de> for Vote<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Vote<T>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Debug, Deserialize)]
-        struct VoteHelper<T> {
-            value: T,
-            round: Round,
-            validator: ValidatorName,
-            signature: Signature,
-        }
-
-        let VoteHelper {
-            value,
-            round,
-            validator,
-            signature,
-        } = VoteHelper::deserialize(deserializer)?;
-
-        Ok(Vote {
-            value: Hashed::new(value),
-            round,
-            validator,
-            signature,
-        })
-    }
 }
 
 impl Has<ChainId> for CertificateValue {
