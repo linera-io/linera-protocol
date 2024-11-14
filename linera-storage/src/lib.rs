@@ -77,6 +77,9 @@ pub trait Storage: Sized {
     /// Returns what blobs from the input are missing from storage.
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError>;
 
+    /// Returns what blob states from the input are missing from storage.
+    async fn missing_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError>;
+
     /// Tests existence of a blob state with the given blob ID.
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 

@@ -170,12 +170,11 @@ impl ValidatorNode for SimpleClient {
             .await
     }
 
-    async fn blobs_last_used_by(
+    async fn missing_blob_states(
         &self,
         blob_ids: Vec<BlobId>,
-    ) -> Result<Vec<CryptoHash>, NodeError> {
-        self.query(RpcMessage::BlobsLastUsedBy(Box::new(blob_ids)))
-            .await
+    ) -> Result<Vec<BlobId>, NodeError> {
+        self.query(RpcMessage::MissingBlobStates(Box::new(blob_ids))).await
     }
 }
 

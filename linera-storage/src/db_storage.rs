@@ -65,6 +65,16 @@ static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     )
 });
 
+/// The metric counting how often multiple blobs are tested for existence from storage
+#[cfg(with_metrics)]
+static CONTAINS_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    prometheus_util::register_int_counter_vec(
+        "contains_blob_states",
+        "The metric counting how often multiple blob states are tested for existence from storage",
+        &[],
+    )
+});
+
 /// The metric counting how often a blob state is tested for existence from storage
 #[cfg(with_metrics)]
 static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -387,6 +397,24 @@ where
         }
         #[cfg(with_metrics)]
         CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
+        Ok(missing_blobs)
+    }
+
+    async fn missing_blob_states(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
+        let mut keys = Vec::new();
+        for blob_id in blob_ids {
+            let key = bcs::to_bytes(&BaseKey::BlobState(*blob_id))?;
+            keys.push(key);
+        }
+        let results = self.store.contains_keys(keys).await?;
+        let mut missing_blobs = Vec::new();
+        for (blob_id, result) in blob_ids.iter().zip(results) {
+            if !result {
+                missing_blobs.push(*blob_id);
+            }
+        }
+        #[cfg(with_metrics)]
+        CONTAINS_BLOB_STATES_COUNTER.with_label_values(&[]).inc();
         Ok(missing_blobs)
     }
 

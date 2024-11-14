@@ -199,12 +199,12 @@ where
         .await
     }
 
-    async fn blobs_last_used_by(
+    async fn missing_blob_states(
         &self,
         blob_ids: Vec<BlobId>,
-    ) -> Result<Vec<CryptoHash>, NodeError> {
+    ) -> Result<Vec<BlobId>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_blobs_last_used_by(blob_ids, sender)
+            validator.do_missing_blob_states(blob_ids, sender)
         })
         .await
     }
@@ -516,21 +516,19 @@ where
         sender.send(certificate_hash)
     }
 
-    async fn do_blobs_last_used_by(
+    async fn do_missing_blob_states(
         self,
         blob_ids: Vec<BlobId>,
-        sender: oneshot::Sender<Result<Vec<CryptoHash>, NodeError>>,
-    ) -> Result<(), Result<Vec<CryptoHash>, NodeError>> {
+        sender: oneshot::Sender<Result<Vec<BlobId>, NodeError>>,
+    ) -> Result<(), Result<Vec<BlobId>, NodeError>> {
         let validator = self.client.lock().await;
-        let blob_states = validator
+        let missing_blob_states = validator
             .state
             .storage_client()
-            .read_blob_states(&blob_ids)
-            .await;
-        let hashes = blob_states
-            .map(|states| states.into_iter().map(|state| state.last_used_by).collect())
+            .missing_blob_states(&blob_ids)
+            .await
             .map_err(Into::into);
-        sender.send(hashes)
+        sender.send(missing_blob_states)
     }
 }
 
