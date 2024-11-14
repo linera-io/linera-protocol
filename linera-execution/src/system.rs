@@ -494,7 +494,12 @@ where
                 ..
             } => {
                 let message = self
-                    .transfer(context.authenticated_signer, owner, recipient, amount)
+                    .transfer(
+                        context.authenticated_signer,
+                        owner.map(AccountOwner::User),
+                        recipient,
+                        amount,
+                    )
                     .await?;
 
                 if let Some(message) = message {
@@ -682,27 +687,27 @@ where
     pub async fn transfer(
         &mut self,
         authenticated_signer: Option<Owner>,
-        owner: Option<Owner>,
+        source: Option<AccountOwner>,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        match (owner, authenticated_signer) {
-            (Some(_), _) => ensure!(
-                authenticated_signer == owner,
+        match (source, authenticated_signer) {
+            (Some(AccountOwner::User(owner)), Some(signer)) => ensure!(
+                signer == owner,
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
+            (Some(AccountOwner::Application(_)), _) => todo!(),
             (None, Some(signer)) => ensure!(
                 self.ownership.get().verify_owner(&signer).is_some(),
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
-            (None, None) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
+            (_, None) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
         }
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectTransferAmount
         );
-        self.debit(owner.map(AccountOwner::User).as_ref(), amount)
-            .await?;
+        self.debit(source.as_ref(), amount).await?;
         match recipient {
             Recipient::Account(account) => {
                 let message = RawOutgoingMessage {
@@ -712,7 +717,7 @@ where
                     kind: MessageKind::Tracked,
                     message: SystemMessage::Credit {
                         amount,
-                        source: owner.map(AccountOwner::User),
+                        source,
                         target: account.owner.map(AccountOwner::User),
                     },
                 };

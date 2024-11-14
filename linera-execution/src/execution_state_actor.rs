@@ -138,7 +138,12 @@ where
                 let mut execution_outcome = RawExecutionOutcome::default();
                 let message = self
                     .system
-                    .transfer(signer, source, Recipient::Account(destination), amount)
+                    .transfer(
+                        signer,
+                        source.map(AccountOwner::User),
+                        Recipient::Account(destination),
+                        amount,
+                    )
                     .await?;
 
                 if let Some(message) = message {
