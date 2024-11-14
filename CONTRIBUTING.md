@@ -114,7 +114,7 @@ cargo check-all-features --all-targets
 ## Snapshot tests
 
 Several crates (`linera-rpc`, `linera-views-derive`, and others) use [`insta`](https://insta.rs/) to
-manage snapshot tests and ensure output or RPC formats don't unintentially change. If you've
+manage snapshot tests and ensure output or RPC formats don't unintentionally change. If you've
 deliberately changed the output of one of these crates, and the test fails, you can use `cargo insta
 review` to update the staged snapshot, or manually move the `.snap.new` file into place. See the
 [`insta` documentation](https://insta.rs/docs/quickstart/) for more information.
