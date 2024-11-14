@@ -20,7 +20,6 @@ use dashmap::{
 use futures::{
     future::{self, try_join_all, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
-    TryStreamExt as _,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::data_types::Bytecode;
@@ -305,7 +304,7 @@ where
         let mut validators = validators.iter().collect::<Vec<_>>();
         validators.shuffle(&mut rand::thread_rng());
         for remote_node in validators {
-            let info = self.local_node.local_chain_info(chain_id).await?;
+            let info = self.local_node.chain_info(chain_id).await?;
             if target_next_block_height <= info.next_block_height {
                 return Ok(info);
             }
@@ -317,7 +316,7 @@ where
             )
             .await?;
         }
-        let info = self.local_node.local_chain_info(chain_id).await?;
+        let info = self.local_node.chain_info(chain_id).await?;
         if target_next_block_height <= info.next_block_height {
             Ok(info)
         } else {
@@ -1304,8 +1303,13 @@ where
 
         // Obtain the next block height we need in the local node, for each chain.
         let local_next_heights = self
-            .local_next_block_heights(remote_max_heights.keys(), chain_worker_limit)
-            .await?;
+            .client
+            .local_node
+            .next_block_heights(remote_max_heights.keys(), chain_worker_limit)
+            .await
+            .map_err(|error| NodeError::LocalError {
+                error: error.to_string(),
+            })?;
 
         // We keep track of the height we've successfully downloaded and checked, per chain.
         let mut downloaded_heights = BTreeMap::new();
@@ -1706,7 +1710,7 @@ where
 
         self.client
             .local_node
-            .local_chain_info(chain_id)
+            .chain_info(chain_id)
             .await
             .map_err(Into::into)
     }
@@ -1719,7 +1723,7 @@ where
         remote_node: &RemoteNode<P::Node>,
         chain_id: ChainId,
     ) -> Result<(), ChainClientError> {
-        let local_info = self.client.local_node.local_chain_info(chain_id).await?;
+        let local_info = self.client.local_node.chain_info(chain_id).await?;
         let range = BlockHeightRange {
             start: local_info.next_block_height,
             limit: None,
@@ -1797,8 +1801,8 @@ where
         Ok(())
     }
 
-    /// Downloads and processes from the specified validator a confirmed block certificate that
-    /// uses the given blob. If this succeeds, the blob will be in our storage.
+    /// Downloads and processes from the specified validator a confirmed block certificates that
+    /// use the given blobs. If this succeeds, the blob will be in our storage.
     async fn update_local_node_with_blobs_from(
         &self,
         blob_ids: Vec<BlobId>,
@@ -3071,7 +3075,7 @@ where
         chain_id: ChainId,
         local_node: &mut LocalNodeClient<S>,
     ) -> Option<Box<ChainInfo>> {
-        let Ok(info) = local_node.local_chain_info(chain_id).await else {
+        let Ok(info) = local_node.chain_info(chain_id).await else {
             error!("Fail to read local chain info for {chain_id}");
             return None;
         };
@@ -3329,31 +3333,6 @@ where
         self.receive_certificates_from_validators(vec![received_certificates])
             .await;
         Ok(())
-    }
-
-    /// Given a list of chain IDs, returns a map that assigns to each of them the next block
-    /// height, i.e. the lowest block height that we have not processed in the local node yet.
-    ///
-    /// It makes at most `chain_worker_limit` requests to the local node in parallel.
-    async fn local_next_block_heights(
-        &self,
-        chain_ids: impl IntoIterator<Item = &ChainId>,
-        chain_worker_limit: usize,
-    ) -> Result<BTreeMap<ChainId, BlockHeight>, NodeError> {
-        let futures = chain_ids
-            .into_iter()
-            .map(|chain_id| async move {
-                let local_info = self.client.local_node.local_chain_info(*chain_id).await?;
-                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
-            })
-            .collect::<Vec<_>>();
-        stream::iter(futures)
-            .buffer_unordered(chain_worker_limit)
-            .try_collect()
-            .await
-            .map_err(|error| NodeError::LocalNodeQuery {
-                error: error.to_string(),
-            })
     }
 
     /// Given a set of chain ID-block height pairs, returns a map that assigns to each chain ID

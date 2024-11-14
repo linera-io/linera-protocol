@@ -2,10 +2,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 
+use futures::{stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
-    data_types::{ArithmeticError, Blob, UserApplicationDescription},
+    data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
@@ -235,7 +239,7 @@ where
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub(crate) async fn local_chain_info(
+    pub(crate) async fn chain_info(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, LocalNodeError> {
@@ -306,5 +310,27 @@ where
             requests.extend(new_actions.cross_chain_requests);
         }
         Ok(())
+    }
+
+    /// Given a list of chain IDs, returns a map that assigns to each of them the next block
+    /// height, i.e. the lowest block height that we have not processed in the local node yet.
+    ///
+    /// It makes at most `chain_worker_limit` requests to the local node in parallel.
+    pub async fn next_block_heights(
+        &self,
+        chain_ids: impl IntoIterator<Item = &ChainId>,
+        chain_worker_limit: usize,
+    ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
+        let futures = chain_ids
+            .into_iter()
+            .map(|chain_id| async move {
+                let local_info = self.chain_info(*chain_id).await?;
+                Ok::<_, LocalNodeError>((*chain_id, local_info.next_block_height))
+            })
+            .collect::<Vec<_>>();
+        stream::iter(futures)
+            .buffer_unordered(chain_worker_limit)
+            .try_collect()
+            .await
     }
 }
