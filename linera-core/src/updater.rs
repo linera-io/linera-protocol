@@ -18,12 +18,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{Certificate, CertificateValue},
+    types::Certificate,
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::{
     client::ChainClientError,
@@ -213,31 +213,12 @@ where
 
         match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                // Find the missing blobs locally and retry.
-                let required = match certificate.inner() {
-                    CertificateValue::ConfirmedBlock(confirmed) => {
-                        confirmed.inner().required_blob_ids()
-                    }
-                    CertificateValue::ValidatedBlock(validated) => {
-                        validated.inner().required_blob_ids()
-                    }
-                    CertificateValue::Timeout(_) => HashSet::new(),
-                };
-                for blob_id in blob_ids {
-                    if !required.contains(blob_id) {
-                        warn!("validator requested blob {blob_id:?} but it is not required",);
-                        return Err(NodeError::UnexpectedEntriesInBlobsNotFound.into());
-                    }
-                }
-                let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
-                if blob_ids.len() > unique_missing_blob_ids.len() {
-                    warn!("blobs requested by validator contain duplicates");
-                    return Err(NodeError::DuplicatesInBlobsNotFound.into());
-                }
+                self.remote_node
+                    .check_blobs_not_found_error(&certificate, blob_ids)?;
 
                 let blobs = self
                     .local_node
-                    .find_missing_blobs(unique_missing_blob_ids, certificate.inner().chain_id())
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 Ok(self

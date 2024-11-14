@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet, VecDeque},
+    collections::{BTreeMap, VecDeque},
     sync::Arc,
 };
 
@@ -187,7 +187,7 @@ where
     /// - Returns `None` if not all blobs could be found.
     pub async fn find_missing_blobs(
         &self,
-        mut missing_blob_ids: HashSet<BlobId>,
+        mut missing_blob_ids: Vec<BlobId>,
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         if missing_blob_ids.is_empty() {
@@ -213,7 +213,7 @@ where
 
         let storage = self.storage_client();
         let Some(read_blobs) = storage
-            .read_blobs(&missing_blob_ids.into_iter().collect::<Vec<_>>())
+            .read_blobs(&missing_blob_ids)
             .await?
             .into_iter()
             .collect::<Option<Vec<_>>>()
