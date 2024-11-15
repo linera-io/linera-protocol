@@ -397,28 +397,18 @@ where
         &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
-        if self
+        match self
             .recent_confirmed_value_cache
-            .contains(&certificate.value.value_hash)
+            .full_certificate(certificate.clone())
             .await
         {
-            Ok(self
-                .recent_confirmed_value_cache
-                .full_certificate(certificate.clone())
-                .await?
-                .into())
-        } else if self
-            .recent_validated_value_cache
-            .contains(&certificate.value.value_hash)
-            .await
-        {
-            Ok(self
+            Ok(certificate) => Ok(certificate.into()),
+            Err(WorkerError::MissingCertificateValue) => Ok(self
                 .recent_validated_value_cache
-                .full_certificate(certificate.clone())
-                .await?
-                .into())
-        } else {
-            Err(WorkerError::MissingCertificateValue)
+                .full_certificate(certificate)
+                .await
+                .map(Into::into)?),
+            Err(other) => Err(other),
         }
     }
 }
