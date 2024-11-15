@@ -593,18 +593,6 @@ impl TryFrom<api::CryptoHash> for CryptoHash {
     }
 }
 
-impl TryFrom<api::CryptoHashes> for Vec<CryptoHash> {
-    type Error = GrpcProtoConversionError;
-
-    fn try_from(hashes: api::CryptoHashes) -> Result<Self, Self::Error> {
-        Ok(hashes
-            .bytes
-            .into_iter()
-            .map(|hash| CryptoHash::try_from(hash.as_slice()))
-            .collect::<Result<_, _>>()?)
-    }
-}
-
 impl TryFrom<BlobContent> for api::BlobContent {
     type Error = GrpcProtoConversionError;
 
@@ -654,16 +642,6 @@ impl From<CryptoHash> for api::CryptoHash {
         Self {
             bytes: hash.as_bytes().to_vec(),
         }
-    }
-}
-
-impl From<Vec<CryptoHash>> for api::CryptoHashes {
-    fn from(hashes: Vec<CryptoHash>) -> Self {
-        let bytes = hashes
-            .into_iter()
-            .map(|hash| hash.as_bytes().to_vec())
-            .collect::<Vec<_>>();
-        Self { bytes }
     }
 }
 

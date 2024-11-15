@@ -105,7 +105,7 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn blobs_last_used_by(&self, _: Vec<BlobId>) -> Result<Vec<CryptoHash>, NodeError> {
+    async fn missing_blob_ids(&self, _: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }

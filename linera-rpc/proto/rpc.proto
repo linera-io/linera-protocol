@@ -70,8 +70,8 @@ service ValidatorNode {
   // Returns the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
-  // Returns the hashes of the certificates that last used each of the blobs.
-  rpc BlobsLastUsedBy(BlobIds) returns (CryptoHashes);
+  // Returns the `BlobId`s that are not contained as `Blob`.
+  rpc MissingBlobIds(BlobIds) returns (BlobIds);
 }
 
 // A request for a batch of certificates.
@@ -260,10 +260,6 @@ message PublicKey {
 
 message CryptoHash {
   bytes bytes = 1;
-}
-
-message CryptoHashes {
-  repeated bytes bytes = 1;
 }
 
 message Owner {

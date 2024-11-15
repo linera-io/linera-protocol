@@ -33,7 +33,7 @@ pub enum RpcMessage {
     DownloadCertificate(Box<CryptoHash>),
     DownloadCertificates(Box<Vec<CryptoHash>>),
     BlobLastUsedBy(Box<BlobId>),
-    BlobsLastUsedBy(Box<Vec<BlobId>>),
+    MissingBlobIds(Box<Vec<BlobId>>),
     VersionInfoQuery,
     GenesisConfigHashQuery,
 
@@ -48,7 +48,7 @@ pub enum RpcMessage {
     DownloadCertificateResponse(Box<Certificate>),
     DownloadCertificatesResponse(Box<Vec<Certificate>>),
     BlobLastUsedByResponse(Box<CryptoHash>),
-    BlobsLastUsedByResponse(Box<Vec<CryptoHash>>),
+    MissingBlobIdsResponse(Box<Vec<BlobId>>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -81,9 +81,9 @@ impl RpcMessage {
             | DownloadCertificate(_)
             | DownloadCertificates(_)
             | BlobLastUsedBy(_)
-            | BlobsLastUsedBy(_)
             | BlobLastUsedByResponse(_)
-            | BlobsLastUsedByResponse(_)
+            | MissingBlobIds(_)
+            | MissingBlobIdsResponse(_)
             | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {
                 return None;
@@ -104,7 +104,7 @@ impl RpcMessage {
             | DownloadBlobContent(_)
             | DownloadCertificateValue(_)
             | BlobLastUsedBy(_)
-            | BlobsLastUsedBy(_)
+            | MissingBlobIds(_)
             | DownloadCertificate(_)
             | DownloadCertificates(_) => true,
             BlockProposal(_)
@@ -120,7 +120,7 @@ impl RpcMessage {
             | DownloadBlobContentResponse(_)
             | DownloadCertificateValueResponse(_)
             | BlobLastUsedByResponse(_)
-            | BlobsLastUsedByResponse(_)
+            | MissingBlobIdsResponse(_)
             | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => false,
         }
@@ -193,23 +193,23 @@ impl TryFrom<RpcMessage> for Vec<Certificate> {
     }
 }
 
-impl TryFrom<RpcMessage> for Vec<CryptoHash> {
-    type Error = NodeError;
-    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
-        match message {
-            RpcMessage::BlobsLastUsedByResponse(hashes) => Ok(*hashes),
-            RpcMessage::Error(error) => Err(*error),
-            _ => Err(NodeError::UnexpectedMessage),
-        }
-    }
-}
-
 impl TryFrom<RpcMessage> for CryptoHash {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::BlobLastUsedByResponse(hash) => Ok(*hash),
             RpcMessage::GenesisConfigHashResponse(hash) => Ok(*hash),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for Vec<BlobId> {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::MissingBlobIds(blob_ids) => Ok(*blob_ids),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

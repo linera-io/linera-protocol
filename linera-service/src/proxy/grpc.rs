@@ -33,7 +33,7 @@ use linera_rpc::{
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificateValue,
             CertificatesBatchRequest, CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult,
-            CryptoHash, CryptoHashes, HandleCertificateRequest, LiteCertificate, Notification,
+            CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
             SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
@@ -530,22 +530,18 @@ where
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]
-    async fn blobs_last_used_by(
+    async fn missing_blob_ids(
         &self,
         request: Request<BlobIds>,
-    ) -> Result<Response<CryptoHashes>, Status> {
+    ) -> Result<Response<BlobIds>, Status> {
         let blob_ids: Vec<linera_base::identifiers::BlobId> = request.into_inner().try_into()?;
-        let blob_states = self
+        let missing_blob_ids = self
             .0
             .storage
-            .read_blob_states(&blob_ids)
+            .missing_blobs(&blob_ids)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
-        let results = blob_states
-            .into_iter()
-            .map(|blob_state| blob_state.last_used_by)
-            .collect::<Vec<_>>();
-        Ok(Response::new(results.into()))
+        Ok(Response::new(missing_blob_ids.try_into()?))
     }
 }
 

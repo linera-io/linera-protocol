@@ -794,7 +794,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     9:
-      BlobsLastUsedBy:
+      MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
@@ -844,10 +844,10 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: CryptoHash
     22:
-      BlobsLastUsedByResponse:
+      MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
-            TYPENAME: CryptoHash
+            TYPENAME: BlobId
     23:
       CrossChainRequest:
         NEWTYPE:
