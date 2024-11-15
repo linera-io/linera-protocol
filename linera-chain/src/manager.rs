@@ -411,7 +411,7 @@ impl ChainManager {
         outcome: BlockExecutionOutcome,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
-    ) -> (Option<Vote<ValidatedBlock>>, Option<Vote<ConfirmedBlock>>) {
+    ) -> (&Option<Vote<ValidatedBlock>>, &Option<Vote<ConfirmedBlock>>) {
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
         self.update_current_round(local_time);
@@ -460,7 +460,7 @@ impl ChainManager {
         }
 
         // TODO: Is it guaranteed that if key_pair = None, then the vote is not signed ever?
-        (self.validated_vote.clone(), self.confirmed_vote.clone())
+        (&self.validated_vote, &self.confirmed_vote)
     }
 
     /// Signs a vote to confirm the validated block.
