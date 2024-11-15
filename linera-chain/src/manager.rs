@@ -484,6 +484,7 @@ impl ChainManager {
             let vote = Vote::new(confirmed.value().clone(), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.confirmed_vote = Some(vote);
+            self.validated_vote = None;
         }
     }
 
