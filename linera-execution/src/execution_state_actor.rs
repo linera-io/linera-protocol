@@ -168,7 +168,7 @@ where
                     .claim(
                         signer,
                         None,
-                        owner,
+                        AccountOwner::User(owner),
                         source.chain_id,
                         Recipient::Account(destination),
                         amount,

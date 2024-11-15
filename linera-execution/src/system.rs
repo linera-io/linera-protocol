@@ -517,7 +517,7 @@ where
                     .claim(
                         context.authenticated_signer,
                         None,
-                        owner,
+                        AccountOwner::User(owner),
                         target_id,
                         recipient,
                         amount,
@@ -742,15 +742,21 @@ where
         &self,
         authenticated_signer: Option<Owner>,
         authenticated_application_id: Option<UserApplicationId>,
-        owner: Owner,
+        source: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
-        ensure!(
-            authenticated_signer.as_ref() == Some(&owner),
-            SystemExecutionError::UnauthenticatedClaimOwner
-        );
+        match source {
+            AccountOwner::User(owner) => ensure!(
+                authenticated_signer == Some(owner),
+                SystemExecutionError::UnauthenticatedClaimOwner
+            ),
+            AccountOwner::Application(owner) => ensure!(
+                authenticated_application_id == Some(owner),
+                SystemExecutionError::UnauthenticatedClaimOwner
+            ),
+        }
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectClaimAmount
@@ -763,7 +769,7 @@ where
             kind: MessageKind::Simple,
             message: SystemMessage::Withdraw {
                 amount,
-                owner: AccountOwner::User(owner),
+                owner: source,
                 recipient,
             },
         })
