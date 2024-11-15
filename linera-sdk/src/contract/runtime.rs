@@ -187,7 +187,7 @@ where
     /// balance) to `destination`.
     pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
         wit::transfer(
-            source.map(|source| source.into()),
+            source.map(|source| AccountOwner::User(source).into()),
             destination.into(),
             amount.into(),
         )

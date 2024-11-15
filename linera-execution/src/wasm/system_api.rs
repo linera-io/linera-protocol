@@ -240,14 +240,14 @@ where
     /// balance) to `destination`.
     fn transfer(
         caller: &mut Caller,
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
     ) -> Result<(), RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .transfer(source.map(AccountOwner::User), destination, amount)
+            .transfer(source, destination, amount)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

@@ -16,7 +16,7 @@ interface contract-system-api {
     send-message: func(message: send-message-request);
     subscribe: func(chain: chain-id, channel: channel-name);
     unsubscribe: func(chain: chain-id, channel: channel-name);
-    transfer: func(source: option<owner>, destination: account, amount: amount);
+    transfer: func(source: option<account-owner>, destination: account, amount: amount);
     claim: func(source: account, destination: account, amount: amount);
     get-chain-ownership: func() -> chain-ownership;
     open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> tuple<message-id, chain-id>;
