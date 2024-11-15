@@ -546,6 +546,10 @@ pub enum ClientCommand {
         #[arg(long)]
         maximum_bytecode_size: Option<u64>,
 
+        /// Set the maximum size of a block proposal, in bytes.
+        #[arg(long)]
+        maximum_block_proposal_size: Option<u64>,
+
         /// Set the maximum read data per block.
         #[arg(long)]
         maximum_bytes_read_per_block: Option<u64>,
@@ -668,6 +672,10 @@ pub enum ClientCommand {
         /// in bytes.
         #[arg(long)]
         maximum_blob_size: Option<u64>,
+
+        /// Set the maximum size of a block proposal, in bytes.
+        #[arg(long)]
+        maximum_block_proposal_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]

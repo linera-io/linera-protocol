@@ -47,6 +47,8 @@ pub struct ResourceControlPolicy {
     pub maximum_bytecode_size: u64,
     /// The maximum size of a blob.
     pub maximum_blob_size: u64,
+    /// The maximum size of a block proposal.
+    pub maximum_block_proposal_size: u64,
     /// The maximum data to read per block
     pub maximum_bytes_read_per_block: u64,
     /// The maximum data to write per block
@@ -71,6 +73,7 @@ impl fmt::Display for ResourceControlPolicy {
             maximum_executed_block_size,
             maximum_blob_size,
             maximum_bytecode_size,
+            maximum_block_proposal_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
         } = self;
@@ -92,6 +95,7 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_executed_block_size} maximum size of an executed block\n\
             {maximum_blob_size} maximum size of a data blob, bytecode or other binary blob\n\
             {maximum_bytecode_size} maximum size of service and contract bytecode\n\
+            {maximum_block_proposal_size} maximum size of a block proposal\n\
             {maximum_bytes_read_per_block} maximum number bytes read per block\n\
             {maximum_bytes_written_per_block} maximum number bytes written per block",
         )
@@ -116,6 +120,7 @@ impl Default for ResourceControlPolicy {
             maximum_executed_block_size: u64::MAX,
             maximum_blob_size: u64::MAX,
             maximum_bytecode_size: u64::MAX,
+            maximum_block_proposal_size: u64::MAX,
             maximum_bytes_read_per_block: u64::MAX,
             maximum_bytes_written_per_block: u64::MAX,
         }
@@ -237,6 +242,7 @@ impl ResourceControlPolicy {
             maximum_executed_block_size: 1_000_000,
             maximum_blob_size: 1_000_000,
             maximum_bytecode_size: 10_000_000,
+            maximum_block_proposal_size: 13_000_000,
             maximum_bytes_read_per_block: 100_000_000,
             maximum_bytes_written_per_block: 10_000_000,
         }

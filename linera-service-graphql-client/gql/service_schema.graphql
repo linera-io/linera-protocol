@@ -919,6 +919,10 @@ input ResourceControlPolicy {
 	"""
 	maximumBlobSize: Int!
 	"""
+	The maximum size of a block proposal.
+	"""
+	maximumBlockProposalSize: Int!
+	"""
 	The maximum data to read per block
 	"""
 	maximumBytesReadPerBlock: Int!
