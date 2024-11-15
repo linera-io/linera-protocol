@@ -516,6 +516,7 @@ where
                 let message = self
                     .claim(
                         context.authenticated_signer,
+                        None,
                         owner,
                         target_id,
                         recipient,
@@ -740,6 +741,7 @@ where
     pub async fn claim(
         &self,
         authenticated_signer: Option<Owner>,
+        authenticated_application_id: Option<UserApplicationId>,
         owner: Owner,
         target_id: ChainId,
         recipient: Recipient,
