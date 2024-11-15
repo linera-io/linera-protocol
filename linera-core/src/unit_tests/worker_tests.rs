@@ -438,7 +438,7 @@ where
     .await;
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
     let unknown_key_pair = KeyPair::generate();
     let mut bad_signature_block_proposal = block_proposal.clone();
     bad_signature_block_proposal.signature =
@@ -486,7 +486,7 @@ where
     let zero_amount_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::ZERO)
         .with_authenticated_signer(Some(sender_key_pair.public().into()))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
     assert_matches!(
     worker
         .handle_block_proposal(zero_amount_block_proposal)
@@ -526,7 +526,7 @@ where
     {
         let block_proposal = make_first_block(ChainId::root(1))
             .with_timestamp(Timestamp::from(TEST_GRACE_PERIOD_MICROS + 1_000_000))
-            .into_fast_proposal(&key_pair);
+            .into_proposal_with_round(&key_pair, Round::MultiLeader(0));
         // Timestamp too far in the future
         assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -537,7 +537,9 @@ where
     let block_0_time = Timestamp::from(TEST_GRACE_PERIOD_MICROS);
     let certificate = {
         let block = make_first_block(ChainId::root(1)).with_timestamp(block_0_time);
-        let block_proposal = block.clone().into_fast_proposal(&key_pair);
+        let block_proposal = block
+            .clone()
+            .into_proposal_with_round(&key_pair, Round::MultiLeader(0));
         let future = worker.handle_block_proposal(block_proposal);
         clock.set(block_0_time);
         future.await?;
@@ -566,7 +568,7 @@ where
     {
         let block_proposal = make_child_block(&certificate.into_value().try_into().unwrap())
             .with_timestamp(block_0_time.saturating_sub_micros(1))
-            .into_fast_proposal(&key_pair);
+            .into_proposal_with_round(&key_pair, Round::MultiLeader(0));
         // Timestamp older than previous one
         assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -605,7 +607,7 @@ where
     let unknown_key = KeyPair::generate();
     let unknown_sender_block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
-        .into_fast_proposal(&unknown_key);
+        .into_proposal_with_round(&unknown_key, Round::MultiLeader(0));
     assert_matches!(
         worker
             .handle_block_proposal(unknown_sender_block_proposal)
@@ -641,7 +643,7 @@ where
     let block_proposal0 = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::ONE)
         .with_authenticated_signer(Some(sender_key_pair.public().into()))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
     let certificate0 = make_simple_transfer_certificate(
         ChainDescription::Root(1),
         &sender_key_pair,
@@ -656,7 +658,7 @@ where
     .await;
     let block_proposal1 = make_child_block(certificate0.value())
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
 
     assert_matches!(
         worker.handle_block_proposal(block_proposal1.clone()).await,
@@ -761,7 +763,7 @@ where
 
     let epoch = Epoch::ZERO;
     let admin_id = ChainId::root(0);
-    let certificate0 = make_certificate(
+    let certificate0 = make_certificate_with_round(
         &committee,
         &worker,
         HashedCertificateValue::new_confirmed(
@@ -791,9 +793,10 @@ where
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
         ),
+        Round::MultiLeader(0),
     );
 
-    let certificate1 = make_certificate(
+    let certificate1 = make_certificate_with_round(
         &committee,
         &worker,
         HashedCertificateValue::new_confirmed(
@@ -818,6 +821,7 @@ where
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
         ),
+        Round::MultiLeader(0),
     );
     // Missing earlier blocks
     assert_matches!(
@@ -872,7 +876,7 @@ where
         let block_proposal = make_first_block(ChainId::root(2))
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(6))
             .with_authenticated_signer(Some(recipient_key_pair.public().into()))
-            .into_fast_proposal(&recipient_key_pair);
+            .into_proposal_with_round(&recipient_key_pair, Round::MultiLeader(0));
         // Insufficient funding
         assert_matches!(
                 worker.handle_block_proposal(block_proposal).await,
@@ -928,7 +932,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_authenticated_signer(Some(recipient_key_pair.public().into()))
-            .into_fast_proposal(&recipient_key_pair);
+            .into_proposal_with_round(&recipient_key_pair, Round::MultiLeader(0));
         // Inconsistent received messages.
         assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -952,7 +956,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_authenticated_signer(Some(recipient_key_pair.public().into()))
-            .into_fast_proposal(&recipient_key_pair);
+            .into_proposal_with_round(&recipient_key_pair, Round::MultiLeader(0));
         // Skipped message.
         assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -1001,7 +1005,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_authenticated_signer(Some(recipient_key_pair.public().into()))
-            .into_fast_proposal(&recipient_key_pair);
+            .into_proposal_with_round(&recipient_key_pair, Round::MultiLeader(0));
         // Inconsistent order in received messages (heights).
         assert_matches!(
             worker.handle_block_proposal(block_proposal).await,
@@ -1026,7 +1030,7 @@ where
                 action: MessageAction::Accept,
             })
             .with_authenticated_signer(Some(recipient_key_pair.public().into()))
-            .into_fast_proposal(&recipient_key_pair);
+            .into_proposal_with_round(&recipient_key_pair, Round::MultiLeader(0));
         // Taking the first message only is ok.
         worker.handle_block_proposal(block_proposal.clone()).await?;
         let certificate = make_certificate(
@@ -1082,7 +1086,7 @@ where
                 },
                 action: MessageAction::Accept,
             })
-            .into_fast_proposal(&recipient_key_pair);
+            .into_proposal_with_round(&recipient_key_pair, Round::MultiLeader(0));
         worker.handle_block_proposal(block_proposal.clone()).await?;
     }
     Ok(())
@@ -1117,7 +1121,7 @@ where
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(1000))
         .with_authenticated_signer(Some(sender_key_pair.public().into()))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
     assert_matches!(
         worker.handle_block_proposal(block_proposal).await,
         Err(
@@ -1157,7 +1161,7 @@ where
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .with_authenticated_signer(Some(sender_key_pair.public().into()))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
 
     let (chain_info_response, _actions) = worker.handle_block_proposal(block_proposal).await?;
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
@@ -1201,7 +1205,7 @@ where
     let block_proposal = make_first_block(ChainId::root(1))
         .with_simple_transfer(ChainId::root(2), Amount::from_tokens(5))
         .with_authenticated_signer(Some(sender_key_pair.public().into()))
-        .into_fast_proposal(&sender_key_pair);
+        .into_proposal_with_round(&sender_key_pair, Round::MultiLeader(0));
 
     let (response, _actions) = worker.handle_block_proposal(block_proposal.clone()).await?;
     response.check(&ValidatorName(worker.public_key()))?;
@@ -1963,10 +1967,10 @@ where
         let ownership = &recipient_chain.manager.get().ownership;
         assert!(
             ownership
-                .super_owners
+                .owners
                 .contains_key(&recipient_key_pair.public().into())
-                && ownership.super_owners.len() == 1
-                && ownership.owners.is_empty()
+                && ownership.super_owners.is_empty()
+                && ownership.owners.len() == 1
         );
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
@@ -3502,7 +3506,8 @@ where
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
     let value0 = HashedCertificateValue::new_confirmed(executed_block0);
-    let certificate0 = make_certificate(&committee, &worker, value0.clone());
+    let certificate0 =
+        make_certificate_with_round(&committee, &worker, value0.clone(), Round::MultiLeader(0));
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
         .await?;
@@ -3599,7 +3604,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
     assert!(manager.fallback_vote.is_none());
-    assert_eq!(manager.current_round, Round::Fast);
+    assert_eq!(manager.current_round, Round::MultiLeader(0));
     assert!(manager.leader.is_none());
     let fallback_duration = manager.ownership.timeout_config.fallback_duration;
 
@@ -3841,7 +3846,9 @@ where
     clock.set(Timestamp::from(BLOCK_TIMESTAMP));
     let block = make_first_block(chain_id).with_timestamp(Timestamp::from(BLOCK_TIMESTAMP));
 
-    let block_proposal = block.clone().into_fast_proposal(&key_pair);
+    let block_proposal = block
+        .clone()
+        .into_proposal_with_round(&key_pair, Round::MultiLeader(0));
     let _ = worker.handle_block_proposal(block_proposal).await?;
 
     for local_time in queries_before_confirmation {
@@ -3875,7 +3882,8 @@ where
         }
         .with(block),
     );
-    let certificate = make_certificate(&committee, &worker, value);
+    let certificate =
+        make_certificate_with_round(&committee, &worker, value, Round::MultiLeader(0));
     worker.handle_certificate(certificate, vec![], None).await?;
 
     for query_context in query_contexts_after_new_block.clone() {
