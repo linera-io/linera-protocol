@@ -34,8 +34,8 @@ permissions:
 jobs:
 
   test:
-    runs-on: ubuntu-latest-8-cores
-    timeout-minutes: 40
+    runs-on: ubuntu-latest-cores
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v3
