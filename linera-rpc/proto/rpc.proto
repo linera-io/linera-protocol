@@ -70,8 +70,8 @@ service ValidatorNode {
   // Returns the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
 
-  // Returns the `BlobId`s that are not contained as `BlobState`.
-  rpc MissingBlobStates(BlobIds) returns (BlobIds);
+  // Returns the `BlobId`s that are not contained as `Blob`.
+  rpc MissingBlobIds(BlobIds) returns (BlobIds);
 }
 
 // A request for a batch of certificates.

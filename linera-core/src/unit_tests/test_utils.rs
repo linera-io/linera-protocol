@@ -199,9 +199,9 @@ where
         .await
     }
 
-    async fn missing_blob_states(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_missing_blob_states(blob_ids, sender)
+            validator.do_missing_blob_ids(blob_ids, sender)
         })
         .await
     }
@@ -513,19 +513,19 @@ where
         sender.send(certificate_hash)
     }
 
-    async fn do_missing_blob_states(
+    async fn do_missing_blob_ids(
         self,
         blob_ids: Vec<BlobId>,
         sender: oneshot::Sender<Result<Vec<BlobId>, NodeError>>,
     ) -> Result<(), Result<Vec<BlobId>, NodeError>> {
         let validator = self.client.lock().await;
-        let missing_blob_states = validator
+        let missing_blob_ids = validator
             .state
             .storage_client()
-            .missing_blob_states(&blob_ids)
+            .missing_blobs(&blob_ids)
             .await
             .map_err(Into::into);
-        sender.send(missing_blob_states)
+        sender.send(missing_blob_ids)
     }
 }
 

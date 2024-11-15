@@ -170,8 +170,8 @@ impl ValidatorNode for SimpleClient {
             .await
     }
 
-    async fn missing_blob_states(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
-        self.query(RpcMessage::MissingBlobStates(Box::new(blob_ids)))
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+        self.query(RpcMessage::MissingBlobIds(Box::new(blob_ids)))
             .await
     }
 }

@@ -530,18 +530,18 @@ where
     }
 
     #[instrument(skip_all, err(level = Level::WARN))]
-    async fn missing_blob_states(
+    async fn missing_blob_ids(
         &self,
         request: Request<BlobIds>,
     ) -> Result<Response<BlobIds>, Status> {
         let blob_ids: Vec<linera_base::identifiers::BlobId> = request.into_inner().try_into()?;
-        let missing_blob_states: Vec<linera_base::identifiers::BlobId> = self
+        let missing_blob_ids = self
             .0
             .storage
-            .missing_blob_states(&blob_ids)
+            .missing_blobs(&blob_ids)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
-        Ok(Response::new(missing_blob_states.try_into()?))
+        Ok(Response::new(missing_blob_ids.try_into()?))
     }
 }
 

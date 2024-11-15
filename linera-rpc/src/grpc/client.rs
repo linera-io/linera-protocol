@@ -365,9 +365,9 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
-    async fn missing_blob_states(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         let req = api::BlobIds::try_from(blob_ids)?;
-        Ok(client_delegate!(self, missing_blob_states, req)?.try_into()?)
+        Ok(client_delegate!(self, missing_blob_ids, req)?.try_into()?)
     }
 }
 

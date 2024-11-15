@@ -105,7 +105,7 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn missing_blob_states(&self, _: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+    async fn missing_blob_ids(&self, _: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }

@@ -794,7 +794,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     9:
-      MissingBlobStates:
+      MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
@@ -844,7 +844,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: CryptoHash
     22:
-      MissingBlobStatesResponse:
+      MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId

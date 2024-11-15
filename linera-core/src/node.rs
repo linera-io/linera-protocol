@@ -105,8 +105,8 @@ pub trait ValidatorNode {
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
 
-    /// Returns the missing `BlobState`s.
-    async fn missing_blob_states(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
+    /// Returns the missing `Blob`s. by their ids.
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
 }
 
 /// Turn an address into a validator node.
