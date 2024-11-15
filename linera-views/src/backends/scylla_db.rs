@@ -304,14 +304,9 @@ impl ScyllaDbClient {
         let mut batch_values = Vec::new();
         let query1 = &self.write_batch_delete_prefix_unbounded;
         let query2 = &self.write_batch_delete_prefix_bounded;
-        println!("|batch|={}", batch.len());
         ensure!(
             batch.len() <= MAX_BATCH_SIZE,
             ScyllaDbStoreInternalError::TooLargeBatch
-        );
-        println!(
-            "|key_prefix_deletions|={}",
-            batch.key_prefix_deletions.len()
         );
         for key_prefix in batch.key_prefix_deletions {
             ensure!(
@@ -332,10 +327,6 @@ impl ScyllaDbClient {
             }
         }
         let query3 = &self.write_batch_deletion;
-        println!(
-            "|deletions|={}",
-            batch.simple_unordered_batch.deletions.len()
-        );
         for key in batch.simple_unordered_batch.deletions {
             ensure!(
                 key.len() <= MAX_KEY_SIZE,
@@ -346,14 +337,7 @@ impl ScyllaDbClient {
             batch_query.append_statement(query3.clone());
         }
         let query4 = &self.write_batch_insertion;
-        println!(
-            "|insertions|={}",
-            batch.simple_unordered_batch.insertions.len()
-        );
-        let mut total_size = 0;
         for (key, value) in batch.simple_unordered_batch.insertions {
-            println!("|key|={} |value|={}", key.len(), value.len());
-            total_size += key.len() + value.len();
             ensure!(
                 key.len() <= MAX_KEY_SIZE,
                 ScyllaDbStoreInternalError::KeyTooLong
@@ -366,7 +350,6 @@ impl ScyllaDbClient {
             batch_values.push(values);
             batch_query.append_statement(query4.clone());
         }
-        println!("total_size={}", total_size);
         session.batch(&batch_query, batch_values).await?;
         Ok(())
     }
