@@ -3,6 +3,9 @@ name: Benchmarks
 on:
   push:
     branches: [ main, 'devnet_*', 'testnet_*' ]
+  pull_request:
+    branches:
+      - "**"
   workflow_dispatch:
 
 env:
