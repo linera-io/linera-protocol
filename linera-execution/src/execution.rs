@@ -463,7 +463,7 @@ where
             message: SystemMessage::Credit {
                 amount,
                 source: context.authenticated_signer.map(AccountOwner::User),
-                target: account.owner.map(AccountOwner::User),
+                target: account.owner,
             },
         };
         outcome.messages.push(message);

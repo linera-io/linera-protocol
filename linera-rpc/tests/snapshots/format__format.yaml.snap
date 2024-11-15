@@ -9,7 +9,7 @@ Account:
         TYPENAME: ChainId
     - owner:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
 AccountOwner:
   ENUM:
     0:

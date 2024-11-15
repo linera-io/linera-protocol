@@ -33,7 +33,7 @@ interface contract-system-api {
 
     record account {
         chain-id: chain-id,
-        owner: option<owner>,
+        owner: option<account-owner>,
     }
 
     variant account-owner {

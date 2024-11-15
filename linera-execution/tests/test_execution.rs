@@ -13,7 +13,9 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
+    identifiers::{
+        Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
+    },
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -152,7 +154,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     .unwrap();
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Some(owner),
+        owner: Some(AccountOwner::User(owner)),
     };
     let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(

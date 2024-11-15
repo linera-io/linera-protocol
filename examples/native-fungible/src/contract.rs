@@ -39,7 +39,7 @@ impl Contract for NativeFungibleTokenContract {
             let owner = self.normalize_owner(owner);
             let account = Account {
                 chain_id: self.runtime.chain_id(),
-                owner: Some(owner),
+                owner: Some(AccountOwner::User(owner)),
             };
             self.runtime.transfer(None, account, amount);
         }
@@ -142,7 +142,7 @@ impl NativeFungibleTokenContract {
         let owner = self.normalize_owner(account.owner);
         Account {
             chain_id: account.chain_id,
-            owner: Some(owner),
+            owner: Some(AccountOwner::User(owner)),
         }
     }
 

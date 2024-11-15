@@ -159,7 +159,7 @@ where
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
-            Account::owner(ChainId::root(2), owner_identity),
+            Account::owner(ChainId::root(2), owner),
         )
         .await
         .unwrap()

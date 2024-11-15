@@ -728,7 +728,7 @@ where
                     message: SystemMessage::Credit {
                         amount,
                         source,
-                        target: account.owner.map(AccountOwner::User),
+                        target: account.owner,
                     },
                 };
 
@@ -847,7 +847,7 @@ where
                             message: SystemMessage::Credit {
                                 amount,
                                 source: Some(owner),
-                                target: account.owner.map(AccountOwner::User),
+                                target: account.owner,
                             },
                         };
                         outcome.messages.push(message);

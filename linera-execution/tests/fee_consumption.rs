@@ -182,7 +182,7 @@ async fn test_fee_consumption(
 
     let refund_grant_to = Some(Account {
         chain_id: ChainId::root(0),
-        owner: authenticated_signer,
+        owner: authenticated_signer.map(AccountOwner::User),
     });
     let context = MessageContext {
         chain_id: ChainId::root(0),

@@ -48,7 +48,7 @@ pub struct Account {
     pub chain_id: ChainId,
     /// The owner of the account, or `None` for the chain balance.
     #[debug(skip_if = Option::is_none)]
-    pub owner: Option<Owner>,
+    pub owner: Option<AccountOwner>,
 }
 
 impl Account {
@@ -61,10 +61,10 @@ impl Account {
     }
 
     /// Creates an [`Account`] for a specific [`Owner`] on a chain.
-    pub fn owner(chain_id: ChainId, owner: Owner) -> Self {
+    pub fn owner(chain_id: ChainId, owner: impl Into<AccountOwner>) -> Self {
         Account {
             chain_id,
-            owner: Some(owner),
+            owner: Some(owner.into()),
         }
     }
 }
@@ -94,7 +94,7 @@ impl FromStr for Account {
             .parse()?;
 
         if let Some(owner_string) = parts.next() {
-            let owner = owner_string.parse()?;
+            let owner = owner_string.parse::<AccountOwner>()?;
             Ok(Account::owner(chain_id, owner))
         } else {
             Ok(Account::chain(chain_id))

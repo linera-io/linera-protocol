@@ -968,7 +968,7 @@ impl OperationContext {
     fn refund_grant_to(&self) -> Option<Account> {
         Some(Account {
             chain_id: self.chain_id,
-            owner: self.authenticated_signer,
+            owner: self.authenticated_signer.map(AccountOwner::User),
         })
     }
 

@@ -121,6 +121,13 @@ impl Runnable for Job {
                 amount,
             } => {
                 let chain_client = context.make_chain_client(sender.chain_id)?;
+                let owner = match sender.owner {
+                    Some(AccountOwner::User(owner)) => Some(owner),
+                    Some(AccountOwner::Application(_)) => {
+                        bail!("Can't transfer from an application account")
+                    }
+                    None => None,
+                };
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
                     amount, sender, recipient
@@ -131,7 +138,7 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
-                                .transfer_to_account(sender.owner, amount, recipient)
+                                .transfer_to_account(owner, amount, recipient)
                                 .await
                         }
                     })
@@ -300,11 +307,7 @@ impl Runnable for Job {
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    Some(owner) => {
-                        chain_client
-                            .local_owner_balance(AccountOwner::User(owner))
-                            .await?
-                    }
+                    Some(owner) => chain_client.local_owner_balance(owner).await?,
                     None => chain_client.local_balance().await?,
                 };
                 let time_total = time_start.elapsed();
@@ -321,11 +324,7 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    Some(owner) => {
-                        chain_client
-                            .query_owner_balance(AccountOwner::User(owner))
-                            .await?
-                    }
+                    Some(owner) => chain_client.query_owner_balance(owner).await?,
                     None => chain_client.query_balance().await?,
                 };
                 let time_total = time_start.elapsed();
@@ -341,11 +340,7 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
-                    Some(owner) => {
-                        chain_client
-                            .query_owner_balance(AccountOwner::User(owner))
-                            .await
-                    }
+                    Some(owner) => chain_client.query_owner_balance(owner).await,
                     None => chain_client.query_balance().await,
                 };
                 context.update_and_save_wallet(&chain_client).await?;

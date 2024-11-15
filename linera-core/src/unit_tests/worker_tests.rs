@@ -315,7 +315,7 @@ where
                 MessageKind::Tracked,
                 SystemMessage::Credit {
                     source: source.map(AccountOwner::User),
-                    target: account.owner.map(AccountOwner::User),
+                    target: account.owner,
                     amount,
                 },
             )]);
@@ -2102,14 +2102,14 @@ where
     let sender = Owner::from(sender_key_pair.public());
     let sender_account = Account {
         chain_id: ChainId::root(1),
-        owner: Some(sender),
+        owner: Some(AccountOwner::User(sender)),
     };
 
     let recipient_key_pair = KeyPair::generate();
     let recipient = Owner::from(sender_key_pair.public());
     let recipient_account = Account {
         chain_id: ChainId::root(2),
-        owner: Some(recipient),
+        owner: Some(AccountOwner::User(recipient)),
     };
 
     let (committee, worker) = init_worker_with_chains(
