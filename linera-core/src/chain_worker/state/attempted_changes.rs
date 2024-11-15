@@ -13,9 +13,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, Target},
     manager,
-    types::{
-        Certificate, ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate,
-    },
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -133,13 +131,22 @@ where
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
         let manager = self.state.chain.manager.get_mut();
-        manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time);
-        // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some(vote) = manager.pending() {
-            self.state
-                .recent_hashed_certificate_values
-                .insert(Cow::Borrowed(&vote.value))
-                .await;
+        match manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time) {
+            // Cache the value we voted on, so the client doesn't have to send it again.
+            (Some(vote), None) => {
+                self.state
+                    .recent_hashed_validated_values
+                    .insert(Cow::Borrowed(&vote.value))
+                    .await;
+            }
+            (None, Some(vote)) => {
+                self.state
+                    .recent_hashed_confirmed_values
+                    .insert(Cow::Borrowed(&vote.value))
+                    .await;
+            }
+            (Some(_), Some(_)) => panic!("vote is either validated or confirmed"),
+            (None, None) => (),
         }
         self.save().await?;
         Ok(())
@@ -191,12 +198,9 @@ where
             ));
         }
 
-        // NOTE: Turn back to `Certificate` type to extract `HashedCertificateValue`
-        // as the `recent_hashed_cerificate_values` cache works on old types still.
-        let cert = Certificate::from(certificate.clone());
         self.state
-            .recent_hashed_certificate_values
-            .insert(Cow::Borrowed(cert.value()))
+            .recent_hashed_validated_values
+            .insert(Cow::Borrowed(certificate.value()))
             .await;
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
@@ -369,8 +373,8 @@ where
         self.save().await?;
 
         self.state
-            .recent_hashed_certificate_values
-            .insert(Cow::Owned(certificate.into_inner().into()))
+            .recent_hashed_confirmed_values
+            .insert(Cow::Owned(certificate.into_value()))
             .await;
 
         self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)

@@ -11,8 +11,12 @@ mod unit_tests;
 use std::{any::type_name, sync::LazyLock};
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
-use linera_base::{crypto::CryptoHash, data_types::Blob, identifiers::BlobId};
-use linera_chain::types::{Certificate, HashedCertificateValue, LiteCertificate};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::Blob,
+    identifiers::{BlobId, ChainId},
+};
+use linera_chain::types::{GenericCertificate, Has, Hashed, LiteCertificate};
 use lru::LruCache;
 use tokio::sync::Mutex;
 #[cfg(with_metrics)]
@@ -164,38 +168,23 @@ where
     }
 }
 
-impl ValueCache<CryptoHash, HashedCertificateValue> {
+impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
     /// Inserts a [`HashedCertificateValue`] into the cache, if it's not already present.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it needs to be
     /// inserted in the cache.
     ///
     /// Returns [`true`] if the value was not already present in the cache.
-    ///
-    /// # Notes
-    ///
-    /// If the `value` is a [`HashedCertificateValue::ValidatedBlock`], its respective
-    /// [`HashedCertificateValue::ConfirmedBlock`] is also cached.
-    pub async fn insert<'a>(&self, value: Cow<'a, HashedCertificateValue>) -> bool {
+    pub async fn insert<'a>(&self, value: Cow<'a, Hashed<T>>) -> bool {
         let hash = (*value).hash();
-        let maybe_confirmed_value = value.validated_to_confirmed();
         let mut cache = self.cache.lock().await;
         if cache.contains(&hash) {
             // Promote the re-inserted value in the cache, as if it was accessed again.
             cache.promote(&hash);
-            if let Some(confirmed_value) = maybe_confirmed_value {
-                // Also promote its respective confirmed certificate value
-                cache.promote(&confirmed_value.hash());
-            }
             false
         } else {
             // Cache the certificate so that clients don't have to send the value again.
             cache.push(hash, value.into_owned());
-            if let Some(confirmed_value) = maybe_confirmed_value {
-                // Cache the certificate for the confirmed block in advance, so that the clients don't
-                // have to send it.
-                cache.push(confirmed_value.hash(), confirmed_value);
-            }
             true
         }
     }
@@ -205,10 +194,11 @@ impl ValueCache<CryptoHash, HashedCertificateValue> {
     ///
     /// The `values` are wrapped in [`Cow`]s so that each `value` is only cloned if it
     /// needs to be inserted in the cache.
-    pub async fn insert_all<'a>(
-        &self,
-        values: impl IntoIterator<Item = Cow<'a, HashedCertificateValue>>,
-    ) {
+    #[cfg(with_testing)]
+    pub async fn insert_all<'a>(&self, values: impl IntoIterator<Item = Cow<'a, Hashed<T>>>)
+    where
+        T: 'a,
+    {
         let mut cache = self.cache.lock().await;
         for value in values {
             let hash = (*value).hash();
@@ -223,7 +213,10 @@ impl ValueCache<CryptoHash, HashedCertificateValue> {
     pub async fn full_certificate(
         &self,
         certificate: LiteCertificate<'_>,
-    ) -> Result<Certificate, WorkerError> {
+    ) -> Result<GenericCertificate<T>, WorkerError>
+    where
+        T: Has<ChainId>,
+    {
         let value = self
             .get(&certificate.value.value_hash)
             .await

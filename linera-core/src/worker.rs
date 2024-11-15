@@ -25,8 +25,8 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        Certificate, CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue,
-        LiteCertificate, TimeoutCertificate, ValidatedBlockCertificate,
+        Certificate, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, Hashed,
+        LiteCertificate, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
@@ -262,8 +262,8 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    /// Cached hashed certificate values by hash.
-    recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+    recent_confirmed_value_cache: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
+    recent_validated_value_cache: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -296,7 +296,8 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            recent_hashed_certificate_values: Arc::new(ValueCache::default()),
+            recent_confirmed_value_cache: Arc::new(ValueCache::default()),
+            recent_validated_value_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -315,7 +316,8 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            recent_hashed_certificate_values: Arc::new(ValueCache::default()),
+            recent_confirmed_value_cache: Arc::new(ValueCache::default()),
+            recent_validated_value_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -395,9 +397,29 @@ where
         &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
-        self.recent_hashed_certificate_values
-            .full_certificate(certificate)
+        if self
+            .recent_confirmed_value_cache
+            .contains(&certificate.value.value_hash)
             .await
+        {
+            Ok(self
+                .recent_confirmed_value_cache
+                .full_certificate(certificate.clone())
+                .await?
+                .into())
+        } else if self
+            .recent_validated_value_cache
+            .contains(&certificate.value.value_hash)
+            .await
+        {
+            Ok(self
+                .recent_validated_value_cache
+                .full_certificate(certificate.clone())
+                .await?
+                .into())
+        } else {
+            Err(WorkerError::MissingCertificateValue)
+        }
     }
 }
 
@@ -646,7 +668,8 @@ where
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
-                self.recent_hashed_certificate_values.clone(),
+                self.recent_confirmed_value_cache.clone(),
+                self.recent_validated_value_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,

@@ -35,8 +35,14 @@ impl<T> GenericCertificate<T> {
         }
     }
 
+    /// Returns a reference to the `Hashed` value contained in this certificate.
     pub fn value(&self) -> &Hashed<T> {
         &self.value
+    }
+
+    /// Consumes this certificate, returning the value it contains.
+    pub fn into_value(self) -> Hashed<T> {
+        self.value
     }
 
     /// Returns reference to the value contained in this certificate.

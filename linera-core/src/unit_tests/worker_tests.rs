@@ -446,7 +446,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.get().validated_vote().is_none());
     Ok(())
 }
 
@@ -495,7 +496,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.get().validated_vote().is_none());
     Ok(())
 }
 
@@ -607,7 +609,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.get().validated_vote().is_none());
     Ok(())
 }
 
@@ -656,7 +659,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.get().validated_vote().is_none());
 
     drop(chain);
     worker
@@ -664,7 +668,8 @@ where
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_some());
+    assert!(chain.manager.get().validated_vote().is_some());
+    assert!(chain.manager.get().confirmed_vote().is_none());
     drop(chain);
     worker
         .handle_certificate(certificate0, vec![], None)
@@ -672,7 +677,8 @@ where
     worker.handle_block_proposal(block_proposal1).await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_some());
+    assert!(chain.manager.get().confirmed_vote().is_some());
+    assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0.clone()).await,
@@ -1082,7 +1088,8 @@ where
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().pending().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert!(chain.manager.get().validated_vote().is_none());
     Ok(())
 }
 
@@ -1114,7 +1121,7 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    let pending_value = chain.manager.get().pending().unwrap().lite();
+    let pending_value = chain.manager.get().validated_vote().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
         pending_value
