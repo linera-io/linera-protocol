@@ -5,7 +5,10 @@
 use linera_base::data_types::Amount;
 
 use super::*;
-use crate::test::{make_first_block, BlockTestExt};
+use crate::{
+    test::{make_first_block, BlockTestExt},
+    types::HashedCertificateValue,
+};
 
 #[test]
 fn test_signed_values() {

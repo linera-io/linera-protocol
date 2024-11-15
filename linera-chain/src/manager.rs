@@ -84,6 +84,7 @@ use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    block::Timeout,
     data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
     types::{
         CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue, TimeoutCertificate,
@@ -125,13 +126,13 @@ pub struct ChainManager {
     pub timeout: Option<TimeoutCertificate>,
     /// Latest vote we have cast, to validate or confirm.
     #[debug(skip_if = Option::is_none)]
-    pub pending: Option<Vote>,
+    pub pending: Option<Vote<CertificateValue>>,
     /// Latest timeout vote we cast.
     #[debug(skip_if = Option::is_none)]
-    pub timeout_vote: Option<Vote>,
+    pub timeout_vote: Option<Vote<Timeout>>,
     /// Fallback vote we cast.
     #[debug(skip_if = Option::is_none)]
-    pub fallback_vote: Option<Vote>,
+    pub fallback_vote: Option<Vote<Timeout>>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
     #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
@@ -221,7 +222,7 @@ impl ChainManager {
     }
 
     /// Returns the most recent vote we cast.
-    pub fn pending(&self) -> Option<&Vote> {
+    pub fn pending(&self) -> Option<&Vote<CertificateValue>> {
         self.pending.as_ref()
     }
 
@@ -318,7 +319,11 @@ impl ChainManager {
             }
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
-        self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
+        self.timeout_vote = Some(Vote::new(
+            value.try_into().expect("Timeout certificate"),
+            current_round,
+            key_pair,
+        ));
         true
     }
 
@@ -341,7 +346,11 @@ impl ChainManager {
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
-        self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
+        self.fallback_vote = Some(Vote::new(
+            value.try_into().expect("Timeout certificate"),
+            last_regular_round,
+            key_pair,
+        ));
         true
     }
 

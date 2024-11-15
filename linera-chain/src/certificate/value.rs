@@ -2,16 +2,21 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, ensure, identifiers::ChainId};
+use linera_base::{
+    crypto::{BcsHashable, CryptoHash},
+    data_types::BlockHeight,
+    ensure,
+    identifiers::ChainId,
+};
 use linera_execution::committee::Epoch;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use super::Hashed;
 #[cfg(with_testing)]
 use crate::data_types::OutgoingMessage;
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{Block, ExecutedBlock, LiteValue},
+    data_types::{Block, ExecutedBlock},
     ChainError,
 };
 
@@ -127,6 +132,8 @@ impl CertificateValue {
     }
 }
 
+impl BcsHashable for CertificateValue {}
+
 /// A statement to be certified by the validators, with its hash.
 pub type HashedCertificateValue = Hashed<CertificateValue>;
 
@@ -150,13 +157,6 @@ impl HashedCertificateValue {
         CertificateValue::Timeout(Timeout::new(chain_id, height, epoch)).into()
     }
 
-    pub fn lite(&self) -> LiteValue {
-        LiteValue {
-            value_hash: self.hash(),
-            chain_id: self.inner().chain_id(),
-        }
-    }
-
     /// Returns the corresponding `ConfirmedBlock`, if this is a `ValidatedBlock`.
     pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
         match self.inner() {
@@ -165,24 +165,6 @@ impl HashedCertificateValue {
             }
             CertificateValue::ConfirmedBlock(_) | CertificateValue::Timeout(_) => None,
         }
-    }
-}
-
-impl Serialize for HashedCertificateValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.inner().serialize(serializer)
-    }
-}
-
-impl<'a> Deserialize<'a> for HashedCertificateValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
-        Ok(CertificateValue::deserialize(deserializer)?.into())
     }
 }
 

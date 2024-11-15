@@ -8,7 +8,10 @@ use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::Cha
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 
-use crate::{data_types::ExecutedBlock, types::HashedCertificateValue};
+use crate::{
+    data_types::ExecutedBlock,
+    types::{CertificateValue, Has, Hashed, HashedCertificateValue},
+};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
@@ -107,5 +110,24 @@ impl Timeout {
 impl From<Timeout> for HashedCertificateValue {
     fn from(value: Timeout) -> Self {
         HashedCertificateValue::new_timeout(value.chain_id, value.height, value.epoch)
+    }
+}
+
+impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
+    type Error = &'static str;
+    fn try_from(value: HashedCertificateValue) -> Result<Hashed<Timeout>, Self::Error> {
+        let hash = value.hash();
+        match value.into_inner() {
+            CertificateValue::Timeout(timeout) => Ok(Hashed::unchecked_new(timeout, hash)),
+            _ => Err("Expected a Timeout value"),
+        }
+    }
+}
+
+impl BcsHashable for Timeout {}
+
+impl Has<ChainId> for Timeout {
+    fn get(&self) -> &ChainId {
+        &self.chain_id
     }
 }
