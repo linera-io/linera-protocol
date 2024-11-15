@@ -32,7 +32,7 @@ use linera_chain::{
         PostedMessage, SignatureAggregator,
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
-    types::{Certificate, HashedCertificateValue},
+    types::{ConfirmedBlockCertificate, GenericCertificate, Has, Hashed, HashedCertificateValue},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -139,25 +139,27 @@ where
     init_worker_with_chains(storage, [(description, owner, balance)]).await
 }
 
-fn make_certificate<S>(
+fn make_certificate<S, T>(
     committee: &Committee,
     worker: &WorkerState<S>,
-    value: HashedCertificateValue,
-) -> Certificate
+    value: Hashed<T>,
+) -> GenericCertificate<T>
 where
     S: Storage,
+    T: Clone + Has<ChainId>,
 {
     make_certificate_with_round(committee, worker, value, Round::Fast)
 }
 
-fn make_certificate_with_round<S>(
+fn make_certificate_with_round<S, T>(
     committee: &Committee,
     worker: &WorkerState<S>,
-    value: HashedCertificateValue,
+    value: Hashed<T>,
     round: Round,
-) -> Certificate
+) -> GenericCertificate<T>
 where
     S: Storage,
+    T: Clone + Has<ChainId>,
 {
     let vote = LiteVote::new(
         value.lite(),
@@ -181,8 +183,8 @@ async fn make_simple_transfer_certificate<S>(
     committee: &Committee,
     balance: Amount,
     worker: &WorkerState<S>,
-    previous_confirmed_block: Option<&Certificate>,
-) -> Certificate
+    previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
+) -> ConfirmedBlockCertificate
 where
     S: Storage,
 {
@@ -216,8 +218,8 @@ async fn make_transfer_certificate<S>(
     balance: Amount,
     balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
-    previous_confirmed_block: Option<&Certificate>,
-) -> Certificate
+    previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
+) -> ConfirmedBlockCertificate
 where
     S: Storage,
 {
@@ -253,8 +255,8 @@ async fn make_transfer_certificate_for_epoch<S>(
     balance: Amount,
     balances: BTreeMap<Owner, Amount>,
     worker: &WorkerState<S>,
-    previous_confirmed_block: Option<&Certificate>,
-) -> Certificate
+    previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
+) -> ConfirmedBlockCertificate
 where
     S: Storage,
 {
@@ -331,7 +333,7 @@ where
         }
         .with(block),
     );
-    make_certificate(committee, worker, value)
+    make_certificate(committee, worker, value.try_into().expect("Confirmed cert"))
 }
 
 fn direct_outgoing_message(
@@ -395,8 +397,11 @@ fn generate_key_pairs(count: usize) -> Vec<KeyPair> {
 }
 
 /// Creates a `CrossChainRequest` with the messages sent by the certificate to the recipient.
-fn update_recipient_direct(recipient: ChainId, certificate: &Certificate) -> CrossChainRequest {
-    let sender = certificate.inner().chain_id();
+fn update_recipient_direct(
+    recipient: ChainId,
+    certificate: &ConfirmedBlockCertificate,
+) -> CrossChainRequest {
+    let sender = certificate.inner().inner().block.chain_id;
     let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
     CrossChainRequest::UpdateRecipient {
         sender,
@@ -559,7 +564,7 @@ where
         .await?;
 
     {
-        let block_proposal = make_child_block(certificate.value())
+        let block_proposal = make_child_block(&certificate.into_value().try_into().unwrap())
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_fast_proposal(&key_pair);
         // Timestamp older than previous one
@@ -672,7 +677,7 @@ where
     assert!(chain.manager.get().confirmed_vote().is_none());
     drop(chain);
     worker
-        .handle_certificate(certificate0, vec![], None)
+        .handle_certificate(certificate0.into(), vec![], None)
         .await?;
     worker.handle_block_proposal(block_proposal1).await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
@@ -771,7 +776,7 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(
-                make_child_block(certificate0.value())
+                make_child_block(&certificate0.clone().into_value().try_into().unwrap())
                     .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3))
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
@@ -1014,7 +1019,7 @@ where
             .await?;
 
         // Then receive the next two messages.
-        let block_proposal = make_child_block(certificate.value())
+        let block_proposal = make_child_block(&certificate.into_value().try_into().unwrap())
             .with_simple_transfer(ChainId::root(3), Amount::from_tokens(3))
             .with_incoming_bundle(IncomingBundle {
                 origin: Origin::chain(ChainId::root(1)),
@@ -1204,7 +1209,7 @@ where
     .await;
     assert_matches!(
         worker
-            .fully_handle_certificate(certificate, vec![])
+            .fully_handle_certificate(certificate.into(), vec![])
             .await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})
     );
@@ -1328,7 +1333,9 @@ where
     // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
     // compute the hash of the execution state.
     assert_matches!(
-        worker.fully_handle_certificate(certificate, vec![]).await,
+        worker
+            .fully_handle_certificate(certificate.into(), vec![])
+            .await,
         Err(WorkerError::IncorrectOutcome { .. })
     );
     Ok(())
@@ -1374,9 +1381,11 @@ where
     .await;
     // Replays are ignored.
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?;
-    worker.fully_handle_certificate(certificate, vec![]).await?;
+    worker
+        .fully_handle_certificate(certificate.into(), vec![])
+        .await?;
     Ok(())
 }
 
@@ -1433,7 +1442,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1523,7 +1532,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?;
     let new_sender_chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(new_sender_chain.is_active());
@@ -1579,7 +1588,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1652,7 +1661,10 @@ where
     )
     .await;
     worker
-        .handle_cross_chain_request(update_recipient_direct(ChainId::root(2), &certificate))
+        .handle_cross_chain_request(update_recipient_direct(
+            ChainId::root(2),
+            &certificate.clone(),
+        ))
         .await?;
     let chain = worker.chain_state_view(ChainId::root(2)).await?;
     assert!(chain.is_active());
@@ -1847,7 +1859,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -1890,7 +1902,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?;
 
     assert_eq!(
@@ -1973,7 +1985,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -2044,7 +2056,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate00.clone(), vec![])
+        .fully_handle_certificate(certificate00.clone().into(), vec![])
         .await?;
 
     let certificate01 = make_transfer_certificate(
@@ -2078,7 +2090,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate01.clone(), vec![])
+        .fully_handle_certificate(certificate01.clone().into(), vec![])
         .await?;
 
     {
@@ -2104,7 +2116,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![])
+        .fully_handle_certificate(certificate1.clone().into(), vec![])
         .await?;
 
     let certificate2 = make_transfer_certificate(
@@ -2123,7 +2135,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate2.clone(), vec![])
+        .fully_handle_certificate(certificate2.clone().into(), vec![])
         .await?;
 
     // Reject the first transfer and try to use the money of the second one.
@@ -2176,7 +2188,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate(certificate.clone().into(), vec![])
         .await?;
 
     {
@@ -2217,7 +2229,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate3.clone(), vec![])
+        .fully_handle_certificate(certificate3.clone().into(), vec![])
         .await?;
 
     {
@@ -2373,7 +2385,7 @@ where
                 oracle_responses: vec![Vec::new(); 2],
             }
             .with(
-                make_child_block(certificate0.value())
+                make_child_block(&certificate0.clone().into_value().try_into().unwrap())
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
                         committee: committee.clone(),
@@ -2861,7 +2873,7 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(
-                make_child_block(certificate1.value())
+                make_child_block(&certificate1.into_value().try_into().unwrap())
                     .with_epoch(1)
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(user_id),
@@ -3166,12 +3178,12 @@ where
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key1)));
 
     // So owner 0 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(0));
+    let proposal = make_child_block(&value0.clone().try_into().unwrap())
+        .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
-    let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
+    let proposal = make_child_block(&value0.clone().try_into().unwrap())
+        .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3204,7 +3216,7 @@ where
     assert_eq!(response.info.manager.leader, Some(Owner::from(pub_key0)));
 
     // Now owner 0 can propose a block, but owner 1 can't.
-    let block1 = make_child_block(&value0);
+    let block1 = make_child_block(&value0.clone().try_into().unwrap());
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
     let proposal1_wrong_owner = block1
         .clone()
@@ -3243,7 +3255,8 @@ where
 
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
-    let block2 = make_child_block(&value0).with_simple_transfer(ChainId::root(1), amount);
+    let block2 = make_child_block(&value0.clone().try_into().unwrap())
+        .with_simple_transfer(ChainId::root(1), amount);
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
 
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
@@ -3372,11 +3385,12 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // So owner 1 cannot propose a block in this round. And the next round hasn't started yet.
-    let proposal = make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::Fast);
+    let proposal = make_child_block(&value0.clone().try_into().unwrap())
+        .into_proposal_with_round(&key_pairs[1], Round::Fast);
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
-    let proposal =
-        make_child_block(&value0).into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
+    let proposal = make_child_block(&value0.clone().try_into().unwrap())
+        .into_proposal_with_round(&key_pairs[1], Round::MultiLeader(0));
     let result = worker.handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
@@ -3409,7 +3423,7 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. And multi-leader rounds can be skipped without timeout.
-    let block1 = make_child_block(&value0);
+    let block1 = make_child_block(&value0.try_into().unwrap());
     let proposal1 = block1
         .clone()
         .with_authenticated_signer(Some(pub_key1.into()))
@@ -3460,7 +3474,7 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Owner 0 proposes another block. The validator votes to confirm.
-    let block1 = make_child_block(&value0);
+    let block1 = make_child_block(&value0.clone().try_into().unwrap());
     let proposal1 = block1
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
@@ -3485,7 +3499,7 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked.
-    let block2 = make_child_block(&value0)
+    let block2 = make_child_block(&value0.try_into().unwrap())
         .with_simple_transfer(ChainId::root(1), Amount::ONE)
         .with_authenticated_signer(Some(pub_key1.into()));
     let proposal2 = block2
