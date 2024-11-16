@@ -593,7 +593,7 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().read_chain_balance()
     }
 
-    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
         self.inner().read_owner_balance(owner)
     }
 
@@ -758,12 +758,9 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .recv_response()
     }
 
-    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| ExecutionRequest::OwnerBalance {
-                owner: AccountOwner::User(owner),
-                callback,
-            })?
+            .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 

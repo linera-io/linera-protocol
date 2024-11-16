@@ -6,7 +6,9 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -189,7 +191,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .read_owner_balance(owner)
+            .read_owner_balance(AccountOwner::User(owner))
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -474,7 +476,7 @@ where
         caller
             .user_data_mut()
             .runtime
-            .read_owner_balance(owner)
+            .read_owner_balance(AccountOwner::User(owner))
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

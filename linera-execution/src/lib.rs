@@ -41,8 +41,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
-        GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
+        Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -476,7 +476,7 @@ pub trait BaseRuntime {
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the owner balance.
-    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError>;
+    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError>;
 
     /// Reads the balances from all owners.
     fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError>;
