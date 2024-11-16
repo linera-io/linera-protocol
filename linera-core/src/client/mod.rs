@@ -537,7 +537,7 @@ pub enum ChainClientError {
     JsonError(#[from] serde_json::Error),
 
     #[error("Chain operation failed: {0}")]
-    ChainError(ChainError),
+    ChainError(#[from] ChainError),
 
     #[error(transparent)]
     CommunicationError(#[from] CommunicationError<NodeError>),
@@ -573,10 +573,7 @@ pub enum ChainClientError {
     FoundMultipleKeysForChain(ChainId),
 
     #[error(transparent)]
-    ViewError(ViewError),
-
-    #[error("Blobs not found: {0:?}")]
-    BlobsNotFound(Vec<BlobId>),
+    ViewError(#[from] ViewError),
 
     #[error(
         "Failed to download certificates and update local node to the next height \
@@ -586,31 +583,6 @@ pub enum ChainClientError {
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
     },
-}
-
-impl From<ViewError> for ChainClientError {
-    fn from(error: ViewError) -> Self {
-        match error {
-            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::ViewError(error),
-        }
-    }
-}
-
-impl From<ChainError> for ChainClientError {
-    fn from(error: ChainError) -> Self {
-        match error {
-            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            ChainError::ExecutionError(execution_error, context) => {
-                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
-                    Self::BlobsNotFound(blob_ids)
-                } else {
-                    Self::ChainError(ChainError::ExecutionError(execution_error, context))
-                }
-            }
-            error => Self::ChainError(error),
-        }
-    }
 }
 
 impl From<Infallible> for ChainClientError {
@@ -1834,7 +1806,7 @@ where
         if missing_blobs.is_empty() {
             Ok(())
         } else {
-            Err(ChainClientError::BlobsNotFound(missing_blobs))
+            Err(NodeError::BlobsNotFound(missing_blobs).into())
         }
     }
 
