@@ -17,8 +17,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId, Owner,
-        StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId,
+        Owner, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -760,7 +760,10 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
-            .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
+            .send_request(|callback| ExecutionRequest::OwnerBalance {
+                owner: AccountOwner::User(owner),
+                callback,
+            })?
             .recv_response()
     }
 

@@ -107,12 +107,7 @@ where
             }
 
             OwnerBalance { owner, callback } => {
-                let balance = self
-                    .system
-                    .balances
-                    .get(&AccountOwner::User(owner))
-                    .await?
-                    .unwrap_or_default();
+                let balance = self.system.balances.get(&owner).await?.unwrap_or_default();
                 callback.respond(balance);
             }
 
@@ -369,7 +364,7 @@ pub enum ExecutionRequest {
     },
 
     OwnerBalance {
-        owner: Owner,
+        owner: AccountOwner,
         #[debug(skip)]
         callback: Sender<Amount>,
     },
