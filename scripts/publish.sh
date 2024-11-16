@@ -8,5 +8,5 @@ set -x -e
 
 # Publish the given packages.
 grep -v '^#' "$1" | while read LINE; do
-    cargo publish -p $LINE
+    cargo publish -p "$LINE"
 done
