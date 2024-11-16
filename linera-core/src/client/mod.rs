@@ -525,7 +525,7 @@ where
 #[derive(Debug, Error)]
 pub enum ChainClientError {
     #[error("Local node operation failed: {0}")]
-    LocalNodeError(LocalNodeError),
+    LocalNodeError(#[from] LocalNodeError),
 
     #[error("Remote node operation failed: {0}")]
     RemoteNodeError(#[from] NodeError),
@@ -593,15 +593,6 @@ impl From<ViewError> for ChainClientError {
         match error {
             ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             error => Self::ViewError(error),
-        }
-    }
-}
-
-impl From<LocalNodeError> for ChainClientError {
-    fn from(error: LocalNodeError) -> Self {
-        match error {
-            LocalNodeError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
-            error => Self::LocalNodeError(error),
         }
     }
 }
