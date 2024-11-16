@@ -180,8 +180,9 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        let policy = committee.policy().clone();
         check_block_epoch(epoch, block)?;
+        let policy = committee.policy().clone();
+        proposal.check_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         let public_key = self
             .0

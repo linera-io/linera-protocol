@@ -7,6 +7,7 @@ use std::{collections::HashSet, fmt};
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
 use linera_base::{
+    bcs,
     crypto::{BcsHashable, BcsSignable, CryptoError, CryptoHash, KeyPair, PublicKey, Signature},
     data_types::{Amount, Blob, BlockHeight, OracleResponse, Round, Timestamp},
     doc_scalar, ensure, hex_debug,
@@ -773,6 +774,15 @@ impl BlockProposal {
             blobs,
             validated_block_certificate: Some(lite_cert),
         }
+    }
+
+    pub fn check_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
+        let size = bcs::serialized_size(&self)?;
+        ensure!(
+            size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
+            ChainError::BlockProposalTooLarge
+        );
+        Ok(())
     }
 
     pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {

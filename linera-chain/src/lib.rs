@@ -23,6 +23,7 @@ pub mod test;
 pub use chain::ChainStateView;
 use data_types::{MessageBundle, Origin, PostedMessage};
 use linera_base::{
+    bcs,
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId},
@@ -138,6 +139,10 @@ pub enum ChainError {
     CertificateSignatureVerificationFailed { error: String },
     #[error("Internal error {0}")]
     InternalError(String),
+    #[error("Block proposal is too large")]
+    BlockProposalTooLarge,
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
     #[error("Insufficient balance to pay the fees")]
     InsufficientBalance,
     #[error("Invalid owner weights: {0}")]

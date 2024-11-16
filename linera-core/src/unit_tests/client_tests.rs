@@ -26,6 +26,7 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
+use rand::Rng;
 use test_case::test_case;
 
 #[cfg(feature = "dynamodb")]
@@ -2408,6 +2409,7 @@ where
     let large_blob_bytes = b"blob+".to_vec();
     let policy = ResourceControlPolicy {
         maximum_blob_size: blob_bytes.len() as u64,
+        maximum_block_proposal_size: (blob_bytes.len() * 100) as u64,
         ..ResourceControlPolicy::default()
     };
     let mut builder = TestBuilder::new(storage_builder, 4, 0)
@@ -2456,8 +2458,32 @@ where
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
 
+    // This will go way over the limit, because of the different overheads.
+    let blob_bytes = (0..100)
+        .map(|_| {
+            rand::thread_rng()
+                .sample_iter(&rand::distributions::Standard)
+                .take(policy.maximum_blob_size as usize)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let result = client1.publish_data_blobs(blob_bytes).await;
+    assert_matches!(
+        result,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(*chain_error, ChainError::BlockProposalTooLarge)
+    );
+    // TODO(#2906): Remove this once the client properly clears the pending block.
+    client1.clear_pending_block();
+
     let result = client1.publish_data_blob(large_blob_bytes).await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(
+        result,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::BlobTooLarge)
+        ))
+    );
 
     Ok(())
 }
