@@ -2550,8 +2550,15 @@ where
             ));
         };
         if manager.can_propose(&identity, round) {
-            let certificate = self.propose_block(block.clone(), round, manager).await?;
-            Ok(ClientOutcome::Committed(Some(certificate)))
+            let result = self.propose_block(block.clone(), round, manager).await;
+            if matches!(result, Err(ChainClientError::LocalNodeError(_)))
+                && self.state().pending_block().as_ref() == Some(&block)
+            {
+                // If we just tried to propose the pending block, and the local node rejected
+                // the proposal, clear the pending block since we don't want to retry in this case.
+                self.clear_pending_block();
+            }
+            Ok(ClientOutcome::Committed(Some(result?)))
         } else {
             // TODO(#1424): Local timeout might not match validators' exactly.
             let timestamp = manager.round_timeout.ok_or_else(|| {
