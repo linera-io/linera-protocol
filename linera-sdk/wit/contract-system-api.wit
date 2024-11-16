@@ -12,7 +12,7 @@ interface contract-system-api {
     message-is-bouncing: func() -> option<bool>;
     authenticated-caller-id: func() -> option<application-id>;
     read-chain-balance: func() -> amount;
-    read-owner-balance: func(owner: owner) -> amount;
+    read-owner-balance: func(owner: account-owner) -> amount;
     send-message: func(message: send-message-request);
     subscribe: func(chain: chain-id, channel: channel-name);
     unsubscribe: func(chain: chain-id, channel: channel-name);
@@ -34,6 +34,11 @@ interface contract-system-api {
     record account {
         chain-id: chain-id,
         owner: option<owner>,
+    }
+
+    variant account-owner {
+        user(owner),
+        application(application-id),
     }
 
     record amount {

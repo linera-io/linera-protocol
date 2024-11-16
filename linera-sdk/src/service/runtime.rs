@@ -8,7 +8,7 @@ use std::cell::Cell;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
 };
 
 use super::wit::service_system_api as wit;
@@ -96,7 +96,7 @@ where
 
     /// Returns the balance of one of the accounts on this chain.
     pub fn owner_balance(&self, owner: Owner) -> Amount {
-        wit::read_owner_balance(owner.into()).into()
+        wit::read_owner_balance(AccountOwner::User(owner).into()).into()
     }
 
     /// Returns the balances of all accounts on the chain.

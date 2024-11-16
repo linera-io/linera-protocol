@@ -187,11 +187,14 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    fn read_owner_balance(caller: &mut Caller, owner: Owner) -> Result<Amount, RuntimeError> {
+    fn read_owner_balance(
+        caller: &mut Caller,
+        owner: AccountOwner,
+    ) -> Result<Amount, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_owner_balance(AccountOwner::User(owner))
+            .read_owner_balance(owner)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
@@ -472,11 +475,14 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    fn read_owner_balance(caller: &mut Caller, owner: Owner) -> Result<Amount, RuntimeError> {
+    fn read_owner_balance(
+        caller: &mut Caller,
+        owner: AccountOwner,
+    ) -> Result<Amount, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .read_owner_balance(AccountOwner::User(owner))
+            .read_owner_balance(owner)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
