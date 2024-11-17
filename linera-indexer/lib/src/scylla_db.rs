@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
+    lru_caching::read_storage_cache_policy,
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     store::{AdminKeyValueStore, CommonStoreInternalConfig},
-    lru_caching::read_storage_cache_policy,
 };
 
 use crate::{

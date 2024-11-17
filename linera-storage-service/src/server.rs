@@ -14,11 +14,11 @@ use linera_views::{
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
+    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     rocks_db::{
         PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
     },
-    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     store::AdminKeyValueStore as _,
 };
 use serde::Serialize;

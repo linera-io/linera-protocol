@@ -21,7 +21,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::{CachingStore, CachingConfig},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,

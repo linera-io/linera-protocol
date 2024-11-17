@@ -42,7 +42,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{CachingStore, CachingConfig},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,

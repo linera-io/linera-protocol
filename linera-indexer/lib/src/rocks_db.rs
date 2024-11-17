@@ -5,12 +5,12 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
+    lru_caching::read_storage_cache_policy,
     rocks_db::{
         PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
     },
     store::{AdminKeyValueStore, CommonStoreInternalConfig},
-    lru_caching::read_storage_cache_policy,
 };
 
 use crate::{

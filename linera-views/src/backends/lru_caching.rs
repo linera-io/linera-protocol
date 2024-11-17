@@ -16,7 +16,10 @@ use linked_hash_map::LinkedHashMap;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_interval,
-    store::{AdminKeyValueStore, KeyIterable, KeyValueIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        AdminKeyValueStore, KeyIterable, KeyValueIterable, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 #[cfg(with_testing)]
 use crate::{memory::MemoryStore, store::TestKeyValueStore};
@@ -944,7 +947,11 @@ impl<K> CachingStore<K> {
     /// Gets the `storage_cache_policy` or if absent one that matches to an empty cache.
     pub fn storage_cache_policy(&self) -> StorageCachePolicy {
         match &self.cache {
-            None => StorageCachePolicy { max_cache_size: 0, max_entry_size: 0, max_cache_entries: 0},
+            None => StorageCachePolicy {
+                max_cache_size: 0,
+                max_entry_size: 0,
+                max_cache_entries: 0,
+            },
             Some(cache) => {
                 let cache = cache.lock().unwrap();
                 cache.storage_cache_policy.clone()

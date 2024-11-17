@@ -37,7 +37,7 @@ use crate::{
     batch::UnorderedBatch,
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{CachingStore, CachingConfig},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,

@@ -524,8 +524,7 @@ pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), Servic
 
 /// The service store client with metrics
 #[cfg(with_metrics)]
-pub type ServiceStoreClient =
-    MeteredStore<CachingStore<MeteredStore<ServiceStoreClientInternal>>>;
+pub type ServiceStoreClient = MeteredStore<CachingStore<MeteredStore<ServiceStoreClientInternal>>>;
 
 /// The service store client without metrics
 #[cfg(not(with_metrics))]
