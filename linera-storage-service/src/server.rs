@@ -10,7 +10,6 @@ use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
-    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     store::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
 };
 #[cfg(with_rocksdb)]
@@ -19,6 +18,7 @@ use linera_views::{
         PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
     },
+    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     store::AdminKeyValueStore as _,
 };
 use serde::Serialize;

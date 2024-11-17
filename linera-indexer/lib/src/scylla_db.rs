@@ -3,7 +3,7 @@
 
 use linera_views::{
     scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
-    store::{AdminKeyValueStore, CommonStoreConfig, CommonStoreInternalConfig},
+    store::{AdminKeyValueStore, CommonStoreInternalConfig},
     lru_caching::read_storage_cache_policy,
 };
 
@@ -50,7 +50,7 @@ impl ScyllaDbRunner {
         };
         let store_config = ScyllaDbStoreConfig {
             inner_config,
-            cache_size: config.client.cache_size,
+            storage_cache_policy,
         };
         let store = ScyllaDbStore::connect(&store_config, &namespace, root_key).await?;
         Self::new(config, store).await

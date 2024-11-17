@@ -60,7 +60,7 @@ impl RocksDbRunner {
         };
         let store_config = RocksDbStoreConfig {
             inner_config,
-            cache_size: config.client.cache_size,
+            storage_cache_policy,
         };
         let namespace = config.client.namespace.clone();
         let root_key = &[];
