@@ -4,7 +4,92 @@
 //! Add caching to a given store.
 //! The current policy is based on the LRU (Least Recently Used).
 
-use std::{fs::File, io::BufReader};
+use std::{
+    collections::{btree_map, hash_map::RandomState, BTreeMap, BTreeSet},
+    fs::File,
+    io::BufReader,
+    sync::{Arc, Mutex},
+};
+
+use linked_hash_map::LinkedHashMap;
+
+use crate::{
+    batch::{Batch, WriteOperation},
+    common::get_interval,
+    store::{AdminKeyValueStore, KeyIterable, KeyValueIterable, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+};
+#[cfg(with_testing)]
+use crate::{memory::MemoryStore, store::TestKeyValueStore};
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util;
+    use prometheus::{HistogramVec, IntCounterVec};
+
+    /// The total number of value cache faults
+    pub static NUM_CACHE_VALUE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        prometheus_util::register_int_counter_vec(
+            "num_cache_value_fault",
+            "Number of value cache faults",
+            &[],
+        )
+    });
+
+    /// The total number of cache successes
+    pub static NUM_CACHE_VALUE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        prometheus_util::register_int_counter_vec(
+            "num_cache_value_success",
+            "Number of value cache success",
+            &[],
+        )
+    });
+
+    /// The total number of find cache faults
+    pub static NUM_CACHE_FIND_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        prometheus_util::register_int_counter_vec(
+            "num_cache_find_fault",
+            "Number of find cache faults",
+            &[],
+        )
+    });
+
+    /// The total number of find cache successes
+    pub static NUM_CACHE_FIND_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        prometheus_util::register_int_counter_vec(
+            "num_cache_find_success",
+            "Number of find cache success",
+            &[],
+        )
+    });
+
+    /// Size of the inserted value entry
+    pub static VALUE_CACHE_ENTRY_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "value_cache_entry_size",
+            "Value cache entry size",
+            &[],
+            Some(vec![
+                10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0, 10000.0, 30000.0, 100000.0, 300000.0,
+                1000000.0,
+            ]),
+        )
+    });
+
+    /// Size of the inserted find entry
+    pub static FIND_CACHE_ENTRY_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        prometheus_util::register_histogram_vec(
+            "find_cache_entry_size",
+            "Find cache entry size",
+            &[],
+            Some(vec![
+                10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0, 10000.0, 30000.0, 100000.0, 300000.0,
+                1000000.0,
+            ]),
+        )
+    });
+}
 
 /// The parametrization of the cache
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -39,96 +124,6 @@ pub fn read_storage_cache_policy(storage_cache_policy: Option<String>) -> Storag
         }
     }
 }
-
-use std::{
-    collections::{btree_map, hash_map::RandomState, BTreeMap, BTreeSet},
-    sync::{Arc, Mutex},
-};
-
-use linked_hash_map::LinkedHashMap;
-#[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
-    use linera_base::prometheus_util;
-    use prometheus::{HistogramVec, IntCounterVec};
-
-    /// The total number of value cache faults
-    pub static NUM_CACHE_VALUE_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        prometheus_util::register_int_counter_vec(
-            "num_cache_value_fault",
-            "Number of value cache faults",
-            &[],
-        )
-        .expect("Counter creation should not fail")
-    });
-
-    /// The total number of cache successes
-    pub static NUM_CACHE_VALUE_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        prometheus_util::register_int_counter_vec(
-            "num_cache_value_success",
-            "Number of value cache success",
-            &[],
-        )
-        .expect("Counter creation should not fail")
-    });
-
-    /// The total number of find cache faults
-    pub static NUM_CACHE_FIND_FAULT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        prometheus_util::register_int_counter_vec(
-            "num_cache_find_fault",
-            "Number of find cache faults",
-            &[],
-        )
-        .expect("Counter creation should not fail")
-    });
-
-    /// The total number of find cache successes
-    pub static NUM_CACHE_FIND_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        prometheus_util::register_int_counter_vec(
-            "num_cache_find_success",
-            "Number of find cache success",
-            &[],
-        )
-        .expect("Counter creation should not fail")
-    });
-
-    /// Size of the inserted value entry
-    pub static VALUE_CACHE_ENTRY_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
-            "value_cache_entry_size",
-            "Value cache entry size",
-            &[],
-            Some(vec![
-                10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0, 10000.0, 30000.0, 100000.0, 300000.0,
-                1000000.0,
-            ]),
-        )
-        .expect("Histogram can be created")
-    });
-
-    /// Size of the inserted find entry
-    pub static FIND_CACHE_ENTRY_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
-            "find_cache_entry_size",
-            "Find cache entry size",
-            &[],
-            Some(vec![
-                10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0, 10000.0, 30000.0, 100000.0, 300000.0,
-                1000000.0,
-            ]),
-        )
-        .expect("Histogram can be created")
-    });
-}
-
-use crate::{
-    batch::{Batch, WriteOperation},
-    common::get_interval,
-    store::{AdminKeyValueStore, ReadableKeyValueStore, WithError, WritableKeyValueStore},
-};
-#[cfg(with_testing)]
-use crate::{memory::MemoryStore, store::TestKeyValueStore};
 
 #[derive(Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 enum CacheEntry {
@@ -858,9 +853,9 @@ where
     }
 }
 
-/// The configuration type for the `LruCachingStore`.
+/// The configuration type for the `CachingStore`.
 pub struct CachingConfig<C> {
-    /// The inner configuration of the `LruCachingStore`.
+    /// The inner configuration of the `CachingStore`.
     pub inner_config: C,
     /// The cache size being used
     pub storage_cache_policy: StorageCachePolicy,
@@ -914,11 +909,11 @@ where
 }
 
 #[cfg(with_testing)]
-impl<K> TestKeyValueStore for LruCachingStore<K>
+impl<K> TestKeyValueStore for CachingStore<K>
 where
     K: TestKeyValueStore + Send + Sync,
 {
-    async fn new_test_config() -> Result<LruSplittingConfig<K::Config>, K::Error> {
+    async fn new_test_config() -> Result<CachingConfig<K::Config>, K::Error> {
         let inner_config = K::new_test_config().await?;
         let storage_cache_policy = DEFAULT_STORAGE_CACHE_POLICY;
         Ok(CachingConfig {
@@ -939,14 +934,22 @@ fn new_storage_prefix_cache(
     }
 }
 
-impl<K> CachingStore<K>
-where
-    K: RestrictedKeyValueStore + WithError,
-{
+impl<K> CachingStore<K> {
     /// Creates a new key-value store that provides caching at top of the given store.
     pub fn new(store: K, storage_cache_policy: StorageCachePolicy) -> Self {
         let cache = new_storage_prefix_cache(storage_cache_policy);
         Self { store, cache }
+    }
+
+    /// Gets the `storage_cache_policy` or if absent one that matches to an empty cache.
+    pub fn storage_cache_policy(&self) -> StorageCachePolicy {
+        match &self.cache {
+            None => StorageCachePolicy { max_cache_size: 0, max_entry_size: 0, max_cache_entries: 0},
+            Some(cache) => {
+                let cache = cache.lock().unwrap();
+                cache.storage_cache_policy.clone()
+            }
+        }
     }
 }
 
@@ -978,17 +981,6 @@ where
             key_values_vec.push(key_value);
         }
         Ok(key_values_vec)
-    }
-
-    /// Gets the `cache_size`
-    pub fn cache_size(&self) -> usize {
-        match &self.lru_read_values {
-            None => 0,
-            Some(lru_read_values) => {
-                let lru_read_values = lru_read_values.lock().unwrap();
-                lru_read_values.max_cache_size
-            }
-        }
     }
 }
 
