@@ -14,7 +14,6 @@ use linera_views::{
 };
 #[cfg(with_rocksdb)]
 use linera_views::{
-    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     rocks_db::{
         PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
@@ -594,10 +593,9 @@ async fn main() {
                 spawn_mode,
                 common_config: common_config.reduced(),
             };
-            let storage_cache_policy = DEFAULT_STORAGE_CACHE_POLICY;
             let config = RocksDbStoreConfig {
                 inner_config,
-                storage_cache_policy,
+                storage_cache_policy: common_config.storage_cache_policy,
             };
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
                 .await
