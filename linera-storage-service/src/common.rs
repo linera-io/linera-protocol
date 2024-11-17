@@ -4,12 +4,8 @@
 use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
-#[cfg(with_testing)]
-use linera_views::lru_caching::DEFAULT_STORAGE_CACHE_POLICY;
-#[cfg(with_metrics)]
-use linera_views::metering::KeyValueStoreMetrics;
 use linera_views::{
-    lru_caching::LruSplittingConfig,
+    lru_caching::CachingConfig,
     store::{CommonStoreInternalConfig, KeyValueStoreError},
     views::MIN_VIEW_TAG,
 };
@@ -82,7 +78,7 @@ pub struct ServiceStoreInternalConfig {
 }
 
 /// The config type
-pub type ServiceStoreConfig = LruSplittingConfig<ServiceStoreInternalConfig>;
+pub type ServiceStoreConfig = CachingConfig<ServiceStoreInternalConfig>;
 
 impl ServiceStoreInternalConfig {
     pub fn http_address(&self) -> String {

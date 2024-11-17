@@ -10,6 +10,7 @@ use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
+    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
     store::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
 };
 #[cfg(with_rocksdb)]
@@ -593,9 +594,10 @@ async fn main() {
                 spawn_mode,
                 common_config: common_config.reduced(),
             };
+            let storage_cache_policy = DEFAULT_STORAGE_CACHE_POLICY;
             let config = RocksDbStoreConfig {
                 inner_config,
-                cache_size: common_config.cache_size,
+                storage_cache_policy,
             };
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
                 .await
