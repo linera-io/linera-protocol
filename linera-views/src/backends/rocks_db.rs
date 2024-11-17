@@ -17,14 +17,11 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
-use crate::{
-    store::{TestKeyValueStore, TestKeyValueStore},
-    lru_caching::DEFAULT_STORAGE_CACHE_POLICY,
-};
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::{CachingStore, StorageCachePolicy},
+    lru_caching::{CachingStore, CachingConfig},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
@@ -623,12 +620,12 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
 /// The `RocksDbStore` composed type with metrics
 #[cfg(with_metrics)]
 pub type RocksDbStore = MeteredStore<
-    LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
+    CachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
 >;
 
 /// The `RocksDbStore` composed type
 #[cfg(not(with_metrics))]
-pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
+pub type RocksDbStore = CachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
 
 /// The composed error type for the `RocksDbStore`
 pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
