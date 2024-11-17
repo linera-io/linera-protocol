@@ -42,16 +42,13 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig, StorageCachePolicy},
+    lru_caching::{CachingStore, CachingConfig},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
-
-#[cfg(with_testing)]
-use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
@@ -1170,26 +1167,26 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
     const BACKEND: &'static str = "dynamo_db";
 }
 
-/// A shared DB client for DynamoDb implementing LruCaching and metrics
+/// A shared DB client for DynamoDb implementing Caching and metrics
 #[cfg(with_metrics)]
 pub type DynamoDbStore = MeteredStore<
-    LruCachingStore<
+    CachingStore<
         MeteredStore<
             ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
         >,
     >,
 >;
 
-/// A shared DB client for DynamoDb implementing LruCaching
+/// A shared DB client for DynamoDb implementing Caching
 #[cfg(not(with_metrics))]
 pub type DynamoDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
+    CachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
 
 /// The combined error type for the `DynamoDbStore`.
 pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
 
 /// The config type for DynamoDbStore
-pub type DynamoDbStoreConfig = LruSplittingConfig<DynamoDbStoreInternalConfig>;
+pub type DynamoDbStoreConfig = CachingConfig<DynamoDbStoreInternalConfig>;
 
 /// Getting a configuration for the system
 pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {

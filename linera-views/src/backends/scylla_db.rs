@@ -32,12 +32,12 @@ use thiserror::Error;
 #[cfg(with_metrics)]
 use crate::metering::MeteredStore;
 #[cfg(with_testing)]
-use crate::{lru_caching::DEFAULT_STORAGE_CACHE_POLICY, store::TestKeyValueStore};
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::UnorderedBatch,
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{CachingStore, CachingConfig, StorageCachePolicy},
+    lru_caching::{CachingStore, CachingConfig},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
@@ -788,11 +788,11 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
 pub type ScyllaDbStore =
-    MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>;
+    MeteredStore<CachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>;
 
 /// The `ScyllaDbStore` composed type
 #[cfg(not(with_metrics))]
-pub type ScyllaDbStore = LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
+pub type ScyllaDbStore = CachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = CachingConfig<ScyllaDbStoreInternalConfig>;
