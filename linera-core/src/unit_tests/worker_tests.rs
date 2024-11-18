@@ -660,7 +660,12 @@ where
 
     assert_matches!(
         worker.handle_block_proposal(block_proposal1.clone()).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
+        Err(WorkerError::ChainError(error)) if matches!(
+            *error,
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height: BlockHeight(0),
+                found_block_height: BlockHeight(1)
+            })
     );
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -673,21 +678,53 @@ where
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().validated_vote().is_some());
-    assert!(chain.manager.get().confirmed_vote().is_none());
+    assert_eq!(
+        &chain
+            .manager
+            .get()
+            .confirmed_vote()
+            .unwrap()
+            .value()
+            .inner()
+            .block,
+        &block_proposal0.content.block
+    ); // In fast round confirm immediately.
+    assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
+
     worker
         .handle_certificate(certificate0.into(), vec![], None)
         .await?;
-    worker.handle_block_proposal(block_proposal1).await?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    drop(chain);
+
+    worker
+        .handle_block_proposal(block_proposal1.clone())
+        .await?;
+
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().confirmed_vote().is_some());
+    assert_eq!(
+        &chain
+            .manager
+            .get()
+            .confirmed_vote()
+            .unwrap()
+            .value()
+            .inner()
+            .block,
+        &block_proposal1.content.block
+    );
     assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
     assert_matches!(
-        worker.handle_block_proposal(block_proposal0.clone()).await,
-        Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::UnexpectedBlockHeight {..})
+        worker.handle_block_proposal(block_proposal0).await,
+        Err(WorkerError::ChainError(error)) if matches!(
+            *error,
+            ChainError::UnexpectedBlockHeight {
+                expected_block_height: BlockHeight(1),
+                found_block_height: BlockHeight(0),
+            })
     );
     Ok(())
 }
@@ -1126,10 +1163,11 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    let pending_value = chain.manager.get().validated_vote().unwrap().lite();
+    assert!(chain.manager.get().validated_vote().is_none()); // Into was a fast round.
+    let pending_vote = chain.manager.get().confirmed_vote().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
-        pending_value
+        pending_vote
     );
     Ok(())
 }
