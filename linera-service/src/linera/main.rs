@@ -176,7 +176,10 @@ impl Runnable for Job {
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
                 let time_total = time_start.elapsed();
-                info!("Opening a new chain confirmed after {} ms", time_total.as_millis());
+                info!(
+                    "Opening a new chain confirmed after {} ms",
+                    time_total.as_millis()
+                );
                 debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
@@ -220,7 +223,10 @@ impl Runnable for Job {
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
                 let time_total = time_start.elapsed();
-                info!("Opening a new multi-owner chain confirmed after {} ms", time_total.as_millis());
+                info!(
+                    "Opening a new multi-owner chain confirmed after {} ms",
+                    time_total.as_millis()
+                );
                 debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
@@ -255,7 +261,10 @@ impl Runnable for Job {
                     .await
                     .context("Failed to change application permissions")?;
                 let time_total = time_start.elapsed();
-                info!("Change application permissions confirmed after {} ms", time_total.as_millis());
+                info!(
+                    "Change application permissions confirmed after {} ms",
+                    time_total.as_millis()
+                );
                 debug!("{:?}", certificate);
             }
 
@@ -271,7 +280,10 @@ impl Runnable for Job {
                     .await
                     .context("Failed to close chain")?;
                 let time_total = time_start.elapsed();
-                info!("Closing chain confirmed after {} ms", time_total.as_millis());
+                info!(
+                    "Closing chain confirmed after {} ms",
+                    time_total.as_millis()
+                );
                 debug!("{:?}", certificate);
             }
 
@@ -320,7 +332,10 @@ impl Runnable for Job {
                 context.update_and_save_wallet(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
-                info!("Synchronizing balance confirmed after {} ms", time_total.as_millis());
+                info!(
+                    "Synchronizing balance confirmed after {} ms",
+                    time_total.as_millis()
+                );
                 println!("{}", balance);
             }
 
@@ -684,7 +699,10 @@ impl Runnable for Job {
                 context.save_wallet().await?;
 
                 let time_total = time_start.elapsed();
-                info!("Finalize committee confirmed after {} ms", time_total.as_millis());
+                info!(
+                    "Finalize committee confirmed after {} ms",
+                    time_total.as_millis()
+                );
             }
 
             #[cfg(feature = "benchmark")]
@@ -857,7 +875,10 @@ impl Runnable for Job {
                     .publish_bytecode(&chain_client, contract, service)
                     .await?;
                 println!("{}", bytecode_id);
-                info!("Publishing bytecode in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Publishing bytecode in {} ms",
+                    start_time.elapsed().as_millis()
+                );
             }
 
             PublishDataBlob {
@@ -870,7 +891,10 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let hash = context.publish_data_blob(&chain_client, blob_path).await?;
                 println!("{}", hash);
-                info!("Publishing data blob in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Publishing data blob in {} ms",
+                    start_time.elapsed().as_millis()
+                );
             }
 
             // TODO(#2490): Consider removing or renaming this.
@@ -880,7 +904,10 @@ impl Runnable for Job {
                 info!("Verifying data blob on chain {}", reader);
                 let chain_client = context.make_chain_client(reader)?;
                 context.read_data_blob(&chain_client, hash).await?;
-                info!("Reading data blob in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Reading data blob in {} ms",
+                    start_time.elapsed().as_millis()
+                );
             }
 
             CreateApplication {
@@ -923,7 +950,10 @@ impl Runnable for Job {
                     .await
                     .context("Failed to create application")?;
                 info!("{}", "Application created successfully!".green().bold());
-                info!("Creating application in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Creating application in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 println!("{}", application_id);
             }
 
@@ -968,7 +998,10 @@ impl Runnable for Job {
                     .await
                     .context("Failed to create application")?;
                 info!("{}", "Application published successfully!".green().bold());
-                info!("Publishing and creating application in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Publishing and creating application in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 println!("{}", application_id);
             }
 
@@ -993,7 +1026,10 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to request application")?;
-                info!("Requesting application in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Requesting application in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 debug!("{:?}", certificate);
             }
 
@@ -1016,7 +1052,10 @@ impl Runnable for Job {
                 .await?;
                 println!("{}", chain_id);
                 context.save_wallet().await?;
-                info!("Linking chain to key in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Linking chain to key in {} ms",
+                    start_time.elapsed().as_millis()
+                );
             }
 
             Project(project_command) => match project_command {
@@ -1066,7 +1105,10 @@ impl Runnable for Job {
                         .await
                         .context("Failed to create application")?;
                     info!("{}", "Application published successfully!".green().bold());
-                    info!("Publishing and create in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Publishing and create in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                     println!("{}", application_id);
                 }
                 _ => unreachable!("other project commands do not require storage"),
@@ -1088,7 +1130,10 @@ impl Runnable for Job {
                     }
                 }
                 context.update_and_save_wallet(&chain_client).await?;
-                info!("Retrying pending block in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Retrying pending block in {} ms",
+                    start_time.elapsed().as_millis()
+                );
             }
 
             Wallet(WalletCommand::Init {
@@ -1133,7 +1178,10 @@ impl Runnable for Job {
                     .wallet_mut()
                     .mutate(|w| w.set_default_chain(outcome.chain_id))
                     .await??;
-                info!("Initializing wallet in {} ms", start_time.elapsed().as_millis());
+                info!(
+                    "Initializing wallet in {} ms",
+                    start_time.elapsed().as_millis()
+                );
             }
 
             CreateGenesisConfig { .. }
@@ -1406,6 +1454,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             testing_prng_seed,
             network_name,
         } => {
+            let start_time = Instant::now();
             let committee_config: CommitteeConfig = util::read_json(committee_config_path)
                 .expect("Unable to read committee config file");
             let maximum_fuel_per_block = maximum_fuel_per_block.unwrap_or(u64::MAX);
@@ -1470,27 +1519,47 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 .mutate(|wallet| wallet.extend(chains))
                 .await?;
             options.initialize_storage().boxed().await?;
+            info!(
+                "Creating genesis config in {} ms",
+                start_time.elapsed().as_millis()
+            );
             Ok(0)
         }
 
         ClientCommand::Project(project_command) => match project_command {
             ProjectCommand::New { name, linera_root } => {
+                let start_time = Instant::now();
                 Project::create_new(name, linera_root.as_ref().map(AsRef::as_ref))?;
+                info!(
+                    "Operation project new in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
             ProjectCommand::Test { path } => {
+                let start_time = Instant::now();
                 let path = path.clone().unwrap_or_else(|| env::current_dir().unwrap());
                 let project = Project::from_existing_project(path)?;
                 project.test().await?;
+                info!(
+                    "Operation project new in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
             ProjectCommand::PublishAndCreate { .. } => {
+                let start_time = Instant::now();
                 options.run_with_storage(Job(options.clone())).await??;
+                info!(
+                    "Operation publish and create in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
         },
 
         ClientCommand::Keygen => {
+            let start_time = Instant::now();
             let mut wallet = options.wallet().await?;
             let key_pair = wallet.generate_key_pair();
             let public = key_pair.public();
@@ -1498,6 +1567,10 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 .mutate(|w| w.add_unassigned_key_pair(key_pair))
                 .await?;
             println!("{}", public);
+            info!(
+                "Operation key generation done in {} ms",
+                start_time.elapsed().as_millis()
+            );
             Ok(0)
         }
 
@@ -1577,21 +1650,28 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let storage_config = command.storage_config()?;
             let common_config = CommonStoreConfig::default();
             let full_storage_config = storage_config.add_common_config(common_config).await?;
+            let start_time = Instant::now();
             match command {
                 DatabaseToolCommand::DeleteAll { .. } => {
-                    let start_time = Instant::now();
                     full_storage_config.delete_all().await?;
-                    info!("Delete all namespaces in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Delete all namespaces in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                 }
                 DatabaseToolCommand::DeleteNamespace { .. } => {
-                    let start_time = Instant::now();
                     full_storage_config.delete_namespace().await?;
-                    info!("Delete a namespace in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Delete a namespace in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                 }
                 DatabaseToolCommand::CheckExistence { .. } => {
-                    let start_time = Instant::now();
                     let test = full_storage_config.test_existence().await?;
-                    info!("Check existence of a namespace in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Check existence of a namespace in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                     if test {
                         println!("The database does exist");
                         return Ok(0);
@@ -1601,9 +1681,11 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     }
                 }
                 DatabaseToolCommand::CheckAbsence { .. } => {
-                    let start_time = Instant::now();
                     let test = full_storage_config.test_existence().await?;
-                    info!("Check absence of a namespace in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Check absence of a namespace in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                     if test {
                         println!("The database does exist");
                         return Ok(1);
@@ -1613,14 +1695,18 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     }
                 }
                 DatabaseToolCommand::Initialize { .. } => {
-                    let start_time = Instant::now();
                     full_storage_config.initialize().await?;
-                    info!("Initialization done in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Initialization done in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                 }
                 DatabaseToolCommand::ListNamespaces { .. } => {
-                    let start_time = Instant::now();
                     let namespaces = full_storage_config.list_all().await?;
-                    info!("Listing namespaces done in {} ms", start_time.elapsed().as_millis());
+                    info!(
+                        "Listing namespaces done in {} ms",
+                        start_time.elapsed().as_millis()
+                    );
                     println!("The list of namespaces is {:?}", namespaces);
                 }
             }
@@ -1629,6 +1715,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
             WalletCommand::Show { chain_id, short } => {
+                let start_time = Instant::now();
                 if *short {
                     for chain_id in options.wallet().await?.chains.keys() {
                         println!("{chain_id}");
@@ -1636,33 +1723,49 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 } else {
                     wallet::pretty_print(&*options.wallet().await?, *chain_id);
                 }
+                info!("Showing wallet in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
             }
 
             WalletCommand::SetDefault { chain_id } => {
+                let start_time = Instant::now();
                 options
                     .wallet()
                     .await?
                     .mutate(|w| w.set_default_chain(*chain_id))
                     .await??;
+                info!(
+                    "Setting default chain in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
 
             WalletCommand::ForgetKeys { chain_id } => {
+                let start_time = Instant::now();
                 options
                     .wallet()
                     .await?
                     .mutate(|w| w.forget_keys(chain_id))
                     .await??;
+                info!(
+                    "Forgetting keys of chain in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
 
             WalletCommand::ForgetChain { chain_id } => {
+                let start_time = Instant::now();
                 options
                     .wallet()
                     .await?
                     .mutate(|w| w.forget_chain(chain_id))
                     .await??;
+                info!(
+                    "Forgetting chain in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
 
@@ -1673,6 +1776,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 with_other_chains,
                 testing_prng_seed,
             } => {
+                let start_time = Instant::now();
                 let genesis_config: GenesisConfig = match (genesis_config_path, faucet) {
                     (Some(genesis_config_path), None) => util::read_json(genesis_config_path)?,
                     (None, Some(url)) => {
@@ -1721,6 +1825,10 @@ Make sure to use a Linera client compatible with this network.
                     );
                     options.run_with_storage(Job(options.clone())).await??;
                 }
+                info!(
+                    "Wallet initialization done in {} ms",
+                    start_time.elapsed().as_millis()
+                );
                 Ok(0)
             }
         },
