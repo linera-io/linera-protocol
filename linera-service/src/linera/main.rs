@@ -1579,36 +1579,48 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             let full_storage_config = storage_config.add_common_config(common_config).await?;
             match command {
                 DatabaseToolCommand::DeleteAll { .. } => {
+                    let start_time = Instant::now();
                     full_storage_config.delete_all().await?;
+                    info!("Delete all namespaces in {} ms", start_time.elapsed().as_millis());
                 }
                 DatabaseToolCommand::DeleteNamespace { .. } => {
+                    let start_time = Instant::now();
                     full_storage_config.delete_namespace().await?;
+                    info!("Delete a namespace in {} ms", start_time.elapsed().as_millis());
                 }
                 DatabaseToolCommand::CheckExistence { .. } => {
+                    let start_time = Instant::now();
                     let test = full_storage_config.test_existence().await?;
+                    info!("Check existence of a namespace in {} ms", start_time.elapsed().as_millis());
                     if test {
-                        tracing::info!("The database does exist");
+                        println!("The database does exist");
                         return Ok(0);
                     } else {
-                        tracing::info!("The database does not exist");
+                        println!("The database does not exist");
                         return Ok(1);
                     }
                 }
                 DatabaseToolCommand::CheckAbsence { .. } => {
+                    let start_time = Instant::now();
                     let test = full_storage_config.test_existence().await?;
+                    info!("Check absence of a namespace in {} ms", start_time.elapsed().as_millis());
                     if test {
-                        tracing::info!("The database does exist");
+                        println!("The database does exist");
                         return Ok(1);
                     } else {
-                        tracing::info!("The database does not exist");
+                        println!("The database does not exist");
                         return Ok(0);
                     }
                 }
                 DatabaseToolCommand::Initialize { .. } => {
+                    let start_time = Instant::now();
                     full_storage_config.initialize().await?;
+                    info!("Initialization done in {} ms", start_time.elapsed().as_millis());
                 }
                 DatabaseToolCommand::ListNamespaces { .. } => {
+                    let start_time = Instant::now();
                     let namespaces = full_storage_config.list_all().await?;
+                    info!("Listing namespaces done in {} ms", start_time.elapsed().as_millis());
                     println!("The list of namespaces is {:?}", namespaces);
                 }
             }
