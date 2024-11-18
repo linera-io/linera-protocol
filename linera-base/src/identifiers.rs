@@ -31,6 +31,7 @@ pub struct Owner(pub CryptoHash);
 
 /// An account owner.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// An account owned by a user.
     User(Owner),
@@ -292,7 +293,7 @@ impl<'a> Deserialize<'a> for BlobId {
     WitStore,
     WitType,
 )]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct MessageId {
     /// The chain ID that created the message.
     pub chain_id: ChainId,
@@ -304,7 +305,7 @@ pub struct MessageId {
 
 /// A unique identifier for a user application.
 #[derive(Debug, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
@@ -358,7 +359,7 @@ impl From<ApplicationId> for GenericApplicationId {
 
 /// A unique identifier for an application bytecode.
 #[derive(Debug, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the contract bytecode.
     pub contract_blob_hash: CryptoHash,

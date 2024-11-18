@@ -266,12 +266,8 @@ where
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
         if let Some(owner) = query.request_owner_balance {
-            info.requested_owner_balance = chain
-                .execution_state
-                .system
-                .balances
-                .get(&AccountOwner::User(owner))
-                .await?;
+            info.requested_owner_balance =
+                chain.execution_state.system.balances.get(&owner).await?;
         }
         if let Some(next_block_height) = query.test_next_block_height {
             ensure!(

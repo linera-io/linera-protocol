@@ -168,7 +168,7 @@ message ChainInfoQuery {
   bool request_leader_timeout = 8;
 
   // Query the balance of a given owner.
-  optional Owner request_owner_balance = 9;
+  optional AccountOwner request_owner_balance = 9;
 
   // Request a signed vote for fallback mode.
   bool request_fallback = 10;
@@ -252,6 +252,10 @@ message PublicKey {
 }
 
 message CryptoHash {
+  bytes bytes = 1;
+}
+
+message AccountOwner {
   bytes bytes = 1;
 }
 
