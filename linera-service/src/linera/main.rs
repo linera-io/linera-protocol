@@ -138,7 +138,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to make transfer")?;
                 let time_total = time_start.elapsed();
-                info!("Operation confirmed after {} ms", time_total.as_millis());
+                info!("Transfer confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
@@ -176,7 +176,7 @@ impl Runnable for Job {
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
                 let time_total = time_start.elapsed();
-                info!("Operation confirmed after {} ms", time_total.as_millis());
+                info!("Opening a new chain confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
@@ -220,7 +220,7 @@ impl Runnable for Job {
                     .update_wallet_for_new_chain(id, key_pair, timestamp)
                     .await?;
                 let time_total = time_start.elapsed();
-                info!("Operation confirmed after {} ms", time_total.as_millis());
+                info!("Opening a new multi-owner chain confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
                 // Print the new chain ID and message ID on stdout for scripting purposes.
                 println!("{}", message_id);
@@ -255,7 +255,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to change application permissions")?;
                 let time_total = time_start.elapsed();
-                info!("Operation confirmed after {} ms", time_total.as_millis());
+                info!("Change application permissions confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
@@ -271,7 +271,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to close chain")?;
                 let time_total = time_start.elapsed();
-                info!("Operation confirmed after {} ms", time_total.as_millis());
+                info!("Closing chain confirmed after {} ms", time_total.as_millis());
                 debug!("{:?}", certificate);
             }
 
@@ -320,7 +320,7 @@ impl Runnable for Job {
                 context.update_and_save_wallet(&chain_client).await?;
                 let balance = result.context("Failed to synchronize from validators")?;
                 let time_total = time_start.elapsed();
-                info!("Operation confirmed after {} ms", time_total.as_millis());
+                info!("Synchronizing balance confirmed after {} ms", time_total.as_millis());
                 println!("{}", balance);
             }
 
@@ -684,7 +684,7 @@ impl Runnable for Job {
                 context.save_wallet().await?;
 
                 let time_total = time_start.elapsed();
-                info!("Operations confirmed after {} ms", time_total.as_millis());
+                info!("Finalize committee confirmed after {} ms", time_total.as_millis());
             }
 
             #[cfg(feature = "benchmark")]
@@ -857,7 +857,7 @@ impl Runnable for Job {
                     .publish_bytecode(&chain_client, contract, service)
                     .await?;
                 println!("{}", bytecode_id);
-                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+                info!("Publishing bytecode in {} ms", start_time.elapsed().as_millis());
             }
 
             PublishDataBlob {
@@ -870,7 +870,7 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher)?;
                 let hash = context.publish_data_blob(&chain_client, blob_path).await?;
                 println!("{}", hash);
-                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+                info!("Publishing data blob in {} ms", start_time.elapsed().as_millis());
             }
 
             // TODO(#2490): Consider removing or renaming this.
@@ -880,7 +880,7 @@ impl Runnable for Job {
                 info!("Verifying data blob on chain {}", reader);
                 let chain_client = context.make_chain_client(reader)?;
                 context.read_data_blob(&chain_client, hash).await?;
-                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+                info!("Reading data blob in {} ms", start_time.elapsed().as_millis());
             }
 
             CreateApplication {
@@ -923,7 +923,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to create application")?;
                 info!("{}", "Application created successfully!".green().bold());
-                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+                info!("Creating application in {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
             }
 
@@ -968,7 +968,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to create application")?;
                 info!("{}", "Application published successfully!".green().bold());
-                info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+                info!("Publishing and creating application in {} ms", start_time.elapsed().as_millis());
                 println!("{}", application_id);
             }
 
@@ -977,6 +977,7 @@ impl Runnable for Job {
                 target_chain_id,
                 requester_chain_id,
             } => {
+                let start_time = Instant::now();
                 let requester_chain_id =
                     requester_chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Requesting application for chain {}", requester_chain_id);
@@ -992,10 +993,12 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to request application")?;
+                info!("Requesting application in {} ms", start_time.elapsed().as_millis());
                 debug!("{:?}", certificate);
             }
 
             Assign { key, message_id } => {
+                let start_time = Instant::now();
                 let chain_id = ChainId::child(message_id);
                 info!(
                     "Linking chain {} to its corresponding key in the wallet, owned by {}",
@@ -1013,6 +1016,7 @@ impl Runnable for Job {
                 .await?;
                 println!("{}", chain_id);
                 context.save_wallet().await?;
+                info!("Linking chain to key in {} ms", start_time.elapsed().as_millis());
             }
 
             Project(project_command) => match project_command {
@@ -1062,13 +1066,14 @@ impl Runnable for Job {
                         .await
                         .context("Failed to create application")?;
                     info!("{}", "Application published successfully!".green().bold());
-                    info!("Time elapsed: {} ms", start_time.elapsed().as_millis());
+                    info!("Publishing and create in {} ms", start_time.elapsed().as_millis());
                     println!("{}", application_id);
                 }
                 _ => unreachable!("other project commands do not require storage"),
             },
 
             RetryPendingBlock { chain_id } => {
+                let start_time = Instant::now();
                 let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
                 info!("Committing pending block for chain {}", chain_id);
                 let chain_client = context.make_chain_client(chain_id)?;
@@ -1083,6 +1088,7 @@ impl Runnable for Job {
                     }
                 }
                 context.update_and_save_wallet(&chain_client).await?;
+                info!("Retrying pending block in {} ms", start_time.elapsed().as_millis());
             }
 
             Wallet(WalletCommand::Init {
@@ -1091,6 +1097,7 @@ impl Runnable for Job {
                 with_other_chains,
                 ..
             }) => {
+                let start_time = Instant::now();
                 let key_pair = context.wallet.generate_key_pair();
                 let public_key = key_pair.public();
                 info!(
@@ -1126,6 +1133,7 @@ impl Runnable for Job {
                     .wallet_mut()
                     .mutate(|w| w.set_default_chain(outcome.chain_id))
                     .await??;
+                info!("Initializing wallet in {} ms", start_time.elapsed().as_millis());
             }
 
             CreateGenesisConfig { .. }
