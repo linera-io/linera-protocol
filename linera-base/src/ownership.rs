@@ -62,6 +62,16 @@ pub struct ChainOwnership {
 }
 
 impl ChainOwnership {
+    /// Creates a `ChainOwnership` with a single super owner.
+    pub fn single_super(public_key: PublicKey) -> Self {
+        ChainOwnership {
+            super_owners: iter::once((Owner::from(public_key), public_key)).collect(),
+            owners: BTreeMap::new(),
+            multi_leader_rounds: 2,
+            timeout_config: TimeoutConfig::default(),
+        }
+    }
+
     /// Creates a `ChainOwnership` with a single regular owner.
     pub fn single(public_key: PublicKey) -> Self {
         ChainOwnership {
