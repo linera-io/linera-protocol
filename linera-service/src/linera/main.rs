@@ -996,7 +996,7 @@ impl Runnable for Job {
                     .context("Failed to create application")?;
                 info!("{}", "Application published successfully!".green().bold());
                 info!(
-                    "Application published and created application in {} ms",
+                    "Application published and created in {} ms",
                     start_time.elapsed().as_millis()
                 );
                 println!("{}", application_id);
@@ -1656,7 +1656,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 DatabaseToolCommand::DeleteNamespace { .. } => {
                     full_storage_config.delete_namespace().await?;
                     info!(
-                        "Nnamespace deleted in {} ms",
+                        "Namespace deleted in {} ms",
                         start_time.elapsed().as_millis()
                     );
                 }
