@@ -107,7 +107,7 @@ pub enum ViewError {
     CannotAcquireCollectionEntry,
 
     /// Input output error.
-    #[error("IO error")]
+    #[error("I/O error")]
     IoError(#[from] std::io::Error),
 
     /// Arithmetic error

@@ -240,7 +240,7 @@ pub enum ExecutionError {
     UnauthorizedApplication(UserApplicationId),
     #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("Encountered IO error: {0}")]
+    #[error("Encountered I/O error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("More recorded oracle responses than expected")]
     UnexpectedOracleResponse,

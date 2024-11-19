@@ -948,7 +948,7 @@ impl CompressedBytecode {
         while !decoder.get_ref().is_empty() {
             decoder
                 .read_to_end(&mut bytes)
-                .expect("Reading from a slice in memory should not result in IO errors");
+                .expect("Reading from a slice in memory should not result in I/O errors");
         }
 
         Ok(Bytecode { bytes })

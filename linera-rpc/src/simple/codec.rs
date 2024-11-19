@@ -104,7 +104,7 @@ pub enum Error {
 impl From<Error> for NodeError {
     fn from(error: Error) -> NodeError {
         match error {
-            Error::Io(io_error) => NodeError::ClientIoError {
+            Error::IoError(io_error) => NodeError::ClientIoError {
                 error: format!("{}", io_error),
             },
             err => {
