@@ -25,7 +25,7 @@ where
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
-    owner_balances: Cell<Option<Vec<(Owner, Amount)>>>,
+    owner_balances: Cell<Option<Vec<(AccountOwner, Amount)>>>,
     balance_owners: Cell<Option<Vec<Owner>>>,
 }
 
@@ -104,9 +104,15 @@ where
         Self::fetch_value_through_cache(&self.owner_balances, || {
             wit::read_owner_balances()
                 .into_iter()
-                .map(|(owner, amount)| (owner.into(), amount.into()))
+                .map(|(owner, amount)| (AccountOwner::User(owner.into()), amount.into()))
                 .collect()
         })
+        .into_iter()
+        .filter_map(|(account_owner, amount)| match account_owner {
+            AccountOwner::User(owner) => Some((owner, amount)),
+            AccountOwner::Application(_) => None,
+        })
+        .collect()
     }
 
     /// Returns the owners of accounts on this chain.
