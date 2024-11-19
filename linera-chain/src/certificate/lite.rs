@@ -42,7 +42,7 @@ impl<'a> LiteCertificate<'a> {
         }
     }
 
-    /// Creates a `LiteCertificate` from a list of votes, without cryptographically checking the
+    /// Creates a [`LiteCertificate`] from a list of votes, without cryptographically checking the
     /// signatures. Returns `None` if the votes are empty or don't have matching values and rounds.
     pub fn try_from_votes(votes: impl IntoIterator<Item = LiteVote>) -> Option<Self> {
         let mut votes = votes.into_iter();
@@ -73,7 +73,7 @@ impl<'a> LiteCertificate<'a> {
         Ok(&self.value)
     }
 
-    /// Returns the `Certificate` with the specified value, if it matches.
+    /// Returns the [`GenericCertificate`] with the specified value, if it matches.
     pub fn with_value<T: Has<ChainId>>(self, value: Hashed<T>) -> Option<GenericCertificate<T>> {
         if &self.value.chain_id != value.inner().get() || self.value.value_hash != value.hash() {
             return None;
@@ -85,7 +85,7 @@ impl<'a> LiteCertificate<'a> {
         ))
     }
 
-    /// Returns a `LiteCertificate` that owns the list of signatures.
+    /// Returns a [`LiteCertificate`] that owns the list of signatures.
     pub fn cloned(&self) -> LiteCertificate<'static> {
         LiteCertificate {
             value: self.value.clone(),
