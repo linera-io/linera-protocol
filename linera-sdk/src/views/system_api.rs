@@ -92,7 +92,7 @@ pub enum KeyValueStoreError {
 
     /// BCS serialization error.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 }
 
 impl linera_views::store::KeyValueStoreError for KeyValueStoreError {

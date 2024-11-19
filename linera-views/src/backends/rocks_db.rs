@@ -582,7 +582,7 @@ pub enum RocksDbStoreInternalError {
 
     /// BCS serialization error.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 }
 
 /// A path and the guard for the temporary directory if needed

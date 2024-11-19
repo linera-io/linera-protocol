@@ -392,7 +392,7 @@ pub fn create_test_memory_store() -> MemoryStore {
 pub enum MemoryStoreError {
     /// Serialization error with BCS.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 
     /// The value is too large for the MemoryStore
     #[error("The value is too large for the MemoryStore")]

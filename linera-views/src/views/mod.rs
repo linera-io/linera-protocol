@@ -100,7 +100,7 @@ pub trait View<C>: Sized {
 pub enum ViewError {
     /// BCS serialization error.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 
     /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView.
     #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
@@ -108,7 +108,7 @@ pub enum ViewError {
 
     /// Input output error.
     #[error("IO error")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
 
     /// Arithmetic error
     #[error(transparent)]

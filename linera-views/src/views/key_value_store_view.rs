@@ -1211,7 +1211,7 @@ pub enum ViewContainerError {
 
     /// BCS serialization error.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 }
 
 #[cfg(with_testing)]

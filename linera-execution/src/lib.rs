@@ -245,9 +245,9 @@ pub enum ExecutionError {
     #[error("More recorded oracle responses than expected")]
     UnexpectedOracleResponse,
     #[error("Invalid JSON: {0}")]
-    Json(#[from] serde_json::Error),
+    JsonError(#[from] serde_json::Error),
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]

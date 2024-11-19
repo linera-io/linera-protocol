@@ -386,7 +386,7 @@ pub struct ScyllaDbStoreInternal {
 pub enum ScyllaDbStoreError {
     /// BCS serialization error.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 
     /// The key must have at most 1M bytes
     #[error("The key must have at most 1M")]

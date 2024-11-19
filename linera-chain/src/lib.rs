@@ -142,7 +142,7 @@ pub enum ChainError {
     #[error("Block proposal is too large")]
     BlockProposalTooLarge,
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
     #[error("Insufficient balance to pay the fees")]
     InsufficientBalance,
     #[error("Invalid owner weights: {0}")]

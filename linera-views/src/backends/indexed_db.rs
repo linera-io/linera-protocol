@@ -342,7 +342,7 @@ pub use testing::*;
 pub enum IndexedDbStoreError {
     /// Serialization error with BCS.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 
     /// The value is too large for the IndexedDbStore
     #[error("The value is too large for the IndexedDbStore")]

@@ -21,7 +21,7 @@ macro_rules! doc_scalar {
 #[allow(missing_docs)]
 pub enum BcsHexParseError {
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
     #[error("Invalid hexadecimal: {0}")]
     Hex(#[from] hex::FromHexError),
 }

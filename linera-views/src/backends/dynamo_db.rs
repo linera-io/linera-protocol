@@ -1096,7 +1096,7 @@ pub enum DynamoDbStoreInternalError {
 
     /// A BCS error occurred.
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 
     /// A wrong table name error occurred
     #[error(transparent)]

@@ -87,7 +87,7 @@ impl Decoder for Codec {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("I/O error in the underlying transport: {0}")]
-    Io(#[from] io::Error),
+    IoError(#[from] io::Error),
 
     #[error("Failed to deserialize an incoming message: {0}")]
     Deserialization(#[source] bincode::ErrorKind),

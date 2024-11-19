@@ -58,7 +58,7 @@ pub enum ServiceStoreError {
 
     /// An error occurred during BCS serialization
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
 }
 
 impl KeyValueStoreError for ServiceStoreError {

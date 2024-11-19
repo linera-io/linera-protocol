@@ -83,7 +83,7 @@ enum NodeServiceError {
     #[error("could not decode query string: {0}")]
     QueryStringError(#[from] hex::FromHexError),
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
     #[error("missing GraphQL operation")]
