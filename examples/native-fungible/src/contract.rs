@@ -67,7 +67,8 @@ impl Contract for NativeFungibleTokenContract {
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
 
-                self.runtime.transfer(Some(owner), target_account, amount);
+                self.runtime
+                    .transfer(Some(AccountOwner::User(owner)), target_account, amount);
 
                 self.transfer(fungible_target_account.chain_id);
                 FungibleResponse::Ok

@@ -472,8 +472,8 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
-        self.debit(source.map(AccountOwner::User), amount);
+    pub fn transfer(&mut self, source: Option<AccountOwner>, destination: Account, amount: Amount) {
+        self.debit(source, amount);
 
         if Some(destination.chain_id) == self.chain_id {
             self.credit(destination.owner.map(AccountOwner::User), amount);

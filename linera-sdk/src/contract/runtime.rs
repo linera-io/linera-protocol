@@ -185,9 +185,9 @@ where
 
     /// Transfers an `amount` of native tokens from `source` owner account (or the current chain's
     /// balance) to `destination`.
-    pub fn transfer(&mut self, source: Option<Owner>, destination: Account, amount: Amount) {
+    pub fn transfer(&mut self, source: Option<AccountOwner>, destination: Account, amount: Amount) {
         wit::transfer(
-            source.map(|source| AccountOwner::User(source).into()),
+            source.map(|source| source.into()),
             destination.into(),
             amount.into(),
         )
