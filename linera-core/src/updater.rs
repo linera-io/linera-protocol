@@ -155,7 +155,7 @@ where
                 // TODO(#2857): Handle non-remote errors properly.
                 let err = match err {
                     ChainClientError::RemoteNodeError(err) => err,
-                    err => NodeError::LocalError {
+                    err => NodeError::ResponseHandlingError {
                         error: err.to_string(),
                     },
                 };

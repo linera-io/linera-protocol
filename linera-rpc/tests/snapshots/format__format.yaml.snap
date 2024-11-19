@@ -593,19 +593,15 @@ NodeError:
         STRUCT:
           - status: STR
     20:
-      LocalNodeQuery:
-        STRUCT:
-          - error: STR
-    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    22:
+    21:
       DuplicatesInBlobsNotFound: UNIT
-    23:
+    22:
       UnexpectedEntriesInBlobsNotFound: UNIT
-    24:
-      LocalError:
+    23:
+      ResponseHandlingError:
         STRUCT:
           - error: STR
 OpenChainConfig:
