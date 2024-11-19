@@ -272,9 +272,12 @@ ChainManagerInfo:
     - fallback_vote:
         OPTION:
           TYPENAME: LiteVote
-    - requested_pending_value:
+    - requested_confirmed:
         OPTION:
-          TYPENAME: CertificateValue
+          TYPENAME: ConfirmedBlock
+    - requested_validated:
+        OPTION:
+          TYPENAME: ValidatedBlock
     - current_round:
         TYPENAME: Round
     - leader:

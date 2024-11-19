@@ -15,21 +15,22 @@ use linera_execution::{
 };
 
 use crate::{
+    block::ConfirmedBlock,
     data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
-    types::{GenericCertificate, HashedCertificateValue},
+    types::{GenericCertificate, Hashed},
 };
 
 /// Creates a new child of the given block, with the same timestamp.
-pub fn make_child_block(parent: &HashedCertificateValue) -> Block {
+pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Block {
     let parent_value = parent.inner();
-    let parent_block = parent_value.block().unwrap();
+    let parent_block = &parent_value.inner().block;
     Block {
-        epoch: parent_value.epoch(),
-        chain_id: parent_value.chain_id(),
+        epoch: parent_block.epoch,
+        chain_id: parent_block.chain_id,
         incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
-        height: parent_value.height().try_add_one().unwrap(),
+        height: parent_block.height.try_add_one().unwrap(),
         authenticated_signer: parent_block.authenticated_signer,
         timestamp: parent_block.timestamp,
     }

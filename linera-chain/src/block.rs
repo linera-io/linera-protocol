@@ -38,9 +38,29 @@ impl ValidatedBlock {
 
 impl BcsHashable for ValidatedBlock {}
 
+impl Has<ChainId> for ValidatedBlock {
+    fn get(&self) -> &ChainId {
+        &self.executed_block.block.chain_id
+    }
+}
+
 impl From<ValidatedBlock> for HashedCertificateValue {
     fn from(value: ValidatedBlock) -> Self {
         HashedCertificateValue::new_validated(value.executed_block)
+    }
+}
+
+impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
+    type Error = &'static str;
+
+    fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
+        let hash = value.hash();
+        match value.into_inner() {
+            CertificateValue::ValidatedBlock(validated) => {
+                Ok(Hashed::unchecked_new(validated, hash))
+            }
+            _ => Err("Expected a ValidatedBlock value"),
+        }
     }
 }
 
@@ -54,6 +74,20 @@ pub struct ConfirmedBlock {
 impl From<ConfirmedBlock> for HashedCertificateValue {
     fn from(value: ConfirmedBlock) -> Self {
         HashedCertificateValue::new_confirmed(value.executed_block)
+    }
+}
+
+impl TryFrom<HashedCertificateValue> for Hashed<ConfirmedBlock> {
+    type Error = &'static str;
+
+    fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
+        let hash = value.hash();
+        match value.into_inner() {
+            CertificateValue::ConfirmedBlock(confirmed) => {
+                Ok(Hashed::unchecked_new(confirmed, hash))
+            }
+            _ => Err("Expected a ConfirmedBlock value"),
+        }
     }
 }
 
@@ -87,6 +121,12 @@ impl ConfirmedBlock {
     /// Consumes this `ConfirmedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
+    }
+}
+
+impl Has<ChainId> for ConfirmedBlock {
+    fn get(&self) -> &ChainId {
+        &self.executed_block.block.chain_id
     }
 }
 

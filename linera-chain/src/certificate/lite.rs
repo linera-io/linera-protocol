@@ -4,11 +4,11 @@
 
 use std::borrow::Cow;
 
-use linera_base::{crypto::Signature, data_types::Round};
+use linera_base::{crypto::Signature, data_types::Round, identifiers::ChainId};
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{Deserialize, Serialize};
 
-use super::{Certificate, HashedCertificateValue};
+use super::{GenericCertificate, Has, Hashed};
 use crate::{
     data_types::{check_signatures, LiteValue, LiteVote},
     ChainError,
@@ -42,7 +42,7 @@ impl<'a> LiteCertificate<'a> {
         }
     }
 
-    /// Creates a `LiteCertificate` from a list of votes, without cryptographically checking the
+    /// Creates a [`LiteCertificate`] from a list of votes, without cryptographically checking the
     /// signatures. Returns `None` if the votes are empty or don't have matching values and rounds.
     pub fn try_from_votes(votes: impl IntoIterator<Item = LiteVote>) -> Option<Self> {
         let mut votes = votes.into_iter();
@@ -73,20 +73,19 @@ impl<'a> LiteCertificate<'a> {
         Ok(&self.value)
     }
 
-    /// Returns the `Certificate` with the specified value, if it matches.
-    pub fn with_value(self, value: HashedCertificateValue) -> Option<Certificate> {
-        if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
-        {
+    /// Returns the [`GenericCertificate`] with the specified value, if it matches.
+    pub fn with_value<T: Has<ChainId>>(self, value: Hashed<T>) -> Option<GenericCertificate<T>> {
+        if &self.value.chain_id != value.inner().get() || self.value.value_hash != value.hash() {
             return None;
         }
-        Some(Certificate::new(
+        Some(GenericCertificate::new(
             value,
             self.round,
             self.signatures.into_owned(),
         ))
     }
 
-    /// Returns a `LiteCertificate` that owns the list of signatures.
+    /// Returns a [`LiteCertificate`] that owns the list of signatures.
     pub fn cloned(&self) -> LiteCertificate<'static> {
         LiteCertificate {
             value: self.value.clone(),
