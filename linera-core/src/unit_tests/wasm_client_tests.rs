@@ -168,7 +168,7 @@ where
     let result = publisher
         .publish_bytecode(small_bytecode, large_bytecode)
         .await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(result.unwrap_err(), ChainClientError::LocalNodeError(_));
 
     Ok(())
 }
