@@ -55,142 +55,95 @@ mod chain_tests;
 
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::prometheus_util::{
+        bucket_interval, bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        MeasureLatency,
+    },
     prometheus::{HistogramVec, IntCounterVec},
 };
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
-        "num_blocks_executed",
-        "Number of blocks executed",
-        &[],
-    )
+    register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
 });
 
 #[cfg(with_metrics)]
 static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "block_execution_latency",
         "Block execution latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5, 5.0, 10.0, 25.0, 50.0,
-        ]),
+        bucket_latencies(50.0),
     )
 });
 
 #[cfg(with_metrics)]
 static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "message_execution_latency",
         "Message execution latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5,
-        ]),
+        bucket_latencies(2.5),
     )
 });
 
 #[cfg(with_metrics)]
 static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "operation_execution_latency",
         "Operation execution latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_25, 0.000_5, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5,
-        ]),
+        bucket_latencies(2.5),
     )
 });
 
 #[cfg(with_metrics)]
 static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_fuel_used_per_block",
         "Wasm fuel used per block",
         &[],
-        Some(vec![
-            50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10_000.0, 25_000.0, 50_000.0,
-            100_000.0, 250_000.0, 500_000.0,
-        ]),
+        bucket_interval(10.0, 500_000.0),
     )
 });
 
 #[cfg(with_metrics)]
 static WASM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_num_reads_per_block",
         "Wasm number of reads per block",
         &[],
-        Some(vec![0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0, 50.0, 100.0]),
+        bucket_interval(0.1, 100.0),
     )
 });
 
 #[cfg(with_metrics)]
 static WASM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_bytes_read_per_block",
         "Wasm number of bytes read per block",
         &[],
-        Some(vec![
-            0.5,
-            1.0,
-            10.0,
-            100.0,
-            256.0,
-            512.0,
-            1024.0,
-            2048.0,
-            4096.0,
-            8192.0,
-            16384.0,
-            65_536.0,
-            524_288.0,
-            1_048_576.0,
-            8_388_608.0,
-        ]),
+        bucket_interval(0.1, 10_000_000.0),
     )
 });
 
 #[cfg(with_metrics)]
 static WASM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "wasm_bytes_written_per_block",
         "Wasm number of bytes written per block",
         &[],
-        Some(vec![
-            0.5,
-            1.0,
-            10.0,
-            100.0,
-            256.0,
-            512.0,
-            1024.0,
-            2048.0,
-            4096.0,
-            8192.0,
-            16384.0,
-            65_536.0,
-            524_288.0,
-            1_048_576.0,
-            8_388_608.0,
-        ]),
+        bucket_interval(0.1, 10_000_000.0),
     )
 });
 
 #[cfg(with_metrics)]
 static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "state_hash_computation_latency",
         "Time to recompute the state hash",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 

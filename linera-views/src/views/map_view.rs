@@ -21,20 +21,18 @@ use std::sync::LazyLock;
 
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
     prometheus::HistogramVec,
 };
 
 #[cfg(with_metrics)]
 /// The runtime of hash computation
 static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "map_view_hash_runtime",
         "MapView hash runtime",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 

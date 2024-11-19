@@ -10,7 +10,7 @@ use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
     prometheus::HistogramVec,
 };
 
@@ -29,65 +29,55 @@ use crate::{
 #[cfg(with_metrics)]
 /// The latency of hash computation
 static KEY_VALUE_STORE_VIEW_HASH_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "key_value_store_view_hash_latency",
         "KeyValueStoreView hash latency",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 
 #[cfg(with_metrics)]
 /// The latency of get operation
 static KEY_VALUE_STORE_VIEW_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "key_value_store_view_get_latency",
         "KeyValueStoreView get latency",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 
 #[cfg(with_metrics)]
 /// The latency of multi get
 static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "key_value_store_view_multi_get_latency",
         "KeyValueStoreView multi get latency",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 
 #[cfg(with_metrics)]
 /// The latency of contains key
 static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "key_value_store_view_contains_key_latency",
         "KeyValueStoreView contains key latency",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 
 #[cfg(with_metrics)]
 /// The latency of contains keys
 static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "key_value_store_view_contains_keys_latency",
         "KeyValueStoreView contains keys latency",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 
@@ -95,13 +85,11 @@ static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> = Lazy
 /// The latency of find keys by prefix operation
 static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
     LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "key_value_store_view_find_keys_by_prefix_latency",
             "KeyValueStoreView find keys by prefix latency",
             &[],
-            Some(vec![
-                0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-            ]),
+            bucket_latencies(5.0),
         )
     });
 
@@ -109,26 +97,22 @@ static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> 
 /// The latency of find key values by prefix operation
 static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
     LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "key_value_store_view_find_key_values_by_prefix_latency",
             "KeyValueStoreView find key values by prefix latency",
             &[],
-            Some(vec![
-                0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-            ]),
+            bucket_latencies(5.0),
         )
     });
 
 #[cfg(with_metrics)]
 /// The latency of write batch operation
 static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "key_value_store_view_write_batch_latency",
         "KeyValueStoreView write batch latency",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
 });
 

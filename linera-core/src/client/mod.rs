@@ -91,67 +91,52 @@ mod client_tests;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util;
+    use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
     pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
         LazyLock::new(|| {
-            prometheus_util::register_histogram_vec(
+            register_histogram_vec(
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
-                Some(vec![
-                    0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                    25.0, 50.0, 100.0, 250.0, 500.0,
-                ]),
+                bucket_latencies(500.0),
             )
         });
 
     pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "prepare_chain_latency",
             "prepare_chain latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 
     pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "synchronize_chain_state_latency",
             "synchronize_chain_state latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 
     pub static EXECUTE_BLOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "execute_block_latency",
             "execute_block latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 
     pub static FIND_RECEIVED_CERTIFICATES_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "find_received_certificates_latency",
             "find_received_certificates latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 }
