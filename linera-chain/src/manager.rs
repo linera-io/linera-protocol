@@ -245,6 +245,7 @@ impl ChainManager {
         self.fallback_vote.as_ref()
     }
 
+    /// Verifies the safety of a proposed block with respect to voting rules.
     pub fn check_proposed_block(&self, proposal: &BlockProposal) -> Result<Outcome, ChainError> {
         let new_round = proposal.content.round;
         let new_block = &proposal.content.block;
