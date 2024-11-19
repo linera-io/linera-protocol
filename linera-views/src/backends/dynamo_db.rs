@@ -42,7 +42,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,
@@ -1167,26 +1167,26 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
     const BACKEND: &'static str = "dynamo_db";
 }
 
-/// A shared DB client for DynamoDb implementing LruCaching and metrics
+/// A shared DB client for DynamoDb implementing Caching and metrics
 #[cfg(with_metrics)]
 pub type DynamoDbStore = MeteredStore<
-    LruCachingStore<
+    CachingStore<
         MeteredStore<
             ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
         >,
     >,
 >;
 
-/// A shared DB client for DynamoDb implementing LruCaching
+/// A shared DB client for DynamoDb implementing Caching
 #[cfg(not(with_metrics))]
 pub type DynamoDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
+    CachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
 
 /// The combined error type for the `DynamoDbStore`.
 pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
 
 /// The config type for DynamoDbStore
-pub type DynamoDbStoreConfig = LruSplittingConfig<DynamoDbStoreInternalConfig>;
+pub type DynamoDbStoreConfig = CachingConfig<DynamoDbStoreInternalConfig>;
 
 /// Getting a configuration for the system
 pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {

@@ -595,7 +595,7 @@ async fn main() {
             };
             let config = RocksDbStoreConfig {
                 inner_config,
-                cache_size: common_config.cache_size,
+                storage_cache_policy: common_config.storage_cache_policy,
             };
             let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
                 .await

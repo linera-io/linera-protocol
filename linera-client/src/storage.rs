@@ -349,7 +349,7 @@ impl StorageConfigNamespace {
                 };
                 let config = ServiceStoreConfig {
                     inner_config,
-                    cache_size: common_config.cache_size,
+                    storage_cache_policy: common_config.storage_cache_policy,
                 };
                 Ok(StoreConfig::Service(config, namespace))
             }
@@ -370,7 +370,7 @@ impl StorageConfigNamespace {
                 };
                 let config = RocksDbStoreConfig {
                     inner_config,
-                    cache_size: common_config.cache_size,
+                    storage_cache_policy: common_config.storage_cache_policy,
                 };
                 Ok(StoreConfig::RocksDb(config, namespace))
             }
@@ -383,7 +383,7 @@ impl StorageConfigNamespace {
                 };
                 let config = DynamoDbStoreConfig {
                     inner_config,
-                    cache_size: common_config.cache_size,
+                    storage_cache_policy: common_config.storage_cache_policy,
                 };
                 Ok(StoreConfig::DynamoDb(config, namespace))
             }
@@ -395,7 +395,7 @@ impl StorageConfigNamespace {
                 };
                 let config = ScyllaDbStoreConfig {
                     inner_config,
-                    cache_size: common_config.cache_size,
+                    storage_cache_policy: common_config.storage_cache_policy,
                 };
                 Ok(StoreConfig::ScyllaDb(config, namespace))
             }

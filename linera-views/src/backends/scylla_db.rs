@@ -37,7 +37,7 @@ use crate::{
     batch::UnorderedBatch,
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{CachingConfig, CachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
@@ -788,11 +788,11 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
 pub type ScyllaDbStore =
-    MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>;
+    MeteredStore<CachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>;
 
 /// The `ScyllaDbStore` composed type
 #[cfg(not(with_metrics))]
-pub type ScyllaDbStore = LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
+pub type ScyllaDbStore = CachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
 
 /// The `ScyllaDbStoreConfig` input type
-pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;
+pub type ScyllaDbStoreConfig = CachingConfig<ScyllaDbStoreInternalConfig>;

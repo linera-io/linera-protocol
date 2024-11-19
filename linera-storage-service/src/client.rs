@@ -11,7 +11,7 @@ use linera_views::metering::MeteredStore;
 use linera_views::store::TestKeyValueStore;
 use linera_views::{
     batch::{Batch, WriteOperation},
-    lru_caching::LruCachingStore,
+    lru_caching::CachingStore,
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
@@ -524,9 +524,8 @@ pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), Servic
 
 /// The service store client with metrics
 #[cfg(with_metrics)]
-pub type ServiceStoreClient =
-    MeteredStore<LruCachingStore<MeteredStore<ServiceStoreClientInternal>>>;
+pub type ServiceStoreClient = MeteredStore<CachingStore<MeteredStore<ServiceStoreClientInternal>>>;
 
 /// The service store client without metrics
 #[cfg(not(with_metrics))]
-pub type ServiceStoreClient = LruCachingStore<ServiceStoreClientInternal>;
+pub type ServiceStoreClient = CachingStore<ServiceStoreClientInternal>;
