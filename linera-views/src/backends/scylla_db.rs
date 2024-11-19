@@ -437,12 +437,12 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The key must have at most 100K bytes
-    #[error("The key must have at most 100K")]
+    /// The key must have at most MAX_KEY_SIZE bytes
+    #[error("The key must have at most MAX_KEY_SIZE")]
     KeyTooLong,
 
-    /// The value must have at most 16M
-    #[error("The value must have at most 16M")]
+    /// The value must have at most MAX_VALUE_SIZE bytes
+    #[error("The value must have at most MAX_VALUE_SIZE")]
     ValueTooLong,
 
     /// A row error in ScyllaDB
