@@ -198,6 +198,8 @@ pub enum NodeError {
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
+    #[error("Unexpected certificate value")]
+    UnexpectedCertificateValue,
 
     // Networking errors.
     // TODO(#258): These errors should be defined in linera-rpc.
@@ -216,9 +218,6 @@ pub enum NodeError {
     #[error("Failed to subscribe; tonic status: {status}")]
     SubscriptionFailed { status: String },
 
-    #[error("Failed to make a chain info query on the local node: {error}")]
-    LocalNodeQuery { error: String },
-
     #[error("Node failed to provide a 'last used by' certificate for the blob")]
     InvalidCertificateForBlob(BlobId),
     #[error("Node returned a BlobsNotFound error with duplicates")]
@@ -226,7 +225,7 @@ pub enum NodeError {
     #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
     UnexpectedEntriesInBlobsNotFound,
     #[error("Local error handling validator response")]
-    LocalError { error: String },
+    ResponseHandlingError { error: String },
 }
 
 impl From<tonic::Status> for NodeError {

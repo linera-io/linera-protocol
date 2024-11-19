@@ -761,16 +761,12 @@ where
     P: ValidatorNodeProvider + Sync + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    /// Obtains a `ChainStateView` for a given `ChainId`.
+    /// Obtains a `ChainStateView` for this client's chain.
     #[instrument(level = "trace")]
     pub async fn chain_state_view(
         &self,
     ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
-        Ok(self
-            .client
-            .local_node
-            .chain_state_view(self.chain_id)
-            .await?)
+        self.client.local_node.chain_state_view(self.chain_id).await
     }
 
     /// Subscribes to notifications from this client's chain.
@@ -1283,17 +1279,14 @@ where
         chain_id: ChainId,
         remote_node: &RemoteNode<P::Node>,
         chain_worker_limit: usize,
-    ) -> Result<ReceivedCertificatesFromValidator, NodeError> {
+    ) -> Result<ReceivedCertificatesFromValidator, ChainClientError> {
         let mut tracker = self
             .state()
             .received_certificate_trackers()
             .get(&remote_node.name)
             .copied()
             .unwrap_or(0);
-        let (committees, max_epoch) = self
-            .known_committees()
-            .await
-            .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+        let (committees, max_epoch) = self.known_committees().await?;
 
         // Retrieve the list of newly received certificates from this validator.
         let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(tracker);
@@ -1306,10 +1299,7 @@ where
             .client
             .local_node
             .next_block_heights(remote_max_heights.keys(), chain_worker_limit)
-            .await
-            .map_err(|error| NodeError::LocalError {
-                error: error.to_string(),
-            })?;
+            .await?;
 
         // We keep track of the height we've successfully downloaded and checked, per chain.
         let mut downloaded_heights = BTreeMap::new();
@@ -1356,7 +1346,7 @@ where
             let epoch = certificate.inner().epoch();
             let confirmed_block_certificate = certificate
                 .try_into()
-                .map_err(|_| NodeError::InvalidChainInfoResponse)?;
+                .map_err(|_| NodeError::UnexpectedCertificateValue)?;
             match self.check_certificate(max_epoch, &committees, &confirmed_block_certificate)? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(
@@ -1697,12 +1687,6 @@ where
                     client
                         .try_synchronize_chain_state_from(&remote_node, chain_id)
                         .await
-                        .map_err(|error| match error {
-                            ChainClientError::RemoteNodeError(error) => error,
-                            _ => NodeError::LocalError {
-                                error: error.to_string(),
-                            },
-                        })
                 }
             },
         )

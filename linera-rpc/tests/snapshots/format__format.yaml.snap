@@ -567,33 +567,31 @@ NodeError:
     11:
       InvalidChainInfoResponse: UNIT
     12:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     13:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     14:
+      UnexpectedMessage: UNIT
+    15:
       GrpcError:
         STRUCT:
           - error: STR
-    15:
+    16:
       ClientIoError:
         STRUCT:
           - error: STR
-    16:
+    17:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    17:
+    18:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    18:
+    19:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    19:
-      LocalNodeQuery:
-        STRUCT:
-          - error: STR
     20:
       InvalidCertificateForBlob:
         NEWTYPE:
@@ -603,7 +601,7 @@ NodeError:
     22:
       UnexpectedEntriesInBlobsNotFound: UNIT
     23:
-      LocalError:
+      ResponseHandlingError:
         STRUCT:
           - error: STR
 OpenChainConfig:
