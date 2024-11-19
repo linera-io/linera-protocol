@@ -198,6 +198,8 @@ pub enum NodeError {
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
+    #[error("Unexpected certificate value")]
+    UnexpectedCertificateValue,
 
     // Networking errors.
     // TODO(#258): These errors should be defined in linera-rpc.

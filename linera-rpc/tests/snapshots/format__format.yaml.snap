@@ -567,42 +567,44 @@ NodeError:
     11:
       InvalidChainInfoResponse: UNIT
     12:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     13:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     14:
+      UnexpectedMessage: UNIT
+    15:
       GrpcError:
         STRUCT:
           - error: STR
-    15:
+    16:
       ClientIoError:
         STRUCT:
           - error: STR
-    16:
+    17:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    17:
+    18:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    18:
+    19:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    19:
+    20:
       LocalNodeQuery:
         STRUCT:
           - error: STR
-    20:
+    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    21:
-      DuplicatesInBlobsNotFound: UNIT
     22:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      DuplicatesInBlobsNotFound: UNIT
     23:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    24:
       LocalError:
         STRUCT:
           - error: STR

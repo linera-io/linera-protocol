@@ -26,7 +26,6 @@ use tracing::{instrument, warn};
 
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    node::NodeError,
     notifier::Notifier,
     worker::{WorkerError, WorkerState},
 };
@@ -190,7 +189,7 @@ where
         &self,
         mut missing_blob_ids: Vec<BlobId>,
         chain_id: ChainId,
-    ) -> Result<Option<Vec<Blob>>, NodeError> {
+    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
         if missing_blob_ids.is_empty() {
             return Ok(Some(Vec::new()));
         }
@@ -234,8 +233,8 @@ where
     pub async fn chain_state_view(
         &self,
         chain_id: ChainId,
-    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, WorkerError> {
-        self.node.state.chain_state_view(chain_id).await
+    ) -> Result<OwnedRwLockReadGuard<ChainStateView<S::Context>>, LocalNodeError> {
+        Ok(self.node.state.chain_state_view(chain_id).await?)
     }
 
     #[instrument(level = "trace", skip(self))]

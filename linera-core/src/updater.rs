@@ -25,6 +25,7 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::{
+    client::ChainClientError,
     data_types::{ChainInfo, ChainInfoQuery},
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
@@ -109,7 +110,7 @@ pub async fn communicate_with_quorum<'a, A, V, K, F, R, G>(
 where
     A: ValidatorNode + Clone + 'static,
     F: Clone + Fn(RemoteNode<A>) -> R,
-    R: Future<Output = Result<V, NodeError>> + 'a,
+    R: Future<Output = Result<V, ChainClientError>> + 'a,
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
@@ -151,6 +152,13 @@ where
                 highest_key_score = highest_key_score.max(entry.0);
             }
             Err(err) => {
+                // TODO(#2857): Handle non-remote errors properly.
+                let err = match err {
+                    ChainClientError::RemoteNodeError(err) => err,
+                    err => NodeError::LocalError {
+                        error: err.to_string(),
+                    },
+                };
                 let entry = error_scores.entry(err.clone()).or_insert(0);
                 *entry += committee.weight(&name);
                 if *entry >= committee.validity_threshold() {
@@ -205,13 +213,13 @@ where
         &mut self,
         certificate: Certificate,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
             .remote_node
             .handle_optimized_certificate(&certificate, delivery)
             .await;
 
-        match &result {
+        Ok(match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
@@ -226,14 +234,14 @@ where
                     .await
             }
             _ => result,
-        }
+        }?)
     }
 
     async fn send_block_proposal(
         &mut self,
         proposal: Box<BlockProposal>,
         mut blob_ids: HashSet<BlobId>,
-    ) -> Result<Box<ChainInfo>, NodeError> {
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = false;
         for blob in &proposal.blobs {
@@ -281,7 +289,7 @@ where
                     .await?;
                 }
                 // Fail immediately on other errors.
-                Err(e) => return Err(e),
+                Err(err) => return Err(err.into()),
             }
         }
     }
@@ -291,19 +299,11 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), NodeError> {
+    ) -> Result<(), ChainClientError> {
         // Figure out which certificates this validator is missing.
         let query = ChainInfoQuery::new(chain_id);
-        let initial_block_height = match self.remote_node.handle_chain_info_query(query).await {
-            Ok(info) => info.next_block_height,
-            Err(error) => {
-                error!(
-                    name = ?self.remote_node.name, ?chain_id, %error,
-                    "Failed to query validator about missing blocks"
-                );
-                return Err(error);
-            }
-        };
+        let remote_info = self.remote_node.handle_chain_info_query(query).await?;
+        let initial_block_height = remote_info.next_block_height;
         // Obtain the missing blocks and the manager state from the local node.
         let range: Range<usize> =
             initial_block_height.try_into()?..target_block_height.try_into()?;
@@ -335,7 +335,7 @@ where
         &mut self,
         chain_heights: BTreeMap<ChainId, BlockHeight>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<(), NodeError> {
+    ) -> Result<(), ChainClientError> {
         let stream = stream::iter(chain_heights)
             .map(|(chain_id, height)| {
                 let mut updater = self.clone();
@@ -353,7 +353,7 @@ where
     async fn send_chain_information_for_senders(
         &mut self,
         chain_id: ChainId,
-    ) -> Result<(), NodeError> {
+    ) -> Result<(), ChainClientError> {
         let mut sender_heights = BTreeMap::new();
         {
             let chain = self.local_node.chain_state_view(chain_id).await?;
@@ -375,7 +375,7 @@ where
     pub async fn send_chain_update(
         &mut self,
         action: CommunicateAction,
-    ) -> Result<LiteVote, NodeError> {
+    ) -> Result<LiteVote, ChainClientError> {
         let (target_block_height, chain_id) = match &action {
             CommunicateAction::SubmitBlock { proposal, .. } => {
                 let block = &proposal.content.block;
@@ -417,7 +417,7 @@ where
                 vote.check()?;
                 Ok(vote)
             }
-            Some(_) | None => Err(NodeError::MissingVoteInValidatorResponse),
+            Some(_) | None => Err(NodeError::MissingVoteInValidatorResponse.into()),
         }
     }
 }
