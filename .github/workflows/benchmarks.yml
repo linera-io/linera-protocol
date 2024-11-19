@@ -3,6 +3,16 @@ name: Benchmarks
 on:
   push:
     branches: [ main, 'devnet_*', 'testnet_*' ]
+  pull_request:
+    branches:
+      - "**"
+    paths-ignore:
+      - 'CONTRIBUTING.md'
+      - 'INSTALL.md'
+      - 'docker/**'
+      - 'docker_scylla/**'
+      - 'configuration/**'
+      - 'kubernetes/**'
   workflow_dispatch:
 
 env:
