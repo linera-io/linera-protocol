@@ -459,7 +459,6 @@ impl ChainManager {
             };
         }
 
-        // TODO: Is it guaranteed that if key_pair = None, then the vote is not signed ever?
         (&self.validated_vote, &self.confirmed_vote)
     }
 
