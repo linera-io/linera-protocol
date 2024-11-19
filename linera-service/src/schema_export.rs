@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, GenericCertificate, HashedCertificateValue, LiteCertificate},
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
@@ -51,9 +51,9 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn handle_certificate(
+    async fn handle_certificate<T>(
         &self,
-        _: Certificate,
+        _: GenericCertificate<T>,
         _: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {

@@ -221,7 +221,10 @@ where
         &mut self,
         certificate: GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, ChainClientError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         let result = self
             .remote_node
             .handle_optimized_certificate(&certificate, delivery)

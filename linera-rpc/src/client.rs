@@ -8,11 +8,14 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, GenericCertificate, HashedCertificateValue, LiteCertificate},
+    types::{
+        Certificate, GenericCertificate, Has, HashedCertificateValue, IsValidated, LiteCertificate,
+    },
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    worker::CertificateProcessor,
 };
 
 use crate::grpc::GrpcClient;
@@ -75,12 +78,15 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_certificate<T>(
+    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client

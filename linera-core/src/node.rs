@@ -72,7 +72,9 @@ pub trait ValidatorNode {
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError>;
+    ) -> Result<ChainInfoResponse, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>;
 
     /// Handles information queries for this chain.
     async fn handle_chain_info_query(

@@ -105,7 +105,10 @@ impl ValidatorNode for SimpleClient {
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
             certificate: certificate.into(),

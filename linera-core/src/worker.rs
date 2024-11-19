@@ -930,13 +930,16 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
 
+        #[cfg(with_metrics)]
         let round = certificate.round;
+        #[cfg(with_metrics)]
         let cert_str = certificate.inner().to_log_str();
 
-        let (info, actions, duplicated) = self.process_validated_block(certificate, &blobs).await?;
+        let (info, actions, _duplicated) =
+            self.process_validated_block(certificate, &blobs).await?;
         #[cfg(with_metrics)]
         {
-            if !duplicated {
+            if !_duplicated {
                 NUM_ROUNDS_IN_CERTIFICATE
                     .with_label_values(&[cert_str, round.type_name()])
                     .observe(round.number() as f64);

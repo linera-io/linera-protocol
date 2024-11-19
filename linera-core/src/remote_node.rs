@@ -14,8 +14,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        ConfirmedBlockCertificate, GenericCertificate, Has, IsValidated, LiteCertificate,
-        RequiredBlobIds,
+        Certificate, ConfirmedBlockCertificate, GenericCertificate, Has, IsValidated,
+        LiteCertificate, RequiredBlobIds,
     },
 };
 use linera_execution::committee::ValidatorName;
@@ -64,7 +64,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
+    ) -> Result<Box<ChainInfo>, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         let chain_id = certificate.inner().get();
         let response = self
             .node
@@ -93,7 +96,10 @@ impl<N: ValidatorNode> RemoteNode<N> {
         &mut self,
         certificate: &GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
+    ) -> Result<Box<ChainInfo>, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         if certificate.is_signed_by(&self.name) {
             let result = self
                 .handle_lite_certificate(certificate.lite_cerificate(), delivery)
