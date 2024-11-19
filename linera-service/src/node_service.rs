@@ -120,9 +120,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::ChainClientError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
-            NodeServiceError::Bcs(e) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
-            }
+            NodeServiceError::Bcs(e) => (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()]),
             NodeServiceError::JsonError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
