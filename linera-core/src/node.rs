@@ -14,7 +14,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, Origin},
-    types::{Certificate, HashedCertificateValue, LiteCertificate},
+    types::{
+        Certificate, GenericCertificate, Has, HashedCertificateValue, IsValidated, LiteCertificate,
+    },
     ChainError,
 };
 use linera_execution::{
@@ -28,7 +30,7 @@ use thiserror::Error;
 
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    worker::{Notification, WorkerError},
+    worker::{CertificateProcessor, Notification, WorkerError},
 };
 
 /// A pinned [`Stream`] of Notifications.
@@ -65,9 +67,9 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
-    async fn handle_certificate(
+    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;

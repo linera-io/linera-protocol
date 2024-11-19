@@ -815,7 +815,7 @@ where
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = *Has::<ChainId>::get(vote.value());
+            let chain_id = Has::<ChainId>::get(vote.value());
             if done_senders.contains(&chain_id) {
                 continue;
             }

@@ -75,7 +75,7 @@ impl<'a> LiteCertificate<'a> {
 
     /// Returns the [`GenericCertificate`] with the specified value, if it matches.
     pub fn with_value<T: Has<ChainId>>(self, value: Hashed<T>) -> Option<GenericCertificate<T>> {
-        if &self.value.chain_id != value.inner().get() || self.value.value_hash != value.hash() {
+        if self.value.chain_id != value.inner().get() || self.value.value_hash != value.hash() {
             return None;
         }
         Some(GenericCertificate::new(

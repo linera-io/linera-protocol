@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
-    types::{CertificateValue, Timeout},
+    types::Timeout,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -1810,7 +1810,7 @@ where
     let resubmission_result = builder
         .node(2)
         .handle_certificate(
-            validated_block_certificate.into(),
+            validated_block_certificate,
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1882,7 +1882,7 @@ where
     let resubmission_result = builder
         .node(3)
         .handle_certificate(
-            validated_block_certificate.into(),
+            validated_block_certificate,
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -2014,7 +2014,7 @@ where
     let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
         *certificate.inner(),
-        CertificateValue::Timeout(Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO))
+        Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO)
     );
     assert_eq!(certificate.round, Round::SingleLeader(0));
 
@@ -2285,7 +2285,7 @@ where
     builder
         .node(0)
         .handle_certificate(
-            validated_block_certificate.into(),
+            validated_block_certificate,
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )

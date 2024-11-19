@@ -2,14 +2,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    identifiers::ChainId,
+    identifiers::{BlobId, ChainId},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::data_types::LiteValue;
+use super::CertificateValue;
+use crate::{
+    block::{ConfirmedBlock, Timeout, ValidatedBlock},
+    data_types::LiteValue,
+};
 
 /// Wrapper type around hashed instance of `T` type.
 #[derive(Debug)]
@@ -59,7 +65,7 @@ impl<T> Hashed<T> {
     {
         LiteValue {
             value_hash: self.hash,
-            chain_id: *self.value.get(),
+            chain_id: self.value.get(),
         }
     }
 }
@@ -102,6 +108,60 @@ impl<T> PartialEq for Hashed<T> {
 impl<T> Eq for Hashed<T> {}
 
 /// A constraint summing a value of type `T`.
-pub trait Has<T> {
-    fn get(&self) -> &T;
+pub trait Has<T, R = T> {
+    fn get(&self) -> R;
+}
+
+pub enum IsValidated {}
+
+impl Has<IsValidated, bool> for ValidatedBlock {
+    fn get(&self) -> bool {
+        true
+    }
+}
+
+impl Has<IsValidated, bool> for ConfirmedBlock {
+    fn get(&self) -> bool {
+        false
+    }
+}
+
+impl Has<IsValidated, bool> for CertificateValue {
+    fn get(&self) -> bool {
+        matches!(self, CertificateValue::ValidatedBlock(_))
+    }
+}
+
+impl Has<IsValidated, bool> for Timeout {
+    fn get(&self) -> bool {
+        false
+    }
+}
+
+pub enum RequiredBlobIds {}
+
+impl Has<RequiredBlobIds, HashSet<BlobId>> for ValidatedBlock {
+    fn get(&self) -> HashSet<BlobId> {
+        self.inner().outcome.required_blob_ids().clone()
+    }
+}
+
+impl Has<RequiredBlobIds, HashSet<BlobId>> for ConfirmedBlock {
+    fn get(&self) -> HashSet<BlobId> {
+        self.inner().outcome.required_blob_ids().clone()
+    }
+}
+
+impl Has<RequiredBlobIds, HashSet<BlobId>> for Timeout {
+    fn get(&self) -> HashSet<BlobId> {
+        HashSet::new()
+    }
+}
+
+impl Has<RequiredBlobIds, HashSet<BlobId>> for CertificateValue {
+    fn get(&self) -> HashSet<BlobId> {
+        self.executed_block()
+            .map(|block| block.required_blob_ids())
+            .unwrap_or_default()
+    }
 }

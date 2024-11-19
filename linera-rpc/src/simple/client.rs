@@ -14,7 +14,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
+    types::{
+        Certificate, CertificateValue, GenericCertificate, HashedCertificateValue, LiteCertificate,
+    },
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -98,15 +100,15 @@ impl ValidatorNode for SimpleClient {
     }
 
     /// Processes a certificate.
-    async fn handle_certificate(
+    async fn handle_certificate<T>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleCertificateRequest {
-            certificate,
+            certificate: certificate.into(),
             blobs,
             wait_for_outgoing_messages,
         };

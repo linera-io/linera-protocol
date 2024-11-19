@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::Certificate,
+    types::{Certificate, GenericCertificate, Has, IsValidated, RequiredBlobIds},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
@@ -30,6 +30,7 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    worker::CertificateProcessor,
 };
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
@@ -209,9 +210,16 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate(
+    async fn send_certificate<
+        T: 'static
+            + Clone
+            + CertificateProcessor
+            + Has<RequiredBlobIds, HashSet<BlobId>>
+            + Has<ChainId>
+            + Has<IsValidated, bool>,
+    >(
         &mut self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
@@ -226,7 +234,7 @@ where
 
                 let blobs = self
                     .local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().get())
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node
@@ -319,12 +327,12 @@ where
             let storage = self.local_node.storage_client();
             let certs = storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
-                self.send_certificate(cert.into(), delivery).await?;
+                self.send_certificate(cert, delivery).await?;
             }
         }
         if let Some(cert) = manager.timeout {
             if cert.inner().chain_id == chain_id {
-                self.send_certificate(cert.into(), CrossChainMessageDelivery::NonBlocking)
+                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
                     .await?;
             }
         }

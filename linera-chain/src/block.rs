@@ -34,13 +34,17 @@ impl ValidatedBlock {
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
     }
+
+    pub fn to_log_str(&self) -> &'static str {
+        "validated_block"
+    }
 }
 
 impl BcsHashable for ValidatedBlock {}
 
 impl Has<ChainId> for ValidatedBlock {
-    fn get(&self) -> &ChainId {
-        &self.executed_block.block.chain_id
+    fn get(&self) -> ChainId {
+        self.executed_block.block.chain_id
     }
 }
 
@@ -122,11 +126,15 @@ impl ConfirmedBlock {
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
     }
+
+    pub fn to_log_str(&self) -> &'static str {
+        "confirmed_block"
+    }
 }
 
 impl Has<ChainId> for ConfirmedBlock {
-    fn get(&self) -> &ChainId {
-        &self.executed_block.block.chain_id
+    fn get(&self) -> ChainId {
+        self.executed_block.block.chain_id
     }
 }
 
@@ -144,6 +152,10 @@ impl Timeout {
             height,
             epoch,
         }
+    }
+
+    pub fn to_log_str(&self) -> &'static str {
+        "timeout"
     }
 }
 
@@ -167,7 +179,7 @@ impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
 impl BcsHashable for Timeout {}
 
 impl Has<ChainId> for Timeout {
-    fn get(&self) -> &ChainId {
-        &self.chain_id
+    fn get(&self) -> ChainId {
+        self.chain_id
     }
 }

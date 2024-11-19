@@ -9,6 +9,7 @@ use std::{
     time::Duration,
 };
 
+use async_trait::async_trait;
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
 use linera_base::{
@@ -25,8 +26,9 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        Certificate, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, Hashed,
-        LiteCertificate, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, Hashed, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
@@ -393,23 +395,86 @@ where
     }
 
     #[instrument(level = "trace", skip(self, certificate))]
-    pub(crate) async fn full_certificate(
+    pub(crate) async fn full_certificate_alt(
         &self,
         certificate: LiteCertificate<'_>,
-    ) -> Result<Certificate, WorkerError> {
+    ) -> Result<
+        (
+            Option<ConfirmedBlockCertificate>,
+            Option<ValidatedBlockCertificate>,
+        ),
+        WorkerError,
+    > {
         match self
             .recent_confirmed_value_cache
             .full_certificate(certificate.clone())
             .await
         {
-            Ok(certificate) => Ok(certificate.into()),
+            Ok(certificate) => Ok((Some(certificate), None)),
             Err(WorkerError::MissingCertificateValue) => Ok(self
                 .recent_validated_value_cache
                 .full_certificate(certificate)
                 .await
-                .map(Into::into)?),
+                .map(|validated_cert| (None, Some(validated_cert)))?),
             Err(other) => Err(other),
         }
+    }
+}
+
+#[async_trait]
+pub trait CertificateProcessor: Send + Sized {
+    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+        worker: &WorkerState<S>,
+        certificate: GenericCertificate<Self>,
+        blobs: Vec<Blob>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
+}
+
+#[async_trait]
+impl CertificateProcessor for CertificateValue {
+    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+        worker: &WorkerState<S>,
+        certificate: GenericCertificate<CertificateValue>,
+        blobs: Vec<Blob>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        worker.handle_certificate(certificate, blobs, None).await
+    }
+}
+
+#[async_trait]
+impl CertificateProcessor for ConfirmedBlock {
+    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+        worker: &WorkerState<S>,
+        certificate: ConfirmedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        worker
+            .handle_confirmed_certificate(certificate, blobs, None)
+            .await
+    }
+}
+
+#[async_trait]
+impl CertificateProcessor for ValidatedBlock {
+    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+        worker: &WorkerState<S>,
+        certificate: ValidatedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        worker
+            .handle_validated_certificate(certificate, blobs)
+            .await
+    }
+}
+
+#[async_trait]
+impl CertificateProcessor for Timeout {
+    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
+        worker: &WorkerState<S>,
+        certificate: TimeoutCertificate,
+        _blobs: Vec<Blob>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        worker.handle_timeout_certificate(certificate).await
     }
 }
 
@@ -420,27 +485,34 @@ where
     // NOTE: This only works for non-sharded workers!
     #[instrument(level = "trace", skip(self, certificate, blobs))]
     #[cfg(with_testing)]
-    pub async fn fully_handle_certificate(
+    pub async fn fully_handle_certificate<T>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<ChainInfoResponse, WorkerError>
+    where
+        T: CertificateProcessor + Send + 'static,
+    {
         self.fully_handle_certificate_with_notifications(certificate, blobs, &())
             .await
     }
 
-    #[instrument(level = "trace", skip(self, certificate, blobs, notifier))]
+    #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
-    pub(crate) async fn fully_handle_certificate_with_notifications(
+    pub(crate) async fn fully_handle_certificate_with_notifications<T>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         notifier: &impl Notifier,
-    ) -> Result<ChainInfoResponse, WorkerError> {
+    ) -> Result<ChainInfoResponse, WorkerError>
+    where
+        T: CertificateProcessor + 'static,
+    {
         let notifications = (*notifier).clone();
         let this = self.clone();
         linera_base::task::spawn(async move {
-            let (response, actions) = this.handle_certificate(certificate, blobs, None).await?;
+            let (response, actions) =
+                CertificateProcessor::process_certificate(&this, certificate, blobs).await?;
             notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
@@ -761,85 +833,130 @@ where
         certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let full_cert = self.full_certificate(certificate).await?;
-        self.handle_certificate(full_cert, vec![], notify_when_messages_are_delivered)
-            .await
+        match self.full_certificate_alt(certificate).await? {
+            (Some(confirmed), None) => {
+                self.handle_confirmed_certificate(
+                    confirmed,
+                    vec![],
+                    notify_when_messages_are_delivered,
+                )
+                .await
+            }
+            (None, Some(validated)) => self.handle_validated_certificate(validated, vec![]).await,
+            (Some(_), Some(_)) => Err(WorkerError::InvalidLiteCertificate), // todo: more logging? should not happen
+            _ => Err(WorkerError::MissingCertificateValue),
+        }
     }
 
-    /// Processes a certificate.
+    /// Processes a block certificate.
     #[instrument(skip_all, fields(
-        nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.inner().chain_id()),
-        height = %certificate.inner().height(),
-    ))]
+            nick = self.nickname,
+            chain_id = format!("{:.8}", certificate.inner().chain_id()),
+            height = %certificate.inner().height(),
+        ))]
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,
         blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        trace!("{} <-- {:?}", self.nickname, certificate);
-
-        #[cfg(with_metrics)]
-        let (round, log_str, mut confirmed_transactions, mut duplicated) = (
-            certificate.round,
-            certificate.inner().to_log_str(),
-            0u64,
-            false,
-        );
-
-        let (info, actions) = match certificate.inner() {
-            CertificateValue::ValidatedBlock { .. } => {
-                // Confirm the validated block.
-                // Note: This conversion panics if `certificate` is not a validated block certificate.
-                let validated_block_certificate: ValidatedBlockCertificate = certificate.into();
-                let validation_outcomes = self
-                    .process_validated_block(validated_block_certificate, &blobs)
-                    .await?;
-                #[cfg(with_metrics)]
-                {
-                    duplicated = validation_outcomes.2;
-                }
-                let (info, actions, _) = validation_outcomes;
-                (info, actions)
-            }
-            CertificateValue::ConfirmedBlock(_confirmed) => {
-                #[cfg(with_metrics)]
-                {
-                    confirmed_transactions = (_confirmed.inner().block.incoming_bundles.len()
-                        + _confirmed.inner().block.operations.len())
-                        as u64;
-                }
-                let confirmed_block_certificate: ConfirmedBlockCertificate =
-                    certificate.try_into().unwrap();
-                // Execute the confirmed block.
-                self.process_confirmed_block(
-                    confirmed_block_certificate,
-                    &blobs,
+        match certificate.inner() {
+            CertificateValue::ConfirmedBlock(_) => {
+                let certificate = ConfirmedBlockCertificate::try_from(certificate).unwrap();
+                self.handle_confirmed_certificate(
+                    certificate,
+                    blobs,
                     notify_when_messages_are_delivered,
                 )
-                .await?
+                .await
             }
-            CertificateValue::Timeout { .. } => {
-                // Handle the leader timeout.
-                // Note: This conversion panics if `certificate` is not a timeout certificate
-                // but we just checked that it is.
-                let timeout_certificate = certificate.into();
-                self.process_timeout(timeout_certificate).await?
+            CertificateValue::ValidatedBlock(_) => {
+                let certificate = ValidatedBlockCertificate::from(certificate);
+                self.handle_validated_certificate(certificate, blobs).await
             }
-        };
+            CertificateValue::Timeout(_) => {
+                let certificate = TimeoutCertificate::from(certificate);
+                self.handle_timeout_certificate(certificate).await
+            }
+        }
+    }
 
+    /// Processes a confirmed block certificate.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.executed_block().block.chain_id),
+        height = %certificate.executed_block().block.height,
+    ))]
+    pub async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        blobs: Vec<Blob>,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        trace!("{} <-- {:?}", self.nickname, certificate);
         #[cfg(with_metrics)]
-        if !duplicated {
+        {
+            let confirmed_transactions = (certificate.executed_block().block.incoming_bundles.len()
+                + certificate.executed_block().block.operations.len())
+                as u64;
+
             NUM_ROUNDS_IN_CERTIFICATE
-                .with_label_values(&[log_str, round.type_name()])
-                .observe(round.number() as f64);
+                .with_label_values(&[
+                    certificate.inner().to_log_str(),
+                    certificate.round.type_name(),
+                ])
+                .observe(certificate.round.number() as f64);
             if confirmed_transactions > 0 {
                 TRANSACTION_COUNT
                     .with_label_values(&[])
                     .inc_by(confirmed_transactions);
             }
         }
+
+        self.process_confirmed_block(certificate, &blobs, notify_when_messages_are_delivered)
+            .await
+    }
+
+    /// Processes a validated block certificate.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.executed_block().block.chain_id),
+        height = %certificate.executed_block().block.height,
+    ))]
+    pub async fn handle_validated_certificate(
+        &self,
+        certificate: ValidatedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        trace!("{} <-- {:?}", self.nickname, certificate);
+
+        let round = certificate.round;
+        let cert_str = certificate.inner().to_log_str();
+
+        let (info, actions, duplicated) = self.process_validated_block(certificate, &blobs).await?;
+        #[cfg(with_metrics)]
+        {
+            if !duplicated {
+                NUM_ROUNDS_IN_CERTIFICATE
+                    .with_label_values(&[cert_str, round.type_name()])
+                    .observe(round.number() as f64);
+            }
+        }
+        Ok((info, actions))
+    }
+
+    /// Processes a timeout certificate
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.inner().chain_id),
+        height = %certificate.inner().height,
+    ))]
+    pub async fn handle_timeout_certificate(
+        &self,
+        certificate: TimeoutCertificate,
+    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        trace!("{} <-- {:?}", self.nickname, certificate);
+        let (info, actions) = self.process_timeout(certificate).await?;
         Ok((info, actions))
     }
 

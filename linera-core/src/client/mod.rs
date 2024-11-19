@@ -45,8 +45,9 @@ use linera_chain::{
     },
     manager::ChainManagerInfo,
     types::{
-        Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate,
-        ValidatedBlockCertificate,
+        Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Has, Hashed,
+        HashedCertificateValue, LiteCertificate, RequiredBlobIds, Timeout, TimeoutCertificate,
+        ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -79,7 +80,7 @@ use crate::{
     notifier::ChannelNotifier,
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{Notification, Reason, WorkerError, WorkerState},
+    worker::{CertificateProcessor, Notification, Reason, WorkerError, WorkerState},
 };
 
 mod chain_client_state;
@@ -378,13 +379,11 @@ where
                 warn!("Failed to process network certificate {}", hash);
                 return info;
             }
-            let mut result = self
-                .handle_certificate(certificate.clone().into(), vec![])
-                .await;
+            let mut result = self.handle_certificate(certificate.clone(), vec![]).await;
 
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 if let Some(blobs) = remote_node.try_download_blobs(blob_ids).await {
-                    result = self.handle_certificate(certificate.into(), blobs).await;
+                    result = self.handle_certificate(certificate, blobs).await;
                 }
             }
 
@@ -401,9 +400,9 @@ where
         info
     }
 
-    async fn handle_certificate(
+    async fn handle_certificate<T: CertificateProcessor + 'static>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         self.local_node
@@ -1041,18 +1040,19 @@ where
     /// Submits a block proposal to the validators. If it is a slow round, also submits the
     /// validated block for finalization. Returns the confirmed block certificate.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal(
+    async fn submit_block_proposal<
+        T: Clone
+            + Has<ChainId>
+            + Has<RequiredBlobIds, HashSet<BlobId>>
+            + CertificateProcessor
+            + 'static,
+    >(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
-        value: HashedCertificateValue,
-    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        let required_blob_ids = value
-            .inner()
-            .executed_block()
-            .expect("The result of executing a proposal is always an executed block")
-            .outcome
-            .required_blob_ids();
+        value: Hashed<T>,
+    ) -> Result<GenericCertificate<T>, ChainClientError> {
+        let required_blob_ids: HashSet<BlobId> = value.inner().get();
         let proposed_blobs = proposal.blobs.clone();
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
@@ -1063,11 +1063,7 @@ where
             .await?;
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
-        if certificate.inner().is_confirmed() {
-            Ok(certificate.try_into().unwrap()) // shouldn't panic, we just checked.
-        } else {
-            self.finalize_block(committee, certificate.into()).await
-        }
+        Ok(certificate)
     }
 
     /// Broadcasts certified blocks to validators.
@@ -1111,12 +1107,12 @@ where
     /// In that case, it verifies that the validator votes are for the provided value,
     /// and returns a certificate.
     #[instrument(level = "trace", skip(committee, action, value))]
-    async fn communicate_chain_action(
+    async fn communicate_chain_action<T: Has<ChainId>>(
         &self,
         committee: &Committee,
         action: CommunicateAction,
-        value: HashedCertificateValue,
-    ) -> Result<Certificate, ChainClientError> {
+        value: Hashed<T>,
+    ) -> Result<GenericCertificate<T>, ChainClientError> {
         let local_node = self.client.local_node.clone();
         let nodes = self.make_nodes(committee)?;
         let n_validators = nodes.len();
@@ -1212,16 +1208,13 @@ where
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self
-            .process_certificate(certificate.clone().into(), vec![])
-            .await
-        {
+        if let Err(err) = self.process_certificate(certificate.clone(), vec![]).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     let blobs = RemoteNode::download_blobs(blob_ids, &nodes)
                         .await
                         .ok_or(err)?;
-                    self.process_certificate(certificate.into(), blobs).await?;
+                    self.process_certificate(certificate, blobs).await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1565,9 +1558,9 @@ where
 
     /// Handles the certificate in the local node and the resulting notifications.
     #[instrument(level = "trace", skip(certificate))]
-    async fn process_certificate(
+    async fn process_certificate<T: CertificateProcessor + 'static>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
     ) -> Result<(), LocalNodeError> {
         let info = self
@@ -1590,7 +1583,7 @@ where
     /// Requests a leader timeout vote from all validators. If a quorum signs it, creates a
     /// certificate and sends it to all validators, to make them enter the next round.
     #[instrument(level = "trace")]
-    pub async fn request_leader_timeout(&self) -> Result<Certificate, ChainClientError> {
+    pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, ChainClientError> {
         let chain_id = self.chain_id;
         let query = ChainInfoQuery::new(chain_id).with_committees();
         let info = self
@@ -1612,7 +1605,9 @@ where
             round,
             chain_id,
         };
-        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
+        let value: Hashed<Timeout> = HashedCertificateValue::new_timeout(chain_id, height, epoch)
+            .try_into()
+            .unwrap();
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -1724,10 +1719,7 @@ where
         if let Some(cert) = info.manager.requested_locked {
             let hash = cert.hash();
             let mut blobs = vec![];
-            while let Err(original_err) = self
-                .client
-                .handle_certificate(Certificate::from(*cert.clone()), blobs)
-                .await
+            while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
             {
                 if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
                     if let Some(new_blobs) = remote_node
@@ -1974,13 +1966,7 @@ where
                 );
             }
         }
-        let hashed_value = if round.is_fast() {
-            HashedCertificateValue::new_confirmed(executed_block)
-        } else {
-            HashedCertificateValue::new_validated(executed_block)
-        };
-        // Collect the hashed certificate values required for execution.
-        let committee = self.local_committee().await?;
+
         let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         // Create the final block proposal.
         let key_pair = self.key_pair().await?;
@@ -2001,10 +1987,23 @@ where
             .await?;
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut().set_pending_block(block);
+        // Collect the hashed certificate values required for execution.
+        let committee = self.local_committee().await?;
         // Send the query to validators.
-        let certificate = self
-            .submit_block_proposal(&committee, proposal, hashed_value)
-            .await?;
+        let validated_block = ValidatedBlock::new(executed_block);
+        let certificate = if round.is_fast() {
+            self.submit_block_proposal(
+                &committee,
+                proposal,
+                Hashed::new(ConfirmedBlock::from_validated(validated_block)),
+            )
+            .await?
+        } else {
+            let certificate = self
+                .submit_block_proposal(&committee, proposal, Hashed::new(validated_block))
+                .await?;
+            self.finalize_block(&committee, certificate).await?
+        };
         // Communicate the new certificate now.
         let next_block_height = self.next_block_height();
         self.communicate_chain_updates(

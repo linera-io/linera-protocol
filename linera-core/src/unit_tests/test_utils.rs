@@ -20,7 +20,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate},
+    types::{
+        Certificate, ConfirmedBlockCertificate, GenericCertificate, Has, HashedCertificateValue,
+        IsValidated, LiteCertificate,
+    },
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -55,7 +58,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{NetworkActions, Notification, WorkerState},
+    worker::{CertificateProcessor, NetworkActions, Notification, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -121,9 +124,9 @@ where
         .await
     }
 
-    async fn handle_certificate(
+    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -312,13 +315,17 @@ where
         }
     }
 
-    async fn handle_certificate(
-        certificate: Certificate,
+    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
+        certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if certificate.inner().is_validated() => None,
+            FaultType::DontProcessValidated
+                if Has::<IsValidated, bool>::get(certificate.inner()) =>
+            {
+                None
+            }
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -346,21 +353,31 @@ where
         let client = self.client.clone();
         let mut validator = client.lock().await;
         let result = async move {
-            let certificate = validator.state.full_certificate(certificate).await?;
-            self.do_handle_certificate_internal(certificate, &mut validator, vec![])
-                .await
+            match validator.state.full_certificate_alt(certificate).await? {
+                (Some(confirmed), None) => {
+                    self.do_handle_certificate_internal(confirmed, &mut validator, vec![])
+                        .await
+                }
+                (None, Some(validated)) => {
+                    self.do_handle_certificate_internal(validated, &mut validator, vec![])
+                        .await
+                }
+                _ => panic!("Expected exactly one of confirmed or validated"),
+            }
         }
         .await;
         sender.send(result)
     }
 
-    async fn do_handle_certificate_internal(
+    async fn do_handle_certificate_internal<
+        T: 'static + CertificateProcessor + Has<IsValidated, bool>,
+    >(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let is_validated = certificate.inner().is_validated();
+        let is_validated = Has::<IsValidated, bool>::get(certificate.inner());
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
@@ -389,9 +406,9 @@ where
         }
     }
 
-    async fn do_handle_certificate(
+    async fn do_handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
         self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {

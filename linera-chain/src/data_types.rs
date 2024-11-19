@@ -435,11 +435,11 @@ pub struct Vote<T> {
 }
 
 impl Has<ChainId> for CertificateValue {
-    fn get(&self) -> &ChainId {
+    fn get(&self) -> ChainId {
         match self {
-            CertificateValue::ConfirmedBlock(confirmed) => &confirmed.inner().block.chain_id,
-            CertificateValue::ValidatedBlock(validated) => &validated.inner().block.chain_id,
-            CertificateValue::Timeout(Timeout { chain_id, .. }) => chain_id,
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.chain_id,
+            CertificateValue::ValidatedBlock(validated) => validated.inner().block.chain_id,
+            CertificateValue::Timeout(Timeout { chain_id, .. }) => *chain_id,
         }
     }
 }
