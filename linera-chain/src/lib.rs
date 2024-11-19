@@ -37,9 +37,9 @@ use thiserror::Error;
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
-    #[error("Arithmetic error: {0}")]
+    #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
-    #[error("Error in view operation: {0}")]
+    #[error(transparent)]
     ViewError(ViewError),
     #[error("Execution error: {0} during {1:?}")]
     ExecutionError(Box<ExecutionError>, ChainExecutionContext),

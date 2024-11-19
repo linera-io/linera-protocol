@@ -38,7 +38,7 @@ use crate::{
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("a storage option must be provided")]
     NoStorageOption,
     #[error("wallet already exists at {0}")]

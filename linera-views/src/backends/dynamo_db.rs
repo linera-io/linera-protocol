@@ -1067,7 +1067,7 @@ pub enum DynamoDbStoreInternalError {
     JournalConsistencyError(#[from] JournalConsistencyError),
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Already existing database

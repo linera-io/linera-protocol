@@ -288,8 +288,8 @@ where
     /// Handles an error while receiving a message.
     async fn handle_error(&mut self, error: codec::Error) -> Result<(), std::io::Error> {
         match error {
-            codec::Error::Io(io_error) => {
-                error!("IO error in UDP server: {io_error}");
+            codec::Error::IoError(io_error) => {
+                error!("I/O error in UDP server: {io_error}");
                 self.shutdown().await;
                 Err(io_error)
             }
@@ -485,7 +485,7 @@ where
     fn handle_error(&self, error: codec::Error) {
         if !matches!(
             &error,
-            codec::Error::Io(error)
+            codec::Error::IoError(error)
                 if error.kind() == io::ErrorKind::UnexpectedEof
                 || error.kind() == io::ErrorKind::ConnectionReset
         ) {

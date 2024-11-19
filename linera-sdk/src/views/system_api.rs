@@ -91,8 +91,8 @@ pub enum KeyValueStoreError {
     KeyTooLong,
 
     /// BCS serialization error.
-    #[error("BCS error: {0}")]
-    Bcs(#[from] bcs::Error),
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
 }
 
 impl linera_views::store::KeyValueStoreError for KeyValueStoreError {

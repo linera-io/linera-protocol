@@ -9,7 +9,7 @@ use crate::RpcMessage;
 #[derive(Error, Debug)]
 pub enum MassClientError {
     #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("tonic transport: {0}")]
     TonicTransport(#[from] crate::grpc::transport::Error),
     #[error("conversion error: {0}")]
