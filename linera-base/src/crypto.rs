@@ -53,7 +53,7 @@ pub enum CryptoError {
     InvalidSignature { error: String, type_name: String },
     #[error("Signature for object {type_name} is missing")]
     MissingSignature { type_name: String },
-    #[error("String contains non-hexadecimal digits")]
+    #[error(transparent)]
     NonHexDigits(#[from] hex::FromHexError),
     #[error(
         "Byte slice has length {0} but a `CryptoHash` requires exactly {expected} bytes",
@@ -65,7 +65,7 @@ pub enum CryptoError {
         expected = dalek::PUBLIC_KEY_LENGTH,
     )]
     IncorrectPublicKeySize(usize),
-    #[error("Could not parse integer")]
+    #[error("Could not parse integer: {0}")]
     ParseIntError(#[from] ParseIntError),
 }
 

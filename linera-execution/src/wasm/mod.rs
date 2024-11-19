@@ -284,7 +284,7 @@ pub enum WasmExecutionError {
     #[error("Failed to instantiate Wasm module: {_0}")]
     InstantiateModuleWithWasmer(#[from] Box<::wasmer::InstantiationError>),
     #[cfg(with_wasmtime)]
-    #[error("Failed to create and configure Wasmtime runtime")]
+    #[error("Failed to create and configure Wasmtime runtime: {_0}")]
     CreateWasmtimeEngine(#[source] anyhow::Error),
     #[cfg(with_wasmer)]
     #[error(

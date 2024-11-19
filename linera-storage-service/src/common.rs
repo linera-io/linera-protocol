@@ -57,8 +57,8 @@ pub enum ServiceStoreError {
     VarError(#[from] std::env::VarError),
 
     /// An error occurred during BCS serialization
-    #[error("An error occurred during BCS serialization")]
-    Serialization(#[from] bcs::Error),
+    #[error(transparent)]
+    Bcs(#[from] bcs::Error),
 }
 
 impl KeyValueStoreError for ServiceStoreError {

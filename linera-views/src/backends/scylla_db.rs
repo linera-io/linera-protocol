@@ -385,7 +385,7 @@ pub struct ScyllaDbStoreInternal {
 #[derive(Error, Debug)]
 pub enum ScyllaDbStoreError {
     /// BCS serialization error.
-    #[error("BCS error: {0}")]
+    #[error(transparent)]
     Bcs(#[from] bcs::Error),
 
     /// The key must have at most 1M bytes
@@ -409,7 +409,7 @@ pub enum ScyllaDbStoreError {
     InvalidTableName,
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Already existing database

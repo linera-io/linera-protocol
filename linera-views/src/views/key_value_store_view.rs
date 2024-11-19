@@ -1210,7 +1210,7 @@ pub enum ViewContainerError {
     ViewError(#[from] ViewError),
 
     /// BCS serialization error.
-    #[error("BCS error: {0}")]
+    #[error(transparent)]
     Bcs(#[from] bcs::Error),
 }
 

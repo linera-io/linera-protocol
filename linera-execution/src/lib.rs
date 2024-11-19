@@ -238,13 +238,13 @@ pub enum ExecutionError {
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
-    #[error("Failed to make network reqwest")]
+    #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("Encountered IO error")]
+    #[error("Encountered IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("More recorded oracle responses than expected")]
     UnexpectedOracleResponse,
-    #[error("Invalid JSON: {}", .0)]
+    #[error("Invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     Bcs(#[from] bcs::Error),

@@ -86,13 +86,13 @@ impl Decoder for Codec {
 /// Errors that can arise during transmission or reception of [`RpcMessage`]s.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("IO error in the underlying transport")]
+    #[error("I/O error in the underlying transport: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Failed to deserialize an incoming message")]
+    #[error("Failed to deserialize an incoming message: {0}")]
     Deserialization(#[source] bincode::ErrorKind),
 
-    #[error("Failed to serialize outgoing message")]
+    #[error("Failed to serialize outgoing message: {0}")]
     Serialization(#[source] bincode::ErrorKind),
 
     #[error("RpcMessage is too big to fit in a protocol frame: \

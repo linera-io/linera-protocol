@@ -1067,7 +1067,7 @@ pub enum DynamoDbStoreInternalError {
     JournalConsistencyError(#[from] JournalConsistencyError),
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Already existing database
@@ -1096,7 +1096,7 @@ pub enum DynamoDbStoreInternalError {
 
     /// A BCS error occurred.
     #[error(transparent)]
-    BcsError(#[from] bcs::Error),
+    Bcs(#[from] bcs::Error),
 
     /// A wrong table name error occurred
     #[error(transparent)]

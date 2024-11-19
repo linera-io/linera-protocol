@@ -557,7 +557,7 @@ pub enum RocksDbStoreInternalError {
     NonDirectoryNamespace,
 
     /// Error converting `OsString` to `String`
-    #[error("error in the conversion from OsString")]
+    #[error("error in the conversion from OsString: {0:?}")]
     IntoStringError(OsString),
 
     /// The key must have at most 8M
@@ -565,7 +565,7 @@ pub enum RocksDbStoreInternalError {
     KeyTooLong,
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Invalid namespace
@@ -581,7 +581,7 @@ pub enum RocksDbStoreInternalError {
     FsError(#[from] std::io::Error),
 
     /// BCS serialization error.
-    #[error("BCS error: {0}")]
+    #[error(transparent)]
     Bcs(#[from] bcs::Error),
 }
 

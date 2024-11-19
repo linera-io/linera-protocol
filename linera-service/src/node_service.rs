@@ -80,10 +80,10 @@ enum NodeServiceError {
     ChainClientError(#[from] ChainClientError),
     #[error(transparent)]
     BcsHexError(#[from] BcsHexParseError),
-    #[error("could not decode query string")]
+    #[error("could not decode query string: {0}")]
     QueryStringError(#[from] hex::FromHexError),
     #[error(transparent)]
-    BcsError(#[from] bcs::Error),
+    Bcs(#[from] bcs::Error),
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
     #[error("missing GraphQL operation")]
@@ -96,11 +96,11 @@ enum NodeServiceError {
     GraphQLParseError { error: String },
     #[error("malformed application response")]
     MalformedApplicationResponse,
-    #[error("application service error")]
+    #[error("application service error: {errors:?}")]
     ApplicationServiceError { errors: Vec<String> },
-    #[error("chain ID not found")]
+    #[error("chain ID not found: {chain_id}")]
     UnknownChainId { chain_id: String },
-    #[error("malformed chain ID")]
+    #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
 }
 
@@ -120,7 +120,7 @@ impl IntoResponse for NodeServiceError {
             NodeServiceError::ChainClientError(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
-            NodeServiceError::BcsError(e) => {
+            NodeServiceError::Bcs(e) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, vec![e.to_string()])
             }
             NodeServiceError::JsonError(e) => {

@@ -352,7 +352,7 @@ where
 #[derive(Error, Debug)]
 pub enum DualStoreError<E1, E2> {
     /// Serialization error with BCS.
-    #[error("BCS error: {0}")]
+    #[error(transparent)]
     Bcs(#[from] bcs::Error),
 
     /// First store.

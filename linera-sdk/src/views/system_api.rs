@@ -91,7 +91,7 @@ pub enum KeyValueStoreError {
     KeyTooLong,
 
     /// BCS serialization error.
-    #[error("BCS error: {0}")]
+    #[error(transparent)]
     Bcs(#[from] bcs::Error),
 }
 
