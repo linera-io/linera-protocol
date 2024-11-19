@@ -44,7 +44,7 @@ pub fn bucket_interval(start_value: f64, end_value: f64) -> Option<Vec<f64>> {
     let factor = 3.0_f64;
     let count_approx = quot.ln() / factor.ln();
     let count = count_approx.round() as usize;
-    Some(exponential_buckets(start_value, factor, count).expect("An exponential buckets"))
+    Some(exponential_buckets(start_value, factor, count).expect("Exponential buckets creation should not fail!"))
 }
 
 /// Construct the latencies starting from 0.0001 and ending at the maximum latency
