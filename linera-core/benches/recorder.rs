@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use criterion::measurement::{Measurement, ValueFormatter};
 use prometheus::proto::MetricType;
 
-/// A `BenchRecorder` together with a set of counter names. This can be used in benachmarks that
+/// A `BenchRecorder` together with a set of counter names. This can be used in benchmarks that
 /// measure the sum of the selected counters instead of wall clock time.
 pub struct BenchRecorderMeasurement {
     counter_names: HashSet<&'static str>,
