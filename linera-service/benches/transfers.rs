@@ -20,10 +20,11 @@ fn cross_chain_native_token_transfers(criterion: &mut Criterion) {
     let chain_count = 100;
     let accounts_per_chain = 1;
     let transfers_per_account = 100;
+    let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
     criterion.bench_function("same_chain_native_token_transfers", |bencher| {
         bencher
-            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
+            .to_async(&runtime)
             .iter_custom(|iterations| async move {
                 let mut total_time = Duration::ZERO;
 
