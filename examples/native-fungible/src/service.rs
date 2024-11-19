@@ -50,7 +50,7 @@ impl Accounts {
     // Define a field that lets you query by key
     async fn entry(&self, key: AccountOwner) -> AccountEntry {
         let owner = match key {
-            AccountOwner::User(owner) => owner,
+            AccountOwner::User(_) => key,
             AccountOwner::Application(_) => panic!("Applications not supported yet"),
         };
         let runtime = self

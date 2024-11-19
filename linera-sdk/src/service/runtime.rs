@@ -95,8 +95,8 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: Owner) -> Amount {
-        wit::read_owner_balance(AccountOwner::User(owner).into()).into()
+    pub fn owner_balance(&self, owner: AccountOwner) -> Amount {
+        wit::read_owner_balance(owner.into()).into()
     }
 
     /// Returns the balances of all accounts on the chain.

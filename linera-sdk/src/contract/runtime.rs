@@ -152,8 +152,8 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, owner: Owner) -> Amount {
-        wit::read_owner_balance(AccountOwner::User(owner).into()).into()
+    pub fn owner_balance(&mut self, owner: AccountOwner) -> Amount {
+        wit::read_owner_balance(owner.into()).into()
     }
 
     /// Schedules a message to be sent to this application on another chain.

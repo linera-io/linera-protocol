@@ -402,8 +402,8 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&mut self, owner: Owner) -> Amount {
-        *self.owner_balance_mut(AccountOwner::User(owner))
+    pub fn owner_balance(&mut self, owner: AccountOwner) -> Amount {
+        *self.owner_balance_mut(owner)
     }
 
     /// Returns a mutable reference to the balance of one of the accounts on this chain.

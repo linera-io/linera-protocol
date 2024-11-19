@@ -50,7 +50,7 @@ impl Contract for NativeFungibleTokenContract {
             Operation::Balance { owner } => {
                 let owner = self.normalize_owner(owner);
 
-                let balance = self.runtime.owner_balance(owner);
+                let balance = self.runtime.owner_balance(AccountOwner::User(owner));
                 FungibleResponse::Balance(balance)
             }
 

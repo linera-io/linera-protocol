@@ -242,11 +242,11 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: Owner) -> Amount {
+    pub fn owner_balance(&self, owner: AccountOwner) -> Amount {
         self.owner_balances
             .borrow_mut()
             .as_mut()
-            .and_then(|owner_balances| owner_balances.get(&AccountOwner::User(owner)).copied())
+            .and_then(|owner_balances| owner_balances.get(&owner).copied())
             .unwrap_or_else(|| {
                 panic!(
                     "Balance for owner {owner} was not mocked, \
