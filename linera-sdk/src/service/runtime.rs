@@ -26,7 +26,7 @@ where
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
     owner_balances: Cell<Option<Vec<(AccountOwner, Amount)>>>,
-    balance_owners: Cell<Option<Vec<Owner>>>,
+    balance_owners: Cell<Option<Vec<AccountOwner>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -115,8 +115,15 @@ where
             wit::read_balance_owners()
                 .into_iter()
                 .map(Owner::from)
+                .map(AccountOwner::User)
                 .collect()
         })
+        .into_iter()
+        .filter_map(|account_owner| match account_owner {
+            AccountOwner::User(owner) => Some(owner),
+            AccountOwner::Application(_) => None,
+        })
+        .collect()
     }
 
     /// Queries another application.
