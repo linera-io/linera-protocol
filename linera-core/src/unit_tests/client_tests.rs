@@ -10,7 +10,9 @@ use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{Account, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -147,7 +149,8 @@ where
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let owner = sender.identity().await?;
+    let owner_identity = sender.identity().await?;
+    let owner = AccountOwner::User(owner_identity);
     let receiver = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
@@ -156,7 +159,7 @@ where
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
-            Account::owner(ChainId::root(2), owner),
+            Account::owner(ChainId::root(2), owner_identity),
         )
         .await
         .unwrap()
@@ -180,7 +183,10 @@ where
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver.local_owner_balance(friend).await.unwrap(),
+        receiver
+            .local_owner_balance(AccountOwner::User(friend))
+            .await
+            .unwrap(),
         Amount::from_millis(99)
     );
     // The received amount is not in the unprotected balance.
@@ -212,7 +218,7 @@ where
     // First attempt that should be rejected.
     sender
         .claim(
-            owner,
+            owner_identity,
             ChainId::root(2),
             Recipient::root(1),
             Amount::from_tokens(5),
@@ -222,7 +228,7 @@ where
     // Second attempt with a correct amount.
     let cert = sender
         .claim(
-            owner,
+            owner_identity,
             ChainId::root(2),
             Recipient::root(1),
             Amount::from_tokens(2),

@@ -18,7 +18,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -300,7 +300,11 @@ impl Runnable for Job {
                 info!("Reading the balance of {} from the local state", account);
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    Some(owner) => chain_client.local_owner_balance(owner).await?,
+                    Some(owner) => {
+                        chain_client
+                            .local_owner_balance(AccountOwner::User(owner))
+                            .await?
+                    }
                     None => chain_client.local_balance().await?,
                 };
                 let time_total = time_start.elapsed();
@@ -317,7 +321,11 @@ impl Runnable for Job {
                 );
                 let time_start = Instant::now();
                 let balance = match account.owner {
-                    Some(owner) => chain_client.query_owner_balance(owner).await?,
+                    Some(owner) => {
+                        chain_client
+                            .query_owner_balance(AccountOwner::User(owner))
+                            .await?
+                    }
                     None => chain_client.query_balance().await?,
                 };
                 let time_total = time_start.elapsed();
@@ -333,7 +341,11 @@ impl Runnable for Job {
                 let time_start = Instant::now();
                 chain_client.synchronize_from_validators().await?;
                 let result = match account.owner {
-                    Some(owner) => chain_client.query_owner_balance(owner).await,
+                    Some(owner) => {
+                        chain_client
+                            .query_owner_balance(AccountOwner::User(owner))
+                            .await
+                    }
                     None => chain_client.query_balance().await,
                 };
                 context.update_and_save_wallet(&chain_client).await?;
