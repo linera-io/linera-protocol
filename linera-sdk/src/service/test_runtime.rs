@@ -11,7 +11,7 @@ use std::{
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
 };
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
@@ -27,7 +27,7 @@ where
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
-    owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
+    owner_balances: RefCell<Option<HashMap<AccountOwner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
     blobs: RefCell<Option<HashMap<DataBlobHash, Vec<u8>>>>,
@@ -211,7 +211,7 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn with_owner_balances(
         self,
-        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
     ) -> Self {
         *self.owner_balances.borrow_mut() = Some(owner_balances.into_iter().collect());
         self
@@ -220,20 +220,20 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn set_owner_balances(
         &self,
-        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
     ) -> &Self {
         *self.owner_balances.borrow_mut() = Some(owner_balances.into_iter().collect());
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn with_owner_balance(self, owner: Owner, balance: Amount) -> Self {
+    pub fn with_owner_balance(self, owner: AccountOwner, balance: Amount) -> Self {
         self.set_owner_balance(owner, balance);
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn set_owner_balance(&self, owner: Owner, balance: Amount) -> &Self {
+    pub fn set_owner_balance(&self, owner: AccountOwner, balance: Amount) -> &Self {
         self.owner_balances
             .borrow_mut()
             .get_or_insert_with(HashMap::new)
@@ -246,7 +246,7 @@ where
         self.owner_balances
             .borrow_mut()
             .as_mut()
-            .and_then(|owner_balances| owner_balances.get(&owner).copied())
+            .and_then(|owner_balances| owner_balances.get(&AccountOwner::User(owner)).copied())
             .unwrap_or_else(|| {
                 panic!(
                     "Balance for owner {owner} was not mocked, \
@@ -266,6 +266,10 @@ where
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .iter()
+            .filter_map(|(account_owner, amount)| match account_owner {
+                AccountOwner::User(owner) => Some((owner, amount)),
+                AccountOwner::Application(_) => None,
+            })
             .map(|(owner, amount)| (*owner, *amount))
             .collect()
     }
@@ -280,6 +284,10 @@ where
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .keys()
+            .filter_map(|account_owner| match account_owner {
+                AccountOwner::User(owner) => Some(owner),
+                AccountOwner::Application(_) => None,
+            })
             .cloned()
             .collect()
     }
