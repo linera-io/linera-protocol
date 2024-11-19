@@ -4,6 +4,7 @@
 
 //! This module defines the core Linera protocol.
 
+#![recursion_limit = "256"]
 #![deny(clippy::large_futures)]
 
 pub mod chain_worker;
