@@ -1106,6 +1106,13 @@ impl ContractSyncRuntime {
             chain_id,
             height: action.height(),
         };
+
+        {
+            let runtime = self.inner();
+            assert_eq!(runtime.authenticated_signer, action.signer());
+            assert_eq!(runtime.chain_id, chain_id);
+            assert_eq!(runtime.height, action.height());
+        }
         self.execute(application_id, action.signer(), move |code| match action {
             UserAction::Instantiate(context, argument) => code.instantiate(context, argument),
             UserAction::Operation(context, operation) => {
