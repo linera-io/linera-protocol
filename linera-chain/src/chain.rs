@@ -4,7 +4,7 @@
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -22,10 +22,10 @@ use linera_base::{
     },
 };
 use linera_execution::{
-    system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext, ExecutionStateView,
-    Message, MessageContext, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceController, ResourceTracker, Response, ServiceRuntimeEndpoint,
-    TransactionTracker,
+    committee::ValidatorName, system::OpenChainConfig, ExecutionOutcome, ExecutionRuntimeContext,
+    ExecutionStateView, Message, MessageContext, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceController, ResourceTracker, Response,
+    ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -202,6 +202,8 @@ where
     pub confirmed_log: LogView<C, CryptoHash>,
     /// Sender chain and height of all certified blocks known as a receiver (local ordering).
     pub received_log: LogView<C, ChainAndHeight>,
+    /// The number of `received_log` entries we have synchronized, for each validator.
+    pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorName, u64>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, Origin, InboxStateView<C>>,
@@ -531,6 +533,21 @@ where
             self.received_log.push(chain_and_height);
         }
         Ok(new_outbox_entries)
+    }
+
+    /// Updates the `received_log` tracker for the given validator.
+    pub fn update_received_certificate_tracker(&mut self, name: ValidatorName, tracker: u64) {
+        self.received_certificate_trackers
+            .get_mut()
+            .entry(name)
+            .and_modify(|t| {
+                // Because several synchronizations could happen in parallel, we need to make
+                // sure to never go backward.
+                if tracker > *t {
+                    *t = tracker;
+                }
+            })
+            .or_insert(tracker);
     }
 
     pub async fn execute_init_message(

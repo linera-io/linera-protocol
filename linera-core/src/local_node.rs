@@ -17,7 +17,7 @@ use linera_chain::{
     types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
 };
-use linera_execution::{Query, Response};
+use linera_execution::{committee::ValidatorName, Query, Response};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use thiserror::Error;
@@ -331,5 +331,17 @@ where
             .buffer_unordered(chain_worker_limit)
             .try_collect()
             .await
+    }
+
+    pub async fn update_received_certificate_trackers(
+        &self,
+        chain_id: ChainId,
+        new_trackers: BTreeMap<ValidatorName, u64>,
+    ) -> Result<(), LocalNodeError> {
+        self.node
+            .state
+            .update_received_certificate_trackers(chain_id, new_trackers)
+            .await?;
+        Ok(())
     }
 }

@@ -1259,8 +1259,10 @@ where
         chain_worker_limit: usize,
     ) -> Result<ReceivedCertificatesFromValidator, ChainClientError> {
         let mut tracker = self
-            .state()
-            .received_certificate_trackers()
+            .chain_state_view()
+            .await?
+            .received_certificate_trackers
+            .get()
             .get(&remote_node.name)
             .copied()
             .unwrap_or(0);
@@ -1464,9 +1466,16 @@ where
         stream.for_each(future::ready).await;
 
         // Update the trackers.
-        let mut state = self.state_mut();
-        for (name, tracker) in new_trackers {
-            state.update_received_certificate_tracker(name, tracker);
+        if let Err(error) = self
+            .client
+            .local_node
+            .update_received_certificate_trackers(self.chain_id, new_trackers)
+            .await
+        {
+            error!(
+                "Failed to update the certificate trackers for chain {:.8}: {error}",
+                self.chain_id
+            );
         }
     }
 

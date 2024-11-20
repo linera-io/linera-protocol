@@ -203,6 +203,10 @@ type ChainStateExtendedView {
 	"""
 	receivedLog: LogView_ChainAndHeight_7af83576!
 	"""
+	The number of `received_log` entries we have synchronized, for each validator.
+	"""
+	receivedCertificateTrackers: JSONObject!
+	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
 	inboxes: ReentrantCollectionView_Origin_InboxStateView_3699835794!
