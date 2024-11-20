@@ -219,6 +219,7 @@ pub enum ExecutionError {
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    // TODO(#2927): support dynamic loading of modules on the Web
     #[error("Unsupported dynamic application load: {0:?}")]
     UnsupportedDynamicApplicationLoad(Box<UserApplicationId>),
 
