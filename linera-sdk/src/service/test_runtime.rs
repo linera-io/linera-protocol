@@ -257,7 +257,7 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(Owner, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(AccountOwner, Amount)> {
         self.owner_balances
             .borrow_mut()
             .as_ref()
@@ -266,10 +266,6 @@ where
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .iter()
-            .filter_map(|(account_owner, amount)| match account_owner {
-                AccountOwner::User(owner) => Some((owner, amount)),
-                AccountOwner::Application(_) => None,
-            })
             .map(|(owner, amount)| (*owner, *amount))
             .collect()
     }

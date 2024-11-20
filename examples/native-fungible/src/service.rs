@@ -73,7 +73,7 @@ impl Accounts {
             .owner_balances()
             .into_iter()
             .map(|(owner, amount)| AccountEntry {
-                key: AccountOwner::User(owner),
+                key: owner,
                 value: amount,
             })
             .collect()

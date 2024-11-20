@@ -100,19 +100,13 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(Owner, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(AccountOwner, Amount)> {
         Self::fetch_value_through_cache(&self.owner_balances, || {
             wit::read_owner_balances()
                 .into_iter()
                 .map(|(owner, amount)| (owner.into(), amount.into()))
                 .collect()
         })
-        .into_iter()
-        .filter_map(|(account_owner, amount)| match account_owner {
-            AccountOwner::User(owner) => Some((owner, amount)),
-            AccountOwner::Application(_) => None,
-        })
-        .collect()
     }
 
     /// Returns the owners of accounts on this chain.
