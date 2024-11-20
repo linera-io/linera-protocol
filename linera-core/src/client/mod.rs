@@ -2096,7 +2096,7 @@ where
             Either::Right(timeout) => return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)),
         };
         let confirmed_value = self
-            .set_pending_block(round, incoming_bundles, operations, identity)
+            .new_pending_block(round, incoming_bundles, operations, identity)
             .await?;
 
         match self.process_pending_block_without_prepare().await? {
@@ -2118,10 +2118,11 @@ where
         }
     }
 
-    /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
-    /// called, it will be proposed to the validators.
+    /// Creates a new pending block and handles the proposal in the local node.
+    /// Next time `process_pending_block_without_prepare` is called, this block will be proposed
+    /// to the validators.
     #[instrument(level = "trace", skip(incoming_bundles, operations))]
-    async fn set_pending_block(
+    async fn new_pending_block(
         &self,
         round: Round,
         incoming_bundles: Vec<IncomingBundle>,
