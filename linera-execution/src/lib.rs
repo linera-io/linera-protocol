@@ -219,6 +219,8 @@ pub enum ExecutionError {
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    #[error("Unsupported dynamic application load: {0:?}")]
+    UnsupportedDynamicApplicationLoad(Box<UserApplicationId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
