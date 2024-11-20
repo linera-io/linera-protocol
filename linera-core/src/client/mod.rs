@@ -1991,12 +1991,16 @@ where
             self.submit_block_proposal(
                 &committee,
                 proposal,
-                Hashed::new(ConfirmedBlock::from_validated(validated_block)),
+                HashedCertificateValue::new_confirmed(validated_block.into_inner()),
             )
             .await?
         } else {
             let certificate = self
-                .submit_block_proposal(&committee, proposal, Hashed::new(validated_block))
+                .submit_block_proposal(
+                    &committee,
+                    proposal,
+                    HashedCertificateValue::new_validated(validated_block.into_inner()),
+                )
                 .await?;
             self.finalize_block(&committee, certificate).await?
         };

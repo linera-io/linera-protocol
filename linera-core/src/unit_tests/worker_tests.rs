@@ -799,7 +799,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        Hashed::new(ConfirmedBlock::from_validated(ValidatedBlock::new(
+        HashedCertificateValue::new_confirmed(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(
                     ChainId::root(2),
@@ -820,7 +820,7 @@ where
                     .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3))
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
-        ))),
+        ),
     );
     // Missing earlier blocks
     assert_matches!(
