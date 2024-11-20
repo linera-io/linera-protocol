@@ -336,7 +336,7 @@ where
         }
         .with(block),
     );
-    make_certificate(committee, worker, value.try_into().expect("Confirmed cert"))
+    make_certificate(committee, worker, value)
 }
 
 fn direct_outgoing_message(
@@ -567,7 +567,7 @@ where
         .await?;
 
     {
-        let block_proposal = make_child_block(&certificate.into_value().try_into().unwrap())
+        let block_proposal = make_child_block(&certificate.into_value())
             .with_timestamp(block_0_time.saturating_sub_micros(1))
             .into_fast_proposal(&key_pair);
         // Timestamp older than previous one
@@ -816,7 +816,7 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(
-                make_child_block(&certificate0.clone().into_value().try_into().unwrap())
+                make_child_block(&certificate0.clone().into_value())
                     .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3))
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
@@ -1052,9 +1052,7 @@ where
                     oracle_responses: vec![Vec::new(); 2],
                 }
                 .with(block_proposal.content.block),
-            )
-            .try_into()
-            .unwrap(),
+            ),
         );
         worker
             .handle_confirmed_certificate(certificate.clone(), vec![], None)
@@ -2424,7 +2422,7 @@ where
                 oracle_responses: vec![Vec::new(); 2],
             }
             .with(
-                make_child_block(&certificate0.clone().into_value().try_into().unwrap())
+                make_child_block(&certificate0.clone().into_value())
                     .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
                         epoch: Epoch::from(1),
                         committee: committee.clone(),
@@ -2912,7 +2910,7 @@ where
                 oracle_responses: vec![Vec::new()],
             }
             .with(
-                make_child_block(&certificate1.into_value().try_into().unwrap())
+                make_child_block(&certificate1.into_value())
                     .with_epoch(1)
                     .with_incoming_bundle(IncomingBundle {
                         origin: Origin::chain(user_id),
@@ -3207,9 +3205,7 @@ where
         })
         .with_authenticated_signer(Some(pub_key0.into()));
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0)
-        .try_into()
-        .unwrap();
+    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3243,9 +3239,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout: Hashed<Timeout> =
-        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0))
-            .try_into()
-            .unwrap();
+        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts, where owner
     // 0 happens to be the leader.
@@ -3272,9 +3266,7 @@ where
         .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let value1: Hashed<ValidatedBlock> =
-        HashedCertificateValue::new_validated(executed_block1.clone())
-            .try_into()
-            .unwrap();
+        HashedCertificateValue::new_validated(executed_block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
@@ -3307,9 +3299,7 @@ where
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
     // locked block; certificate1 (with block1) remains locked.
     let value2: Hashed<ValidatedBlock> =
-        HashedCertificateValue::new_validated(executed_block2.clone())
-            .try_into()
-            .unwrap();
+        HashedCertificateValue::new_validated(executed_block2.clone());
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
     worker
@@ -3424,9 +3414,7 @@ where
         },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0)
-        .try_into()
-        .unwrap();
+    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3461,9 +3449,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
     let value_timeout: Hashed<Timeout> =
-        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0))
-            .try_into()
-            .unwrap();
+        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts.
     let certificate_timeout = vote
@@ -3517,9 +3503,7 @@ where
         },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0)
-        .try_into()
-        .unwrap();
+    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3535,9 +3519,7 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
-    let value1: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block1)
-        .try_into()
-        .unwrap();
+    let value1: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block1);
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3547,9 +3529,7 @@ where
 
     // Once we provide the validator with a timeout certificate, the next round starts.
     let value_timeout: Hashed<Timeout> =
-        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0))
-            .try_into()
-            .unwrap();
+        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
     let (response, _) = worker
@@ -3577,9 +3557,7 @@ where
     // A validated block certificate from a later round can override the locked fast block.
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
     let value2: Hashed<ValidatedBlock> =
-        HashedCertificateValue::new_validated(executed_block2.clone())
-            .try_into()
-            .unwrap();
+        HashedCertificateValue::new_validated(executed_block2.clone());
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry(
@@ -3899,9 +3877,7 @@ where
             oracle_responses: vec![],
         }
         .with(block),
-    )
-    .try_into()
-    .unwrap();
+    );
     let certificate = make_certificate(&committee, &worker, value);
     worker
         .handle_confirmed_certificate(certificate, vec![], None)

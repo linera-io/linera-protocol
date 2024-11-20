@@ -76,10 +76,9 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
 impl From<GenericCertificate<ConfirmedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ConfirmedBlock>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
-        Certificate::new(
-            HashedCertificateValue::new_confirmed(value.into_inner().into_inner()),
-            round,
-            signatures,
-        )
+        let hash = value.hash();
+        let value =
+            Hashed::unchecked_new(CertificateValue::ConfirmedBlock(value.into_inner()), hash);
+        Certificate::new(value, round, signatures)
     }
 }

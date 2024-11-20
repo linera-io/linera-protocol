@@ -48,12 +48,6 @@ impl Has<ChainId> for ValidatedBlock {
     }
 }
 
-impl From<ValidatedBlock> for HashedCertificateValue {
-    fn from(value: ValidatedBlock) -> Self {
-        HashedCertificateValue::new_validated(value.executed_block)
-    }
-}
-
 impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
     type Error = &'static str;
 
@@ -73,12 +67,6 @@ impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
 pub struct ConfirmedBlock {
     // The executed block contained in this `ConfirmedBlock`.
     executed_block: ExecutedBlock,
-}
-
-impl From<ConfirmedBlock> for HashedCertificateValue {
-    fn from(value: ConfirmedBlock) -> Self {
-        HashedCertificateValue::new_confirmed(value.executed_block)
-    }
 }
 
 impl TryFrom<HashedCertificateValue> for Hashed<ConfirmedBlock> {
@@ -156,12 +144,6 @@ impl Timeout {
 
     pub fn to_log_str(&self) -> &'static str {
         "timeout"
-    }
-}
-
-impl From<Timeout> for HashedCertificateValue {
-    fn from(value: Timeout) -> Self {
-        HashedCertificateValue::new_timeout(value.chain_id, value.height, value.epoch)
     }
 }
 

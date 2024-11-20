@@ -338,11 +338,7 @@ impl ChainManager {
             }
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
-        self.timeout_vote = Some(Vote::new(
-            value.try_into().expect("Timeout certificate"),
-            current_round,
-            key_pair,
-        ));
+        self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
         true
     }
 
@@ -365,11 +361,7 @@ impl ChainManager {
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
-        self.fallback_vote = Some(Vote::new(
-            value.try_into().expect("Timeout certificate"),
-            last_regular_round,
-            key_pair,
-        ));
+        self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
     }
 
@@ -428,7 +420,7 @@ impl ChainManager {
             {
                 let value = HashedCertificateValue::new_validated(executed_block.clone());
                 if let Some(certificate) = lite_cert.with_value(value) {
-                    self.locked = Some(certificate.into());
+                    self.locked = Some(certificate);
                 }
             }
         }
@@ -441,18 +433,14 @@ impl ChainManager {
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
             if round.is_fast() {
                 self.confirmed_vote = Some(Vote::new(
-                    HashedCertificateValue::new_confirmed(executed_block)
-                        .try_into()
-                        .expect("ConfirmedBlock"),
+                    HashedCertificateValue::new_confirmed(executed_block),
                     round,
                     key_pair,
                 ));
                 self.validated_vote = None
             } else {
                 self.validated_vote = Some(Vote::new(
-                    HashedCertificateValue::new_validated(executed_block)
-                        .try_into()
-                        .expect("ValidatedBlock"),
+                    HashedCertificateValue::new_validated(executed_block),
                     round,
                     key_pair,
                 ));

@@ -139,29 +139,37 @@ pub type HashedCertificateValue = Hashed<CertificateValue>;
 
 impl HashedCertificateValue {
     /// Creates a [`ConfirmedBlock`](CertificateValue::ConfirmedBlock) value.
-    pub fn new_confirmed(executed_block: ExecutedBlock) -> HashedCertificateValue {
-        CertificateValue::ConfirmedBlock(ConfirmedBlock::new(executed_block)).into()
+    pub fn new_confirmed(executed_block: ExecutedBlock) -> Hashed<ConfirmedBlock> {
+        HashedCertificateValue::from(CertificateValue::ConfirmedBlock(ConfirmedBlock::new(
+            executed_block,
+        )))
+        .try_into()
+        .unwrap()
     }
 
     /// Creates a [`ValidatedBlock`](CertificateValue::ValidatedBlock) value.
-    pub fn new_validated(executed_block: ExecutedBlock) -> HashedCertificateValue {
-        CertificateValue::ValidatedBlock(ValidatedBlock::new(executed_block)).into()
+    pub fn new_validated(executed_block: ExecutedBlock) -> Hashed<ValidatedBlock> {
+        HashedCertificateValue::from(CertificateValue::ValidatedBlock(ValidatedBlock::new(
+            executed_block,
+        )))
+        .try_into()
+        .unwrap()
     }
 
     /// Creates a [`Timeout`](CertificateValue::Timeout) value.
-    pub fn new_timeout(
-        chain_id: ChainId,
-        height: BlockHeight,
-        epoch: Epoch,
-    ) -> HashedCertificateValue {
-        CertificateValue::Timeout(Timeout::new(chain_id, height, epoch)).into()
+    pub fn new_timeout(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> Hashed<Timeout> {
+        HashedCertificateValue::from(CertificateValue::Timeout(Timeout::new(
+            chain_id, height, epoch,
+        )))
+        .try_into()
+        .unwrap()
     }
 
     /// Returns the corresponding `ConfirmedBlock`, if this is a `ValidatedBlock`.
-    pub fn validated_to_confirmed(&self) -> Option<HashedCertificateValue> {
-        match self.inner() {
+    pub fn validated_to_confirmed(self) -> Option<HashedCertificateValue> {
+        match self.into_inner() {
             CertificateValue::ValidatedBlock(validated) => {
-                Some(ConfirmedBlock::from_validated(validated.clone()).into())
+                Some(HashedCertificateValue::new_confirmed(validated.into_inner()).into())
             }
             CertificateValue::ConfirmedBlock(_) | CertificateValue::Timeout(_) => None,
         }
@@ -177,6 +185,30 @@ impl From<CertificateValue> for HashedCertificateValue {
 impl From<HashedCertificateValue> for CertificateValue {
     fn from(hv: HashedCertificateValue) -> CertificateValue {
         hv.into_inner()
+    }
+}
+
+impl From<Hashed<ConfirmedBlock>> for HashedCertificateValue {
+    fn from(confirmed: Hashed<ConfirmedBlock>) -> HashedCertificateValue {
+        let hash = confirmed.hash();
+        let value = confirmed.into_inner();
+        Hashed::unchecked_new(CertificateValue::ConfirmedBlock(value), hash)
+    }
+}
+
+impl From<Hashed<ValidatedBlock>> for HashedCertificateValue {
+    fn from(validated: Hashed<ValidatedBlock>) -> HashedCertificateValue {
+        let hash = validated.hash();
+        let value = validated.into_inner();
+        Hashed::unchecked_new(CertificateValue::ValidatedBlock(value), hash)
+    }
+}
+
+impl From<Hashed<Timeout>> for HashedCertificateValue {
+    fn from(timeout: Hashed<Timeout>) -> HashedCertificateValue {
+        let hash = timeout.hash();
+        let value = timeout.into_inner();
+        Hashed::unchecked_new(CertificateValue::Timeout(value), hash)
     }
 }
 

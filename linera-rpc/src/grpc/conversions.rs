@@ -850,7 +850,8 @@ pub mod tests {
                     ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
-            ),
+            )
+            .into(),
             Round::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
@@ -899,7 +900,8 @@ pub mod tests {
                     ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
-            ),
+            )
+            .into(),
             Round::SingleLeader(2),
             vec![(
                 ValidatorName::from(key_pair.public()),

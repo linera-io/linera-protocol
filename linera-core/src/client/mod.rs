@@ -1026,9 +1026,7 @@ where
         };
         let certificate: ConfirmedBlockCertificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
-            .await?
-            .try_into()
-            .expect("Finalized block should be confirmed");
+            .await?;
         self.receive_certificate_and_update_validators_internal(
             certificate.clone(),
             ReceiveCertificateMode::AlreadyChecked,
@@ -1605,9 +1603,7 @@ where
             round,
             chain_id,
         };
-        let value: Hashed<Timeout> = HashedCertificateValue::new_timeout(chain_id, height, epoch)
-            .try_into()
-            .unwrap();
+        let value: Hashed<Timeout> = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -2100,7 +2096,7 @@ where
         let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if Some(&certificate.executed_block().block) == confirmed_value.inner().block() =>
+                if certificate.executed_block().block == confirmed_value.inner().inner().block =>
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
@@ -2124,7 +2120,7 @@ where
         &self,
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
-    ) -> Result<HashedCertificateValue, ChainClientError> {
+    ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
         let identity = self.identity().await?;
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();

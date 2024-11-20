@@ -31,15 +31,9 @@ impl From<Certificate> for GenericCertificate<Timeout> {
 impl From<GenericCertificate<Timeout>> for Certificate {
     fn from(cert: GenericCertificate<Timeout>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
-        Certificate::new(
-            HashedCertificateValue::new_timeout(
-                value.inner().chain_id,
-                value.inner().height,
-                value.inner().epoch,
-            ),
-            round,
-            signatures,
-        )
+        let hash = value.hash();
+        let value = Hashed::unchecked_new(CertificateValue::Timeout(value.into_inner()), hash);
+        Certificate::new(value, round, signatures)
     }
 }
 
@@ -66,11 +60,11 @@ impl<'de> Deserialize<'de> for GenericCertificate<Timeout> {
             signatures: Vec<(ValidatorName, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
-        let timeout_hashed: HashedCertificateValue = inner.value.clone().into();
-        Ok(Self::new(
-            Hashed::unchecked_new(inner.value, timeout_hashed.hash()),
-            inner.round,
-            inner.signatures,
-        ))
+        let timeout_hashed = HashedCertificateValue::new_timeout(
+            inner.value.chain_id,
+            inner.value.height,
+            inner.value.epoch,
+        );
+        Ok(Self::new(timeout_hashed, inner.round, inner.signatures))
     }
 }

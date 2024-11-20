@@ -72,7 +72,7 @@ impl From<GenericCertificate<ValidatedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ValidatedBlock>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
         Certificate::new(
-            HashedCertificateValue::new_validated(value.into_inner().into_inner()),
+            HashedCertificateValue::new_validated(value.into_inner().into_inner()).into(),
             round,
             signatures,
         )
@@ -102,11 +102,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
             signatures: Vec<(ValidatorName, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
-        let validated_hashed: HashedCertificateValue = inner.value.clone().into();
-        Ok(Self::new(
-            Hashed::unchecked_new(inner.value, validated_hashed.hash()),
-            inner.round,
-            inner.signatures,
-        ))
+        let validated_hashed = HashedCertificateValue::new_validated(inner.value.into_inner());
+        Ok(Self::new(validated_hashed, inner.round, inner.signatures))
     }
 }

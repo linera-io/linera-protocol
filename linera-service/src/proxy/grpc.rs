@@ -618,7 +618,7 @@ mod proto_message_cap {
         };
         let signatures = vec![(validator, signature)];
         Certificate::new(
-            HashedCertificateValue::new_confirmed(executed_block),
+            HashedCertificateValue::new_confirmed(executed_block).into(),
             Default::default(),
             signatures,
         )
