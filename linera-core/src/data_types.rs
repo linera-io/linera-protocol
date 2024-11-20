@@ -2,8 +2,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Not};
 
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
     data_types::{Amount, BlockHeight, Round, Timestamp},
@@ -31,6 +32,7 @@ pub struct BlockHeightRange {
     /// Starting point
     pub start: BlockHeight,
     /// Optional limit on the number of elements.
+    #[debug(skip_if = Option::is_none)]
     pub limit: Option<u64>,
 }
 
@@ -63,22 +65,31 @@ pub struct ChainInfoQuery {
     /// The chain ID.
     pub chain_id: ChainId,
     /// Optionally test that the block height is the one expected.
+    #[debug(skip_if = Option::is_none)]
     pub test_next_block_height: Option<BlockHeight>,
     /// Request the balance of a given `Owner`.
+    #[debug(skip_if = Option::is_none)]
     pub request_owner_balance: Option<Owner>,
     /// Query the current committees.
+    #[debug(skip_if = Not::not)]
     pub request_committees: bool,
     /// Query the received messages that are waiting be picked in the next block.
+    #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query a range of certificate hashes sent from the chain.
+    #[debug(skip_if = Option::is_none)]
     pub request_sent_certificate_hashes_in_range: Option<BlockHeightRange>,
     /// Query new certificate sender chain IDs and block heights received from the chain.
+    #[debug(skip_if = Option::is_none)]
     pub request_received_log_excluding_first_n: Option<u64>,
     /// Query values from the chain manager, not just votes.
+    #[debug(skip_if = Not::not)]
     pub request_manager_values: bool,
     /// Include a timeout vote for the current round, if appropriate.
+    #[debug(skip_if = Not::not)]
     pub request_leader_timeout: bool,
     /// Include a vote to switch to fallback mode, if appropriate.
+    #[debug(skip_if = Not::not)]
     pub request_fallback: bool,
 }
 
@@ -150,32 +161,41 @@ pub struct ChainInfo {
     /// The chain ID.
     pub chain_id: ChainId,
     /// The number identifying the current configuration.
+    #[debug(skip_if = Option::is_none)]
     pub epoch: Option<Epoch>,
     /// The chain description.
+    #[debug(skip_if = Option::is_none)]
     pub description: Option<ChainDescription>,
     /// The state of the chain authentication.
     pub manager: Box<ChainManagerInfo>,
     /// The current balance.
     pub chain_balance: Amount,
     /// The last block hash, if any.
+    #[debug(skip_if = Option::is_none)]
     pub block_hash: Option<CryptoHash>,
     /// The earliest possible timestamp for the next block.
     pub timestamp: Timestamp,
     /// The height after the latest block in the chain.
     pub next_block_height: BlockHeight,
     /// The hash of the current execution state.
+    #[debug(skip_if = Option::is_none)]
     pub state_hash: Option<CryptoHash>,
     /// The requested owner balance, if any.
+    #[debug(skip_if = Option::is_none)]
     pub requested_owner_balance: Option<Amount>,
     /// The current committees.
+    #[debug(skip_if = Option::is_none)]
     pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
     /// The received messages that are waiting be picked in the next block (if requested).
+    #[debug(skip_if = Vec::is_empty)]
     pub requested_pending_message_bundles: Vec<IncomingBundle>,
     /// The response to `request_sent_certificate_hashes_in_range`
+    #[debug(skip_if = Vec::is_empty)]
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
     /// The current number of received certificates (useful for `request_received_log_excluding_first_n`)
     pub count_received_log: usize,
     /// The response to `request_received_certificates_excluding_first_n`
+    #[debug(skip_if = Vec::is_empty)]
     pub requested_received_log: Vec<ChainAndHeight>,
 }
 
@@ -327,7 +347,6 @@ impl<T> ClientOutcome<T> {
         }
     }
 
-    #[expect(clippy::result_large_err)]
     pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, ChainClientError>
     where
         F: FnOnce(T) -> Result<S, ChainClientError>,

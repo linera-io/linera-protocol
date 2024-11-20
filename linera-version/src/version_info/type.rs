@@ -73,13 +73,13 @@ pub enum Error {
     #[error("no such package: {0}")]
     NoSuchPackage(String),
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("glob error: {0}")]
     Glob(#[from] glob::GlobError),
     #[error("pattern error: {0}")]
     Pattern(#[from] glob::PatternError),
     #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
+    JsonError(#[from] serde_json::Error),
 }
 
 struct Outcome {

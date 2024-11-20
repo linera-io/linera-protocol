@@ -4082,6 +4082,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "cfg_aliases",
+ "custom_debug_derive",
  "futures",
  "hex",
  "linera-base",
@@ -4092,6 +4093,7 @@ dependencies = [
  "rand_chacha",
  "rand_distr",
  "serde",
+ "serde_bytes",
  "thiserror",
  "tokio",
  "tracing",
@@ -4172,6 +4174,7 @@ dependencies = [
  "clap",
  "counter",
  "criterion",
+ "custom_debug_derive",
  "dashmap 5.5.3",
  "fungible",
  "futures",
@@ -4545,7 +4548,6 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -308,6 +308,8 @@ where
             | RpcMessage::DownloadCertificateValueResponse(_)
             | RpcMessage::BlobLastUsedBy(_)
             | RpcMessage::BlobLastUsedByResponse(_)
+            | RpcMessage::MissingBlobIds(_)
+            | RpcMessage::MissingBlobIdsResponse(_)
             | RpcMessage::DownloadCertificate(_)
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificateResponse(_)

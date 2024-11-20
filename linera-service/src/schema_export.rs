@@ -7,8 +7,9 @@ use linera_base::{
     data_types::{Blob, BlobContent, Timestamp},
     identifiers::{BlobId, ChainId},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+use linera_chain::{
+    data_types::BlockProposal,
+    types::{Certificate, HashedCertificateValue, LiteCertificate},
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
@@ -101,6 +102,10 @@ impl ValidatorNode for DummyValidatorNode {
     }
 
     async fn blob_last_used_by(&self, _: BlobId) -> Result<CryptoHash, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn missing_blob_ids(&self, _: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 }

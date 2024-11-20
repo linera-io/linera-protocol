@@ -27,14 +27,14 @@ pub use node_provider::NodeOptions;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleLiteCertRequest<'a> {
-    pub certificate: linera_chain::data_types::LiteCertificate<'a>,
+    pub certificate: linera_chain::types::LiteCertificate<'a>,
     pub wait_for_outgoing_messages: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleCertificateRequest {
-    pub certificate: linera_chain::data_types::Certificate,
+    pub certificate: linera_chain::types::Certificate,
     pub wait_for_outgoing_messages: bool,
     pub blobs: Vec<linera_base::data_types::Blob>,
 }

@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     env,
     marker::PhantomData,
     mem,
     path::{Path, PathBuf},
     str::FromStr,
+    sync,
     time::Duration,
 };
 
@@ -30,7 +32,7 @@ use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     cli_wrappers::{
@@ -54,12 +56,23 @@ fn reqwest_client() -> reqwest::Client {
 
 /// Wrapper to run a Linera client command.
 pub struct ClientWrapper {
+    binary_path: sync::Mutex<Option<PathBuf>>,
     testing_prng_seed: Option<u64>,
     storage: String,
     wallet: String,
     max_pending_message_bundles: usize,
     network: Network,
     pub path_provider: PathProvider,
+    on_drop: OnClientDrop,
+}
+
+/// Action to perform when the [`ClientWrapper`] is dropped.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OnClientDrop {
+    /// Close all the chains on the wallet.
+    CloseChains,
+    /// Do not close any chains, leaving them active.
+    LeakChains,
 }
 
 impl ClientWrapper {
@@ -68,6 +81,7 @@ impl ClientWrapper {
         network: Network,
         testing_prng_seed: Option<u64>,
         id: usize,
+        on_drop: OnClientDrop,
     ) -> Self {
         let storage = format!(
             "rocksdb:{}/client_{}.db",
@@ -76,12 +90,14 @@ impl ClientWrapper {
         );
         let wallet = format!("wallet_{}.json", id);
         Self {
+            binary_path: sync::Mutex::new(None),
             testing_prng_seed,
             storage,
             wallet,
             max_pending_message_bundles: 10_000,
             network,
             path_provider,
+            on_drop,
         }
     }
 
@@ -141,24 +157,74 @@ impl ClientWrapper {
     }
 
     async fn command(&self) -> Result<Command> {
-        let path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
-        let mut command = Command::new(path);
-        command
-            .current_dir(self.path_provider.path())
-            .env(
-                "RUST_LOG",
-                std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
-            )
-            .args(["--wallet", &self.wallet])
-            .args(["--storage", &self.storage])
-            .args([
-                "--max-pending-message-bundles",
-                &self.max_pending_message_bundles.to_string(),
-            ])
-            .args(["--send-timeout-ms", "500000"])
-            .args(["--recv-timeout-ms", "500000"])
-            .arg("--wait-for-outgoing-messages");
+        let mut command = self.command_binary().await?;
+        command.current_dir(self.path_provider.path()).env(
+            "RUST_LOG",
+            std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+        );
+        for argument in self.command_arguments() {
+            command.arg(&*argument);
+        }
         Ok(command)
+    }
+
+    /// Returns an iterator over the arguments that should be added to all command invocations.
+    fn command_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> + '_ {
+        [
+            "--wallet".into(),
+            self.wallet.as_str().into(),
+            "--storage".into(),
+            self.storage.as_str().into(),
+            "--max-pending-message-bundles".into(),
+            self.max_pending_message_bundles.to_string().into(),
+            "--send-timeout-ms".into(),
+            "500000".into(),
+            "--recv-timeout-ms".into(),
+            "500000".into(),
+            "--wait-for-outgoing-messages".into(),
+        ]
+        .into_iter()
+    }
+
+    /// Returns the [`Command`] instance configured to run the appropriate binary.
+    ///
+    /// The path is resolved once and cached inside `self` for subsequent usages.
+    async fn command_binary(&self) -> Result<Command> {
+        match self.command_with_cached_binary_path() {
+            Some(command) => Ok(command),
+            None => {
+                let resolved_path = resolve_binary("linera", env!("CARGO_PKG_NAME")).await?;
+                let command = Command::new(&resolved_path);
+
+                self.set_cached_binary_path(resolved_path);
+
+                Ok(command)
+            }
+        }
+    }
+
+    /// Returns a [`Command`] instance configured with the cached `binary_path`, if available.
+    fn command_with_cached_binary_path(&self) -> Option<Command> {
+        let binary_path = self.binary_path.lock().unwrap();
+
+        binary_path.as_ref().map(Command::new)
+    }
+
+    /// Sets the cached `binary_path` with the `new_binary_path`.
+    ///
+    /// # Panics
+    ///
+    /// If the cache is already set to a different value. In theory the two threads calling
+    /// `command_binary` can race and resolve the binary path twice, but they should always be the
+    /// same path.
+    fn set_cached_binary_path(&self, new_binary_path: PathBuf) {
+        let mut binary_path = self.binary_path.lock().unwrap();
+
+        if binary_path.is_none() {
+            *binary_path = Some(new_binary_path);
+        } else {
+            assert_eq!(*binary_path, Some(new_binary_path));
+        }
     }
 
     /// Runs `linera create-genesis-config`.
@@ -184,6 +250,7 @@ impl ClientWrapper {
             maximum_executed_block_size,
             maximum_blob_size,
             maximum_bytecode_size,
+            maximum_block_proposal_size,
             maximum_bytes_read_per_block,
             maximum_bytes_written_per_block,
         } = policy;
@@ -219,6 +286,10 @@ impl ClientWrapper {
             .args([
                 "--maximum-bytecode-size",
                 &maximum_bytecode_size.to_string(),
+            ])
+            .args([
+                "--maximum-block-proposal-size",
+                &maximum_block_proposal_size.to_string(),
             ])
             .args([
                 "--maximum-bytes-read-per-block",
@@ -882,6 +953,79 @@ impl ClientWrapper {
         info!("Done building application {name}: contract_size={contract_size}, service_size={service_size}");
 
         Ok((contract, service))
+    }
+}
+
+impl Drop for ClientWrapper {
+    fn drop(&mut self) {
+        use std::process::Command as SyncCommand;
+
+        if self.on_drop != OnClientDrop::CloseChains {
+            return;
+        }
+
+        let Ok(binary_path) = self.binary_path.lock() else {
+            error!("Failed to close chains because a thread panicked with a lock to `binary_path`");
+            return;
+        };
+
+        let Some(binary_path) = binary_path.as_ref() else {
+            warn!(
+                "Assuming no chains need to be closed, because the command binary was never \
+                resolved and therefore presumably never called"
+            );
+            return;
+        };
+
+        let working_directory = self.path_provider.path();
+        let mut wallet_show_command = SyncCommand::new(binary_path);
+
+        for argument in self.command_arguments() {
+            wallet_show_command.arg(&*argument);
+        }
+
+        let Ok(wallet_show_output) = wallet_show_command
+            .current_dir(working_directory)
+            .args(["wallet", "show", "--short"])
+            .output()
+        else {
+            warn!("Failed to execute `wallet show --short` to list chains to close");
+            return;
+        };
+
+        if !wallet_show_output.status.success() {
+            warn!("Failed to list chains in the wallet to close them");
+            return;
+        }
+
+        let Ok(chain_list_string) = String::from_utf8(wallet_show_output.stdout) else {
+            warn!(
+                "Failed to close chains because `linera wallet show --short` \
+                returned a non-UTF-8 output"
+            );
+            return;
+        };
+
+        let chain_ids = chain_list_string
+            .split('\n')
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty());
+
+        for chain_id in chain_ids {
+            let mut close_chain_command = SyncCommand::new(binary_path);
+
+            for argument in self.command_arguments() {
+                close_chain_command.arg(&*argument);
+            }
+
+            close_chain_command.current_dir(working_directory);
+
+            match close_chain_command.args(["close-chain", chain_id]).status() {
+                Ok(status) if status.success() => (),
+                Ok(failure) => warn!("Failed to close chain {chain_id}: {failure}"),
+                Err(error) => warn!("Failed to close chain {chain_id}: {error}"),
+            }
+        }
     }
 }
 

@@ -18,9 +18,10 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    data_types::{
-        Block, BlockProposal, Certificate, ExecutedBlock, HashedCertificateValue, Medium,
-        MessageBundle, Origin, Target,
+    data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
+    types::{
+        ConfirmedBlock, ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
@@ -54,7 +55,8 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+    recent_hashed_confirmed_values: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
+    recent_hashed_validated_values: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -69,7 +71,8 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        certificate_value_cache: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+        confirmed_value_cache: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
+        validated_value_cache: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -83,7 +86,8 @@ where
             chain,
             shared_chain_view: None,
             service_runtime_endpoint,
-            recent_hashed_certificate_values: certificate_value_cache,
+            recent_hashed_confirmed_values: confirmed_value_cache,
+            recent_hashed_validated_values: validated_value_cache,
             tracked_chains,
             delivery_notifier,
             knows_chain_is_active: false,
@@ -129,7 +133,7 @@ where
     pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
-    ) -> Result<Option<Certificate>, WorkerError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
         ChainWorkerStateWithTemporaryChanges::new(self)
             .await
             .read_certificate(height)
@@ -187,7 +191,7 @@ where
     /// Processes a leader timeout issued for this multi-owner chain.
     pub(super) async fn process_timeout(
         &mut self,
-        certificate: Certificate,
+        certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
             .await
@@ -224,7 +228,7 @@ where
     /// Processes a validated block issued for this multi-owner chain.
     pub(super) async fn process_validated_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
         ChainWorkerStateWithAttemptedChanges::new(self)
@@ -236,7 +240,7 @@ where
     /// Processes a confirmed block (aka a commit).
     pub(super) async fn process_confirmed_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {

@@ -7,9 +7,9 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainId, Owner},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
-    LiteValue, ProposalContent,
+use linera_chain::{
+    data_types::{BlockProposal, LiteValue, ProposalContent},
+    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -340,7 +340,7 @@ impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
 
     fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: Some(request.certificate.value().chain_id().into()),
+            chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -365,7 +365,7 @@ impl TryFrom<Certificate> for api::Certificate {
 
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
         Ok(Self {
-            value: bincode::serialize(&certificate.value)?,
+            value: bincode::serialize(certificate.inner())?,
             round: bincode::serialize(&certificate.round)?,
             signatures: bincode::serialize(certificate.signatures())?,
         })
@@ -551,6 +551,18 @@ impl TryFrom<api::BlobId> for BlobId {
     }
 }
 
+impl TryFrom<api::BlobIds> for Vec<BlobId> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_ids: api::BlobIds) -> Result<Self, Self::Error> {
+        Ok(blob_ids
+            .bytes
+            .into_iter()
+            .map(|x| bincode::deserialize(x.as_slice()))
+            .collect::<Result<_, _>>()?)
+    }
+}
+
 impl TryFrom<BlobId> for api::BlobId {
     type Error = GrpcProtoConversionError;
 
@@ -558,6 +570,18 @@ impl TryFrom<BlobId> for api::BlobId {
         Ok(Self {
             bytes: bincode::serialize(&blob_id)?,
         })
+    }
+}
+
+impl TryFrom<Vec<BlobId>> for api::BlobIds {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(blob_ids: Vec<BlobId>) -> Result<Self, Self::Error> {
+        let bytes = blob_ids
+            .into_iter()
+            .map(|blob_id| bincode::serialize(&blob_id))
+            .collect::<Result<_, _>>()?;
+        Ok(Self { bytes })
     }
 }
 
@@ -663,8 +687,9 @@ pub mod tests {
         data_types::{Amount, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{Block, BlockExecutionOutcome, HashedCertificateValue},
+        data_types::{Block, BlockExecutionOutcome},
         test::make_first_block,
+        types::HashedCertificateValue,
     };
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};

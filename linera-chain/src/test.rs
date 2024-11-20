@@ -14,23 +14,24 @@ use linera_execution::{
     Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
 };
 
-use crate::data_types::{
-    Block, BlockProposal, Certificate, HashedCertificateValue, IncomingBundle, PostedMessage,
-    SignatureAggregator, Vote,
+use crate::{
+    block::ConfirmedBlock,
+    data_types::{Block, BlockProposal, IncomingBundle, PostedMessage, SignatureAggregator, Vote},
+    types::{GenericCertificate, Hashed},
 };
 
 /// Creates a new child of the given block, with the same timestamp.
-pub fn make_child_block(parent: &HashedCertificateValue) -> Block {
+pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Block {
     let parent_value = parent.inner();
-    let parent_block = parent_value.block().unwrap();
+    let parent_block = &parent_value.inner().block;
     Block {
-        epoch: parent_value.epoch(),
-        chain_id: parent_value.chain_id(),
+        epoch: parent_block.epoch,
+        chain_id: parent_block.chain_id,
         incoming_bundles: vec![],
         operations: vec![],
         previous_block_hash: Some(parent.hash()),
-        height: parent_value.height().try_add_one().unwrap(),
-        authenticated_signer: None,
+        height: parent_block.height.try_add_one().unwrap(),
+        authenticated_signer: parent_block.authenticated_signer,
         timestamp: parent_block.timestamp,
     }
 }
@@ -51,6 +52,9 @@ pub fn make_first_block(chain_id: ChainId) -> Block {
 
 /// A helper trait to simplify constructing blocks for tests.
 pub trait BlockTestExt: Sized {
+    /// Returns the block with the given authenticated signer.
+    fn with_authenticated_signer(self, authenticated_signer: Option<Owner>) -> Self;
+
     /// Returns the block with the given operation appended at the end.
     fn with_operation(self, operation: impl Into<Operation>) -> Self;
 
@@ -79,6 +83,11 @@ pub trait BlockTestExt: Sized {
 }
 
 impl BlockTestExt for Block {
+    fn with_authenticated_signer(mut self, authenticated_signer: Option<Owner>) -> Self {
+        self.authenticated_signer = authenticated_signer;
+        self
+    }
+
     fn with_operation(mut self, operation: impl Into<Operation>) -> Self {
         self.operations.push(operation.into());
         self
@@ -116,13 +125,13 @@ impl BlockTestExt for Block {
     }
 }
 
-pub trait VoteTestExt: Sized {
+pub trait VoteTestExt<T>: Sized {
     /// Returns a certificate for a committee consisting only of this validator.
-    fn into_certificate(self) -> Certificate;
+    fn into_certificate(self) -> GenericCertificate<T>;
 }
 
-impl VoteTestExt for Vote {
-    fn into_certificate(self) -> Certificate {
+impl<T: Clone> VoteTestExt<T> for Vote<T> {
+    fn into_certificate(self) -> GenericCertificate<T> {
         let state = ValidatorState {
             network_address: "".to_string(),
             votes: 100,

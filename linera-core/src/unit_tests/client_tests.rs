@@ -14,10 +14,8 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{
-        CertificateValue, ExecutedBlock, IncomingBundle, Medium, MessageBundle, Origin,
-        PostedMessage,
-    },
+    data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
+    types::{CertificateValue, Timeout},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -28,6 +26,7 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, TestClock};
 use linera_views::memory::MemoryStore;
+use rand::Rng;
 use test_case::test_case;
 
 #[cfg(feature = "dynamodb")]
@@ -118,9 +117,8 @@ where
             builder
                 .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
                 .await
-                .unwrap()
-                .value,
-            certificate.value
+                .unwrap(),
+            certificate
         );
     }
     assert_matches!(
@@ -238,7 +236,7 @@ where
         .await?;
     let cert = receiver.process_inbox().await?.0.pop().unwrap();
     {
-        let messages = &cert.value().block().unwrap().incoming_bundles;
+        let messages = &cert.executed_block().block.incoming_bundles;
         // Both `Claim` messages were included in the block.
         assert_eq!(messages.len(), 2);
         // The first one was rejected.
@@ -287,9 +285,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -341,9 +338,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -391,9 +387,8 @@ where
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     assert_eq!(
         sender.local_balance().await.unwrap(),
@@ -518,6 +513,26 @@ where
         .await
         .unwrap()
         .unwrap();
+
+    // Regression test for #2869.
+    let sub_message_id = MessageId {
+        index: message_id.index + 1,
+        ..message_id
+    };
+    assert_matches!(
+        certificate.executed_block().messages()[0][sub_message_id.index as usize].message,
+        Message::System(SystemMessage::Subscribe { .. })
+    );
+    assert_eq!(
+        sender
+            .client
+            .local_node()
+            .certificate_for(&sub_message_id)
+            .await
+            .unwrap(),
+        certificate.clone()
+    );
+
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
@@ -583,21 +598,17 @@ where
     assert_eq!(parent.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
+    assert_matches!(
+        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        Operation::System(SystemOperation::OpenChain(_)),
+        "Unexpected certificate value",
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
-    );
-    assert_matches!(
-        certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block, .. } if matches!(
-            executed_block.block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
-        ),
-        "Unexpected certificate value",
+            .unwrap(),
+        certificate
     );
     // Make a client to try the new chain.
     let client = builder
@@ -677,21 +688,17 @@ where
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
+    assert_matches!(
+        certificate.executed_block().block.operations[open_chain_message_id.index as usize],
+        Operation::System(SystemOperation::OpenChain(_)),
+        "Unexpected certificate value",
+    );
     assert_eq!(
         builder
             .check_that_validators_have_certificate(sender.chain_id, BlockHeight::from(1), 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
-    );
-    assert_matches!(
-        &certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            block.operations[open_chain_message_id.index as usize],
-            Operation::System(SystemOperation::OpenChain(_)),
-        ),
-        "Unexpected certificate value",
+            .unwrap(),
+        certificate
     );
     // Make a client to try the new chain.
     let client = builder
@@ -712,11 +719,11 @@ where
         result,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(&*error, ChainError::CannotSkipMessage {
-            bundle: MessageBundle { messages, .. }, ..
-        } if matches!(messages[..], [PostedMessage {
-            message: Message::System(SystemMessage::Credit { .. }), ..
-        }]))
+        )) if matches!(&*error, ChainError::CannotSkipMessage { bundle, .. }
+            if matches!(&**bundle, MessageBundle { messages, .. }
+            if matches!(messages[..], [PostedMessage {
+                message: Message::System(SystemMessage::Credit { .. }), ..
+        }])))
     );
     Ok(())
 }
@@ -810,10 +817,8 @@ where
 
     let certificate = client1.close_chain().await.unwrap().unwrap();
     assert_matches!(
-        certificate.value(),
-        CertificateValue::ConfirmedBlock { executed_block: ExecutedBlock { block, .. }, .. } if matches!(
-            &block.operations[..], &[Operation::System(SystemOperation::CloseChain)]
-        ),
+        certificate.executed_block().block.operations[..],
+        [Operation::System(SystemOperation::CloseChain)],
         "Unexpected certificate value",
     );
     assert_eq!(client1.next_block_height(), BlockHeight::from(1));
@@ -823,9 +828,8 @@ where
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     // Cannot use the chain for operations any more.
     let result = client1
@@ -858,7 +862,7 @@ where
         .unwrap();
     client1.synchronize_from_validators().await.unwrap();
     let (certificates, _) = client1.process_inbox().await.unwrap();
-    let block = certificates[0].value().block().unwrap();
+    let block = &certificates[0].executed_block().block;
     assert!(block.operations.is_empty());
     assert_eq!(block.incoming_bundles.len(), 1);
     assert_matches!(
@@ -979,9 +983,8 @@ where
         builder
             .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
             .await
-            .unwrap()
-            .value,
-        certificate.value
+            .unwrap(),
+        certificate
     );
     // Local balance is lagging.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1125,7 +1128,13 @@ where
             Account::chain(client3.chain_id),
         )
         .await,
-        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(error)))) if matches!(*error, ChainError::ExecutionError(ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }), ChainExecutionContext::Operation(_)))
+        Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(WorkerError::ChainError(
+            error
+        )))) if matches!(&*error, ChainError::ExecutionError(
+            execution_error, ChainExecutionContext::Operation(_)
+        ) if matches!(**execution_error, ExecutionError::SystemError(
+            SystemExecutionError::InsufficientFunding { .. }
+        )))
     );
     // There is no pending block, since the proposal wasn't valid at the time.
     assert!(client2
@@ -1322,9 +1331,11 @@ where
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
             WorkerError::ChainError(error)
-        ))) if matches!(*error, ChainError::ExecutionError(
-            ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. }),
+        ))) if matches!(&*error, ChainError::ExecutionError(
+            execution_error,
             ChainExecutionContext::Operation(0)
+        ) if matches!(**execution_error,
+            ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })
         ))
     );
     let obtained_error = sender
@@ -1338,11 +1349,11 @@ where
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
-        )) if matches!(*error,
-            ChainError::ExecutionError(ExecutionError::SystemError(
-                SystemExecutionError::InsufficientFundingForFees { .. }
-            ), ChainExecutionContext::Block)
-        )
+        )) if matches!(&*error, ChainError::ExecutionError(
+            execution_error, ChainExecutionContext::Block
+        )  if matches!(**execution_error, ExecutionError::SystemError(
+            SystemExecutionError::InsufficientFundingForFees { .. }
+        )))
     );
     Ok(())
 }
@@ -1420,7 +1431,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::BlobsNotFound(not_found_blob_ids)) if not_found_blob_ids == [blob0_id]
+        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids))) if not_found_blob_ids == [blob0_id]
     );
 
     // Take one validator down
@@ -1433,9 +1444,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     // Validators goes back up
@@ -1451,11 +1460,7 @@ where
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    assert!(certificate
-        .value()
-        .executed_block()
-        .unwrap()
-        .requires_blob(&blob0_id));
+    assert!(certificate.executed_block().requires_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)
@@ -1490,9 +1495,8 @@ where
             validator_manager
                 .requested_locked
                 .unwrap()
-                .value()
-                .block()
-                .unwrap()
+                .executed_block()
+                .block
                 .operations,
             blob_0_1_operations
         );
@@ -1509,7 +1513,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1596,9 +1600,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     builder
@@ -1652,7 +1654,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 2)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1751,9 +1753,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate0
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob0_id));
 
     let blob2_bytes = b"blob2".to_vec();
@@ -1770,9 +1770,7 @@ where
         .unwrap()
         .unwrap();
     assert!(publish_certificate2
-        .value()
         .executed_block()
-        .unwrap()
         .requires_blob(&blob2_id));
 
     builder
@@ -1812,7 +1810,7 @@ where
     let resubmission_result = builder
         .node(2)
         .handle_certificate(
-            validated_block_certificate,
+            validated_block_certificate.into(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1841,9 +1839,8 @@ where
                 validator_manager
                     .requested_locked
                     .unwrap()
-                    .value()
-                    .block()
-                    .unwrap()
+                    .executed_block()
+                    .block
                     .operations,
                 blob_0_1_operations,
             );
@@ -1885,7 +1882,7 @@ where
     let resubmission_result = builder
         .node(3)
         .handle_certificate(
-            validated_block_certificate,
+            validated_block_certificate.into(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1911,9 +1908,8 @@ where
         validator_manager
             .requested_locked
             .unwrap()
-            .value()
-            .block()
-            .unwrap()
+            .executed_block()
+            .block
             .operations,
         blob_2_3_operations,
     );
@@ -1929,7 +1925,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client3_c
-        .read_hashed_certificate_values_downward(bt_certificate.value.hash(), 3)
+        .read_hashed_certificate_values_downward(bt_certificate.hash(), 3)
         .await
         .unwrap();
 
@@ -2017,12 +2013,8 @@ where
     // After the timeout they will.
     let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
-        *certificate.value(),
-        CertificateValue::Timeout {
-            chain_id,
-            height: BlockHeight::from(1),
-            epoch: Epoch::ZERO
-        }
+        *certificate.inner(),
+        CertificateValue::Timeout(Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO))
     );
     assert_eq!(certificate.round, Round::SingleLeader(0));
 
@@ -2293,7 +2285,7 @@ where
     builder
         .node(0)
         .handle_certificate(
-            validated_block_certificate,
+            validated_block_certificate.into(),
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -2417,6 +2409,7 @@ where
     let large_blob_bytes = b"blob+".to_vec();
     let policy = ResourceControlPolicy {
         maximum_blob_size: blob_bytes.len() as u64,
+        maximum_block_proposal_size: (blob_bytes.len() * 100) as u64,
         ..ResourceControlPolicy::default()
     };
     let mut builder = TestBuilder::new(storage_builder, 4, 0)
@@ -2461,12 +2454,34 @@ where
         .await
         .unwrap()
         .unwrap();
-    let executed_block = certificate.value().executed_block().unwrap();
+    let executed_block = certificate.executed_block();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
 
+    // This will go way over the limit, because of the different overheads.
+    let blob_bytes = (0..100)
+        .map(|_| {
+            rand::thread_rng()
+                .sample_iter(&rand::distributions::Standard)
+                .take(policy.maximum_blob_size as usize)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let result = client1.publish_data_blobs(blob_bytes).await;
+    assert_matches!(
+        result,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
+        )) if matches!(*chain_error, ChainError::BlockProposalTooLarge)
+    );
+
     let result = client1.publish_data_blob(large_blob_bytes).await;
-    assert_matches!(result, Err(ChainClientError::LocalNodeError(_)));
+    assert_matches!(
+        result,
+        Err(ChainClientError::LocalNodeError(
+            LocalNodeError::WorkerError(WorkerError::BlobTooLarge)
+        ))
+    );
 
     Ok(())
 }

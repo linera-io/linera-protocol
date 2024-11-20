@@ -320,6 +320,9 @@ where
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
             )))),
+            MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(Box::new(
+                self.storage.missing_blobs(&blob_ids).await?,
+            )))),
             BlockProposal(_)
             | LiteCertificate(_)
             | Certificate(_)
@@ -332,6 +335,7 @@ where
             | GenesisConfigHashResponse(_)
             | DownloadBlobContentResponse(_)
             | BlobLastUsedByResponse(_)
+            | MissingBlobIdsResponse(_)
             | DownloadCertificateValueResponse(_)
             | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {

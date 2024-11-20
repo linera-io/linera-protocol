@@ -11,9 +11,10 @@ use linera_base::{
 use linera_chain::{
     data_types::{
         Block, BlockExecutionOutcome, BlockProposal, ChannelFullName, ExecutedBlock,
-        HashedCertificateValue, IncomingBundle, Medium, MessageAction, ProposalContent,
+        IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
+    types::HashedCertificateValue,
 };
 use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};
@@ -21,7 +22,10 @@ use linera_views::views::View;
 #[cfg(with_testing)]
 use {
     linera_base::{crypto::CryptoHash, data_types::BlockHeight},
-    linera_chain::data_types::{Certificate, MessageBundle, Origin},
+    linera_chain::{
+        data_types::{MessageBundle, Origin},
+        types::ConfirmedBlockCertificate,
+    },
 };
 
 use super::{check_block_epoch, ChainWorkerState};
@@ -57,7 +61,7 @@ where
     pub(super) async fn read_certificate(
         &mut self,
         height: BlockHeight,
-    ) -> Result<Option<Certificate>, WorkerError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
         self.0.ensure_is_active()?;
         let certificate_hash = match self.0.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
@@ -176,8 +180,9 @@ where
             .system
             .current_committee()
             .expect("chain is active");
-        let policy = committee.policy().clone();
         check_block_epoch(epoch, block)?;
+        let policy = committee.policy().clone();
+        proposal.check_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         let public_key = self
             .0
@@ -310,7 +315,7 @@ where
                 for bundle in inbox.added_bundles.elements().await? {
                     messages.push(IncomingBundle {
                         origin: origin.clone(),
-                        bundle: bundle.clone(),
+                        bundle,
                         action,
                     });
                 }

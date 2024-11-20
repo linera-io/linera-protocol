@@ -25,7 +25,7 @@ use linera_service::{
         local_net::{
             get_node_port, Database, LocalNet, LocalNetConfig, PathProvider, ProcessInbox,
         },
-        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+        ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network, OnClientDrop,
     },
     faucet::ClaimOutcome,
     test_name,
@@ -61,9 +61,8 @@ impl Drop for RestoreVarOnDrop {
     }
 }
 
-// TODO(#2051): Enable the `test_end_to_end_reconfiguration::scylladb_grpc` that is sometimes failing due to runtime exhaustion.
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
-//#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_service_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -640,7 +639,13 @@ async fn test_project_new() -> Result<()> {
     let _rustflags_override = override_disable_warnings_as_errors();
     let path_provider = PathProvider::create_temporary_directory()?;
     let id = 0;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
+    let client = ClientWrapper::new(
+        path_provider,
+        Network::Grpc,
+        None,
+        id,
+        OnClientDrop::LeakChains,
+    );
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let linera_root = manifest_dir
         .parent()
@@ -658,7 +663,13 @@ async fn test_project_new() -> Result<()> {
 async fn test_project_test() -> Result<()> {
     let path_provider = PathProvider::create_temporary_directory()?;
     let id = 0;
-    let client = ClientWrapper::new(path_provider, Network::Grpc, None, id);
+    let client = ClientWrapper::new(
+        path_provider,
+        Network::Grpc,
+        None,
+        id,
+        OnClientDrop::LeakChains,
+    );
     client
         .project_test(&ClientWrapper::example_path("counter")?)
         .await?;

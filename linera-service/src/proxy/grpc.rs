@@ -31,7 +31,7 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlockProposal, Certificate, CertificateValue,
+            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificateValue,
             CertificatesBatchRequest, CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult,
             CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
             SubscriptionRequest, VersionInfo,
@@ -54,7 +54,9 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util,
+    linera_base::prometheus_util::{
+        bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    },
     prometheus::{HistogramVec, IntCounterVec},
 };
 
@@ -63,42 +65,34 @@ use crate::prometheus_server;
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "proxy_request_latency",
         "Proxy request latency",
         &[],
-        Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            50.0, 100.0, 200.0, 300.0, 400.0,
-        ]),
+        bucket_latencies(500.0),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
-static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("proxy_request_count", "Proxy request count", &[])
-        .expect("Counter creation should not fail")
-});
+static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> =
+    LazyLock::new(|| register_int_counter_vec("proxy_request_count", "Proxy request count", &[]));
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "proxy_request_success",
         "Proxy request success",
         &["method_name"],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "proxy_request_error",
         "Proxy request error",
         &["method_name"],
     )
-    .expect("Counter creation should not fail")
 });
 
 #[derive(Clone)]
@@ -300,7 +294,7 @@ where
         }
     }
 
-    async fn client_for_proxy_worker<R>(
+    async fn worker_client<R>(
         &self,
         request: Request<R>,
     ) -> Result<(ValidatorWorkerClient<Channel>, R), Status>
@@ -352,7 +346,7 @@ where
         &self,
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_block_proposal(inner).await,
             "handle_block_proposal",
@@ -364,7 +358,7 @@ where
         &self,
         request: Request<LiteCertificate>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_lite_certificate(inner).await,
             "handle_lite_certificate",
@@ -376,7 +370,7 @@ where
         &self,
         request: Request<HandleCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_certificate(inner).await,
             "handle_certificate",
@@ -388,7 +382,7 @@ where
         &self,
         request: Request<ChainInfoQuery>,
     ) -> Result<Response<ChainInfoResult>, Status> {
-        let (mut client, inner) = self.client_for_proxy_worker(request).await?;
+        let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
             client.handle_chain_info_query(inner).await,
             "handle_chain_info_query",
@@ -468,12 +462,13 @@ where
         request: Request<CryptoHash>,
     ) -> Result<Response<Certificate>, Status> {
         let hash = request.into_inner().try_into()?;
-        let certificate = self
+        let certificate: linera_chain::types::Certificate = self
             .0
             .storage
             .read_certificate(hash)
             .await
-            .map_err(|err| Status::from_error(Box::new(err)))?;
+            .map_err(|err| Status::from_error(Box::new(err)))?
+            .into();
         Ok(Response::new(certificate.try_into()?))
     }
 
@@ -491,7 +486,7 @@ where
 
         // Use 70% of the max message size as a buffer capacity.
         // Leave 30% as overhead.
-        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::data_types::Certificate> =
+        let mut grpc_message_limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =
             GrpcMessageLimiter::new(GRPC_CHUNKED_MESSAGE_FILL_LIMIT);
 
         let mut certificates = vec![];
@@ -504,8 +499,8 @@ where
                 .await
                 .map_err(|err| Status::from_error(Box::new(err)))?
             {
-                if grpc_message_limiter.fits::<Certificate>(certificate.clone())? {
-                    certificates.push(certificate);
+                if grpc_message_limiter.fits::<Certificate>(certificate.clone().into())? {
+                    certificates.push(linera_chain::types::Certificate::from(certificate));
                 } else {
                     break 'outer;
                 }
@@ -530,6 +525,21 @@ where
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
         Ok(Response::new(blob_state.last_used_by.into()))
+    }
+
+    #[instrument(skip_all, err(level = Level::WARN))]
+    async fn missing_blob_ids(
+        &self,
+        request: Request<BlobIds>,
+    ) -> Result<Response<BlobIds>, Status> {
+        let blob_ids: Vec<linera_base::identifiers::BlobId> = request.into_inner().try_into()?;
+        let missing_blob_ids = self
+            .0
+            .storage
+            .missing_blobs(&blob_ids)
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(missing_blob_ids.try_into()?))
     }
 }
 
@@ -587,8 +597,9 @@ impl<T> GrpcMessageLimiter<T> {
 #[cfg(test)]
 mod proto_message_cap {
     use linera_base::crypto::{KeyPair, Signature};
-    use linera_chain::data_types::{
-        BlockExecutionOutcome, Certificate, ExecutedBlock, HashedCertificateValue,
+    use linera_chain::{
+        data_types::{BlockExecutionOutcome, ExecutedBlock},
+        types::{Certificate, HashedCertificateValue},
     };
     use linera_execution::committee::ValidatorName;
     use linera_sdk::base::{ChainId, TestString};

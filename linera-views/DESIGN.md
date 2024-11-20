@@ -39,7 +39,7 @@ implemented by mapping the values in their specific types to their serialization
 
 The keys are constructed step by step from the prefix to the full key. So, whenever
 we have a view or any other object then we have a `base_key` associated with it and
-with no other objects. A view is associated to many keys, all of whom share the same
+with no other objects. A view is associated with many keys, all of which share the same
 `base_key` as prefix.
 This leads us to introduce a trait `Context` that can be implemented with a specific
 `KeyValueStore` client and a `base_key`.
@@ -74,7 +74,7 @@ The design of the key-value store client is done in the following way:
 * We can delete keys having a specific prefix.
 * We can retrieve the list of keys having a specific prefix. Similarly, we can
 retrieve the list of `(key, value)` whose keys have a specific prefix.
-* Also, the list of the keys are provided in the lexicographic order.
+* Also, the list of the keys is provided in the lexicographic order.
 
 ## Journaling
 

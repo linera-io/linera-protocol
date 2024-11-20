@@ -11,9 +11,12 @@ use linera_base::{
     identifiers::{ApplicationId, ChainId, GenericApplicationId, Owner},
     ownership::TimeoutConfig,
 };
-use linera_chain::data_types::{
-    Block, Certificate, ChannelFullName, HashedCertificateValue, IncomingBundle, LiteVote, Medium,
-    MessageAction, Origin, SignatureAggregator,
+use linera_chain::{
+    data_types::{
+        Block, ChannelFullName, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
+        SignatureAggregator,
+    },
+    types::{Certificate, HashedCertificateValue},
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation},
@@ -52,7 +55,7 @@ impl BlockBuilder {
         let height = previous_block
             .map(|certificate| {
                 certificate
-                    .value()
+                    .inner()
                     .height()
                     .try_add_one()
                     .expect("Block height limit reached")
@@ -191,7 +194,7 @@ impl BlockBuilder {
         action: MessageAction,
     ) -> &mut Self {
         let origin = Origin {
-            sender: certificate.value().chain_id(),
+            sender: certificate.inner().chain_id(),
             medium: medium.clone(),
         };
         let bundles = certificate

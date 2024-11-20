@@ -33,7 +33,7 @@ use linera_views::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 #[cfg(with_metrics)]
-use {linera_base::prometheus_util, prometheus::IntCounterVec};
+use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
 
 #[cfg(test)]
 use crate::test_utils::SystemExecutionState;
@@ -54,12 +54,11 @@ pub static CREATE_APPLICATION_MESSAGE_INDEX: u32 = 0;
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
 static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec(
+    register_int_counter_vec(
         "open_chain_count",
         "The number of times the `OpenChain` operation was executed",
         &[],
     )
-    .expect("Counter creation should not fail")
 });
 
 /// A view accessing the execution state of the system of a chain.
@@ -111,6 +110,7 @@ pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
     Transfer {
+        #[debug(skip_if = Option::is_none)]
         owner: Option<Owner>,
         recipient: Recipient,
         amount: Amount,
@@ -132,8 +132,10 @@ pub enum SystemOperation {
     /// Changes the ownership of the chain.
     ChangeOwnership {
         /// Super owners can propose fast blocks in the first round, and regular blocks in any round.
+        #[debug(skip_if = Vec::is_empty)]
         super_owners: Vec<PublicKey>,
         /// The regular owners, with their weights that determine how often they are round leader.
+        #[debug(skip_if = Vec::is_empty)]
         owners: Vec<(PublicKey, u64)>,
         /// The number of initial rounds after 0 in which all owners are allowed to propose blocks.
         multi_leader_rounds: u32,
@@ -166,8 +168,9 @@ pub enum SystemOperation {
         #[debug(with = "hex_debug")]
         parameters: Vec<u8>,
         #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug")]
+        #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
         instantiation_argument: Vec<u8>,
+        #[debug(skip_if = Vec::is_empty)]
         required_application_ids: Vec<UserApplicationId>,
     },
     /// Requests a message from another chain to register a user application on this chain.
@@ -198,8 +201,10 @@ pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
     Credit {
+        #[debug(skip_if = Option::is_none)]
         target: Option<Owner>,
         amount: Amount,
+        #[debug(skip_if = Option::is_none)]
         source: Option<Owner>,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
@@ -336,7 +341,7 @@ pub enum SystemExecutionError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
-    ViewError(#[from] ViewError),
+    ViewError(ViewError),
 
     #[error("Invalid admin ID in new chain: {0}")]
     InvalidNewChainAdminId(ChainId),
@@ -389,12 +394,21 @@ pub enum SystemExecutionError {
     #[error("Chain is not active yet.")]
     InactiveChain,
 
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
     #[error("Oracle response mismatch")]
     OracleResponseMismatch,
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
+}
+
+impl From<ViewError> for SystemExecutionError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => SystemExecutionError::BlobsNotFound(blob_ids),
+            error => SystemExecutionError::ViewError(error),
+        }
+    }
 }
 
 impl<C> SystemExecutionStateView<C>
@@ -668,11 +682,16 @@ where
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        if owner.is_some() {
-            ensure!(
+        match (owner, authenticated_signer) {
+            (Some(_), _) => ensure!(
                 authenticated_signer == owner,
                 SystemExecutionError::UnauthenticatedTransferOwner
-            );
+            ),
+            (None, Some(signer)) => ensure!(
+                self.ownership.get().verify_owner(&signer).is_some(),
+                SystemExecutionError::UnauthenticatedTransferOwner
+            ),
+            (None, None) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
         }
         ensure!(
             amount > Amount::ZERO,
@@ -966,15 +985,11 @@ where
         Ok(messages)
     }
 
-    pub async fn read_blob_content(
-        &mut self,
-        blob_id: BlobId,
-    ) -> Result<BlobContent, SystemExecutionError> {
+    pub async fn read_blob_content(&mut self, blob_id: BlobId) -> Result<BlobContent, ViewError> {
         self.context()
             .extra()
             .get_blob(blob_id)
             .await
-            .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))
             .map(Into::into)
     }
 
@@ -985,7 +1000,7 @@ where
         if self.context().extra().contains_blob(blob_id).await? {
             Ok(())
         } else {
-            Err(SystemExecutionError::BlobNotFoundOnRead(blob_id))
+            Err(SystemExecutionError::BlobsNotFound(vec![blob_id]))
         }
     }
 
@@ -996,25 +1011,35 @@ where
     ) -> Result<(), SystemExecutionError> {
         let contract_bytecode_blob_id =
             BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
-        ensure!(
-            self.context()
-                .extra()
-                .contains_blob(contract_bytecode_blob_id)
-                .await?,
-            SystemExecutionError::BlobNotFoundOnRead(contract_bytecode_blob_id)
-        );
-        txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
+
+        let mut missing_blobs = Vec::new();
+        if !self
+            .context()
+            .extra()
+            .contains_blob(contract_bytecode_blob_id)
+            .await?
+        {
+            missing_blobs.push(contract_bytecode_blob_id);
+        }
+
         let service_bytecode_blob_id =
             BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
-        ensure!(
-            self.context()
-                .extra()
-                .contains_blob(service_bytecode_blob_id)
-                .await?,
-            SystemExecutionError::BlobNotFoundOnRead(service_bytecode_blob_id)
-        );
-        txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
-        Ok(())
+        if !self
+            .context()
+            .extra()
+            .contains_blob(service_bytecode_blob_id)
+            .await?
+        {
+            missing_blobs.push(service_bytecode_blob_id);
+        }
+
+        if missing_blobs.is_empty() {
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
+            Ok(())
+        } else {
+            Err(SystemExecutionError::BlobsNotFound(missing_blobs))
+        }
     }
 }
 

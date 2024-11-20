@@ -30,19 +30,19 @@ use scylla::{
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-use crate::metering::{MeteredStore, LRU_CACHING_METRICS, SCYLLA_DB_METRICS};
+use crate::metering::MeteredStore;
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
-    batch::{Batch, UnorderedBatch},
+    batch::UnorderedBatch,
     common::get_upper_bound_option,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::LruCachingStore,
+    lru_caching::{LruCachingStore, LruSplittingConfig},
     store::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStoreError, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
+        AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
+        WithError,
     },
 };
-#[cfg(with_testing)]
-use crate::{lru_caching::TEST_CACHE_SIZE, store::TestKeyValueStore};
 
 /// The client for ScyllaDb.
 /// * The session allows to pass queries
@@ -364,14 +364,6 @@ impl ScyllaDbClient {
     }
 }
 
-/// We limit the number of connections that can be done for tests.
-#[cfg(with_testing)]
-const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
-
-/// The number of connections in the stream is limited for tests.
-#[cfg(with_testing)]
-const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
-
 /// The maximal size of an operation on ScyllaDB seems to be 16M
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
 /// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
@@ -386,7 +378,6 @@ pub struct ScyllaDbStoreInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
-    cache_size: usize,
     root_key: Vec<u8>,
 }
 
@@ -394,8 +385,8 @@ pub struct ScyllaDbStoreInternal {
 #[derive(Error, Debug)]
 pub enum ScyllaDbStoreError {
     /// BCS serialization error.
-    #[error("BCS error: {0}")]
-    Bcs(#[from] bcs::Error),
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
 
     /// The key must have at most 1M bytes
     #[error("The key must have at most 1M")]
@@ -418,7 +409,7 @@ pub enum ScyllaDbStoreError {
     InvalidTableName,
 
     /// Missing database
-    #[error("Missing database")]
+    #[error("Missing database: {0}")]
     MissingDatabase(String),
 
     /// Already existing database
@@ -554,8 +545,21 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
     big_key
 }
 
+/// The type for building a new ScyllaDB Key Value Store
+#[derive(Debug)]
+pub struct ScyllaDbStoreInternalConfig {
+    /// The url to which the requests have to be sent
+    pub uri: String,
+    /// The common configuration of the key value store
+    pub common_config: CommonStoreInternalConfig,
+}
+
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
-    type Config = ScyllaDbStoreConfig;
+    type Config = ScyllaDbStoreInternalConfig;
+
+    fn get_name() -> String {
+        "scylladb internal".to_string()
+    }
 
     async fn connect(
         config: &Self::Config,
@@ -575,13 +579,11 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let cache_size = config.common_config.cache_size;
         let root_key = get_big_root_key(root_key);
         Ok(Self {
             store,
             semaphore,
             max_stream_queries,
-            cache_size,
             root_key,
         })
     }
@@ -590,13 +592,11 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
-        let cache_size = self.cache_size;
         let root_key = get_big_root_key(root_key);
         Ok(Self {
             store,
             semaphore,
             max_stream_queries,
-            cache_size,
             root_key,
         })
     }
@@ -765,160 +765,34 @@ impl ScyllaDbStoreInternal {
     }
 }
 
-/// A shared DB store for ScyllaDB implementing LruCaching
-#[derive(Clone)]
-pub struct ScyllaDbStore {
-    #[cfg(with_metrics)]
-    store:
-        MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>,
-    #[cfg(not(with_metrics))]
-    store: LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>,
-}
+/// We limit the number of connections that can be done for tests.
+#[cfg(with_testing)]
+const TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES: usize = 10;
 
-/// The type for building a new ScyllaDB Key Value Store
-#[derive(Debug)]
-pub struct ScyllaDbStoreConfig {
-    /// The url to which the requests have to be sent
-    pub uri: String,
-    /// The common configuration of the key value store
-    pub common_config: CommonStoreConfig,
-}
-
-impl WithError for ScyllaDbStore {
-    type Error = ScyllaDbStoreError;
-}
-
-impl ReadableKeyValueStore for ScyllaDbStore {
-    const MAX_KEY_SIZE: usize = ScyllaDbStoreInternal::MAX_KEY_SIZE;
-
-    type Keys = <ScyllaDbStoreInternal as ReadableKeyValueStore>::Keys;
-
-    type KeyValues = <ScyllaDbStoreInternal as ReadableKeyValueStore>::KeyValues;
-
-    fn max_stream_queries(&self) -> usize {
-        self.store.max_stream_queries()
-    }
-
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ScyllaDbStoreError> {
-        self.store.read_value_bytes(key).await
-    }
-
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbStoreError> {
-        self.store.contains_key(key).await
-    }
-
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
-        self.store.contains_keys(keys).await
-    }
-
-    async fn read_multi_values_bytes(
-        &self,
-        keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreError> {
-        if keys.is_empty() {
-            return Ok(Vec::new());
-        }
-        Box::pin(self.store.read_multi_values_bytes(keys)).await
-    }
-
-    async fn find_keys_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::Keys, ScyllaDbStoreError> {
-        self.store.find_keys_by_prefix(key_prefix).await
-    }
-
-    async fn find_key_values_by_prefix(
-        &self,
-        key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, ScyllaDbStoreError> {
-        self.store.find_key_values_by_prefix(key_prefix).await
-    }
-}
-
-impl WritableKeyValueStore for ScyllaDbStore {
-    const MAX_VALUE_SIZE: usize = ScyllaDbStoreInternal::MAX_VALUE_SIZE;
-
-    async fn write_batch(&self, batch: Batch) -> Result<(), ScyllaDbStoreError> {
-        self.store.write_batch(batch).boxed().await
-    }
-
-    async fn clear_journal(&self) -> Result<(), ScyllaDbStoreError> {
-        self.store.clear_journal().boxed().await
-    }
-}
-
-impl AdminKeyValueStore for ScyllaDbStore {
-    type Config = ScyllaDbStoreConfig;
-
-    async fn connect(
-        config: &Self::Config,
-        namespace: &str,
-        root_key: &[u8],
-    ) -> Result<Self, ScyllaDbStoreError> {
-        let cache_size = config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::connect(config, namespace, root_key).await?;
-        Ok(ScyllaDbStore::from_inner(simple_store, cache_size))
-    }
-
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ScyllaDbStoreError> {
-        let simple_store = self.inner().clone_with_root_key(root_key)?;
-        let cache_size = self.inner().cache_size;
-        Ok(ScyllaDbStore::from_inner(simple_store, cache_size))
-    }
-
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::list_all(config).await
-    }
-
-    async fn delete_all(config: &Self::Config) -> Result<(), ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::delete_all(config).await
-    }
-
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::exists(config, namespace).await
-    }
-
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::create(config, namespace).await
-    }
-
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::delete(config, namespace).await
-    }
-}
+/// The number of connections in the stream is limited for tests.
+#[cfg(with_testing)]
+const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 #[cfg(with_testing)]
-impl TestKeyValueStore for ScyllaDbStore {
-    async fn new_test_config() -> Result<ScyllaDbStoreConfig, ScyllaDbStoreError> {
+impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
+    async fn new_test_config() -> Result<ScyllaDbStoreInternalConfig, ScyllaDbStoreError> {
         let uri = "localhost:9042".to_string();
-        let common_config = CommonStoreConfig {
+        let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
-            cache_size: TEST_CACHE_SIZE,
         };
-        Ok(ScyllaDbStoreConfig { uri, common_config })
+        Ok(ScyllaDbStoreInternalConfig { uri, common_config })
     }
 }
 
-impl ScyllaDbStore {
-    #[cfg(with_metrics)]
-    fn inner(&self) -> &ScyllaDbStoreInternal {
-        &self.store.store.store.store.store
-    }
+/// The `ScyllaDbStore` composed type with metrics
+#[cfg(with_metrics)]
+pub type ScyllaDbStore =
+    MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>;
 
-    #[cfg(not(with_metrics))]
-    fn inner(&self) -> &ScyllaDbStoreInternal {
-        &self.store.store.store
-    }
+/// The `ScyllaDbStore` composed type
+#[cfg(not(with_metrics))]
+pub type ScyllaDbStore = LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
 
-    fn from_inner(simple_store: ScyllaDbStoreInternal, cache_size: usize) -> ScyllaDbStore {
-        let store = JournalingKeyValueStore::new(simple_store);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
-        let store = LruCachingStore::new(store, cache_size);
-        #[cfg(with_metrics)]
-        let store = MeteredStore::new(&LRU_CACHING_METRICS, store);
-        Self { store }
-    }
-}
+/// The `ScyllaDbStoreConfig` input type
+pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;

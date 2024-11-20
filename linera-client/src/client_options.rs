@@ -1,7 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, env, fmt, iter, num::NonZeroU16, path::PathBuf, time::Duration};
+use std::{
+    collections::HashSet,
+    env, fmt, iter,
+    num::{NonZeroU16, NonZeroUsize},
+    path::PathBuf,
+    time::Duration,
+};
 
 use chrono::{DateTime, Utc};
 use linera_base::{
@@ -32,7 +38,7 @@ use crate::{
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("a storage option must be provided")]
     NoStorageOption,
     #[error("wallet already exists at {0}")]
@@ -95,6 +101,10 @@ pub struct ClientOptions {
     /// The WebAssembly runtime to use.
     #[arg(long)]
     pub wasm_runtime: Option<WasmRuntime>,
+
+    /// The maximal number of chains loaded in memory at a given time.
+    #[arg(long, default_value = "40")]
+    pub max_loaded_chains: NonZeroUsize,
 
     /// The maximal number of simultaneous queries to the database
     #[arg(long)]
@@ -369,7 +379,6 @@ pub enum ClientCommand {
     /// It can still reject incoming messages, so they bounce back to the sender.
     CloseChain {
         /// Chain ID (must be one of our chains)
-        #[arg(long = "from")]
         chain_id: ChainId,
     },
 
@@ -382,7 +391,7 @@ pub enum ClientCommand {
     /// linera local-balance` for a consolidated balance.
     LocalBalance {
         /// The account to read, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
     },
@@ -394,7 +403,7 @@ pub enum ClientCommand {
     /// validators yet. Call `linera sync` first to do so.
     QueryBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
     },
@@ -405,7 +414,7 @@ pub enum ClientCommand {
     /// This command is deprecated. Use `linera sync && linera query-balance` instead.
     SyncBalance {
         /// The account to query, written as `CHAIN-ID:OWNER` or simply `CHAIN-ID` for the
-        /// chain balance. By defaults, we read the chain balance of the default chain in
+        /// chain balance. By default, we read the chain balance of the default chain in
         /// the wallet.
         account: Option<Account>,
     },
@@ -426,7 +435,7 @@ pub enum ClientCommand {
     },
 
     /// Show the version and genesis config hash of a new validator, and print a warning if it is
-    /// incompatible. Also print some information about the given chain while we are it.
+    /// incompatible. Also print some information about the given chain while we are at it.
     QueryValidator {
         /// The new validator's address.
         address: String,
@@ -439,7 +448,7 @@ pub enum ClientCommand {
     },
 
     /// Show the current set of validators for a chain. Also print some information about
-    /// the given chain while we are it.
+    /// the given chain while we are at it.
     QueryValidators {
         /// The chain to query. If omitted, query the default chain of the wallet.
         chain_id: Option<ChainId>,
@@ -504,7 +513,7 @@ pub enum ClientCommand {
         #[arg(long)]
         byte_stored: Option<Amount>,
 
-        /// Set the base price of sending a operation from a block..
+        /// Set the base price of sending an operation from a block..
         #[arg(long)]
         operation: Option<Amount>,
 
@@ -536,6 +545,10 @@ pub enum ClientCommand {
         /// Set the maximum size of decompressed contract or service bytecode, in bytes.
         #[arg(long)]
         maximum_bytecode_size: Option<u64>,
+
+        /// Set the maximum size of a block proposal, in bytes.
+        #[arg(long)]
+        maximum_block_proposal_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]
@@ -627,7 +640,7 @@ pub enum ClientCommand {
         #[arg(long, default_value = "0")]
         byte_stored_price: Amount,
 
-        /// Set the base price of sending a operation from a block..
+        /// Set the base price of sending an operation from a block..
         #[arg(long, default_value = "0")]
         operation_price: Amount,
 
@@ -659,6 +672,10 @@ pub enum ClientCommand {
         /// in bytes.
         #[arg(long)]
         maximum_blob_size: Option<u64>,
+
+        /// Set the maximum size of a block proposal, in bytes.
+        #[arg(long)]
+        maximum_block_proposal_size: Option<u64>,
 
         /// Set the maximum read data per block.
         #[arg(long)]
@@ -867,6 +884,75 @@ pub enum ClientCommand {
     /// Manage a local Linera Network.
     #[command(subcommand)]
     Net(NetCommand),
+
+    /// Operation on the storage.
+    #[command(subcommand)]
+    Storage(DatabaseToolCommand),
+}
+
+#[derive(Clone, clap::Parser)]
+pub enum DatabaseToolCommand {
+    /// Delete all the namespaces of the database
+    #[command(name = "delete_all")]
+    DeleteAll {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Delete a single namespace from the database
+    #[command(name = "delete_namespace")]
+    DeleteNamespace {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Check existence of a namespace in the database
+    #[command(name = "check_existence")]
+    CheckExistence {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Check absence of a namespace in the database
+    #[command(name = "check_absence")]
+    CheckAbsence {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// Initialize a namespace in the database
+    #[command(name = "initialize")]
+    Initialize {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+
+    /// List the namespaces of the database
+    #[command(name = "list_namespaces")]
+    ListNamespaces {
+        /// Storage configuration for the blockchain history.
+        #[arg(long = "storage")]
+        storage_config: String,
+    },
+}
+
+impl DatabaseToolCommand {
+    pub fn storage_config(&self) -> Result<StorageConfigNamespace, Error> {
+        let storage_config = match self {
+            DatabaseToolCommand::DeleteAll { storage_config } => storage_config,
+            DatabaseToolCommand::DeleteNamespace { storage_config } => storage_config,
+            DatabaseToolCommand::CheckExistence { storage_config } => storage_config,
+            DatabaseToolCommand::CheckAbsence { storage_config } => storage_config,
+            DatabaseToolCommand::Initialize { storage_config } => storage_config,
+            DatabaseToolCommand::ListNamespaces { storage_config } => storage_config,
+        };
+        Ok(storage_config.parse::<StorageConfigNamespace>()?)
+    }
 }
 
 #[derive(Clone, clap::Parser)]
@@ -949,13 +1035,12 @@ pub enum ResourceControlPolicyConfig {
 
 impl ResourceControlPolicyConfig {
     pub fn into_policy(self) -> ResourceControlPolicy {
-        use ResourceControlPolicyConfig::*;
         match self {
-            Default => ResourceControlPolicy::default(),
-            OnlyFuel => ResourceControlPolicy::only_fuel(),
-            FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
-            AllCategories => ResourceControlPolicy::all_categories(),
-            Devnet => ResourceControlPolicy::devnet(),
+            ResourceControlPolicyConfig::Default => ResourceControlPolicy::default(),
+            ResourceControlPolicyConfig::OnlyFuel => ResourceControlPolicy::only_fuel(),
+            ResourceControlPolicyConfig::FuelAndBlock => ResourceControlPolicy::fuel_and_block(),
+            ResourceControlPolicyConfig::AllCategories => ResourceControlPolicy::all_categories(),
+            ResourceControlPolicyConfig::Devnet => ResourceControlPolicy::devnet(),
         }
     }
 }
@@ -977,7 +1062,13 @@ impl fmt::Display for ResourceControlPolicyConfig {
 #[derive(Clone, clap::Subcommand)]
 pub enum WalletCommand {
     /// Show the contents of the wallet.
-    Show { chain_id: Option<ChainId> },
+    Show {
+        /// The chain to show the metadata.
+        chain_id: Option<ChainId>,
+        /// Only print a non-formatted list of the wallet's chain IDs.
+        #[arg(long)]
+        short: bool,
+    },
 
     /// Change the wallet default chain.
     SetDefault { chain_id: ChainId },

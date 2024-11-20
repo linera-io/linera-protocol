@@ -11,11 +11,10 @@ use linera_base::{
     identifiers::{ChainId, MessageId},
 };
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, MessageBundle, Origin,
-        Target,
-    },
-    manager, ChainStateView,
+    data_types::{BlockExecutionOutcome, BlockProposal, MessageBundle, Origin, Target},
+    manager,
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    ChainStateView,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
@@ -66,17 +65,8 @@ where
     /// Processes a leader timeout issued for this multi-owner chain.
     pub(super) async fn process_timeout(
         &mut self,
-        certificate: Certificate,
+        certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let (chain_id, height, epoch) = match certificate.value() {
-            CertificateValue::Timeout {
-                chain_id,
-                height,
-                epoch,
-                ..
-            } => (*chain_id, *height, *epoch),
-            _ => panic!("Expecting a leader timeout certificate"),
-        };
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.state.ensure_is_active()?;
@@ -88,11 +78,11 @@ where
             .current_committee()
             .expect("chain is active");
         ensure!(
-            epoch == chain_epoch,
+            certificate.inner().epoch == chain_epoch,
             WorkerError::InvalidEpoch {
-                chain_id,
+                chain_id: certificate.inner().chain_id,
                 chain_epoch,
-                epoch
+                epoch: certificate.inner().epoch
             }
         );
         certificate.check(committee)?;
@@ -102,7 +92,7 @@ where
             .chain
             .tip_state
             .get()
-            .already_validated_block(height)?
+            .already_validated_block(certificate.inner().height)?
         {
             return Ok((
                 ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair()),
@@ -110,19 +100,21 @@ where
             ));
         }
         let old_round = self.state.chain.manager.get().current_round;
+        let timeout_chainid = certificate.inner().chain_id;
+        let timeout_height = certificate.inner().height;
         self.state
             .chain
             .manager
             .get_mut()
-            .handle_timeout_certificate(
-                certificate.clone(),
-                self.state.storage.clock().current_time(),
-            );
+            .handle_timeout_certificate(certificate, self.state.storage.clock().current_time());
         let round = self.state.chain.manager.get().current_round;
         if round > old_round {
             actions.notifications.push(Notification {
-                chain_id,
-                reason: Reason::NewRound { height, round },
+                chain_id: timeout_chainid,
+                reason: Reason::NewRound {
+                    height: timeout_height,
+                    round,
+                },
             })
         }
         let info = ChainInfoResponse::new(&self.state.chain, self.state.config.key_pair());
@@ -139,13 +131,22 @@ where
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
         let manager = self.state.chain.manager.get_mut();
-        manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time);
-        // Cache the value we voted on, so the client doesn't have to send it again.
-        if let Some(vote) = manager.pending() {
-            self.state
-                .recent_hashed_certificate_values
-                .insert(Cow::Borrowed(&vote.value))
-                .await;
+        match manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time) {
+            // Cache the value we voted on, so the client doesn't have to send it again.
+            (Some(vote), None) => {
+                self.state
+                    .recent_hashed_validated_values
+                    .insert(Cow::Borrowed(&vote.value))
+                    .await;
+            }
+            (None, Some(vote)) => {
+                self.state
+                    .recent_hashed_confirmed_values
+                    .insert(Cow::Borrowed(&vote.value))
+                    .await;
+            }
+            (Some(_), Some(_)) => panic!("vote is either validated or confirmed"),
+            (None, None) => (),
         }
         self.save().await?;
         Ok(())
@@ -154,13 +155,10 @@ where
     /// Processes a validated block issued for this multi-owner chain.
     pub(super) async fn process_validated_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let executed_block = match certificate.value() {
-            CertificateValue::ValidatedBlock { executed_block } => executed_block,
-            _ => panic!("Expecting a validation certificate"),
-        };
+        let executed_block = certificate.executed_block();
 
         let block = &executed_block.block;
         let height = block.height;
@@ -199,9 +197,10 @@ where
                 true,
             ));
         }
+
         self.state
-            .recent_hashed_certificate_values
-            .insert(Cow::Borrowed(&certificate.value))
+            .recent_hashed_validated_values
+            .insert(Cow::Borrowed(certificate.value()))
             .await;
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
@@ -235,15 +234,13 @@ where
     /// Processes a confirmed block (aka a commit).
     pub(super) async fn process_confirmed_block(
         &mut self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            panic!("Expecting a confirmation certificate");
-        };
+        let executed_block = certificate.executed_block();
         let block = &executed_block.block;
-        let block_height = block.height;
+        let block_height = executed_block.block.height;
         // Check that the chain is active and ready for this confirmation.
         let tip = self.state.chain.tip_state.get().clone();
         if tip.next_block_height < block_height {
@@ -320,7 +317,9 @@ where
         // Update the blob state with last used certificate hash.
         let blob_state = BlobState {
             last_used_by: certificate_hash,
-            epoch: certificate.value().epoch(),
+            chain_id: block.chain_id,
+            block_height,
+            epoch: block.epoch,
         };
         self.state
             .storage
@@ -343,8 +342,8 @@ where
         ensure!(
             executed_block.outcome == verified_outcome,
             WorkerError::IncorrectOutcome {
-                submitted: executed_block.outcome.clone(),
-                computed: verified_outcome,
+                submitted: Box::new(executed_block.outcome.clone()),
+                computed: Box::new(verified_outcome),
             }
         );
         // Advance to next block height.
@@ -367,15 +366,15 @@ where
             chain_id: block.chain_id,
             reason: Reason::NewBlock {
                 height: block_height,
-                hash: certificate.value.hash(),
+                hash: certificate.hash(),
             },
         });
         // Persist chain.
         self.save().await?;
 
         self.state
-            .recent_hashed_certificate_values
-            .insert(Cow::Owned(certificate.value))
+            .recent_hashed_confirmed_values
+            .insert(Cow::Owned(certificate.into_value()))
             .await;
 
         self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)

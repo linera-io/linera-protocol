@@ -16,7 +16,7 @@ use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder}
 use linera_base::{
     crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, time::Duration,
 };
-use linera_chain::data_types::HashedCertificateValue;
+use linera_chain::types::HashedCertificateValue;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::store::KeyValueStore;

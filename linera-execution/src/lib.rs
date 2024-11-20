@@ -190,11 +190,11 @@ const _: () = {
 #[derive(Error, Debug)]
 pub enum ExecutionError {
     #[error(transparent)]
-    ViewError(#[from] ViewError),
+    ViewError(ViewError),
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     #[error(transparent)]
-    SystemError(#[from] SystemExecutionError),
+    SystemError(SystemExecutionError),
     #[error("User application reported an error: {0}")]
     UserError(String),
     #[cfg(any(with_wasmer, with_wasmtime))]
@@ -239,16 +239,16 @@ pub enum ExecutionError {
     OwnerIsNone,
     #[error("Application is not authorized to perform system operations on this chain: {0:}")]
     UnauthorizedApplication(UserApplicationId),
-    #[error("Failed to make network reqwest")]
+    #[error("Failed to make network reqwest: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("Encountered IO error")]
+    #[error("Encountered I/O error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("More recorded oracle responses than expected")]
     UnexpectedOracleResponse,
-    #[error("Invalid JSON: {}", .0)]
-    Json(#[from] serde_json::Error),
+    #[error("Invalid JSON: {0}")]
+    JsonError(#[from] serde_json::Error),
     #[error(transparent)]
-    Bcs(#[from] bcs::Error),
+    BcsError(#[from] bcs::Error),
     #[error("Recorded response for oracle query has the wrong type")]
     OracleResponseMismatch,
     #[error("Assertion failed: local time {local_time} is not earlier than {timestamp}")]
@@ -269,6 +269,28 @@ pub enum ExecutionError {
     ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
     #[error("Failed to send service code to worker thread: {0:?}")]
     ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
+}
+
+impl From<ViewError> for ExecutionError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => ExecutionError::BlobsNotFound(blob_ids),
+            error => ExecutionError::ViewError(error),
+        }
+    }
+}
+
+impl From<SystemExecutionError> for ExecutionError {
+    fn from(error: SystemExecutionError) -> Self {
+        match error {
+            SystemExecutionError::BlobsNotFound(blob_ids) => {
+                ExecutionError::BlobsNotFound(blob_ids)
+            }
+            error => ExecutionError::SystemError(error),
+        }
+    }
 }
 
 /// The public entry points provided by the contract part of an application.
@@ -352,7 +374,7 @@ pub trait ExecutionRuntimeContext {
         description: &UserApplicationDescription,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 }
@@ -362,13 +384,16 @@ pub struct OperationContext {
     /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// `None` if this is the transaction entrypoint or the caller doesn't want this particular
     /// call to be authenticated (e.g. for safety reasons).
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_caller_id: Option<UserApplicationId>,
     /// The current block height.
     pub height: BlockHeight,
     /// The current index of the operation.
+    #[debug(skip_if = Option::is_none)]
     pub index: Option<u32>,
 }
 
@@ -379,8 +404,10 @@ pub struct MessageContext {
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
     /// The authenticated signer of the operation that created the message, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// Where to send a refund for the unused part of each grant after execution, if any.
+    #[debug(skip_if = Option::is_none)]
     pub refund_grant_to: Option<Account>,
     /// The current block height.
     pub height: BlockHeight,
@@ -396,6 +423,7 @@ pub struct FinalizeContext {
     /// The current chain ID.
     pub chain_id: ChainId,
     /// The authenticated signer of the operation, if any.
+    #[debug(skip_if = Option::is_none)]
     pub authenticated_signer: Option<Owner>,
     /// The current block height.
     pub height: BlockHeight,
@@ -1024,11 +1052,11 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ExecutionError> {
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
         Ok(self
             .blobs
             .get(&blob_id)
-            .ok_or_else(|| SystemExecutionError::BlobNotFoundOnRead(blob_id))?
+            .ok_or_else(|| ViewError::BlobsNotFound(vec![blob_id]))?
             .clone())
     }
 
@@ -1180,6 +1208,10 @@ impl From<Vec<u8>> for Response {
 pub struct BlobState {
     /// Hash of the last `Certificate` that published or used this blob.
     pub last_used_by: CryptoHash,
+    /// The `ChainId` of the chain that published the change
+    pub chain_id: ChainId,
+    /// The `BlockHeight` of the chain that published the change
+    pub block_height: BlockHeight,
     /// Epoch of the `last_used_by` certificate.
     pub epoch: Epoch,
 }

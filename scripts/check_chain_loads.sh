@@ -8,6 +8,9 @@
 
 USAGES_FILE="$(mktemp)"
 
+# Make sure we're at the source of the repo.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
 grep -R '\<\(create_chain\|load_chain\|load_active_chain\)\>' linera-* > "$USAGES_FILE"
 
 # linera-storage contains the implementation of the methods

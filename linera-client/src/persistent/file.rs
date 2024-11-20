@@ -17,9 +17,9 @@ struct Lock(fs_err::File);
 #[derive(Debug, thiserror::Error)]
 enum ErrorInner {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("JSON error: {0}")]
-    Serde(#[from] serde_json::Error),
+    JsonError(#[from] serde_json::Error),
 }
 
 thiserror_context::impl_context!(Error(ErrorInner));

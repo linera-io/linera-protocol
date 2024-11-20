@@ -69,6 +69,9 @@ service ValidatorNode {
 
   // Returns the hash of the `Certificate` that last used a blob.
   rpc BlobLastUsedBy(BlobId) returns (CryptoHash);
+
+  // Returns the `BlobId`s that are not contained as `Blob`.
+  rpc MissingBlobIds(BlobIds) returns (BlobIds);
 }
 
 // A request for a batch of certificates.
@@ -270,6 +273,11 @@ message Signature {
 // A content-addressed blob ID i.e. the hash of the `BlobContent`.
 message BlobId {
   bytes bytes = 1;
+}
+
+// Content-addressed blob IDs i.e. the hashes of the `BlobContent`s.
+message BlobIds {
+  repeated bytes bytes = 1;
 }
 
 // A blob of binary data.

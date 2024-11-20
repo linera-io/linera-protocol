@@ -46,7 +46,7 @@ BYTECODE_ID=$(linera publish-bytecode \
     examples/target/wasm32-unknown-unknown/release/non_fungible_{contract,service}.wasm)
 ```
 
-Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused it later.
+Here, we stored the new bytecode ID in a variable `BYTECODE_ID` to be reused later.
 
 ## Creating an NFT
 

@@ -247,7 +247,7 @@ impl<'input> CallerTypeParameter<'input> {
         )
     }
 
-    /// Specializes the the [`CallerTypeParameter`] in the `target_type` with the concrete
+    /// Specializes the [`CallerTypeParameter`] in the `target_type` with the concrete
     /// `caller_type`.
     pub fn specialize_type(&self, target_type: &mut Type, caller_type: Type) {
         self.build_specializations(caller_type)

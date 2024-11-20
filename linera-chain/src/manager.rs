@@ -70,6 +70,7 @@
 
 use std::collections::BTreeMap;
 
+use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
@@ -81,12 +82,13 @@ use linera_execution::committee::Epoch;
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use rand_distr::{Distribution, WeightedAliasIndex};
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
 use crate::{
-    data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue,
-        HashedCertificateValue, LiteVote, ProposalContent, Vote,
+    block::{ConfirmedBlock, Timeout, ValidatedBlock},
+    data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
+    types::{
+        ConfirmedBlockCertificate, Hashed, HashedCertificateValue, TimeoutCertificate,
+        ValidatedBlockCertificate,
     },
     ChainError,
 };
@@ -106,24 +108,36 @@ pub struct ChainManager {
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: u64,
     /// The probability distribution for choosing a round leader.
+    #[debug(skip_if = Option::is_none)]
     pub distribution: Option<WeightedAliasIndex<u64>>,
     /// The probability distribution for choosing a fallback round leader.
+    #[debug(skip_if = Option::is_none)]
     pub fallback_distribution: Option<WeightedAliasIndex<u64>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
+    #[debug(skip_if = Option::is_none)]
     pub proposed: Option<BlockProposal>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
-    pub locked: Option<Certificate>,
+    #[debug(skip_if = Option::is_none)]
+    pub locked: Option<ValidatedBlockCertificate>,
     /// Latest leader timeout certificate we have received.
-    pub timeout: Option<Certificate>,
-    /// Latest vote we have cast, to validate or confirm.
-    pub pending: Option<Vote>,
+    #[debug(skip_if = Option::is_none)]
+    pub timeout: Option<TimeoutCertificate>,
+    /// Latest vote we cast to confirm a block.
+    #[debug(skip_if = Option::is_none)]
+    pub confirmed_vote: Option<Vote<ConfirmedBlock>>,
+    /// Latest vote we cast to validate a block.
+    #[debug(skip_if = Option::is_none)]
+    pub validated_vote: Option<Vote<ValidatedBlock>>,
     /// Latest timeout vote we cast.
-    pub timeout_vote: Option<Vote>,
+    #[debug(skip_if = Option::is_none)]
+    pub timeout_vote: Option<Vote<Timeout>>,
     /// Fallback vote we cast.
-    pub fallback_vote: Option<Vote>,
+    #[debug(skip_if = Option::is_none)]
+    pub fallback_vote: Option<Vote<Timeout>>,
     /// The time after which we are ready to sign a timeout certificate for the current round.
+    #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
     /// The lowest round where we can still vote to validate or confirm a block. This is
     /// the round to which the timeout applies.
@@ -133,8 +147,10 @@ pub struct ChainManager {
     /// round to become current, unless a higher one already is.
     pub current_round: Round,
     /// The owners that take over in fallback mode.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
     /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
@@ -198,7 +214,8 @@ impl ChainManager {
             proposed: None,
             locked: None,
             timeout: None,
-            pending: None,
+            confirmed_vote: None,
+            validated_vote: None,
             timeout_vote: None,
             fallback_vote: None,
             round_timeout,
@@ -208,9 +225,24 @@ impl ChainManager {
         })
     }
 
-    /// Returns the most recent vote we cast.
-    pub fn pending(&self) -> Option<&Vote> {
-        self.pending.as_ref()
+    /// Returns the most recent confirmed vote we cast.
+    pub fn confirmed_vote(&self) -> Option<&Vote<ConfirmedBlock>> {
+        self.confirmed_vote.as_ref()
+    }
+
+    /// Returns the most recent validated vote we cast.
+    pub fn validated_vote(&self) -> Option<&Vote<ValidatedBlock>> {
+        self.validated_vote.as_ref()
+    }
+
+    /// Returns the most recent timeout vote we cast.
+    pub fn timeout_vote(&self) -> Option<&Vote<Timeout>> {
+        self.timeout_vote.as_ref()
+    }
+
+    /// Returns the most recent fallback vote we cast.
+    pub fn fallback_vote(&self) -> Option<&Vote<Timeout>> {
+        self.fallback_vote.as_ref()
     }
 
     /// Verifies the safety of a proposed block with respect to voting rules.
@@ -275,7 +307,7 @@ impl ChainManager {
                     .validated_block_certificate
                     .as_ref()
                     .is_some_and(|cert| locked.round <= cert.round),
-                ChainError::HasLockedBlock(locked.value().height(), locked.round)
+                ChainError::HasLockedBlock(locked.executed_block().block.height, locked.round)
             )
         }
         Ok(Outcome::Accept)
@@ -306,7 +338,11 @@ impl ChainManager {
             }
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
-        self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
+        self.timeout_vote = Some(Vote::new(
+            value.try_into().expect("Timeout certificate"),
+            current_round,
+            key_pair,
+        ));
         true
     }
 
@@ -329,32 +365,31 @@ impl ChainManager {
         }
         let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
         let last_regular_round = Round::SingleLeader(u32::MAX);
-        self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
+        self.fallback_vote = Some(Vote::new(
+            value.try_into().expect("Timeout certificate"),
+            last_regular_round,
+            key_pair,
+        ));
         true
     }
 
     /// Verifies that we can vote to confirm a validated block.
-    pub fn check_validated_block(&self, certificate: &Certificate) -> Result<Outcome, ChainError> {
-        let new_block = certificate.value().block();
+    pub fn check_validated_block(
+        &self,
+        certificate: &ValidatedBlockCertificate,
+    ) -> Result<Outcome, ChainError> {
+        let new_block = &certificate.executed_block().block;
         let new_round = certificate.round;
-        if let Some(Vote { value, round, .. }) = &self.pending {
-            match value.inner() {
-                CertificateValue::ConfirmedBlock { executed_block } => {
-                    if Some(&executed_block.block) == new_block && *round == new_round {
-                        return Ok(Outcome::Skip); // We already voted to confirm this block.
-                    }
-                }
-                CertificateValue::ValidatedBlock { .. } => {
-                    ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
-                }
-                CertificateValue::Timeout { .. } => {
-                    // Unreachable: We only put validated or confirmed blocks in pending.
-                    return Err(ChainError::InternalError(
-                        "pending can only be validated or confirmed block".to_string(),
-                    ));
-                }
+        if let Some(Vote { value, round, .. }) = &self.confirmed_vote {
+            if value.inner().inner().block == *new_block && *round == new_round {
+                return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }
+
+        if let Some(Vote { round, .. }) = &self.validated_vote {
+            ensure!(new_round >= *round, ChainError::InsufficientRound(*round))
+        }
+
         // We don't compare to `current_round` here: Non-validators must update their locked block
         // even if it is older than the current round. Validators will only sign in the current
         // round, though. (See `create_final_vote` below.)
@@ -377,7 +412,7 @@ impl ChainManager {
         outcome: BlockExecutionOutcome,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
-    ) {
+    ) -> (&Option<Vote<ValidatedBlock>>, &Option<Vote<ConfirmedBlock>>) {
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
         self.update_current_round(local_time);
@@ -393,7 +428,7 @@ impl ChainManager {
             {
                 let value = HashedCertificateValue::new_validated(executed_block.clone());
                 if let Some(certificate) = lite_cert.with_value(value) {
-                    self.locked = Some(certificate);
+                    self.locked = Some(certificate.into());
                 }
             }
         }
@@ -404,40 +439,52 @@ impl ChainManager {
 
         if let Some(key_pair) = key_pair {
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
-            let value = if round.is_fast() {
-                HashedCertificateValue::new_confirmed(executed_block)
+            if round.is_fast() {
+                self.confirmed_vote = Some(Vote::new(
+                    HashedCertificateValue::new_confirmed(executed_block)
+                        .try_into()
+                        .expect("ConfirmedBlock"),
+                    round,
+                    key_pair,
+                ));
+                self.validated_vote = None
             } else {
-                HashedCertificateValue::new_validated(executed_block)
+                self.validated_vote = Some(Vote::new(
+                    HashedCertificateValue::new_validated(executed_block)
+                        .try_into()
+                        .expect("ValidatedBlock"),
+                    round,
+                    key_pair,
+                ));
+                self.confirmed_vote = None;
             };
-            self.pending = Some(Vote::new(value, round, key_pair));
         }
+
+        (&self.validated_vote, &self.confirmed_vote)
     }
 
     /// Signs a vote to confirm the validated block.
     pub fn create_final_vote(
         &mut self,
-        certificate: Certificate,
+        validated: ValidatedBlockCertificate,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
     ) {
-        let round = certificate.round;
+        let round = validated.round;
         // Validators only change their locked block if the new one is included in a proposal in the
         // current round, or it is itself in the current round.
         if key_pair.is_some() && round < self.current_round {
             return;
         }
-        let Some(value) = certificate.value.validated_to_confirmed() else {
-            // Unreachable: This is only called with validated blocks.
-            error!("Unexpected certificate; expected ValidatedBlock");
-            return;
-        };
-        self.locked = Some(certificate);
+        let confirmed = ConfirmedBlockCertificate::from_validated(validated.clone());
+        self.locked = Some(validated);
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
-            let vote = Vote::new(value, round, key_pair);
+            let vote = Vote::new(confirmed.value().clone(), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
-            self.pending = Some(vote);
+            self.confirmed_vote = Some(vote);
+            self.validated_vote = None;
         }
     }
 
@@ -468,12 +515,11 @@ impl ChainManager {
 
     /// Updates the round number and timer if the timeout certificate is from a higher round than
     /// any known certificate.
-    pub fn handle_timeout_certificate(&mut self, certificate: Certificate, local_time: Timestamp) {
-        if !certificate.value().is_timeout() {
-            // Unreachable: This is only called with timeout certificates.
-            error!("Unexpected certificate; expected leader timeout");
-            return;
-        }
+    pub fn handle_timeout_certificate(
+        &mut self,
+        certificate: TimeoutCertificate,
+        local_time: Timestamp,
+    ) {
         let round = certificate.round;
         if let Some(known_certificate) = &self.timeout {
             if known_certificate.round >= round {
@@ -558,43 +604,62 @@ pub struct ChainManagerInfo {
     /// The configuration of the chain's owners.
     pub ownership: ChainOwnership,
     /// Latest authenticated block that we have received, if requested.
+    #[debug(skip_if = Option::is_none)]
     pub requested_proposed: Option<Box<BlockProposal>>,
     /// Latest validated proposal that we have voted to confirm (or would have, if we are not a
     /// validator).
-    pub requested_locked: Option<Box<Certificate>>,
+    #[debug(skip_if = Option::is_none)]
+    pub requested_locked: Option<Box<ValidatedBlockCertificate>>,
     /// Latest timeout certificate we have seen.
-    pub timeout: Option<Box<Certificate>>,
+    #[debug(skip_if = Option::is_none)]
+    pub timeout: Option<Box<TimeoutCertificate>>,
     /// Latest vote we cast (either to validate or to confirm a block).
+    #[debug(skip_if = Option::is_none)]
     pub pending: Option<LiteVote>,
     /// Latest timeout vote we cast.
+    #[debug(skip_if = Option::is_none)]
     pub timeout_vote: Option<LiteVote>,
     /// Fallback vote we cast.
+    #[debug(skip_if = Option::is_none)]
     pub fallback_vote: Option<LiteVote>,
     /// The value we voted for, if requested.
-    pub requested_pending_value: Option<Box<HashedCertificateValue>>,
+    #[debug(skip_if = Option::is_none)]
+    pub requested_confirmed: Option<Box<Hashed<ConfirmedBlock>>>,
+    /// The value we voted for, if requested.
+    #[debug(skip_if = Option::is_none)]
+    pub requested_validated: Option<Box<Hashed<ValidatedBlock>>>,
     /// The current round, i.e. the lowest round where we can still vote to validate a block.
     pub current_round: Round,
     /// The current leader, who is allowed to propose the next block.
     /// `None` if everyone is allowed to propose.
+    #[debug(skip_if = Option::is_none)]
     pub leader: Option<Owner>,
     /// The timestamp when the current round times out.
+    #[debug(skip_if = Option::is_none)]
     pub round_timeout: Option<Timestamp>,
     /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
+    #[debug(skip_if = BTreeMap::is_empty)]
     pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 impl From<&ChainManager> for ChainManagerInfo {
     fn from(manager: &ChainManager) -> Self {
         let current_round = manager.current_round;
+        let pending = manager
+            .confirmed_vote
+            .as_ref()
+            .map(|vote| vote.lite())
+            .or_else(move || manager.validated_vote.as_ref().map(|vote| vote.lite()));
         ChainManagerInfo {
             ownership: manager.ownership.clone(),
             requested_proposed: None,
             requested_locked: None,
             timeout: manager.timeout.clone().map(Box::new),
-            pending: manager.pending.as_ref().map(|vote| vote.lite()),
+            pending,
             timeout_vote: manager.timeout_vote.as_ref().map(Vote::lite),
             fallback_vote: manager.fallback_vote.as_ref().map(Vote::lite),
-            requested_pending_value: None,
+            requested_confirmed: None,
+            requested_validated: None,
             current_round,
             leader: manager.round_leader(current_round).cloned(),
             round_timeout: manager.round_timeout,
@@ -608,8 +673,12 @@ impl ChainManagerInfo {
     pub fn add_values(&mut self, manager: &ChainManager) {
         self.requested_proposed = manager.proposed.clone().map(Box::new);
         self.requested_locked = manager.locked.clone().map(Box::new);
-        self.requested_pending_value = manager
-            .pending
+        self.requested_confirmed = manager
+            .confirmed_vote
+            .as_ref()
+            .map(|vote| Box::new(vote.value.clone()));
+        self.requested_validated = manager
+            .validated_vote
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
         self.pending_blobs = manager.pending_blobs.clone();
@@ -618,10 +687,7 @@ impl ChainManagerInfo {
     /// Gets the highest validated block.
     pub fn highest_validated_block(&self) -> Option<&Block> {
         if let Some(certificate) = &self.requested_locked {
-            let block = certificate.value().block();
-            if block.is_some() {
-                return block;
-            }
+            return Some(&certificate.executed_block().block);
         }
 
         if let Some(proposal) = &self.requested_proposed {
@@ -631,5 +697,15 @@ impl ChainManagerInfo {
         }
 
         None
+    }
+
+    /// Returns whether the `identity` is allowed to propose a block in `round`.
+    /// This is dependant on the type of round and whether `identity` is a validator or (super)owner.
+    pub fn can_propose(&self, identity: &Owner, round: Round) -> bool {
+        match round {
+            Round::Fast => self.ownership.super_owners.contains_key(identity),
+            Round::MultiLeader(_) => true,
+            Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
+        }
     }
 }

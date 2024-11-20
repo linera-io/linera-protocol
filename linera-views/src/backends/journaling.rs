@@ -103,7 +103,7 @@ struct JournalHeader {
 #[derive(Clone)]
 pub struct JournalingKeyValueStore<K> {
     /// The inner store.
-    pub store: K,
+    store: K,
 }
 
 impl<K> DeletePrefixExpander for &JournalingKeyValueStore<K>
@@ -179,6 +179,10 @@ where
     K: AdminKeyValueStore + Send + Sync,
 {
     type Config = K::Config;
+
+    fn get_name() -> String {
+        format!("journaling {}", K::get_name())
+    }
 
     async fn connect(
         config: &Self::Config,

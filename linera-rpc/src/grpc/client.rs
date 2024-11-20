@@ -10,7 +10,10 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
     time::Duration,
 };
-use linera_chain::data_types::{self, Certificate, CertificateValue, HashedCertificateValue};
+use linera_chain::{
+    data_types::{self},
+    types::{self, Certificate, CertificateValue, HashedCertificateValue},
+};
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
@@ -29,12 +32,9 @@ use super::{
         self, chain_info_result::Inner, validator_node_client::ValidatorNodeClient,
         SubscriptionRequest,
     },
-    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
+    transport, GRPC_MAX_MESSAGE_SIZE,
 };
-use crate::{
-    config::ValidatorPublicNetworkConfig, node_provider::NodeOptions, HandleCertificateRequest,
-    HandleLiteCertRequest,
-};
+use crate::{HandleCertificateRequest, HandleLiteCertRequest, NodeOptions};
 
 #[derive(Clone)]
 pub struct GrpcClient {
@@ -46,23 +46,31 @@ pub struct GrpcClient {
 
 impl GrpcClient {
     pub fn new(
-        network: ValidatorPublicNetworkConfig,
-        options: NodeOptions,
-    ) -> Result<Self, GrpcError> {
-        let address = network.http_address();
-
-        let channel =
-            transport::create_channel(address.clone(), &transport::Options::from(&options))?;
+        address: String,
+        channel: transport::Channel,
+        retry_delay: Duration,
+        max_retries: u32,
+    ) -> Self {
         let client = ValidatorNodeClient::new(channel)
             .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
-
-        Ok(Self {
+        Self {
             address,
             client,
-            retry_delay: options.retry_delay,
-            max_retries: options.max_retries,
-        })
+            retry_delay,
+            max_retries,
+        }
+    }
+
+    pub fn create(address: String, node_options: NodeOptions) -> Self {
+        let options = (&node_options).into();
+        let channel = transport::create_channel(address.clone(), &options).unwrap();
+        Self::new(
+            address,
+            channel,
+            node_options.retry_delay,
+            node_options.max_retries,
+        )
     }
 
     /// Returns whether this gRPC status means the server stream should be reconnected to, or not.
@@ -179,7 +187,7 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, fields(address = self.address))]
     async fn handle_lite_certificate(
         &self,
-        certificate: data_types::LiteCertificate<'_>,
+        certificate: types::LiteCertificate<'_>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
@@ -354,6 +362,12 @@ impl ValidatorNode for GrpcClient {
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         let req = api::BlobId::try_from(blob_id)?;
         Ok(client_delegate!(self, blob_last_used_by, req)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err, fields(address = self.address))]
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+        let req = api::BlobIds::try_from(blob_ids)?;
+        Ok(client_delegate!(self, missing_blob_ids, req)?.try_into()?)
     }
 }
 

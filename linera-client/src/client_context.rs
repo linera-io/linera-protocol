@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(with_testing)]
+use std::num::NonZeroUsize;
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
@@ -15,7 +17,7 @@ use linera_base::{
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
-use linera_chain::data_types::Certificate;
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     client::{BlanketMessagePolicy, ChainClient, Client, MessagePolicy},
     data_types::ClientOutcome,
@@ -35,6 +37,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
+    linera_chain::types::{Certificate, GenericCertificate, Has},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
@@ -170,6 +173,7 @@ where
             options.long_lived_services,
             chain_ids,
             name,
+            options.max_loaded_chains,
         );
 
         ClientContext {
@@ -205,7 +209,16 @@ where
             1 => format!("Client node for {:.8}", chain_ids[0]),
             n => format!("Client node for {:.8} and {} others", chain_ids[0], n - 1),
         };
-        let client = Client::new(node_provider, storage, 10, delivery, false, chain_ids, name);
+        let client = Client::new(
+            node_provider,
+            storage,
+            10,
+            delivery,
+            false,
+            chain_ids,
+            name,
+            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
+        );
 
         ClientContext {
             client: Arc::new(client),
@@ -349,7 +362,7 @@ where
     pub async fn process_inbox(
         &mut self,
         chain_client: &ChainClient<NodeProvider, S>,
-    ) -> Result<Vec<Certificate>, Error> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, Error> {
         let mut certificates = Vec::new();
         // Try processing the inbox optimistically without waiting for validator notifications.
         let (new_certificates, maybe_timeout) = {
@@ -625,10 +638,7 @@ where
                 .execute_without_prepare(operations)
                 .await?
                 .expect("should execute block with OpenChain operations");
-            let executed_block = certificate
-                .value()
-                .executed_block()
-                .expect("certificate should be confirmed block");
+            let executed_block = certificate.executed_block();
             let timestamp = executed_block.block.timestamp;
             for i in 0..num_new_chains {
                 let message_id = executed_block
@@ -792,14 +802,20 @@ where
     }
 
     /// Tries to aggregate votes into certificates.
-    pub fn make_benchmark_certificates_from_votes(&self, votes: Vec<Vote>) -> Vec<Certificate> {
+    pub fn make_benchmark_certificates_from_votes<T>(
+        &self,
+        votes: Vec<Vote<T>>,
+    ) -> Vec<GenericCertificate<T>>
+    where
+        T: std::fmt::Debug + Clone + Has<ChainId>,
+    {
         let committee = self.wallet.genesis_config().create_committee();
         let mut aggregators = HashMap::new();
         let mut certificates = Vec::new();
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = vote.value().chain_id();
+            let chain_id = *Has::<ChainId>::get(vote.value());
             if done_senders.contains(&chain_id) {
                 continue;
             }
@@ -888,9 +904,11 @@ where
                         self.recv_timeout,
                     ))
                 }
-                NetworkProtocol::Grpc { .. } => Box::new(
-                    GrpcClient::new(config.network.clone(), self.make_node_options()).unwrap(),
-                ),
+                NetworkProtocol::Grpc { .. } => {
+                    let node_options = self.make_node_options();
+                    let address = config.network.http_address();
+                    Box::new(GrpcClient::create(address, node_options))
+                }
             };
 
             validator_clients.push(client);

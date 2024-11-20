@@ -28,7 +28,7 @@ use crate::cli_wrappers::{
     kubectl::KubectlInstance,
     local_net::PathProvider,
     util::get_github_root,
-    ClientWrapper, LineraNet, LineraNetConfig, Network,
+    ClientWrapper, LineraNet, LineraNetConfig, Network, OnClientDrop,
 };
 
 #[cfg(with_testing)]
@@ -257,6 +257,7 @@ impl LineraNet for LocalKubernetesNet {
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
+            OnClientDrop::LeakChains,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);

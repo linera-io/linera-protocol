@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, vec};
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::PublicKey,
+    crypto::{CryptoHash, PublicKey},
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
@@ -22,21 +22,13 @@ use linera_execution::{
         create_dummy_user_application_registrations, register_mock_applications, ExpectedCall,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, MessageKind, Operation,
-    OperationContext, Query, QueryContext, RawExecutionOutcome, RawOutgoingMessage,
-    ResourceControlPolicy, ResourceController, Response, SystemOperation, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
+    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemExecutionError,
+    SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
-
-fn make_operation_context() -> OperationContext {
-    OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: Some(0),
-        authenticated_signer: None,
-        authenticated_caller_id: None,
-    }
-}
+use test_case::test_case;
 
 #[tokio::test]
 async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
@@ -1488,7 +1480,8 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 async fn test_open_chain() {
     let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
-    let ownership = ChainOwnership::single(PublicKey::test_key(1));
+    let chain_key = PublicKey::test_key(1);
+    let ownership = ChainOwnership::single(chain_key);
     let child_ownership = ChainOwnership::single(PublicKey::test_key(2));
     let state = SystemExecutionState {
         committees: committees.clone(),
@@ -1502,6 +1495,7 @@ async fn test_open_chain() {
 
     let context = OperationContext {
         height: BlockHeight(1),
+        authenticated_signer: Some(chain_key.into()),
         ..make_operation_context()
     };
     let first_message_index = 5;
@@ -1666,4 +1660,131 @@ async fn test_close_chain() {
     .await
     .unwrap();
     assert!(view.system.closed.get());
+}
+
+/// Tests an application attempting to transfer the tokens in the chain's balance while executing
+/// messages.
+#[test_case(
+    Some(PublicKey::test_key(1)), Some(PublicKey::test_key(1).into())
+    => matches Ok(Ok(()));
+    "works if sender is a receiving chain owner"
+)]
+#[test_case(
+    Some(PublicKey::test_key(1)), Some(PublicKey::test_key(2).into())
+    => matches Ok(Err(
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
+    ));
+    "fails if sender is not a receiving chain owner"
+)]
+#[test_case(
+    Some(PublicKey::test_key(1)), None
+    => matches Ok(Err(
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
+    ));
+    "fails if unauthenticated"
+)]
+#[test_case(
+    None, None
+    => matches Ok(Err(
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
+    ));
+    "fails if unauthenticated and receiving chain has no owners"
+)]
+#[test_case(
+    None, Some(PublicKey::test_key(1).into())
+    => matches Ok(Err(
+        ExecutionError::SystemError(SystemExecutionError::UnauthenticatedTransferOwner)
+    ));
+    "fails if receiving chain has no owners"
+)]
+#[tokio::test]
+async fn test_message_receipt_spending_chain_balance(
+    receiving_chain_owner_key: Option<PublicKey>,
+    authenticated_signer: Option<Owner>,
+) -> anyhow::Result<Result<(), ExecutionError>> {
+    let amount = Amount::ONE;
+    let super_owners = receiving_chain_owner_key
+        .into_iter()
+        .map(|key| (Owner::from(key), key))
+        .collect();
+
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balance: amount,
+        ownership: ChainOwnership {
+            super_owners,
+            ..ChainOwnership::default()
+        },
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let mut applications = register_mock_applications(&mut view, 1).await?;
+    let (application_id, application, _, _) = applications
+        .next()
+        .expect("Caller mock application should be registered");
+
+    let receiver_chain_account = None;
+    let sender_chain_id = ChainId::root(2);
+    let recipient = Account {
+        chain_id: sender_chain_id,
+        owner: None,
+    };
+
+    application.expect_call(ExpectedCall::execute_message(
+        move |runtime, _context, _operation| {
+            runtime.transfer(receiver_chain_account, recipient, amount)?;
+            Ok(())
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = make_message_context(authenticated_signer);
+    let mut controller = ResourceController::default();
+    let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
+
+    let execution_result = view
+        .execute_message(
+            context,
+            Timestamp::from(0),
+            Message::User {
+                application_id,
+                bytes: vec![],
+            },
+            None,
+            &mut txn_tracker,
+            &mut controller,
+        )
+        .await;
+
+    Ok(execution_result)
+}
+
+/// Creates a dummy [`OperationContext`] to use in tests.
+fn make_operation_context() -> OperationContext {
+    OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: Some(0),
+        authenticated_signer: None,
+        authenticated_caller_id: None,
+    }
+}
+
+/// Creates a dummy [`MessageContext`] to use in tests.
+fn make_message_context(authenticated_signer: Option<Owner>) -> MessageContext {
+    MessageContext {
+        chain_id: ChainId::root(0),
+        is_bouncing: false,
+        authenticated_signer,
+        refund_grant_to: None,
+        height: BlockHeight(0),
+        certificate_hash: CryptoHash::test_hash("block receiving a message"),
+        message_id: MessageId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight(0),
+            index: 0,
+        },
+    }
 }

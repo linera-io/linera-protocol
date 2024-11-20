@@ -9,7 +9,7 @@ use std::{
 use async_graphql::{OneofObject, SimpleObject};
 use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
-use linera_chain::data_types::HashedCertificateValue;
+use linera_chain::types::HashedCertificateValue;
 use linera_execution::Operation;
 use linera_indexer::{
     common::IndexerError,

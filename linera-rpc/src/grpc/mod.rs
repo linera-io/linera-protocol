@@ -27,7 +27,7 @@ pub enum GrpcError {
     #[error("failed to communicate cross-chain queries: {0}")]
     CrossChain(#[from] tonic::Status),
 
-    #[error("failed to execute task to completion")]
+    #[error("failed to execute task to completion: {0}")]
     Join(#[from] futures::channel::oneshot::Canceled),
 
     #[error("failed to parse socket address: {0}")]

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
     prometheus::HistogramVec,
 };
 
@@ -25,15 +25,12 @@ use crate::{
 #[cfg(with_metrics)]
 /// The runtime of hash computation
 static SET_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "set_view_hash_runtime",
         "SetView hash runtime",
         &[],
-        Some(vec![
-            0.001, 0.003, 0.01, 0.03, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.0, 5.0,
-        ]),
+        bucket_latencies(5.0),
     )
-    .expect("Histogram can be created")
 });
 
 /// A [`View`] that supports inserting and removing values indexed by a key.

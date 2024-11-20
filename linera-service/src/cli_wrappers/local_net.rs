@@ -34,7 +34,9 @@ use tonic_health::pb::{
 use tracing::{info, warn};
 
 use crate::{
-    cli_wrappers::{ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig},
+    cli_wrappers::{
+        ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
+    },
     util::ChildExt,
 };
 
@@ -83,7 +85,9 @@ async fn make_testing_config(database: Database) -> Result<StorageConfig> {
             #[cfg(feature = "scylladb")]
             {
                 let config = ScyllaDbStore::new_test_config().await?;
-                Ok(StorageConfig::ScyllaDb { uri: config.uri })
+                Ok(StorageConfig::ScyllaDb {
+                    uri: config.inner_config.uri,
+                })
             }
             #[cfg(not(feature = "scylladb"))]
             panic!("Database::ScyllaDb is selected without the feature sctlladb");
@@ -317,6 +321,7 @@ impl LineraNet for LocalNet {
             self.network.external,
             self.testing_prng_seed,
             self.next_client_id,
+            OnClientDrop::LeakChains,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);

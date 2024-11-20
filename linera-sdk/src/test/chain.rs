@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
-use linera_chain::{data_types::Certificate, ChainError, ChainExecutionContext};
+use linera_chain::{types::Certificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
@@ -209,7 +209,7 @@ impl ActiveChain {
             .await;
 
         let executed_block = certificate
-            .value()
+            .inner()
             .executed_block()
             .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);
@@ -319,7 +319,7 @@ impl ActiveChain {
             .await
             .as_ref()
             .expect("Block was not successfully added")
-            .value()
+            .inner()
             .height()
     }
 
@@ -364,7 +364,7 @@ impl ActiveChain {
             .await;
 
         let executed_block = creation_certificate
-            .value()
+            .inner()
             .executed_block()
             .expect("Failed to obtain executed block from certificate");
         assert_eq!(executed_block.messages().len(), 1);
@@ -431,8 +431,11 @@ impl ActiveChain {
                 if matches!(
                     &*boxed_chain_error,
                     ChainError::ExecutionError(
-                        ExecutionError::SystemError(SystemExecutionError::UnknownApplicationId(_)),
+                        execution_error,
                         ChainExecutionContext::DescribeApplication,
+                    ) if matches!(
+                        **execution_error,
+                        ExecutionError::SystemError(SystemExecutionError::UnknownApplicationId(_))
                     )
                 ) =>
             {

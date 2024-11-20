@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    borrow::Cow,
     collections::{HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
@@ -13,7 +12,7 @@ use std::{
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
 use linera_base::{
-    crypto::{CryptoHash, KeyPair},
+    crypto::{CryptoError, CryptoHash, KeyPair},
     data_types::{
         ArithmeticError, Blob, BlockHeight, DecompressionError, Round, UserApplicationDescription,
     },
@@ -23,13 +22,17 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        Block, BlockExecutionOutcome, BlockProposal, Certificate, CertificateValue, ExecutedBlock,
-        HashedCertificateValue, LiteCertificate, MessageBundle, Origin, Target,
+        Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
-    ChainStateView,
+    types::{
+        Certificate, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, Hashed,
+        LiteCertificate, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+    },
+    ChainError, ChainStateView,
 };
-use linera_execution::{committee::Epoch, Query, Response};
+use linera_execution::{committee::Epoch, ExecutionError, Query, Response};
 use linera_storage::Storage;
+use linera_views::views::ViewError;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -37,7 +40,9 @@ use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{error, instrument, trace, warn, Instrument as _};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util,
+    linera_base::prometheus_util::{
+        bucket_interval, register_histogram_vec, register_int_counter_vec,
+    },
     prometheus::{HistogramVec, IntCounterVec},
     std::sync::LazyLock,
 };
@@ -56,40 +61,31 @@ mod worker_tests;
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "num_rounds_in_certificate",
         "Number of rounds in certificate",
         &["certificate_value", "round_type"],
-        Some(vec![
-            0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
-        ]),
+        bucket_interval(0.1, 50.0),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
 static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "num_rounds_in_block_proposal",
         "Number of rounds in block proposal",
         &["round_type"],
-        Some(vec![
-            0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 15.0, 25.0, 50.0,
-        ]),
+        bucket_interval(0.1, 50.0),
     )
-    .expect("Counter creation should not fail")
 });
 
 #[cfg(with_metrics)]
-static TRANSACTION_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("transaction_count", "Transaction count", &[])
-        .expect("Counter creation should not fail")
-});
+static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
+    LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
 
 #[cfg(with_metrics)]
 static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-    prometheus_util::register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
-        .expect("Counter creation should not fail")
+    register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
 });
 
 /// Instruct the networking layer to send cross-chain requests and/or push notifications.
@@ -141,22 +137,22 @@ pub enum Reason {
 #[derive(Debug, Error)]
 pub enum WorkerError {
     #[error(transparent)]
-    CryptoError(#[from] linera_base::crypto::CryptoError),
+    CryptoError(#[from] CryptoError),
 
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
     #[error(transparent)]
-    ViewError(#[from] linera_views::views::ViewError),
+    ViewError(ViewError),
 
     #[error(transparent)]
-    ChainError(#[from] Box<linera_chain::ChainError>),
+    ChainError(#[from] Box<ChainError>),
 
     // Chain access control
     #[error("Block was not signed by an authorized owner")]
     InvalidOwner,
 
-    #[error("Operations in the block are not authenticated by the proper signer")]
+    #[error("Operations in the block are not authenticated by the proper signer: {0}")]
     InvalidSigner(Owner),
 
     // Chaining
@@ -189,8 +185,8 @@ pub enum WorkerError {
     "
     )]
     IncorrectOutcome {
-        computed: BlockExecutionOutcome,
-        submitted: BlockExecutionOutcome,
+        computed: Box<BlockExecutionOutcome>,
+        submitted: Box<BlockExecutionOutcome>,
     },
     #[error("The timestamp of a Tick operation is in the future.")]
     InvalidTimestamp,
@@ -206,7 +202,7 @@ pub enum WorkerError {
     MissingExecutedBlockInProposal,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
-    #[error("The following blobs are missing: {0:?}.")]
+    #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
@@ -222,10 +218,32 @@ pub enum WorkerError {
     Decompression(#[from] DecompressionError),
 }
 
-impl From<linera_chain::ChainError> for WorkerError {
+impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
-    fn from(chain_error: linera_chain::ChainError) -> Self {
-        WorkerError::ChainError(Box::new(chain_error))
+    fn from(chain_error: ChainError) -> Self {
+        match chain_error {
+            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            ChainError::ExecutionError(execution_error, context) => {
+                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
+                    Self::BlobsNotFound(blob_ids)
+                } else {
+                    Self::ChainError(Box::new(ChainError::ExecutionError(
+                        execution_error,
+                        context,
+                    )))
+                }
+            }
+            error => Self::ChainError(Box::new(error)),
+        }
+    }
+}
+
+impl From<ViewError> for WorkerError {
+    fn from(view_error: ViewError) -> Self {
+        match view_error {
+            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            error => Self::ViewError(error),
+        }
     }
 }
 
@@ -241,8 +259,8 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    /// Cached hashed certificate values by hash.
-    recent_hashed_certificate_values: Arc<ValueCache<CryptoHash, HashedCertificateValue>>,
+    recent_confirmed_value_cache: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
+    recent_validated_value_cache: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -275,7 +293,8 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            recent_hashed_certificate_values: Arc::new(ValueCache::default()),
+            recent_confirmed_value_cache: Arc::new(ValueCache::default()),
+            recent_validated_value_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -294,7 +313,8 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            recent_hashed_certificate_values: Arc::new(ValueCache::default()),
+            recent_confirmed_value_cache: Arc::new(ValueCache::default()),
+            recent_validated_value_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -374,17 +394,19 @@ where
         &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Certificate, WorkerError> {
-        self.recent_hashed_certificate_values
-            .full_certificate(certificate)
+        match self
+            .recent_confirmed_value_cache
+            .full_certificate(certificate.clone())
             .await
-    }
-
-    #[instrument(level = "trace", skip(self, hash))]
-    pub(crate) async fn recent_hashed_certificate_value(
-        &self,
-        hash: &CryptoHash,
-    ) -> Option<HashedCertificateValue> {
-        self.recent_hashed_certificate_values.get(hash).await
+        {
+            Ok(certificate) => Ok(certificate.into()),
+            Err(WorkerError::MissingCertificateValue) => Ok(self
+                .recent_validated_value_cache
+                .full_certificate(certificate)
+                .await
+                .map(Into::into)?),
+            Err(other) => Err(other),
+        }
     }
 }
 
@@ -476,14 +498,11 @@ where
     )]
     async fn process_confirmed_block(
         &self,
-        certificate: Certificate,
+        certificate: ConfirmedBlockCertificate,
         blobs: &[Blob],
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::ConfirmedBlock { executed_block, .. } = certificate.value() else {
-            panic!("Expecting a confirmation certificate");
-        };
-        let chain_id = executed_block.block.chain_id;
+        let chain_id = certificate.executed_block().block.chain_id;
 
         let (response, actions) = self
             .query_chain_worker(chain_id, move |callback| {
@@ -506,16 +525,12 @@ where
     #[instrument(level = "trace", skip(self, certificate))]
     async fn process_validated_block(
         &self,
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         blobs: &[Blob],
     ) -> Result<(ChainInfoResponse, NetworkActions, bool), WorkerError> {
-        let CertificateValue::ValidatedBlock {
-            executed_block: ExecutedBlock { block, .. },
-        } = certificate.value()
-        else {
-            panic!("Expecting a validation certificate");
-        };
-        self.query_chain_worker(block.chain_id, move |callback| {
+        let chain_id = certificate.executed_block().block.chain_id;
+
+        self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessValidatedBlock {
                 certificate,
                 blobs: blobs.to_owned(),
@@ -529,12 +544,10 @@ where
     #[instrument(level = "trace", skip(self, certificate))]
     async fn process_timeout(
         &self,
-        certificate: Certificate,
+        certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let CertificateValue::Timeout { chain_id, .. } = certificate.value() else {
-            panic!("Expecting a leader timeout certificate");
-        };
-        self.query_chain_worker(*chain_id, move |callback| {
+        let chain_id = certificate.inner().chain_id;
+        self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ProcessTimeout {
                 certificate,
                 callback,
@@ -560,15 +573,6 @@ where
         .await
     }
 
-    /// Inserts a [`HashedCertificateValue`] into the worker's cache.
-    #[instrument(level = "trace", skip(self, value))]
-    pub(crate) async fn cache_recent_hashed_certificate_value<'a>(
-        &self,
-        value: Cow<'a, HashedCertificateValue>,
-    ) -> bool {
-        self.recent_hashed_certificate_values.insert(value).await
-    }
-
     /// Returns a stored [`Certificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height))]
     #[cfg(with_testing)]
@@ -576,7 +580,7 @@ where
         &self,
         chain_id: ChainId,
         height: BlockHeight,
-    ) -> Result<Option<Certificate>, WorkerError> {
+    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
         self.query_chain_worker(chain_id, move |callback| {
             ChainWorkerRequest::ReadCertificate { height, callback }
         })
@@ -651,7 +655,8 @@ where
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
-                self.recent_hashed_certificate_values.clone(),
+                self.recent_confirmed_value_cache.clone(),
+                self.recent_validated_value_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,
@@ -761,8 +766,8 @@ where
     /// Processes a certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.value().chain_id()),
-        height = %certificate.value().height(),
+        chain_id = format!("{:.8}", certificate.inner().chain_id()),
+        height = %certificate.inner().height(),
     ))]
     pub async fn handle_certificate(
         &self,
@@ -775,15 +780,19 @@ where
         #[cfg(with_metrics)]
         let (round, log_str, mut confirmed_transactions, mut duplicated) = (
             certificate.round,
-            certificate.value().to_log_str(),
+            certificate.inner().to_log_str(),
             0u64,
             false,
         );
 
-        let (info, actions) = match certificate.value() {
+        let (info, actions) = match certificate.inner() {
             CertificateValue::ValidatedBlock { .. } => {
                 // Confirm the validated block.
-                let validation_outcomes = self.process_validated_block(certificate, &blobs).await?;
+                // Note: This conversion panics if `certificate` is not a validated block certificate.
+                let validated_block_certificate: ValidatedBlockCertificate = certificate.into();
+                let validation_outcomes = self
+                    .process_validated_block(validated_block_certificate, &blobs)
+                    .await?;
                 #[cfg(with_metrics)]
                 {
                     duplicated = validation_outcomes.2;
@@ -791,18 +800,18 @@ where
                 let (info, actions, _) = validation_outcomes;
                 (info, actions)
             }
-            CertificateValue::ConfirmedBlock {
-                executed_block: _executed_block,
-            } => {
+            CertificateValue::ConfirmedBlock(_confirmed) => {
                 #[cfg(with_metrics)]
                 {
-                    confirmed_transactions = (_executed_block.block.incoming_bundles.len()
-                        + _executed_block.block.operations.len())
+                    confirmed_transactions = (_confirmed.inner().block.incoming_bundles.len()
+                        + _confirmed.inner().block.operations.len())
                         as u64;
                 }
+                let confirmed_block_certificate: ConfirmedBlockCertificate =
+                    certificate.try_into().unwrap();
                 // Execute the confirmed block.
                 self.process_confirmed_block(
-                    certificate,
+                    confirmed_block_certificate,
                     &blobs,
                     notify_when_messages_are_delivered,
                 )
@@ -810,7 +819,10 @@ where
             }
             CertificateValue::Timeout { .. } => {
                 // Handle the leader timeout.
-                self.process_timeout(certificate).await?
+                // Note: This conversion panics if `certificate` is not a timeout certificate
+                // but we just checked that it is.
+                let timeout_certificate = certificate.into();
+                self.process_timeout(timeout_certificate).await?
             }
         };
 

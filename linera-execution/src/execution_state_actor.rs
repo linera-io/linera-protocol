@@ -3,15 +3,16 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::fmt::{self, Debug, Formatter};
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
 
+use custom_debug_derive::Debug;
 use futures::channel::mpsc;
 #[cfg(with_metrics)]
-use linera_base::prometheus_util::{self, MeasureLatency as _};
+use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency as _};
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
+    hex_debug, hex_vec_debug,
     identifiers::{Account, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
@@ -32,31 +33,23 @@ use crate::{
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a contract bytecode.
 static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "load_contract_latency",
         "Load contract latency",
         &[],
-        Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            100.0, 250.0,
-        ]),
+        bucket_latencies(250.0),
     )
-    .expect("Histogram creation should not fail")
 });
 
 #[cfg(with_metrics)]
 /// Histogram of the latency to load a service bytecode.
 static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "load_service_latency",
         "Load service latency",
         &[],
-        Some(vec![
-            0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0,
-            100.0, 250.0,
-        ]),
+        bucket_latencies(250.0),
     )
-    .expect("Histogram creation should not fail")
 });
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
@@ -317,11 +310,7 @@ where
             }
 
             ReadBlobContent { blob_id, callback } => {
-                let blob = self
-                    .system
-                    .read_blob_content(blob_id)
-                    .await
-                    .map_err(|_| SystemExecutionError::BlobNotFoundOnRead(blob_id))?;
+                let blob = self.system.read_blob_content(blob_id).await?;
                 callback.respond(blob);
             }
 
@@ -336,41 +325,51 @@ where
 }
 
 /// Requests to the execution state.
+#[derive(Debug)]
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {
         id: UserApplicationId,
+        #[debug(skip)]
         callback: Sender<(UserContractCode, UserApplicationDescription)>,
     },
 
     #[cfg(not(web))]
     LoadService {
         id: UserApplicationId,
+        #[debug(skip)]
         callback: Sender<(UserServiceCode, UserApplicationDescription)>,
     },
 
     ChainBalance {
+        #[debug(skip)]
         callback: Sender<Amount>,
     },
 
     OwnerBalance {
         owner: Owner,
+        #[debug(skip)]
         callback: Sender<Amount>,
     },
 
     OwnerBalances {
+        #[debug(skip)]
         callback: Sender<Vec<(Owner, Amount)>>,
     },
 
     BalanceOwners {
+        #[debug(skip)]
         callback: Sender<Vec<Owner>>,
     },
 
     Transfer {
+        #[debug(skip_if = Option::is_none)]
         source: Option<Owner>,
         destination: Account,
         amount: Amount,
+        #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
+        #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
 
@@ -378,238 +377,115 @@ pub enum ExecutionRequest {
         source: Account,
         destination: Account,
         amount: Amount,
+        #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
+        #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
 
     SystemTimestamp {
+        #[debug(skip)]
         callback: Sender<Timestamp>,
     },
 
     ChainOwnership {
+        #[debug(skip)]
         callback: Sender<ChainOwnership>,
     },
 
     ReadValueBytes {
         id: UserApplicationId,
+        #[debug(with = hex_debug)]
         key: Vec<u8>,
+        #[debug(skip)]
         callback: Sender<Option<Vec<u8>>>,
     },
 
     ContainsKey {
         id: UserApplicationId,
         key: Vec<u8>,
+        #[debug(skip)]
         callback: Sender<bool>,
     },
 
     ContainsKeys {
         id: UserApplicationId,
+        #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
         callback: Sender<Vec<bool>>,
     },
 
     ReadMultiValuesBytes {
         id: UserApplicationId,
+        #[debug(with = hex_vec_debug)]
         keys: Vec<Vec<u8>>,
+        #[debug(skip)]
         callback: Sender<Vec<Option<Vec<u8>>>>,
     },
 
     FindKeysByPrefix {
         id: UserApplicationId,
+        #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
+        #[debug(skip)]
         callback: Sender<Vec<Vec<u8>>>,
     },
 
     FindKeyValuesByPrefix {
         id: UserApplicationId,
+        #[debug(with = hex_debug)]
         key_prefix: Vec<u8>,
+        #[debug(skip)]
         callback: Sender<Vec<(Vec<u8>, Vec<u8>)>>,
     },
 
     WriteBatch {
         id: UserApplicationId,
         batch: Batch,
+        #[debug(skip)]
         callback: Sender<()>,
     },
 
     OpenChain {
         ownership: ChainOwnership,
+        #[debug(skip_if = Amount::is_zero)]
         balance: Amount,
         next_message_id: MessageId,
         application_permissions: ApplicationPermissions,
+        #[debug(skip)]
         callback: Sender<[RawOutgoingMessage<SystemMessage, Amount>; 2]>,
     },
 
     CloseChain {
         application_id: UserApplicationId,
+        #[debug(skip)]
         callback: oneshot::Sender<Result<(), ExecutionError>>,
     },
 
     FetchUrl {
         url: String,
+        #[debug(skip)]
         callback: Sender<Vec<u8>>,
     },
 
     HttpPost {
         url: String,
         content_type: String,
+        #[debug(with = hex_debug)]
         payload: Vec<u8>,
+        #[debug(skip)]
         callback: oneshot::Sender<Vec<u8>>,
     },
 
     ReadBlobContent {
         blob_id: BlobId,
+        #[debug(skip)]
         callback: Sender<BlobContent>,
     },
 
     AssertBlobExists {
         blob_id: BlobId,
+        #[debug(skip)]
         callback: Sender<()>,
     },
-}
-
-impl Debug for ExecutionRequest {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        match self {
-            #[cfg(not(web))]
-            ExecutionRequest::LoadContract { id, .. } => formatter
-                .debug_struct("ExecutionRequest::LoadContract")
-                .field("id", id)
-                .finish_non_exhaustive(),
-
-            #[cfg(not(web))]
-            ExecutionRequest::LoadService { id, .. } => formatter
-                .debug_struct("ExecutionRequest::LoadService")
-                .field("id", id)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ChainBalance { .. } => formatter
-                .debug_struct("ExecutionRequest::ChainBalance")
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::OwnerBalance { owner, .. } => formatter
-                .debug_struct("ExecutionRequest::OwnerBalance")
-                .field("owner", owner)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::OwnerBalances { .. } => formatter
-                .debug_struct("ExecutionRequest::OwnerBalances")
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::BalanceOwners { .. } => formatter
-                .debug_struct("ExecutionRequest::BalanceOwners")
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::Transfer {
-                source,
-                destination,
-                amount,
-                signer,
-                ..
-            } => formatter
-                .debug_struct("ExecutionRequest::Transfer")
-                .field("source", source)
-                .field("destination", destination)
-                .field("amount", amount)
-                .field("signer", signer)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::Claim {
-                source,
-                destination,
-                amount,
-                signer,
-                ..
-            } => formatter
-                .debug_struct("ExecutionRequest::Claim")
-                .field("source", source)
-                .field("destination", destination)
-                .field("amount", amount)
-                .field("signer", signer)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::SystemTimestamp { .. } => formatter
-                .debug_struct("ExecutionRequest::SystemTimestamp")
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ChainOwnership { .. } => formatter
-                .debug_struct("ExecutionRequest::ChainOwnership")
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ReadValueBytes { id, key, .. } => formatter
-                .debug_struct("ExecutionRequest::ReadValueBytes")
-                .field("id", id)
-                .field("key", key)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ContainsKey { id, key, .. } => formatter
-                .debug_struct("ExecutionRequest::ContainsKey")
-                .field("id", id)
-                .field("key", key)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ContainsKeys { id, keys, .. } => formatter
-                .debug_struct("ExecutionRequest::ContainsKeys")
-                .field("id", id)
-                .field("keys", keys)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ReadMultiValuesBytes { id, keys, .. } => formatter
-                .debug_struct("ExecutionRequest::ReadMultiValuesBytes")
-                .field("id", id)
-                .field("keys", keys)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::FindKeysByPrefix { id, key_prefix, .. } => formatter
-                .debug_struct("ExecutionRequest::FindKeysByPrefix")
-                .field("id", id)
-                .field("key_prefix", key_prefix)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::FindKeyValuesByPrefix { id, key_prefix, .. } => formatter
-                .debug_struct("ExecutionRequest::FindKeyValuesByPrefix")
-                .field("id", id)
-                .field("key_prefix", key_prefix)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::WriteBatch { id, batch, .. } => formatter
-                .debug_struct("ExecutionRequest::WriteBatch")
-                .field("id", id)
-                .field("batch", batch)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::OpenChain { balance, .. } => formatter
-                .debug_struct("ExecutionRequest::OpenChain")
-                .field("balance", balance)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::CloseChain { application_id, .. } => formatter
-                .debug_struct("ExecutionRequest::CloseChain")
-                .field("application_id", application_id)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::FetchUrl { url, .. } => formatter
-                .debug_struct("ExecutionRequest::FetchUrl")
-                .field("url", url)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::HttpPost {
-                url, content_type, ..
-            } => formatter
-                .debug_struct("ExecutionRequest::HttpPost")
-                .field("url", url)
-                .field("content_type", content_type)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::ReadBlobContent { blob_id, .. } => formatter
-                .debug_struct("ExecutionRequest::ReadBlob")
-                .field("blob_id", blob_id)
-                .finish_non_exhaustive(),
-
-            ExecutionRequest::AssertBlobExists { blob_id, .. } => formatter
-                .debug_struct("ExecutionRequest::AssertBlobExists")
-                .field("blob_id", blob_id)
-                .finish_non_exhaustive(),
-        }
-    }
 }

@@ -27,7 +27,7 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
-use linera_chain::{data_types::HashedCertificateValue, ChainStateView};
+use linera_chain::{types::HashedCertificateValue, ChainStateView};
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError},
@@ -80,7 +80,7 @@ enum NodeServiceError {
     ChainClientError(#[from] ChainClientError),
     #[error(transparent)]
     BcsHexError(#[from] BcsHexParseError),
-    #[error("could not decode query string")]
+    #[error("could not decode query string: {0}")]
     QueryStringError(#[from] hex::FromHexError),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
@@ -96,11 +96,11 @@ enum NodeServiceError {
     GraphQLParseError { error: String },
     #[error("malformed application response")]
     MalformedApplicationResponse,
-    #[error("application service error")]
+    #[error("application service error: {errors:?}")]
     ApplicationServiceError { errors: Vec<String> },
-    #[error("chain ID not found")]
+    #[error("chain ID not found: {chain_id}")]
     UnknownChainId { chain_id: String },
-    #[error("malformed chain ID")]
+    #[error("malformed chain ID: {0}")]
     InvalidChainId(CryptoError),
 }
 
@@ -1064,7 +1064,7 @@ where
             })?;
         let hash = loop {
             let timeout = match client.execute_operations(operations.clone()).await? {
-                ClientOutcome::Committed(certificate) => break certificate.value.hash(),
+                ClientOutcome::Committed(certificate) => break certificate.hash(),
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().await.map_err(|_| {

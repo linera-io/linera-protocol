@@ -21,8 +21,9 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::{
-    data_types::{BlockExecutionOutcome, HashedCertificateValue, OutgoingMessage},
+    data_types::{BlockExecutionOutcome, OutgoingMessage},
     test::{make_child_block, make_first_block, BlockTestExt},
+    types::HashedCertificateValue,
 };
 use linera_execution::{
     committee::Epoch,
@@ -252,7 +253,7 @@ where
     // Execute an application operation
     let increment = 5_u64;
     let user_operation = bcs::to_bytes(&increment)?;
-    let run_block = make_child_block(&create_certificate.value)
+    let run_block = make_child_block(&create_certificate.into_value().try_into().unwrap())
         .with_timestamp(3)
         .with_operation(Operation::User {
             application_id,

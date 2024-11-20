@@ -12,7 +12,7 @@ services:
       - "--overprovisioned"
       - "1"
   proxy:
-    image: linera
+    image: "${LINERA_IMAGE:-linera}"
     container_name: proxy
     ports:
       - "19100:19100"
@@ -23,7 +23,7 @@ services:
       shard-init:
         condition: service_completed_successfully
   shard:
-    image: linera
+    image: "${LINERA_IMAGE:-linera}"
     deploy:
       replicas: 4
     command: [ "./compose-server-entrypoint.sh" ]
@@ -33,7 +33,7 @@ services:
       shard-init:
         condition: service_completed_successfully
   shard-init:
-    image: linera
+    image: "${LINERA_IMAGE:-linera}"
     container_name: shard-init
     command: [ "./compose-server-init.sh" ]
     volumes:

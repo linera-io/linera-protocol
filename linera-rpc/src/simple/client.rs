@@ -12,8 +12,9 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
     time::{timer, Duration},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, CertificateValue, HashedCertificateValue, LiteCertificate,
+use linera_chain::{
+    data_types::BlockProposal,
+    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -53,13 +54,13 @@ impl SimpleClient {
         // Send message
         timer::timeout(self.send_timeout, stream.send(message))
             .await
-            .map_err(|timeout| codec::Error::Io(timeout.into()))??;
+            .map_err(|timeout| codec::Error::IoError(timeout.into()))??;
         // Wait for reply
         timer::timeout(self.recv_timeout, stream.next())
             .await
-            .map_err(|timeout| codec::Error::Io(timeout.into()))?
+            .map_err(|timeout| codec::Error::IoError(timeout.into()))?
             .transpose()?
-            .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
+            .ok_or_else(|| codec::Error::IoError(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
     async fn query<Response>(&self, query: RpcMessage) -> Result<Response, Response::Error>
@@ -166,6 +167,11 @@ impl ValidatorNode for SimpleClient {
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         self.query(RpcMessage::BlobLastUsedBy(Box::new(blob_id)))
+            .await
+    }
+
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+        self.query(RpcMessage::MissingBlobIds(Box::new(blob_ids)))
             .await
     }
 }

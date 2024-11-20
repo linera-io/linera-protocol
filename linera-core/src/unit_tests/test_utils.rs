@@ -18,8 +18,9 @@ use linera_base::{
     data_types::*,
     identifiers::{BlobId, ChainDescription, ChainId, UserApplicationId},
 };
-use linera_chain::data_types::{
-    BlockProposal, Certificate, HashedCertificateValue, LiteCertificate,
+use linera_chain::{
+    data_types::BlockProposal,
+    types::{Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -177,6 +178,7 @@ where
             validator.do_download_certificate(hash, sender)
         })
         .await
+        .map(Into::into)
     }
 
     async fn download_certificates(
@@ -187,11 +189,19 @@ where
             validator.do_download_certificates(hashes, sender)
         })
         .await
+        .map(|certs| certs.into_iter().map(Certificate::from).collect())
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_blob_last_used_by(blob_id, sender)
+        })
+        .await
+    }
+
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_missing_blob_ids(blob_ids, sender)
         })
         .await
     }
@@ -262,7 +272,7 @@ where
         let handle_block_proposal_result =
             Self::handle_block_proposal(proposal, &mut validator).await;
         let result = match handle_block_proposal_result {
-            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
+            Some(Err(NodeError::BlobsNotFound(_))) => {
                 handle_block_proposal_result.expect("handle_block_proposal_result should be Some")
             }
             _ => match validator.fault_type {
@@ -308,7 +318,7 @@ where
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if certificate.value().is_validated() => None,
+            FaultType::DontProcessValidated if certificate.inner().is_validated() => None,
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -350,11 +360,11 @@ where
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let is_validated = certificate.value().is_validated();
+        let is_validated = certificate.inner().is_validated();
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
-            Some(Err(NodeError::BlobsNotFound(_) | NodeError::BlobNotFoundOnRead(_))) => {
+            Some(Err(NodeError::BlobsNotFound(_))) => {
                 handle_certificate_result.expect("handle_certificate_result should be Some")
             }
             _ => match validator.fault_type {
@@ -457,15 +467,14 @@ where
     async fn do_download_certificate(
         self,
         hash: CryptoHash,
-        sender: oneshot::Sender<Result<Certificate, NodeError>>,
-    ) -> Result<(), Result<Certificate, NodeError>> {
+        sender: oneshot::Sender<Result<ConfirmedBlockCertificate, NodeError>>,
+    ) -> Result<(), Result<ConfirmedBlockCertificate, NodeError>> {
         let validator = self.client.lock().await;
         let certificate = validator
             .state
             .storage_client()
             .read_certificate(hash)
             .await
-            .map(Into::into)
             .map_err(Into::into);
 
         sender.send(certificate)
@@ -474,8 +483,8 @@ where
     async fn do_download_certificates(
         self,
         hashes: Vec<CryptoHash>,
-        sender: oneshot::Sender<Result<Vec<Certificate>, NodeError>>,
-    ) -> Result<(), Result<Vec<Certificate>, NodeError>> {
+        sender: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>, NodeError>>,
+    ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
         let validator = self.client.lock().await;
         let certificates = validator
             .state
@@ -502,6 +511,21 @@ where
             .map_err(Into::into);
 
         sender.send(certificate_hash)
+    }
+
+    async fn do_missing_blob_ids(
+        self,
+        blob_ids: Vec<BlobId>,
+        sender: oneshot::Sender<Result<Vec<BlobId>, NodeError>>,
+    ) -> Result<(), Result<Vec<BlobId>, NodeError>> {
+        let validator = self.client.lock().await;
+        let missing_blob_ids = validator
+            .state
+            .storage_client()
+            .missing_blobs(&blob_ids)
+            .await
+            .map_err(Into::into);
+        sender.send(missing_blob_ids)
     }
 }
 
@@ -807,6 +831,7 @@ where
             false,
             [chain_id],
             format!("Client node for {:.8}", chain_id),
+            NonZeroUsize::new(20).expect("Chain worker limit should not be zero"),
         ));
         Ok(builder.create_chain_client(
             chain_id,
@@ -826,7 +851,7 @@ where
         chain_id: ChainId,
         block_height: BlockHeight,
         target_count: usize,
-    ) -> Option<Certificate> {
+    ) -> Option<ConfirmedBlockCertificate> {
         let query =
             ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_in_range(BlockHeightRange {
                 start: block_height,
@@ -844,13 +869,13 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.value().is_confirmed()
-                                && cert.value().chain_id() == chain_id
-                                && cert.value().height() == block_height
+                            if cert.inner().is_confirmed()
+                                && cert.inner().chain_id() == chain_id
+                                && cert.inner().height() == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;
-                                certificate = Some(cert);
+                                certificate = Some(cert.try_into().unwrap());
                             }
                         }
                     }

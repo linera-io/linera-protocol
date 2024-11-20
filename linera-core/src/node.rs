@@ -13,12 +13,13 @@ use linera_base::{
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, Certificate, HashedCertificateValue, LiteCertificate, Origin},
+    data_types::{BlockProposal, Origin},
+    types::{Certificate, HashedCertificateValue, LiteCertificate},
     ChainError,
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
-    ExecutionError, SystemExecutionError,
+    ExecutionError,
 };
 use linera_version::VersionInfo;
 use linera_views::views::ViewError;
@@ -103,11 +104,13 @@ pub trait ValidatorNode {
 
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;
+
+    /// Returns the missing `Blob`s. by their ids.
+    async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError>;
 }
 
 /// Turn an address into a validator node.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
-#[expect(clippy::result_large_err)]
 pub trait ValidatorNodeProvider: 'static {
     #[cfg(not(web))]
     type Node: ValidatorNode + Send + Sync + Clone + 'static;
@@ -174,11 +177,11 @@ pub enum NodeError {
     )]
     MissingCrossChainUpdate {
         chain_id: ChainId,
-        origin: Origin,
+        origin: Box<Origin>,
         height: BlockHeight,
     },
 
-    #[error("The following blobs are missing: {0:?}.")]
+    #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
     // This error must be normalized during conversions.
@@ -195,6 +198,8 @@ pub enum NodeError {
 
     #[error("The received chain info response is invalid")]
     InvalidChainInfoResponse,
+    #[error("Unexpected certificate value")]
+    UnexpectedCertificateValue,
 
     // Networking errors.
     // TODO(#258): These errors should be defined in linera-rpc.
@@ -213,15 +218,14 @@ pub enum NodeError {
     #[error("Failed to subscribe; tonic status: {status}")]
     SubscriptionFailed { status: String },
 
-    #[error("Failed to make a chain info query on the local node: {error}")]
-    LocalNodeQuery { error: String },
-
-    #[error("Blob not found on storage read: {0}")]
-    BlobNotFoundOnRead(BlobId),
     #[error("Node failed to provide a 'last used by' certificate for the blob")]
     InvalidCertificateForBlob(BlobId),
+    #[error("Node returned a BlobsNotFound error with duplicates")]
+    DuplicatesInBlobsNotFound,
+    #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
+    UnexpectedEntriesInBlobsNotFound,
     #[error("Local error handling validator response")]
-    LocalError { error: String },
+    ResponseHandlingError { error: String },
 }
 
 impl From<tonic::Status> for NodeError {
@@ -242,18 +246,20 @@ impl CrossChainMessageDelivery {
     }
 
     pub fn wait_for_outgoing_messages(self) -> bool {
-        use CrossChainMessageDelivery::*;
         match self {
-            NonBlocking => false,
-            Blocking => true,
+            CrossChainMessageDelivery::NonBlocking => false,
+            CrossChainMessageDelivery::Blocking => true,
         }
     }
 }
 
 impl From<ViewError> for NodeError {
     fn from(error: ViewError) -> Self {
-        Self::ViewError {
-            error: error.to_string(),
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            error => Self::ViewError {
+                error: error.to_string(),
+            },
         }
     }
 }
@@ -283,18 +289,20 @@ impl From<ChainError> for NodeError {
                 height,
             } => Self::MissingCrossChainUpdate {
                 chain_id,
-                origin: *origin,
+                origin,
                 height,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
-            ChainError::ExecutionError(
-                ExecutionError::SystemError(SystemExecutionError::BlobNotFoundOnRead(blob_id)),
-                _,
-            )
-            | ChainError::ExecutionError(
-                ExecutionError::ViewError(ViewError::BlobNotFoundOnRead(blob_id)),
-                _,
-            ) => Self::BlobNotFoundOnRead(blob_id),
+            ChainError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            ChainError::ExecutionError(execution_error, context) => {
+                if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
+                    Self::BlobsNotFound(blob_ids)
+                } else {
+                    Self::ChainError {
+                        error: ChainError::ExecutionError(execution_error, context).to_string(),
+                    }
+                }
+            }
             error => Self::ChainError {
                 error: error.to_string(),
             },
@@ -307,7 +315,7 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
-            WorkerError::BlobsNotFound(blob_ids) => NodeError::BlobsNotFound(blob_ids),
+            WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             error => Self::WorkerError {
                 error: error.to_string(),
             },

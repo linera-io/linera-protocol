@@ -5,6 +5,13 @@
 
 #![deny(clippy::large_futures)]
 
+mod block;
+mod certificate;
+
+pub mod types {
+    pub use super::{block::*, certificate::*};
+}
+
 mod chain;
 pub mod data_types;
 mod inbox;
@@ -16,9 +23,10 @@ pub mod test;
 pub use chain::ChainStateView;
 use data_types::{MessageBundle, Origin, PostedMessage};
 use linera_base::{
+    bcs,
     crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, BlobId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::views::ViewError;
@@ -29,12 +37,12 @@ use thiserror::Error;
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
-    #[error("Arithmetic error: {0}")]
+    #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
-    #[error("Error in view operation: {0}")]
-    ViewError(#[from] ViewError),
+    #[error(transparent)]
+    ViewError(ViewError),
     #[error("Execution error: {0} during {1:?}")]
-    ExecutionError(ExecutionError, ChainExecutionContext),
+    ExecutionError(Box<ExecutionError>, ChainExecutionContext),
 
     #[error("The chain being queried is not active {0:?}")]
     InactiveChain(ChainId),
@@ -54,8 +62,8 @@ pub enum ChainError {
     UnexpectedMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        bundle: MessageBundle,
-        previous_bundle: MessageBundle,
+        bundle: Box<MessageBundle>,
+        previous_bundle: Box<MessageBundle>,
     },
     #[error(
         "Message in block proposed to {chain_id:?} is out of order compared to previous messages \
@@ -65,7 +73,7 @@ pub enum ChainError {
     IncorrectMessageOrder {
         chain_id: ChainId,
         origin: Box<Origin>,
-        bundle: MessageBundle,
+        bundle: Box<MessageBundle>,
         next_height: BlockHeight,
         next_index: u32,
     },
@@ -76,7 +84,7 @@ pub enum ChainError {
     CannotRejectMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        posted_message: PostedMessage,
+        posted_message: Box<PostedMessage>,
     },
     #[error(
         "Block proposed to {chain_id:?} is attempting to skip a message bundle \
@@ -85,7 +93,7 @@ pub enum ChainError {
     CannotSkipMessage {
         chain_id: ChainId,
         origin: Box<Origin>,
-        bundle: MessageBundle,
+        bundle: Box<MessageBundle>,
     },
     #[error(
         "Incoming message bundle in block proposed to {chain_id:?} has timestamp \
@@ -131,6 +139,10 @@ pub enum ChainError {
     CertificateSignatureVerificationFailed { error: String },
     #[error("Internal error {0}")]
     InternalError(String),
+    #[error("Block proposal is too large")]
+    BlockProposalTooLarge,
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
     #[error("Insufficient balance to pay the fees")]
     InsufficientBalance,
     #[error("Invalid owner weights: {0}")]
@@ -150,6 +162,17 @@ pub enum ChainError {
         expected: CryptoHash,
         actual: CryptoHash,
     },
+    #[error("Blobs not found: {0:?}")]
+    BlobsNotFound(Vec<BlobId>),
+}
+
+impl From<ViewError> for ChainError {
+    fn from(error: ViewError) -> Self {
+        match error {
+            ViewError::BlobsNotFound(blob_ids) => ChainError::BlobsNotFound(blob_ids),
+            error => ChainError::ViewError(error),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -159,4 +182,17 @@ pub enum ChainExecutionContext {
     IncomingBundle(u32),
     Operation(u32),
     Block,
+}
+
+trait ExecutionResultExt<T> {
+    fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError>;
+}
+
+impl<T, E> ExecutionResultExt<T> for Result<T, E>
+where
+    E: Into<ExecutionError>,
+{
+    fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError> {
+        self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context))
+    }
 }

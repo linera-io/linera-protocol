@@ -228,6 +228,10 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
 impl LocalAdminKeyValueStore for IndexedDbStore {
     type Config = IndexedDbStoreConfig;
 
+    fn get_name() -> String {
+        "indexed db".to_string()
+    }
+
     async fn connect(
         config: &Self::Config,
         namespace: &str,
@@ -337,8 +341,8 @@ pub use testing::*;
 #[derive(Error, Debug)]
 pub enum IndexedDbStoreError {
     /// Serialization error with BCS.
-    #[error("BCS error: {0}")]
-    Bcs(#[from] bcs::Error),
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
 
     /// The value is too large for the IndexedDbStore
     #[error("The value is too large for the IndexedDbStore")]

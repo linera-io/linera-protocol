@@ -31,7 +31,7 @@ async fn hex_game() {
         })
         .await;
 
-    let executed_block = certificate.value().executed_block().unwrap();
+    let executed_block = certificate.inner().executed_block().unwrap();
     let message_id = executed_block.message_id_for_operation(0, 0).unwrap();
     let description = ChainDescription::Child(message_id);
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator);
@@ -105,7 +105,7 @@ async fn hex_game_clock() {
         })
         .await;
 
-    let executed_block = certificate.value().executed_block().unwrap();
+    let executed_block = certificate.inner().executed_block().unwrap();
     let message_id = executed_block.message_id_for_operation(0, 0).unwrap();
     let description = ChainDescription::Child(message_id);
     let mut chain = ActiveChain::new(key_pair1.copy(), description, validator.clone());

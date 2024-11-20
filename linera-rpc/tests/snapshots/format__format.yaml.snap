@@ -151,23 +151,16 @@ CertificateValue:
   ENUM:
     0:
       ValidatedBlock:
-        STRUCT:
-          - executed_block:
-              TYPENAME: ExecutedBlock
+        NEWTYPE:
+          TYPENAME: ValidatedBlock
     1:
       ConfirmedBlock:
-        STRUCT:
-          - executed_block:
-              TYPENAME: ExecutedBlock
+        NEWTYPE:
+          TYPENAME: ConfirmedBlock
     2:
       Timeout:
-        STRUCT:
-          - chain_id:
-              TYPENAME: ChainId
-          - height:
-              TYPENAME: BlockHeight
-          - epoch:
-              TYPENAME: Epoch
+        NEWTYPE:
+          TYPENAME: Timeout
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -266,10 +259,10 @@ ChainManagerInfo:
           TYPENAME: BlockProposal
     - requested_locked:
         OPTION:
-          TYPENAME: Certificate
+          TYPENAME: ValidatedBlockCertificate
     - timeout:
         OPTION:
-          TYPENAME: Certificate
+          TYPENAME: TimeoutCertificate
     - pending:
         OPTION:
           TYPENAME: LiteVote
@@ -279,9 +272,12 @@ ChainManagerInfo:
     - fallback_vote:
         OPTION:
           TYPENAME: LiteVote
-    - requested_pending_value:
+    - requested_confirmed:
         OPTION:
-          TYPENAME: CertificateValue
+          TYPENAME: ConfirmedBlock
+    - requested_validated:
+        OPTION:
+          TYPENAME: ValidatedBlock
     - current_round:
         TYPENAME: Round
     - leader:
@@ -342,6 +338,10 @@ Committee:
 CompressedBytecode:
   STRUCT:
     - compressed_bytes: BYTES
+ConfirmedBlock:
+  STRUCT:
+    - executed_block:
+        TYPENAME: ExecutedBlock
 CrateVersion:
   STRUCT:
     - major: U32
@@ -397,10 +397,8 @@ EventRecord:
   STRUCT:
     - stream_id:
         TYPENAME: StreamId
-    - key:
-        SEQ: U8
-    - value:
-        SEQ: U8
+    - key: BYTES
+    - value: BYTES
 ExecutedBlock:
   STRUCT:
     - block:
@@ -569,43 +567,41 @@ NodeError:
     11:
       InvalidChainInfoResponse: UNIT
     12:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     13:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     14:
+      UnexpectedMessage: UNIT
+    15:
       GrpcError:
         STRUCT:
           - error: STR
-    15:
+    16:
       ClientIoError:
         STRUCT:
           - error: STR
-    16:
+    17:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    17:
+    18:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    18:
+    19:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    19:
-      LocalNodeQuery:
-        STRUCT:
-          - error: STR
     20:
-      BlobNotFoundOnRead:
-        NEWTYPE:
-          TYPENAME: BlobId
-    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
+    21:
+      DuplicatesInBlobsNotFound: UNIT
     22:
-      LocalError:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    23:
+      ResponseHandlingError:
         STRUCT:
           - error: STR
 OpenChainConfig:
@@ -642,12 +638,10 @@ OracleResponse:
   ENUM:
     0:
       Service:
-        NEWTYPE:
-          SEQ: U8
+        NEWTYPE: BYTES
     1:
       Post:
-        NEWTYPE:
-          SEQ: U8
+        NEWTYPE: BYTES
     2:
       Blob:
         NEWTYPE:
@@ -746,6 +740,7 @@ ResourceControlPolicy:
     - maximum_executed_block_size: U64
     - maximum_bytecode_size: U64
     - maximum_blob_size: U64
+    - maximum_block_proposal_size: U64
     - maximum_bytes_read_per_block: U64
     - maximum_bytes_written_per_block: U64
 Round:
@@ -801,51 +796,61 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     9:
-      VersionInfoQuery: UNIT
+      MissingBlobIds:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
     10:
-      GenesisConfigHashQuery: UNIT
+      VersionInfoQuery: UNIT
     11:
+      GenesisConfigHashQuery: UNIT
+    12:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    12:
+    13:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    13:
+    14:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    14:
+    15:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    15:
+    16:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    16:
+    17:
       DownloadBlobContentResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    17:
+    18:
       DownloadCertificateValueResponse:
         NEWTYPE:
           TYPENAME: CertificateValue
-    18:
+    19:
       DownloadCertificateResponse:
         NEWTYPE:
           TYPENAME: Certificate
-    19:
+    20:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: Certificate
-    20:
+    21:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    21:
+    22:
+      MissingBlobIdsResponse:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
+    23:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest
@@ -1029,6 +1034,25 @@ SystemOperation:
           TYPENAME: AdminOperation
 TimeDelta:
   NEWTYPESTRUCT: U64
+Timeout:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - epoch:
+        TYPENAME: Epoch
+TimeoutCertificate:
+  STRUCT:
+    - value:
+        TYPENAME: Timeout
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 TimeoutConfig:
   STRUCT:
     - fast_round_duration:
@@ -1052,6 +1076,21 @@ UserApplicationDescription:
     - required_application_ids:
         SEQ:
           TYPENAME: ApplicationId
+ValidatedBlock:
+  STRUCT:
+    - executed_block:
+        TYPENAME: ExecutedBlock
+ValidatedBlockCertificate:
+  STRUCT:
+    - value:
+        TYPENAME: ValidatedBlock
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 ValidatorName:
   NEWTYPESTRUCT:
     TYPENAME: PublicKey
