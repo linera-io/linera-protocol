@@ -768,6 +768,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
+            .map(|response| {
+                response
+                    .into_iter()
+                    .filter_map(|(owner, balance)| match owner {
+                        AccountOwner::User(user) => Some((user, balance)),
+                        AccountOwner::Application(_) => None,
+                    })
+                    .collect()
+            })
     }
 
     fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError> {

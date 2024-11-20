@@ -120,15 +120,7 @@ where
                         Ok(())
                     })
                     .await?;
-                callback.respond(
-                    balances
-                        .into_iter()
-                        .filter_map(|(owner, balance)| match owner {
-                            AccountOwner::User(user) => Some((user, balance)),
-                            AccountOwner::Application(_) => None,
-                        })
-                        .collect(),
-                );
+                callback.respond(balances.into_iter().collect());
             }
 
             BalanceOwners { callback } => {
@@ -371,7 +363,7 @@ pub enum ExecutionRequest {
 
     OwnerBalances {
         #[debug(skip)]
-        callback: Sender<Vec<(Owner, Amount)>>,
+        callback: Sender<Vec<(AccountOwner, Amount)>>,
     },
 
     BalanceOwners {
