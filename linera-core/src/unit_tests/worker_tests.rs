@@ -705,7 +705,7 @@ where
     drop(chain);
 
     worker
-        .handle_certificate(block_certificate0.into(), vec![], None)
+        .handle_certificate(block_certificate0, vec![], None)
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
