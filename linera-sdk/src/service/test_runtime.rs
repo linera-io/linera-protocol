@@ -11,7 +11,7 @@ use std::{
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
@@ -271,7 +271,7 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<Owner> {
+    pub fn balance_owners(&self) -> Vec<AccountOwner> {
         self.owner_balances
             .borrow_mut()
             .as_ref()
@@ -280,10 +280,6 @@ where
                 please call `MockServiceRuntime::set_owner_balances` first",
             )
             .keys()
-            .filter_map(|account_owner| match account_owner {
-                AccountOwner::User(owner) => Some(owner),
-                AccountOwner::Application(_) => None,
-            })
             .cloned()
             .collect()
     }

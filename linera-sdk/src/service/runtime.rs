@@ -8,7 +8,7 @@ use std::cell::Cell;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{AccountOwner, ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 
 use super::wit::service_system_api as wit;
@@ -110,19 +110,13 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<Owner> {
+    pub fn balance_owners(&self) -> Vec<AccountOwner> {
         Self::fetch_value_through_cache(&self.balance_owners, || {
             wit::read_balance_owners()
                 .into_iter()
                 .map(AccountOwner::from)
                 .collect()
         })
-        .into_iter()
-        .filter_map(|account_owner| match account_owner {
-            AccountOwner::User(owner) => Some(owner),
-            AccountOwner::Application(_) => None,
-        })
-        .collect()
     }
 
     /// Queries another application.

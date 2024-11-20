@@ -84,11 +84,7 @@ impl Accounts {
             .runtime
             .try_lock()
             .expect("Services only run in a single thread");
-        runtime
-            .balance_owners()
-            .into_iter()
-            .map(AccountOwner::User)
-            .collect()
+        runtime.balance_owners()
     }
 }
 
