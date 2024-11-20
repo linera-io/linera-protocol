@@ -1084,10 +1084,10 @@ impl ContractSyncRuntime {
         let runtime_handle = this.clone();
         let mut this_guard = this.inner();
 
-        if let std::collections::hash_map::Entry::Vacant(e) =
+        if let std::collections::hash_map::Entry::Vacant(entry) =
             this_guard.loaded_applications.entry(id)
         {
-            e.insert(LoadedApplication::new(
+            entry.insert(LoadedApplication::new(
                 code.instantiate(runtime_handle)?,
                 description,
             ));
@@ -1424,6 +1424,7 @@ impl ServiceSyncRuntime {
         }
     }
 
+    /// Loads a service into the runtime's memory.
     pub(crate) fn preload_service(
         &self,
         id: UserApplicationId,
@@ -1438,10 +1439,10 @@ impl ServiceSyncRuntime {
         let runtime_handle = this.clone();
         let mut this_guard = this.inner();
 
-        if let std::collections::hash_map::Entry::Vacant(e) =
+        if let std::collections::hash_map::Entry::Vacant(entry) =
             this_guard.loaded_applications.entry(id)
         {
-            e.insert(LoadedApplication::new(
+            entry.insert(LoadedApplication::new(
                 code.instantiate(runtime_handle)?,
                 description,
             ));
