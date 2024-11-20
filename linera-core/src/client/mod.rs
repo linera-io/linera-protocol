@@ -1944,12 +1944,10 @@ where
             );
             validated_block_certificate.executed_block().clone()
         } else {
-            self.stage_block_execution_and_discard_failing_messages(block)
-                .await?
-                .0
+            self.stage_block_execution(block).await?.0
         };
         let block = executed_block.block.clone();
-        if let Some(proposal) = manager.requested_proposed {
+        if let Some(proposal) = &manager.requested_proposed {
             if proposal.content.round.is_fast() {
                 ensure!(
                     proposal.content.block == block,
@@ -1979,11 +1977,13 @@ where
                 blobs,
             ))
         };
-        // Check the final block proposal. This will be cheaper after #1401.
-        self.client
-            .local_node
-            .handle_block_proposal(*proposal.clone())
-            .await?;
+        if manager.requested_proposed.as_ref() != Some(&proposal) {
+            // Check the final block proposal. This will be cheaper after #1401.
+            self.client
+                .local_node
+                .handle_block_proposal(*proposal.clone())
+                .await?;
+        }
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut().set_pending_block(block);
         // Send the query to validators.
@@ -2083,7 +2083,50 @@ where
             ClientOutcome::Committed(None) => {}
         }
         let incoming_bundles = self.pending_message_bundles().await?;
-        let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
+
+        let info = self.chain_info_with_manager_values().await?;
+        let manager = &info.manager;
+        // If there is a conflicting proposal in the current round, we can only propose if the
+        // next round can be started without a timeout, i.e. if we are in a multi-leader round.
+        let conflicting_proposal = manager
+            .requested_proposed
+            .as_ref()
+            .is_some_and(|proposal| proposal.content.round == manager.current_round);
+        let round = if !conflicting_proposal {
+            manager.current_round
+        } else if let Some(round) = manager
+            .ownership
+            .next_round(manager.current_round)
+            .filter(|_| manager.current_round.is_multi_leader())
+        {
+            round
+        } else if let Some(timestamp) = manager.round_timeout {
+            return Ok(ExecuteBlockOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }));
+        } else {
+            return Err(ChainClientError::BlockProposalError(
+                "Conflicting proposal in the current round.",
+            ));
+        };
+        let identity = self.identity().await?;
+        if !manager.can_propose(&identity, round) {
+            // TODO(#1424): Local timeout might not match validators' exactly.
+            let timestamp = manager.round_timeout.ok_or_else(|| {
+                ChainClientError::BlockProposalError("Cannot propose in the current round.")
+            })?;
+            return Ok(ExecuteBlockOutcome::WaitForTimeout(RoundTimeout {
+                timestamp,
+                current_round: manager.current_round,
+                next_block_height: info.next_block_height,
+            }));
+        }
+
+        let confirmed_value = self
+            .set_pending_block(round, incoming_bundles, operations, identity)
+            .await?;
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
                 if Some(&certificate.executed_block().block) == confirmed_value.inner().block() =>
@@ -2108,12 +2151,20 @@ where
     #[instrument(level = "trace", skip(incoming_bundles, operations))]
     async fn set_pending_block(
         &self,
+        round: Round,
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
+        identity: Owner,
     ) -> Result<HashedCertificateValue, ChainClientError> {
-        let identity = self.identity().await?;
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
+            ensure!(
+                state.pending_block().is_none(),
+                ChainClientError::BlockProposalError(
+                    "Client state already has a pending block; \
+                    use the `linera retry-pending-block` command to commit that first"
+                )
+            );
             (
                 state.block_hash(),
                 state.next_block_height(),
@@ -2135,8 +2186,23 @@ where
         let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
-        self.state_mut()
-            .set_pending_block(executed_block.block.clone());
+        let block = executed_block.block.clone();
+        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
+        let key_pair = self.key_pair().await?;
+
+        let proposal = Box::new(BlockProposal::new_initial(
+            round,
+            block.clone(),
+            &key_pair,
+            blobs,
+        ));
+        // Check the final block proposal. This will be cheaper after #1401.
+        self.client
+            .local_node
+            .handle_block_proposal(*proposal.clone())
+            .await?;
+        self.state_mut().set_pending_block(block);
+
         Ok(HashedCertificateValue::new_confirmed(executed_block))
     }
 
