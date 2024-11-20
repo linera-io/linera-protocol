@@ -513,6 +513,15 @@ where
             .runtime
             .read_balance_owners()
             .map_err(|error| RuntimeError::Custom(error.into()))
+            .map(|account_owners| {
+                account_owners
+                    .into_iter()
+                    .filter_map(|account_owner| match account_owner {
+                        AccountOwner::User(owner) => Some(owner),
+                        AccountOwner::Application(_) => None,
+                    })
+                    .collect()
+            })
     }
 
     /// Queries another application.
