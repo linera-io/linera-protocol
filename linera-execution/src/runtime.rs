@@ -1070,7 +1070,6 @@ impl ContractSyncRuntime {
         )))
     }
 
-    // TODO: deduplicate `Contract`/`Service` traits and types
     pub(crate) fn preload_contract(
         &self,
         id: UserApplicationId,
@@ -1084,9 +1083,7 @@ impl ContractSyncRuntime {
         let runtime_handle = this.clone();
         let mut this_guard = this.inner();
 
-        if let std::collections::hash_map::Entry::Vacant(entry) =
-            this_guard.loaded_applications.entry(id)
-        {
+        if let hash_map::Entry::Vacant(entry) = this_guard.loaded_applications.entry(id) {
             entry.insert(LoadedApplication::new(
                 code.instantiate(runtime_handle)?,
                 description,
@@ -1439,9 +1436,7 @@ impl ServiceSyncRuntime {
         let runtime_handle = this.clone();
         let mut this_guard = this.inner();
 
-        if let std::collections::hash_map::Entry::Vacant(entry) =
-            this_guard.loaded_applications.entry(id)
-        {
+        if let hash_map::Entry::Vacant(entry) = this_guard.loaded_applications.entry(id) {
             entry.insert(LoadedApplication::new(
                 code.instantiate(runtime_handle)?,
                 description,
