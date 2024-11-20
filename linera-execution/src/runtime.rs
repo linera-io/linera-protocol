@@ -774,6 +774,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
             .recv_response()
+            .map(|account_owners| {
+                account_owners
+                    .into_iter()
+                    .filter_map(|account_owner| match account_owner {
+                        AccountOwner::User(owner) => Some(owner),
+                        AccountOwner::Application(_) => None,
+                    })
+                    .collect()
+            })
     }
 
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError> {

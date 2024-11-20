@@ -125,15 +125,7 @@ where
 
             BalanceOwners { callback } => {
                 let owners = self.system.balances.indices().await?;
-                callback.respond(
-                    owners
-                        .into_iter()
-                        .filter_map(|owner| match owner {
-                            AccountOwner::User(user) => Some(user),
-                            AccountOwner::Application(_) => None,
-                        })
-                        .collect(),
-                );
+                callback.respond(owners);
             }
 
             Transfer {
@@ -368,7 +360,7 @@ pub enum ExecutionRequest {
 
     BalanceOwners {
         #[debug(skip)]
-        callback: Sender<Vec<Owner>>,
+        callback: Sender<Vec<AccountOwner>>,
     },
 
     Transfer {
