@@ -147,5 +147,10 @@ fn prepare_transfers(
         .collect::<FuturesUnordered<_>>()
 }
 
-criterion_group!(benches, cross_chain_native_token_transfers);
+criterion_group!(
+    name = benches;
+    config = Criterion::default()
+        .measurement_time(Duration::from_secs(180));
+    targets = cross_chain_native_token_transfers
+);
 criterion_main!(benches);
