@@ -18,7 +18,7 @@ use dashmap::{
     DashMap,
 };
 use futures::{
-    future::{self, try_join_all, FusedFuture, Future},
+    future::{self, try_join_all, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -1977,7 +1977,12 @@ where
                 blobs,
             ))
         };
-        if manager.requested_proposed.as_ref() != Some(&proposal) {
+        if manager
+            .requested_proposed
+            .as_ref()
+            .map(|proposal| &proposal.content)
+            != Some(&proposal.content)
+        {
             // Check the final block proposal. This will be cheaper after #1401.
             self.client
                 .local_node
@@ -2082,51 +2087,18 @@ where
             }
             ClientOutcome::Committed(None) => {}
         }
+
         let incoming_bundles = self.pending_message_bundles().await?;
-
-        let info = self.chain_info_with_manager_values().await?;
-        let manager = &info.manager;
-        // If there is a conflicting proposal in the current round, we can only propose if the
-        // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        let conflicting_proposal = manager
-            .requested_proposed
-            .as_ref()
-            .is_some_and(|proposal| proposal.content.round == manager.current_round);
-        let round = if !conflicting_proposal {
-            manager.current_round
-        } else if let Some(round) = manager
-            .ownership
-            .next_round(manager.current_round)
-            .filter(|_| manager.current_round.is_multi_leader())
-        {
-            round
-        } else if let Some(timestamp) = manager.round_timeout {
-            return Ok(ExecuteBlockOutcome::WaitForTimeout(RoundTimeout {
-                timestamp,
-                current_round: manager.current_round,
-                next_block_height: info.next_block_height,
-            }));
-        } else {
-            return Err(ChainClientError::BlockProposalError(
-                "Conflicting proposal in the current round.",
-            ));
-        };
         let identity = self.identity().await?;
-        if !manager.can_propose(&identity, round) {
-            // TODO(#1424): Local timeout might not match validators' exactly.
-            let timestamp = manager.round_timeout.ok_or_else(|| {
-                ChainClientError::BlockProposalError("Cannot propose in the current round.")
-            })?;
-            return Ok(ExecuteBlockOutcome::WaitForTimeout(RoundTimeout {
-                timestamp,
-                current_round: manager.current_round,
-                next_block_height: info.next_block_height,
-            }));
-        }
-
+        let info = self.chain_info_with_manager_values().await?;
+        let round = match Self::round_for_new_proposal(&info, &identity, None)? {
+            Either::Left(round) => round,
+            Either::Right(timeout) => return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)),
+        };
         let confirmed_value = self
             .set_pending_block(round, incoming_bundles, operations, identity)
             .await?;
+
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
                 if Some(&certificate.executed_block().block) == confirmed_value.inner().block() =>
@@ -2496,7 +2468,7 @@ where
             }
         }
         self.update_from_info(&info);
-        let manager = *info.manager;
+        let manager = &info.manager;
 
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &manager.requested_locked {
@@ -2532,10 +2504,29 @@ where
             return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
         };
 
+        let round = match Self::round_for_new_proposal(&info, &identity, Some(&block))? {
+            Either::Left(round) => round,
+            Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
+        };
+        let certificate = self
+            .propose_block(block.clone(), round, *info.manager)
+            .await?;
+        Ok(ClientOutcome::Committed(Some(certificate)))
+    }
+
+    /// Returns a round in which we can propose a new block or the given one, or a timeout for
+    /// the current round.
+    fn round_for_new_proposal(
+        info: &ChainInfo,
+        identity: &Owner,
+        block: Option<&Block>,
+    ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
+        let manager = &info.manager;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == manager.current_round && proposal.content.block != block
+            proposal.content.round == manager.current_round
+                && block.map_or(true, |block| proposal.content.block != *block)
         });
         let round = if !conflicting_proposal {
             manager.current_round
@@ -2546,7 +2537,7 @@ where
         {
             round
         } else if let Some(timestamp) = manager.round_timeout {
-            return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+            return Ok(Either::Right(RoundTimeout {
                 timestamp,
                 current_round: manager.current_round,
                 next_block_height: info.next_block_height,
@@ -2556,20 +2547,18 @@ where
                 "Conflicting proposal in the current round.",
             ));
         };
-        if manager.can_propose(&identity, round) {
-            let certificate = self.propose_block(block.clone(), round, manager).await?;
-            Ok(ClientOutcome::Committed(Some(certificate)))
-        } else {
-            // TODO(#1424): Local timeout might not match validators' exactly.
-            let timestamp = manager.round_timeout.ok_or_else(|| {
-                ChainClientError::BlockProposalError("Cannot propose in the current round.")
-            })?;
-            Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-                timestamp,
-                current_round: manager.current_round,
-                next_block_height: info.next_block_height,
-            }))
+        if manager.can_propose(identity, round) {
+            return Ok(Either::Left(round));
         }
+        // TODO(#1424): Local timeout might not match validators' exactly.
+        let timestamp = manager.round_timeout.ok_or_else(|| {
+            ChainClientError::BlockProposalError("Cannot propose in the current round.")
+        })?;
+        Ok(Either::Right(RoundTimeout {
+            timestamp,
+            current_round: manager.current_round,
+            next_block_height: info.next_block_height,
+        }))
     }
 
     /// Clears the information on any operation that previously failed.
