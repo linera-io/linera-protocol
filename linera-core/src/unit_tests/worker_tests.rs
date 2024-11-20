@@ -682,13 +682,44 @@ where
         &chain
             .manager
             .get()
+            .validated_vote()
+            .unwrap()
+            .value()
+            .inner()
+            .block,
+        &block_proposal0.content.block
+    ); // Multi-leader round - it's not confirmed yet.
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    let block_certificate0 = make_certificate(
+        &committee,
+        &worker,
+        chain
+            .manager
+            .get()
+            .validated_vote()
+            .unwrap()
+            .value()
+            .clone()
+            .into(),
+    );
+    drop(chain);
+
+    worker
+        .handle_certificate(block_certificate0.into(), vec![], None)
+        .await?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert_eq!(
+        &chain
+            .manager
+            .get()
             .confirmed_vote()
             .unwrap()
             .value()
             .inner()
             .block,
         &block_proposal0.content.block
-    ); // In fast round confirm immediately.
+    ); // Should be confirmed after handling the certificate.
     assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
 
@@ -708,14 +739,14 @@ where
         &chain
             .manager
             .get()
-            .confirmed_vote()
+            .validated_vote()
             .unwrap()
             .value()
             .inner()
             .block,
         &block_proposal1.content.block
     );
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0).await,
@@ -1145,7 +1176,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
@@ -1163,7 +1194,30 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().validated_vote().is_none()); // Into was a fast round.
+    assert!(chain.manager.get().confirmed_vote().is_none()); // It was a multi-leader
+                                                             // round.
+    let validated_certificate = make_certificate(
+        &committee,
+        &worker,
+        chain
+            .manager
+            .get()
+            .validated_vote()
+            .unwrap()
+            .value()
+            .clone()
+            .into(),
+    );
+    drop(chain);
+
+    let (chain_info_response, _actions) = worker
+        .handle_certificate(validated_certificate, vec![], None)
+        .await?;
+    chain_info_response.check(&ValidatorName(worker.public_key()))?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().validated_vote().is_none()); // Should be confirmed by
+                                                             // now.
     let pending_vote = chain.manager.get().confirmed_vote().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
