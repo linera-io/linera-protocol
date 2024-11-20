@@ -496,21 +496,14 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    fn read_owner_balances(caller: &mut Caller) -> Result<Vec<(Owner, Amount)>, RuntimeError> {
+    fn read_owner_balances(
+        caller: &mut Caller,
+    ) -> Result<Vec<(AccountOwner, Amount)>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
             .read_owner_balances()
             .map_err(|error| RuntimeError::Custom(error.into()))
-            .map(|balances| {
-                balances
-                    .into_iter()
-                    .filter_map(|(account_owner, amount)| match account_owner {
-                        AccountOwner::User(owner) => Some((owner, amount)),
-                        AccountOwner::Application(_) => None,
-                    })
-                    .collect()
-            })
     }
 
     /// Returns the owners of accounts on this chain.
