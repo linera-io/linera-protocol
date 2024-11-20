@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{stream, StreamExt as _, TryStreamExt as _};
+use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
@@ -110,14 +110,13 @@ where
         certificate: LiteCertificate<'_>,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        match self.node.state.full_certificate_alt(certificate).await? {
-            (Some(confirmed), None) => {
+        match self.node.state.full_certificate(certificate).await? {
+            Either::Left(confirmed) => {
                 Ok(self.handle_certificate(confirmed, vec![], notifier).await?)
             }
-            (None, Some(validated)) => {
+            Either::Right(validated) => {
                 Ok(self.handle_certificate(validated, vec![], notifier).await?)
             }
-            _ => panic!(),
         }
     }
 

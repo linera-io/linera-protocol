@@ -10,6 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::future::Either;
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
 use linera_base::{
@@ -395,27 +396,21 @@ where
     }
 
     #[instrument(level = "trace", skip(self, certificate))]
-    pub(crate) async fn full_certificate_alt(
+    pub(crate) async fn full_certificate(
         &self,
         certificate: LiteCertificate<'_>,
-    ) -> Result<
-        (
-            Option<ConfirmedBlockCertificate>,
-            Option<ValidatedBlockCertificate>,
-        ),
-        WorkerError,
-    > {
+    ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         match self
             .recent_confirmed_value_cache
             .full_certificate(certificate.clone())
             .await
         {
-            Ok(certificate) => Ok((Some(certificate), None)),
+            Ok(certificate) => Ok(Either::Left(certificate)),
             Err(WorkerError::MissingCertificateValue) => Ok(self
                 .recent_validated_value_cache
                 .full_certificate(certificate)
                 .await
-                .map(|validated_cert| (None, Some(validated_cert)))?),
+                .map(Either::Right)?),
             Err(other) => Err(other),
         }
     }
@@ -833,8 +828,8 @@ where
         certificate: LiteCertificate<'a>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        match self.full_certificate_alt(certificate).await? {
-            (Some(confirmed), None) => {
+        match self.full_certificate(certificate).await? {
+            Either::Left(confirmed) => {
                 self.handle_confirmed_certificate(
                     confirmed,
                     vec![],
@@ -842,9 +837,7 @@ where
                 )
                 .await
             }
-            (None, Some(validated)) => self.handle_validated_certificate(validated, vec![]).await,
-            (Some(_), Some(_)) => Err(WorkerError::InvalidLiteCertificate), // todo: more logging? should not happen
-            _ => Err(WorkerError::MissingCertificateValue),
+            Either::Right(validated) => self.handle_validated_certificate(validated, vec![]).await,
         }
     }
 

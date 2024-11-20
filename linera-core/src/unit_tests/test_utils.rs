@@ -10,6 +10,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{
+    future::Either,
     lock::{Mutex, MutexGuard},
     Future,
 };
@@ -353,16 +354,15 @@ where
         let client = self.client.clone();
         let mut validator = client.lock().await;
         let result = async move {
-            match validator.state.full_certificate_alt(certificate).await? {
-                (Some(confirmed), None) => {
+            match validator.state.full_certificate(certificate).await? {
+                Either::Left(confirmed) => {
                     self.do_handle_certificate_internal(confirmed, &mut validator, vec![])
                         .await
                 }
-                (None, Some(validated)) => {
+                Either::Right(validated) => {
                     self.do_handle_certificate_internal(validated, &mut validator, vec![])
                         .await
                 }
-                _ => panic!("Expected exactly one of confirmed or validated"),
             }
         }
         .await;
