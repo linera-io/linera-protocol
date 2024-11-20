@@ -10,7 +10,7 @@ interface service-system-api {
     read-owner-balance: func(owner: account-owner) -> amount;
     read-system-timestamp: func() -> timestamp;
     read-owner-balances: func() -> list<tuple<account-owner, amount>>;
-    read-balance-owners: func() -> list<owner>;
+    read-balance-owners: func() -> list<account-owner>;
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;

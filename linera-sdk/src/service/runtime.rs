@@ -114,8 +114,7 @@ where
         Self::fetch_value_through_cache(&self.balance_owners, || {
             wit::read_balance_owners()
                 .into_iter()
-                .map(Owner::from)
-                .map(AccountOwner::User)
+                .map(AccountOwner::from)
                 .collect()
         })
         .into_iter()
