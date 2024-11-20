@@ -479,7 +479,7 @@ pub trait BaseRuntime {
     fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError>;
 
     /// Reads the balances from all owners.
-    fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError>;
+    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError>;
 
     /// Reads balance owners.
     fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError>;

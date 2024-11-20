@@ -502,6 +502,15 @@ where
             .runtime
             .read_owner_balances()
             .map_err(|error| RuntimeError::Custom(error.into()))
+            .map(|balances| {
+                balances
+                    .into_iter()
+                    .filter_map(|(account_owner, amount)| match account_owner {
+                        AccountOwner::User(owner) => Some((owner, amount)),
+                        AccountOwner::Application(_) => None,
+                    })
+                    .collect()
+            })
     }
 
     /// Returns the owners of accounts on this chain.
