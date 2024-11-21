@@ -384,9 +384,12 @@ impl SyncRuntimeInternal<UserContractInstance> {
         match self.loaded_applications.entry(id) {
             // TODO(#2927): support dynamic loading of modules on the Web
             #[cfg(web)]
-            hash_map::Entry::Vacant(_) => Err(ExecutionError::UnsupportedDynamicApplicationLoad(
-                Box::new(id),
-            )),
+            hash_map::Entry::Vacant(_) => {
+                drop(this);
+                Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
+                    id,
+                )))
+            }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
                 let (code, description) = self
@@ -502,9 +505,12 @@ impl SyncRuntimeInternal<UserServiceInstance> {
         match self.loaded_applications.entry(id) {
             // TODO(#2927): support dynamic loading of modules on the Web
             #[cfg(web)]
-            hash_map::Entry::Vacant(_) => Err(ExecutionError::UnsupportedDynamicApplicationLoad(
-                Box::new(id),
-            )),
+            hash_map::Entry::Vacant(_) => {
+                drop(this);
+                Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
+                    id,
+                )))
+            }
             #[cfg(not(web))]
             hash_map::Entry::Vacant(entry) => {
                 let (code, description) = self
