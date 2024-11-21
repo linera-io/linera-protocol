@@ -2409,20 +2409,21 @@ where
             }
         };
 
-        let block = executed_block.block.clone();
+        // Collect the blobs required for execution.
+        let block = &executed_block.block;
+        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
+        let already_handled_locally = info.manager.already_handled_proposal(round, block);
         let hashed_value = if round.is_fast() {
             HashedCertificateValue::new_confirmed(executed_block)
         } else {
             HashedCertificateValue::new_validated(executed_block)
         };
-        // Collect the hashed certificate values required for execution.
-        // Create the final block proposal.
-        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         let key_pair = self.key_pair().await?;
-        let already_handled_locally = info.manager.already_handled_proposal(round, &block);
+        // Create the final block proposal.
         let proposal = if let Some(cert) = info.manager.requested_locked {
             Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
         } else {
+            let block = hashed_value.inner().executed_block().unwrap().block.clone();
             Box::new(BlockProposal::new_initial(round, block, &key_pair, blobs))
         };
         if !already_handled_locally {
