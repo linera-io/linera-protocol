@@ -4,11 +4,11 @@
 
 use std::borrow::Cow;
 
-use linera_base::{crypto::Signature, data_types::Round, identifiers::ChainId};
+use linera_base::{crypto::Signature, data_types::Round};
 use linera_execution::committee::{Committee, ValidatorName};
 use serde::{Deserialize, Serialize};
 
-use super::{GenericCertificate, Has, Hashed};
+use super::{CertificateValueT, GenericCertificate, Hashed};
 use crate::{
     data_types::{check_signatures, LiteValue, LiteVote},
     ChainError,
@@ -74,8 +74,12 @@ impl<'a> LiteCertificate<'a> {
     }
 
     /// Returns the [`GenericCertificate`] with the specified value, if it matches.
-    pub fn with_value<T: Has<ChainId>>(self, value: Hashed<T>) -> Option<GenericCertificate<T>> {
-        if self.value.chain_id != value.inner().get() || self.value.value_hash != value.hash() {
+    pub fn with_value<T: CertificateValueT>(
+        self,
+        value: Hashed<T>,
+    ) -> Option<GenericCertificate<T>> {
+        if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
+        {
             return None;
         }
         Some(GenericCertificate::new(

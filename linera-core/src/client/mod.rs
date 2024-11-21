@@ -45,9 +45,9 @@ use linera_chain::{
     },
     manager::ChainManagerInfo,
     types::{
-        Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Has, Hashed,
-        HashedCertificateValue, LiteCertificate, RequiredBlobIds, Timeout, TimeoutCertificate,
-        ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, Hashed, HashedCertificateValue, LiteCertificate, Timeout,
+        TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -1038,19 +1038,13 @@ where
     /// Submits a block proposal to the validators. If it is a slow round, also submits the
     /// validated block for finalization. Returns the confirmed block certificate.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal<
-        T: Clone
-            + Has<ChainId>
-            + Has<RequiredBlobIds, HashSet<BlobId>>
-            + CertificateProcessor
-            + 'static,
-    >(
+    async fn submit_block_proposal<T: CertificateProcessor + 'static>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
         value: Hashed<T>,
     ) -> Result<GenericCertificate<T>, ChainClientError> {
-        let required_blob_ids: HashSet<BlobId> = value.inner().get();
+        let required_blob_ids: HashSet<BlobId> = value.inner().required_blob_ids();
         let proposed_blobs = proposal.blobs.clone();
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
@@ -1105,7 +1099,7 @@ where
     /// In that case, it verifies that the validator votes are for the provided value,
     /// and returns a certificate.
     #[instrument(level = "trace", skip(committee, action, value))]
-    async fn communicate_chain_action<T: Has<ChainId>>(
+    async fn communicate_chain_action<T: CertificateValueT>(
         &self,
         committee: &Committee,
         action: CommunicateAction,

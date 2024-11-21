@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data_types::ExecutedBlock,
-    types::{CertificateValue, Has, Hashed, HashedCertificateValue},
+    types::{CertificateValue, Hashed, HashedCertificateValue},
 };
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
@@ -41,12 +41,6 @@ impl ValidatedBlock {
 }
 
 impl BcsHashable for ValidatedBlock {}
-
-impl Has<ChainId> for ValidatedBlock {
-    fn get(&self) -> ChainId {
-        self.executed_block.block.chain_id
-    }
-}
 
 impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
     type Error = &'static str;
@@ -120,12 +114,6 @@ impl ConfirmedBlock {
     }
 }
 
-impl Has<ChainId> for ConfirmedBlock {
-    fn get(&self) -> ChainId {
-        self.executed_block.block.chain_id
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 pub struct Timeout {
     pub chain_id: ChainId,
@@ -159,9 +147,3 @@ impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
 }
 
 impl BcsHashable for Timeout {}
-
-impl Has<ChainId> for Timeout {
-    fn get(&self) -> ChainId {
-        self.chain_id
-    }
-}

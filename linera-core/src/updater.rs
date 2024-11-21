@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{Certificate, GenericCertificate, Has, IsValidated, RequiredBlobIds},
+    types::{Certificate, GenericCertificate},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
@@ -210,14 +210,7 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate<
-        T: 'static
-            + Clone
-            + CertificateProcessor
-            + Has<RequiredBlobIds, HashSet<BlobId>>
-            + Has<ChainId>
-            + Has<IsValidated, bool>,
-    >(
+    async fn send_certificate<T: 'static + Clone + CertificateProcessor>(
         &mut self,
         certificate: GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
@@ -237,7 +230,7 @@ where
 
                 let blobs = self
                     .local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().get())
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node

@@ -22,8 +22,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        Certificate, ConfirmedBlockCertificate, GenericCertificate, Has, HashedCertificateValue,
-        IsValidated, LiteCertificate,
+        Certificate, CertificateValueT, ConfirmedBlockCertificate, GenericCertificate,
+        HashedCertificateValue, LiteCertificate,
     },
 };
 use linera_execution::{
@@ -125,7 +125,7 @@ where
         .await
     }
 
-    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
+    async fn handle_certificate<T: 'static + CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -316,17 +316,13 @@ where
         }
     }
 
-    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
+    async fn handle_certificate<T: 'static + CertificateProcessor>(
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated
-                if Has::<IsValidated, bool>::get(certificate.inner()) =>
-            {
-                None
-            }
+            FaultType::DontProcessValidated if certificate.inner().is_validated() => None,
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -370,14 +366,14 @@ where
     }
 
     async fn do_handle_certificate_internal<
-        T: 'static + CertificateProcessor + Has<IsValidated, bool>,
+        T: 'static + CertificateProcessor + CertificateValueT,
     >(
         &self,
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let is_validated = Has::<IsValidated, bool>::get(certificate.inner());
+        let is_validated = certificate.inner().is_validated();
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
@@ -406,7 +402,7 @@ where
         }
     }
 
-    async fn do_handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
+    async fn do_handle_certificate<T: 'static + CertificateProcessor>(
         self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

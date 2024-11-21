@@ -14,8 +14,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        Certificate, ConfirmedBlockCertificate, GenericCertificate, Has, IsValidated,
-        LiteCertificate, RequiredBlobIds,
+        Certificate, CertificateValueT, ConfirmedBlockCertificate, GenericCertificate,
+        LiteCertificate,
     },
 };
 use linera_execution::committee::ValidatorName;
@@ -57,9 +57,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_certificate<
-        T: 'static + CertificateProcessor + Has<ChainId> + Has<IsValidated, bool>,
-    >(
+    pub(crate) async fn handle_certificate<T: 'static + CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -68,7 +66,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     where
         Certificate: From<GenericCertificate<T>>,
     {
-        let chain_id = certificate.inner().get();
+        let chain_id = certificate.inner().chain_id();
         let response = self
             .node
             .handle_certificate(certificate, blobs, delivery)
@@ -90,9 +88,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_certificate<
-        T: 'static + Clone + CertificateProcessor + Has<ChainId> + Has<IsValidated, bool>,
-    >(
+    pub(crate) async fn handle_optimized_certificate<T: 'static + CertificateProcessor>(
         &mut self,
         certificate: &GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
@@ -317,13 +313,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found<T: Has<RequiredBlobIds, HashSet<BlobId>>>(
+    pub fn check_blobs_not_found<T: CertificateValueT>(
         &self,
         certificate: &GenericCertificate<T>,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
         // Find the missing blobs locally and retry.
-        let required = certificate.inner().get();
+        let required = certificate.inner().required_blob_ids();
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 warn!(

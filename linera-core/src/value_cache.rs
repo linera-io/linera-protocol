@@ -11,12 +11,8 @@ mod unit_tests;
 use std::{any::type_name, sync::LazyLock};
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::Blob,
-    identifiers::{BlobId, ChainId},
-};
-use linera_chain::types::{GenericCertificate, Has, Hashed, LiteCertificate};
+use linera_base::{crypto::CryptoHash, data_types::Blob, identifiers::BlobId};
+use linera_chain::types::{CertificateValueT, GenericCertificate, Hashed, LiteCertificate};
 use lru::LruCache;
 use tokio::sync::Mutex;
 #[cfg(with_metrics)]
@@ -215,7 +211,7 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
         certificate: LiteCertificate<'_>,
     ) -> Result<GenericCertificate<T>, WorkerError>
     where
-        T: Has<ChainId>,
+        T: CertificateValueT,
     {
         let value = self
             .get(&certificate.value.value_hash)

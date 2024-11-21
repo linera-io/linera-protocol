@@ -8,9 +8,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{
-        Certificate, GenericCertificate, Has, HashedCertificateValue, IsValidated, LiteCertificate,
-    },
+    types::{Certificate, GenericCertificate, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -78,7 +76,7 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_certificate<T: 'static + CertificateProcessor + Has<IsValidated, bool>>(
+    async fn handle_certificate<T: 'static + CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

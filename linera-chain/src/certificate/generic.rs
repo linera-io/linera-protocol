@@ -6,11 +6,10 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{CryptoHash, Signature},
     data_types::Round,
-    identifiers::ChainId,
 };
 use linera_execution::committee::{Committee, ValidatorName};
 
-use super::{hashed::Hashed, Has};
+use super::{hashed::Hashed, CertificateValueT};
 use crate::ChainError;
 
 /// Generic type representing a certificate for `value` of type `T`.
@@ -103,7 +102,7 @@ impl<T> GenericCertificate<T> {
 
     pub fn lite_cerificate(&self) -> crate::certificate::LiteCertificate<'_>
     where
-        T: Has<ChainId>,
+        T: CertificateValueT,
     {
         let value = self.value.lite();
         crate::certificate::LiteCertificate {

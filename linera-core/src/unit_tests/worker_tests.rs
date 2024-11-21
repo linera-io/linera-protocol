@@ -33,7 +33,7 @@ use linera_chain::{
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Has, Hashed,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
         HashedCertificateValue, Timeout, TimeoutCertificate, ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
@@ -149,7 +149,7 @@ fn make_certificate<S, T>(
 ) -> GenericCertificate<T>
 where
     S: Storage,
-    T: Clone + Has<ChainId>,
+    T: CertificateValueT,
 {
     make_certificate_with_round(committee, worker, value, Round::Fast)
 }
@@ -162,7 +162,7 @@ fn make_certificate_with_round<S, T>(
 ) -> GenericCertificate<T>
 where
     S: Storage,
-    T: Clone + Has<ChainId>,
+    T: CertificateValueT,
 {
     let vote = LiteVote::new(
         value.lite(),

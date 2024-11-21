@@ -27,9 +27,9 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        Certificate, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
-        GenericCertificate, Hashed, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
-        ValidatedBlockCertificate,
+        Certificate, CertificateValue, CertificateValueT, ConfirmedBlock,
+        ConfirmedBlockCertificate, GenericCertificate, Hashed, LiteCertificate, Timeout,
+        TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
@@ -417,7 +417,7 @@ where
 }
 
 #[async_trait]
-pub trait CertificateProcessor: Send + Sized {
+pub trait CertificateProcessor: CertificateValueT + Send + Sized {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
