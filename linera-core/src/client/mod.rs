@@ -1968,11 +1968,12 @@ where
         let incoming_bundles = self.pending_message_bundles().await?;
         let identity = self.identity().await?;
         let info = self.chain_info_with_manager_values().await?;
-        let Some(round) = Self::round_for_new_proposal(&info.manager, &identity, None) else {
-            let timeout = info.round_timeout().ok_or_else(|| {
-                ChainClientError::BlockProposalError("Cannot propose in the current round.")
-            })?;
-            return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout));
+        let round = match Self::round_for_new_proposal(&info.manager, &identity, None) {
+            Ok(round) => round,
+            Err(error) => {
+                let timeout = info.round_timeout().ok_or(error)?;
+                return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout));
+            }
         };
         let confirmed_value = self
             .new_pending_block(round, incoming_bundles, operations, identity)
@@ -2363,14 +2364,10 @@ where
                 let committee = self.local_committee().await?;
                 match self.finalize_block(&committee, *certificate.clone()).await {
                     Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
-                    Err(ChainClientError::CommunicationError(_)) => {
+                    Err(ChainClientError::CommunicationError(error)) => {
                         // Communication errors in this case often mean that someone else already
                         // finalized the block or started another round.
-                        let timestamp = info.manager.round_timeout.ok_or_else(|| {
-                            ChainClientError::BlockProposalError(
-                                "Cannot propose in the current round.",
-                            )
-                        })?;
+                        let timestamp = info.manager.round_timeout.ok_or(error)?;
                         return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
                             timestamp,
                             current_round: info.manager.current_round,
@@ -2402,13 +2399,16 @@ where
             self.stage_block_execution(block).await?.0
         };
 
-        let Some(round) =
-            Self::round_for_new_proposal(&info.manager, &identity, Some(&executed_block.block))
-        else {
-            let timeout = info.round_timeout().ok_or_else(|| {
-                ChainClientError::BlockProposalError("Cannot propose in the current round.")
-            })?;
-            return Ok(ClientOutcome::WaitForTimeout(timeout));
+        let round = match Self::round_for_new_proposal(
+            &info.manager,
+            &identity,
+            Some(&executed_block.block),
+        ) {
+            Ok(round) => round,
+            Err(error) => {
+                let timeout = info.round_timeout().ok_or(error)?;
+                return Ok(ClientOutcome::WaitForTimeout(timeout));
+            }
         };
 
         let block = executed_block.block.clone();
@@ -2482,7 +2482,7 @@ where
         manager: &ChainManagerInfo,
         identity: &Owner,
         block: Option<&Block>,
-    ) -> Option<Round> {
+    ) -> Result<Round, ChainClientError> {
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
@@ -2498,9 +2498,16 @@ where
         {
             round
         } else {
-            return None;
+            return Err(ChainClientError::BlockProposalError(
+                "Conflicting proposal in the current round",
+            ));
         };
-        manager.can_propose(identity, round).then_some(round)
+        manager
+            .can_propose(identity, round)
+            .then_some(round)
+            .ok_or_else(|| {
+                ChainClientError::BlockProposalError("Not a leader in the current round")
+            })
     }
 
     /// Clears the information on any operation that previously failed.
