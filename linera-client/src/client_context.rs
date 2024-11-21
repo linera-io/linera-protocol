@@ -37,7 +37,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
-    linera_chain::types::{Certificate, GenericCertificate},
+    linera_chain::types::{Certificate, CertificateValueT, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
@@ -807,7 +807,7 @@ where
         votes: Vec<Vote<T>>,
     ) -> Vec<GenericCertificate<T>>
     where
-        T: std::fmt::Debug + Clone + Has<ChainId>,
+        T: std::fmt::Debug + CertificateValueT,
     {
         let committee = self.wallet.genesis_config().create_committee();
         let mut aggregators = HashMap::new();
@@ -815,7 +815,7 @@ where
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = Has::<ChainId>::get(vote.value());
+            let chain_id = vote.value().chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
