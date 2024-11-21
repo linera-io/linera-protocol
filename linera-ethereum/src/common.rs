@@ -38,9 +38,6 @@ pub enum EthereumServiceError {
     #[error("Failed to deploy the smart contract")]
     DeployError,
 
-    #[error("Json error occurred")]
-    JsonError,
-
     #[error("Unsupported Ethereum type")]
     UnsupportedEthereumTypeError,
 
@@ -65,7 +62,7 @@ pub enum EthereumServiceError {
 
     /// `serde_json` error
     #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::Error),
+    JsonError(#[from] serde_json::Error),
 
     /// RPC error
     #[error(transparent)]

@@ -18,7 +18,7 @@ use dashmap::{
     DashMap,
 };
 use futures::{
-    future::{self, try_join_all, FusedFuture, Future},
+    future::{self, try_join_all, Either, FusedFuture, Future},
     stream::{self, AbortHandle, FusedStream, FuturesUnordered, StreamExt},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -92,67 +92,52 @@ mod client_tests;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util;
+    use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
     pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
         LazyLock::new(|| {
-            prometheus_util::register_histogram_vec(
+            register_histogram_vec(
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
-                Some(vec![
-                    0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                    25.0, 50.0, 100.0, 250.0, 500.0,
-                ]),
+                bucket_latencies(500.0),
             )
         });
 
     pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "prepare_chain_latency",
             "prepare_chain latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 
     pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "synchronize_chain_state_latency",
             "synchronize_chain_state latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 
     pub static EXECUTE_BLOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "execute_block_latency",
             "execute_block latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 
     pub static FIND_RECEIVED_CERTIFICATES_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        prometheus_util::register_histogram_vec(
+        register_histogram_vec(
             "find_received_certificates_latency",
             "find_received_certificates latency",
             &[],
-            Some(vec![
-                0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-                25.0, 50.0, 100.0, 250.0, 500.0,
-            ]),
+            bucket_latencies(500.0),
         )
     });
 }
@@ -1941,12 +1926,10 @@ where
             );
             validated_block_certificate.executed_block().clone()
         } else {
-            self.stage_block_execution_and_discard_failing_messages(block)
-                .await?
-                .0
+            self.stage_block_execution(block).await?.0
         };
         let block = executed_block.block.clone();
-        if let Some(proposal) = manager.requested_proposed {
+        if let Some(proposal) = &manager.requested_proposed {
             if proposal.content.round.is_fast() {
                 ensure!(
                     proposal.content.block == block,
@@ -1970,11 +1953,18 @@ where
                 blobs,
             ))
         };
-        // Check the final block proposal. This will be cheaper after #1401.
-        self.client
-            .local_node
-            .handle_block_proposal(*proposal.clone())
-            .await?;
+        if manager
+            .requested_proposed
+            .as_ref()
+            .map(|proposal| &proposal.content)
+            != Some(&proposal.content)
+        {
+            // Check the final block proposal. This will be cheaper after #1401.
+            self.client
+                .local_node
+                .handle_block_proposal(*proposal.clone())
+                .await?;
+        }
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut().set_pending_block(block);
         // Collect the hashed certificate values required for execution.
@@ -2090,8 +2080,18 @@ where
             }
             ClientOutcome::Committed(None) => {}
         }
+
         let incoming_bundles = self.pending_message_bundles().await?;
-        let confirmed_value = self.set_pending_block(incoming_bundles, operations).await?;
+        let identity = self.identity().await?;
+        let info = self.chain_info_with_manager_values().await?;
+        let round = match Self::round_for_new_proposal(&info, &identity, None)? {
+            Either::Left(round) => round,
+            Either::Right(timeout) => return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)),
+        };
+        let confirmed_value = self
+            .new_pending_block(round, incoming_bundles, operations, identity)
+            .await?;
+
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
                 if certificate.executed_block().block == confirmed_value.inner().inner().block =>
@@ -2111,17 +2111,26 @@ where
         }
     }
 
-    /// Sets the pending block, so that next time `process_pending_block_without_prepare` is
-    /// called, it will be proposed to the validators.
+    /// Creates a new pending block and handles the proposal in the local node.
+    /// Next time `process_pending_block_without_prepare` is called, this block will be proposed
+    /// to the validators.
     #[instrument(level = "trace", skip(incoming_bundles, operations))]
-    async fn set_pending_block(
+    async fn new_pending_block(
         &self,
+        round: Round,
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
+        identity: Owner,
     ) -> Result<Hashed<ConfirmedBlock>, ChainClientError> {
-        let identity = self.identity().await?;
         let (previous_block_hash, height, timestamp) = {
             let state = self.state();
+            ensure!(
+                state.pending_block().is_none(),
+                ChainClientError::BlockProposalError(
+                    "Client state already has a pending block; \
+                    use the `linera retry-pending-block` command to commit that first"
+                )
+            );
             (
                 state.block_hash(),
                 state.next_block_height(),
@@ -2143,8 +2152,23 @@ where
         let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
-        self.state_mut()
-            .set_pending_block(executed_block.block.clone());
+        let block = executed_block.block.clone();
+        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
+        let key_pair = self.key_pair().await?;
+
+        let proposal = Box::new(BlockProposal::new_initial(
+            round,
+            block.clone(),
+            &key_pair,
+            blobs,
+        ));
+        // Check the final block proposal. This will be cheaper after #1401.
+        self.client
+            .local_node
+            .handle_block_proposal(*proposal.clone())
+            .await?;
+        self.state_mut().set_pending_block(block);
+
         Ok(HashedCertificateValue::new_confirmed(executed_block))
     }
 
@@ -2438,7 +2462,7 @@ where
             }
         }
         self.update_from_info(&info);
-        let manager = *info.manager;
+        let manager = &info.manager;
 
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &manager.requested_locked {
@@ -2474,10 +2498,29 @@ where
             return Ok(ClientOutcome::Committed(None)); // Nothing to propose.
         };
 
+        let round = match Self::round_for_new_proposal(&info, &identity, Some(&block))? {
+            Either::Left(round) => round,
+            Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
+        };
+        let certificate = self
+            .propose_block(block.clone(), round, *info.manager)
+            .await?;
+        Ok(ClientOutcome::Committed(Some(certificate)))
+    }
+
+    /// Returns a round in which we can propose a new block or the given one, or a timeout for
+    /// the current round.
+    fn round_for_new_proposal(
+        info: &ChainInfo,
+        identity: &Owner,
+        block: Option<&Block>,
+    ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
+        let manager = &info.manager;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == manager.current_round && proposal.content.block != block
+            proposal.content.round == manager.current_round
+                && block.map_or(true, |block| proposal.content.block != *block)
         });
         let round = if !conflicting_proposal {
             manager.current_round
@@ -2488,7 +2531,7 @@ where
         {
             round
         } else if let Some(timestamp) = manager.round_timeout {
-            return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+            return Ok(Either::Right(RoundTimeout {
                 timestamp,
                 current_round: manager.current_round,
                 next_block_height: info.next_block_height,
@@ -2498,20 +2541,18 @@ where
                 "Conflicting proposal in the current round.",
             ));
         };
-        if manager.can_propose(&identity, round) {
-            let certificate = self.propose_block(block.clone(), round, manager).await?;
-            Ok(ClientOutcome::Committed(Some(certificate)))
-        } else {
-            // TODO(#1424): Local timeout might not match validators' exactly.
-            let timestamp = manager.round_timeout.ok_or_else(|| {
-                ChainClientError::BlockProposalError("Cannot propose in the current round.")
-            })?;
-            Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-                timestamp,
-                current_round: manager.current_round,
-                next_block_height: info.next_block_height,
-            }))
+        if manager.can_propose(identity, round) {
+            return Ok(Either::Left(round));
         }
+        // TODO(#1424): Local timeout might not match validators' exactly.
+        let timestamp = manager.round_timeout.ok_or_else(|| {
+            ChainClientError::BlockProposalError("Cannot propose in the current round.")
+        })?;
+        Ok(Either::Right(RoundTimeout {
+            timestamp,
+            current_round: manager.current_round,
+            next_block_height: info.next_block_height,
+        }))
     }
 
     /// Clears the information on any operation that previously failed.

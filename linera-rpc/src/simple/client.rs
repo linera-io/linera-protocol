@@ -56,13 +56,13 @@ impl SimpleClient {
         // Send message
         timer::timeout(self.send_timeout, stream.send(message))
             .await
-            .map_err(|timeout| codec::Error::Io(timeout.into()))??;
+            .map_err(|timeout| codec::Error::IoError(timeout.into()))??;
         // Wait for reply
         timer::timeout(self.recv_timeout, stream.next())
             .await
-            .map_err(|timeout| codec::Error::Io(timeout.into()))?
+            .map_err(|timeout| codec::Error::IoError(timeout.into()))?
             .transpose()?
-            .ok_or_else(|| codec::Error::Io(std::io::ErrorKind::UnexpectedEof.into()))
+            .ok_or_else(|| codec::Error::IoError(std::io::ErrorKind::UnexpectedEof.into()))
     }
 
     async fn query<Response>(&self, query: RpcMessage) -> Result<Response, Response::Error>

@@ -98,20 +98,20 @@ pub trait View<C>: Sized {
 /// Main error type for the crate.
 #[derive(Error, Debug)]
 pub enum ViewError {
-    /// An error occurred during BCS serialization.
-    #[error("failed to serialize value to calculate its hash")]
-    Serialization(#[from] bcs::Error),
+    /// BCS serialization error.
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
 
     /// We failed to acquire an entry in a CollectionView or a ReentrantCollectionView.
     #[error("trying to access a collection view or reentrant collection view while some entries are still being accessed")]
     CannotAcquireCollectionEntry,
 
     /// Input output error.
-    #[error("IO error")]
-    Io(#[from] std::io::Error),
+    #[error("I/O error")]
+    IoError(#[from] std::io::Error),
 
     /// Arithmetic error
-    #[error("Arithmetic error")]
+    #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
     /// An error happened while trying to lock.

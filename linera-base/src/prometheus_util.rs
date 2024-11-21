@@ -4,8 +4,8 @@
 //! This module defines util functions for interacting with Prometheus (logging metrics, etc)
 
 use prometheus::{
-    histogram_opts, register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
-    Opts,
+    exponential_buckets, histogram_opts, register_histogram_vec, register_int_counter_vec,
+    HistogramVec, IntCounterVec, Opts,
 };
 
 use crate::time::Instant;
@@ -36,6 +36,23 @@ pub fn register_histogram_vec(
     };
 
     register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
+}
+
+/// Construct the bucket interval starting from a value and an ending value.
+pub fn bucket_interval(start_value: f64, end_value: f64) -> Option<Vec<f64>> {
+    let quot = end_value / start_value;
+    let factor = 3.0_f64;
+    let count_approx = quot.ln() / factor.ln();
+    let count = count_approx.round() as usize;
+    Some(
+        exponential_buckets(start_value, factor, count)
+            .expect("Exponential buckets creation should not fail!"),
+    )
+}
+
+/// Construct the latencies starting from 0.0001 and ending at the maximum latency
+pub fn bucket_latencies(max_latency: f64) -> Option<Vec<f64>> {
+    bucket_interval(0.0001_f64, max_latency)
 }
 
 /// A guard for an active latency measurement.

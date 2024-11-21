@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    IoError(#[from] std::io::Error),
     #[error("chain error: {0}")]
     Chain(#[from] linera_chain::ChainError),
     #[error("persistence error: {0}")]

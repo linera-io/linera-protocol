@@ -28,7 +28,7 @@ use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 use wasmtime::{WasmtimeContractInstance, WasmtimeServiceInstance};
 #[cfg(with_metrics)]
 use {
-    linera_base::prometheus_util::{self, MeasureLatency},
+    linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, MeasureLatency},
     prometheus::HistogramVec,
     std::sync::LazyLock,
 };
@@ -45,25 +45,21 @@ use crate::{
 
 #[cfg(with_metrics)]
 static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "contract_instantiation_latency",
         "Contract instantiation latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_3, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
-        ]),
+        bucket_latencies(1.0),
     )
 });
 
 #[cfg(with_metrics)]
 static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-    prometheus_util::register_histogram_vec(
+    register_histogram_vec(
         "service_instantiation_latency",
         "Service instantiation latency",
         &[],
-        Some(vec![
-            0.000_1, 0.000_3, 0.001, 0.002_5, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
-        ]),
+        bucket_latencies(1.0),
     )
 });
 
@@ -284,7 +280,7 @@ pub enum WasmExecutionError {
     #[error("Failed to instantiate Wasm module: {_0}")]
     InstantiateModuleWithWasmer(#[from] Box<::wasmer::InstantiationError>),
     #[cfg(with_wasmtime)]
-    #[error("Failed to create and configure Wasmtime runtime")]
+    #[error("Failed to create and configure Wasmtime runtime: {_0}")]
     CreateWasmtimeEngine(#[source] anyhow::Error),
     #[cfg(with_wasmer)]
     #[error(

@@ -39,11 +39,11 @@ pub enum RuntimeError {
     NotMemory,
 
     /// Attempt to load a string from a sequence of bytes that doesn't contain a UTF-8 string.
-    #[error("Failed to load string from non-UTF-8 bytes")]
+    #[error("Failed to load string from non-UTF-8 bytes: {0}")]
     InvalidString(#[from] FromUtf8Error),
 
     /// Attempt to create a `GuestPointer` from an invalid address representation.
-    #[error("Invalid address read")]
+    #[error("Invalid address read: {0}")]
     InvalidNumber(#[from] TryFromIntError),
 
     /// Attempt to load an `enum` type but the discriminant doesn't match any of the variants.

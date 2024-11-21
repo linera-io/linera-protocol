@@ -2474,8 +2474,6 @@ where
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(*chain_error, ChainError::BlockProposalTooLarge)
     );
-    // TODO(#2906): Remove this once the client properly clears the pending block.
-    client1.clear_pending_block();
 
     let result = client1.publish_data_blob(large_blob_bytes).await;
     assert_matches!(
