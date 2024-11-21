@@ -583,7 +583,7 @@ impl AmmContract {
 
             // When removing liquidity, you'll specify one of the tokens you want to
             // remove and the amount, and we'll calculate the amount for the other token that
-            // we'll remove based on the current ratio, and remove them.
+            // we'll remove them based on the current ratio, and remove them.
             Operation::RemoveLiquidity {
                 owner,
                 token_to_remove_idx,
