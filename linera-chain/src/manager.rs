@@ -85,7 +85,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
+    data_types::{BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
     types::{
         ConfirmedBlockCertificate, Hashed, HashedCertificateValue, TimeoutCertificate,
         ValidatedBlockCertificate,
@@ -682,21 +682,6 @@ impl ChainManagerInfo {
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
         self.pending_blobs = manager.pending_blobs.clone();
-    }
-
-    /// Gets the highest validated block.
-    pub fn highest_validated_block(&self) -> Option<&Block> {
-        if let Some(certificate) = &self.requested_locked {
-            return Some(&certificate.executed_block().block);
-        }
-
-        if let Some(proposal) = &self.requested_proposed {
-            if proposal.content.round.is_fast() {
-                return Some(&proposal.content.block);
-            }
-        }
-
-        None
     }
 
     /// Returns whether the `identity` is allowed to propose a block in `round`.

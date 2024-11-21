@@ -199,6 +199,19 @@ pub struct ChainInfo {
     pub requested_received_log: Vec<ChainAndHeight>,
 }
 
+impl ChainInfo {
+    /// Returns the `RoundTimeout` value for the current round, or `None` if the current round
+    /// does not time out.
+    pub fn round_timeout(&self) -> Option<RoundTimeout> {
+        // TODO(#1424): The local timeout might not match the validators' exactly.
+        Some(RoundTimeout {
+            timestamp: self.manager.round_timeout?,
+            current_round: self.manager.current_round,
+            next_block_height: self.next_block_height,
+        })
+    }
+}
+
 /// The response to an `ChainInfoQuery`
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
