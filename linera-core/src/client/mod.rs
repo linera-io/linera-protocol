@@ -43,7 +43,6 @@ use linera_chain::{
         Block, BlockProposal, ChainAndHeight, ExecutedBlock, IncomingBundle, LiteVote,
         MessageAction,
     },
-    manager::ChainManagerInfo,
     types::{
         Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate,
         ValidatedBlockCertificate,
@@ -1898,129 +1897,6 @@ where
         Ok(blobs)
     }
 
-    /// Executes (or retries) a regular block proposal. Updates local balance.
-    #[instrument(level = "trace", skip(block, round, manager))]
-    async fn propose_block(
-        &self,
-        block: Block,
-        round: Round,
-        manager: ChainManagerInfo,
-    ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        let next_block_height;
-        let block_hash;
-        {
-            let state = self.state();
-            next_block_height = state.next_block_height();
-            block_hash = state.block_hash();
-            // In the fast round, we must never make any conflicting proposals.
-            if round.is_fast() {
-                if let Some(pending) = &state.pending_block() {
-                    ensure!(
-                        pending == &block,
-                        ChainClientError::BlockProposalError(
-                            "Client state has a different pending block; \
-                             use the `linera retry-pending-block` command to commit that first"
-                        )
-                    );
-                }
-            }
-        }
-
-        ensure!(
-            block.height == next_block_height,
-            ChainClientError::BlockProposalError("Unexpected block height")
-        );
-        ensure!(
-            block.previous_block_hash == block_hash,
-            ChainClientError::BlockProposalError("Unexpected previous block hash")
-        );
-        // Make sure that we follow the steps in the multi-round protocol.
-        let executed_block = if let Some(validated_block_certificate) = &manager.requested_locked {
-            ensure!(
-                validated_block_certificate.executed_block().block == block,
-                ChainClientError::BlockProposalError(
-                    "A different block has already been validated at this height"
-                )
-            );
-            validated_block_certificate.executed_block().clone()
-        } else {
-            self.stage_block_execution(block).await?.0
-        };
-        let block = executed_block.block.clone();
-        if let Some(proposal) = &manager.requested_proposed {
-            if proposal.content.round.is_fast() {
-                ensure!(
-                    proposal.content.block == block,
-                    ChainClientError::BlockProposalError(
-                        "Chain manager has a different pending block in the fast round"
-                    )
-                );
-            }
-        }
-        let hashed_value = if round.is_fast() {
-            HashedCertificateValue::new_confirmed(executed_block)
-        } else {
-            HashedCertificateValue::new_validated(executed_block)
-        };
-        // Collect the hashed certificate values required for execution.
-        let committee = self.local_committee().await?;
-        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
-        // Create the final block proposal.
-        let key_pair = self.key_pair().await?;
-        let proposal = if let Some(cert) = manager.requested_locked {
-            Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
-        } else {
-            Box::new(BlockProposal::new_initial(
-                round,
-                block.clone(),
-                &key_pair,
-                blobs,
-            ))
-        };
-        if manager
-            .requested_proposed
-            .as_ref()
-            .map(|proposal| &proposal.content)
-            != Some(&proposal.content)
-        {
-            // Check the final block proposal. This will be cheaper after #1401.
-            self.client
-                .local_node
-                .handle_block_proposal(*proposal.clone())
-                .await?;
-        }
-        // Remember what we are trying to do before sending the proposal to the validators.
-        self.state_mut().set_pending_block(block);
-        // Send the query to validators.
-        let certificate = self
-            .submit_block_proposal(&committee, proposal, hashed_value)
-            .await?;
-        // Communicate the new certificate now.
-        let next_block_height = self.next_block_height();
-        self.communicate_chain_updates(
-            &committee,
-            self.chain_id,
-            next_block_height,
-            self.options.cross_chain_message_delivery,
-        )
-        .await?;
-        if let Ok(new_committee) = self.local_committee().await {
-            if new_committee != committee {
-                // If the configuration just changed, communicate to the new committee as well.
-                // (This is actually more important that updating the previous committee.)
-                let next_block_height = self.next_block_height();
-                self.communicate_chain_updates(
-                    &new_committee,
-                    self.chain_id,
-                    next_block_height,
-                    self.options.cross_chain_message_delivery,
-                )
-                .await?;
-            }
-        }
-        Ok(certificate)
-    }
-
     /// Executes a list of operations.
     #[instrument(level = "trace", skip(operations))]
     pub async fn execute_operations(
@@ -2469,7 +2345,7 @@ where
             }
         }
         self.update_from_info(&info);
-        let manager = &info.manager;
+        let manager = &*info.manager;
 
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &manager.requested_locked {
@@ -2509,9 +2385,120 @@ where
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
+
+        let manager = *info.manager;
+        let next_block_height;
+        let block_hash;
+        {
+            let state = self.state();
+            next_block_height = state.next_block_height();
+            block_hash = state.block_hash();
+            // In the fast round, we must never make any conflicting proposals.
+            if round.is_fast() {
+                if let Some(pending) = &state.pending_block() {
+                    ensure!(
+                        pending == &block,
+                        ChainClientError::BlockProposalError(
+                            "Client state has a different pending block; \
+                             use the `linera retry-pending-block` command to commit that first"
+                        )
+                    );
+                }
+            }
+        }
+
+        ensure!(
+            block.height == next_block_height,
+            ChainClientError::BlockProposalError("Unexpected block height")
+        );
+        ensure!(
+            block.previous_block_hash == block_hash,
+            ChainClientError::BlockProposalError("Unexpected previous block hash")
+        );
+        // Make sure that we follow the steps in the multi-round protocol.
+        let executed_block = if let Some(validated_block_certificate) = &manager.requested_locked {
+            ensure!(
+                validated_block_certificate.executed_block().block == block,
+                ChainClientError::BlockProposalError(
+                    "A different block has already been validated at this height"
+                )
+            );
+            validated_block_certificate.executed_block().clone()
+        } else {
+            self.stage_block_execution(block).await?.0
+        };
+        let block = executed_block.block.clone();
+        if let Some(proposal) = &manager.requested_proposed {
+            if proposal.content.round.is_fast() {
+                ensure!(
+                    proposal.content.block == block,
+                    ChainClientError::BlockProposalError(
+                        "Chain manager has a different pending block in the fast round"
+                    )
+                );
+            }
+        }
+        let hashed_value = if round.is_fast() {
+            HashedCertificateValue::new_confirmed(executed_block)
+        } else {
+            HashedCertificateValue::new_validated(executed_block)
+        };
+        // Collect the hashed certificate values required for execution.
+        let committee = self.local_committee().await?;
+        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
+        // Create the final block proposal.
+        let key_pair = self.key_pair().await?;
+        let proposal = if let Some(cert) = manager.requested_locked {
+            Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
+        } else {
+            Box::new(BlockProposal::new_initial(
+                round,
+                block.clone(),
+                &key_pair,
+                blobs,
+            ))
+        };
+        if manager
+            .requested_proposed
+            .as_ref()
+            .map(|proposal| &proposal.content)
+            != Some(&proposal.content)
+        {
+            // Check the final block proposal. This will be cheaper after #1401.
+            self.client
+                .local_node
+                .handle_block_proposal(*proposal.clone())
+                .await?;
+        }
+        // Remember what we are trying to do before sending the proposal to the validators.
+        self.state_mut().set_pending_block(block);
+        // Send the query to validators.
         let certificate = self
-            .propose_block(block.clone(), round, *info.manager)
+            .submit_block_proposal(&committee, proposal, hashed_value)
             .await?;
+        // Communicate the new certificate now.
+        let next_block_height = self.next_block_height();
+        self.communicate_chain_updates(
+            &committee,
+            self.chain_id,
+            next_block_height,
+            self.options.cross_chain_message_delivery,
+        )
+        .await?;
+        if let Ok(new_committee) = self.local_committee().await {
+            if new_committee != committee {
+                // If the configuration just changed, communicate to the new committee as well.
+                // (This is actually more important that updating the previous committee.)
+                let next_block_height = self.next_block_height();
+                self.communicate_chain_updates(
+                    &new_committee,
+                    self.chain_id,
+                    next_block_height,
+                    self.options.cross_chain_message_delivery,
+                )
+                .await?;
+            }
+        }
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 
