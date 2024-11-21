@@ -684,21 +684,6 @@ impl ChainManagerInfo {
         self.pending_blobs = manager.pending_blobs.clone();
     }
 
-    /// Gets the highest validated block.
-    pub fn highest_validated_block(&self) -> Option<&Block> {
-        if let Some(certificate) = &self.requested_locked {
-            return Some(&certificate.executed_block().block);
-        }
-
-        if let Some(proposal) = &self.requested_proposed {
-            if proposal.content.round.is_fast() {
-                return Some(&proposal.content.block);
-            }
-        }
-
-        None
-    }
-
     /// Returns whether the `identity` is allowed to propose a block in `round`.
     /// This is dependant on the type of round and whether `identity` is a validator or (super)owner.
     pub fn can_propose(&self, identity: &Owner, round: Round) -> bool {
@@ -707,5 +692,19 @@ impl ChainManagerInfo {
             Round::MultiLeader(_) => true,
             Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
         }
+    }
+
+    /// Returns whether a proposal with this content was already handled.
+    pub fn already_handled_proposal(&self, round: Round, block: &Block) -> bool {
+        self.requested_proposed.as_ref().is_some_and(|proposal| {
+            proposal.content.round == round && proposal.content.block == *block
+        })
+    }
+
+    /// Returns whether there is a locked block in the current round.
+    pub fn has_locked_block_in_current_round(&self) -> bool {
+        self.requested_locked
+            .as_ref()
+            .is_some_and(|certificate| certificate.round == self.current_round)
     }
 }

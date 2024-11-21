@@ -10,6 +10,7 @@ use std::{
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
     data_types::{Blob, BlockHeight, Timestamp},
+    ensure,
     identifiers::{BlobId, Owner},
     ownership::ChainOwnership,
 };
@@ -17,6 +18,7 @@ use linera_chain::data_types::Block;
 use linera_execution::committee::ValidatorName;
 use tokio::sync::Mutex;
 
+use super::ChainClientError;
 use crate::data_types::ChainInfo;
 
 /// The state of our interaction with a particular chain: how far we have synchronized it and
@@ -167,5 +169,18 @@ impl ChainClientState {
 
     pub(super) fn client_mutex(&self) -> Arc<Mutex<()>> {
         self.client_mutex.clone()
+    }
+
+    /// Returns an error if the chain info does not match the block hash and height.
+    pub(super) fn check_info_is_up_to_date(
+        &self,
+        info: &ChainInfo,
+    ) -> Result<(), ChainClientError> {
+        ensure!(
+            self.block_hash() == info.block_hash
+                && self.next_block_height() == info.next_block_height,
+            ChainClientError::BlockProposalError("The chain is not synchronized.")
+        );
+        Ok(())
     }
 }
