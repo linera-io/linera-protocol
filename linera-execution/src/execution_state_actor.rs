@@ -59,6 +59,36 @@ where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    pub(crate) async fn load_contract(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<(UserContractCode, UserApplicationDescription), ExecutionError> {
+        #[cfg(with_metrics)]
+        let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
+        let description = self.system.registry.describe_application(id).await?;
+        let code = self
+            .context()
+            .extra()
+            .get_user_contract(&description)
+            .await?;
+        Ok((code, description))
+    }
+
+    pub(crate) async fn load_service(
+        &mut self,
+        id: UserApplicationId,
+    ) -> Result<(UserServiceCode, UserApplicationDescription), ExecutionError> {
+        #[cfg(with_metrics)]
+        let _latency = LOAD_SERVICE_LATENCY.measure_latency();
+        let description = self.system.registry.describe_application(id).await?;
+        let code = self
+            .context()
+            .extra()
+            .get_user_service(&description)
+            .await?;
+        Ok((code, description))
+    }
+
     // TODO(#1416): Support concurrent I/O.
     pub(crate) async fn handle_request(
         &mut self,
@@ -66,29 +96,10 @@ where
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
-            LoadContract { id, callback } => {
-                #[cfg(with_metrics)]
-                let _latency = LOAD_CONTRACT_LATENCY.measure_latency();
-                let description = self.system.registry.describe_application(id).await?;
-                let code = self
-                    .context()
-                    .extra()
-                    .get_user_contract(&description)
-                    .await?;
-                callback.respond((code, description));
-            }
-
-            LoadService { id, callback } => {
-                #[cfg(with_metrics)]
-                let _latency = LOAD_SERVICE_LATENCY.measure_latency();
-                let description = self.system.registry.describe_application(id).await?;
-                let code = self
-                    .context()
-                    .extra()
-                    .get_user_service(&description)
-                    .await?;
-                callback.respond((code, description));
-            }
+            #[cfg(not(web))]
+            LoadContract { id, callback } => callback.respond(self.load_contract(id).await?),
+            #[cfg(not(web))]
+            LoadService { id, callback } => callback.respond(self.load_service(id).await?),
 
             ChainBalance { callback } => {
                 let balance = *self.system.balance.get();
@@ -316,12 +327,14 @@ where
 /// Requests to the execution state.
 #[derive(Debug)]
 pub enum ExecutionRequest {
+    #[cfg(not(web))]
     LoadContract {
         id: UserApplicationId,
         #[debug(skip)]
         callback: Sender<(UserContractCode, UserApplicationDescription)>,
     },
 
+    #[cfg(not(web))]
     LoadService {
         id: UserApplicationId,
         #[debug(skip)]

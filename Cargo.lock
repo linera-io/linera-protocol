@@ -4060,12 +4060,15 @@ dependencies = [
  "test-strategy",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm_thread",
  "wasmtimer",
+ "web-sys",
  "web-time",
  "zstd",
 ]
@@ -8280,12 +8283,12 @@ dependencies = [
 [[package]]
 name = "wasm_thread"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22bc95de7e96023c115820c1b87504cdd316ed958d2dfb97dca502cc6e5772a1"
+source = "git+https://github.com/Twey/wasm_thread?branch=post-message#4742490038bd2d7cd629031bc9a45e547bae5819"
 dependencies = [
  "futures",
  "js-sys",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

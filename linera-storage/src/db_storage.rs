@@ -225,7 +225,8 @@ impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
 #[derive(Clone)]
 pub struct WallClock;
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl Clock for WallClock {
     fn current_time(&self) -> Timestamp {
         Timestamp::now()
@@ -282,7 +283,8 @@ impl TestClockInner {
 pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 
 #[cfg(with_testing)]
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
@@ -331,7 +333,8 @@ impl TestClock {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 impl<Store, C> Storage for DbStorage<Store, C>
 where
     Store: KeyValueStore + Clone + Send + Sync + 'static,

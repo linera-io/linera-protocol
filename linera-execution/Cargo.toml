@@ -70,7 +70,7 @@ wasmer-compiler-singlepass.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
-wasmer = { workspace = true, optional = true, features = ["js-default", "js-serializable-module"] }
+wasmer = { workspace = true, optional = true, features = ["js-default"] }
 
 [dev-dependencies]
 anyhow.workspace = true
