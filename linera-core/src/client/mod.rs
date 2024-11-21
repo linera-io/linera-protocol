@@ -2369,18 +2369,9 @@ where
     async fn process_pending_block_without_prepare(
         &self,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
-        let identity = self.identity().await?;
-        let mut info = self.chain_info_with_manager_values().await?;
-        self.state().check_info_is_up_to_date(&info)?;
-        // If the current round has timed out, we request a timeout certificate and retry in
-        // the next round.
-        if let Some(round_timeout) = info.manager.round_timeout {
-            if round_timeout <= self.storage_client().clock().current_time() {
-                self.request_leader_timeout().await?;
-                info = self.chain_info_with_manager_values().await?;
-            }
-        }
+        let info = self.request_leader_timeout_if_needed().await?;
 
+        let identity = self.identity().await?;
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &info.manager.requested_locked {
             if certificate.round == info.manager.current_round {
@@ -2462,6 +2453,23 @@ where
             .submit_block_proposal_and_update_validators(proposal, hashed_value)
             .await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
+    }
+
+    /// Checks that the current height and hash match the `ChainClientState`. Then requests a
+    /// leader timeout certificate if the current round has timed out. Returns the chain info for
+    /// the (possibly new) current round.
+    async fn request_leader_timeout_if_needed(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+        let mut info = self.chain_info_with_manager_values().await?;
+        self.state().check_info_is_up_to_date(&info)?;
+        // If the current round has timed out, we request a timeout certificate and retry in
+        // the next round.
+        if let Some(round_timeout) = info.manager.round_timeout {
+            if round_timeout <= self.storage_client().clock().current_time() {
+                self.request_leader_timeout().await?;
+                info = self.chain_info_with_manager_values().await?;
+            }
+        }
+        Ok(info)
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
