@@ -740,6 +740,7 @@ where
             .local_node
             .handle_chain_info_query(query)
             .await?;
+        self.update_from_info(&response.info);
         Ok(response.info)
     }
 
@@ -752,6 +753,7 @@ where
             .local_node
             .handle_chain_info_query(query)
             .await?;
+        self.update_from_info(&response.info);
         Ok(response.info)
     }
 
@@ -2378,7 +2380,6 @@ where
                 info = self.chain_info_with_manager_values().await?;
             }
         }
-        self.update_from_info(&info);
 
         // If there is a validated block in the current round, finalize it.
         if let Some(certificate) = &info.manager.requested_locked {
