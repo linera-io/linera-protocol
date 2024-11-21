@@ -65,7 +65,7 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
-    async fn handle_certificate<T: 'static + CertificateProcessor>(
+    async fn handle_certificate<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

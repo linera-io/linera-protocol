@@ -22,8 +22,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        Certificate, CertificateValueT, ConfirmedBlockCertificate, GenericCertificate,
-        HashedCertificateValue, LiteCertificate,
+        Certificate, ConfirmedBlockCertificate, GenericCertificate, HashedCertificateValue,
+        LiteCertificate,
     },
 };
 use linera_execution::{
@@ -125,7 +125,7 @@ where
         .await
     }
 
-    async fn handle_certificate<T: 'static + CertificateProcessor>(
+    async fn handle_certificate<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -316,7 +316,7 @@ where
         }
     }
 
-    async fn handle_certificate<T: 'static + CertificateProcessor>(
+    async fn handle_certificate<T: CertificateProcessor>(
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
@@ -365,9 +365,7 @@ where
         sender.send(result)
     }
 
-    async fn do_handle_certificate_internal<
-        T: 'static + CertificateProcessor + CertificateValueT,
-    >(
+    async fn do_handle_certificate_internal<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
@@ -402,7 +400,7 @@ where
         }
     }
 
-    async fn do_handle_certificate<T: 'static + CertificateProcessor>(
+    async fn do_handle_certificate<T: CertificateProcessor>(
         self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

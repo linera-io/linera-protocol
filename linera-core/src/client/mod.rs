@@ -385,7 +385,7 @@ where
         info
     }
 
-    async fn handle_certificate<T: CertificateProcessor + 'static>(
+    async fn handle_certificate<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -1023,7 +1023,7 @@ where
     /// Submits a block proposal to the validators. If it is a slow round, also submits the
     /// validated block for finalization. Returns the confirmed block certificate.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal<T: CertificateProcessor + 'static>(
+    async fn submit_block_proposal<T: CertificateProcessor>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
@@ -1535,7 +1535,7 @@ where
 
     /// Handles the certificate in the local node and the resulting notifications.
     #[instrument(level = "trace", skip(certificate))]
-    async fn process_certificate<T: CertificateProcessor + 'static>(
+    async fn process_certificate<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

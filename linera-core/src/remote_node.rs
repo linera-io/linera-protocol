@@ -57,7 +57,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_certificate<T: 'static + CertificateProcessor>(
+    pub(crate) async fn handle_certificate<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -88,7 +88,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_certificate<T: 'static + CertificateProcessor>(
+    pub(crate) async fn handle_optimized_certificate<T: CertificateProcessor>(
         &mut self,
         certificate: &GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,

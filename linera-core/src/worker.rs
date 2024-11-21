@@ -414,7 +414,7 @@ where
 }
 
 #[async_trait]
-pub trait CertificateProcessor: CertificateValueT + Send + Sized {
+pub trait CertificateProcessor: CertificateValueT + Send + Sized + 'static {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
@@ -483,7 +483,7 @@ where
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, WorkerError>
     where
-        T: CertificateProcessor + Send + 'static,
+        T: CertificateProcessor,
     {
         self.fully_handle_certificate_with_notifications(certificate, blobs, &())
             .await
@@ -498,7 +498,7 @@ where
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, WorkerError>
     where
-        T: CertificateProcessor + 'static,
+        T: CertificateProcessor,
     {
         let notifications = (*notifier).clone();
         let this = self.clone();

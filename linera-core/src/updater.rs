@@ -210,7 +210,7 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate<T: 'static + Clone + CertificateProcessor>(
+    async fn send_certificate<T: 'static + CertificateProcessor>(
         &mut self,
         certificate: GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,

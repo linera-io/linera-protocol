@@ -128,7 +128,7 @@ where
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError>
     where
-        T: CertificateProcessor + 'static,
+        T: CertificateProcessor,
     {
         Ok(
             Box::pin(self.node.state.fully_handle_certificate_with_notifications(

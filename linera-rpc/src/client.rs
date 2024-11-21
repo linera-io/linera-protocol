@@ -76,7 +76,7 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_certificate<T: 'static + CertificateProcessor>(
+    async fn handle_certificate<T: CertificateProcessor>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
