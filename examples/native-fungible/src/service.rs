@@ -49,19 +49,14 @@ struct Accounts {
 impl Accounts {
     // Define a field that lets you query by key
     async fn entry(&self, key: AccountOwner) -> AccountEntry {
-        let owner = match key {
-            AccountOwner::User(_) => key,
-            AccountOwner::Application(_) => panic!("Applications not supported yet"),
-        };
         let runtime = self
             .runtime
             .try_lock()
             .expect("Services only run in a single thread");
 
-        AccountEntry {
-            key,
-            value: runtime.owner_balance(owner),
-        }
+        let value = runtime.owner_balance(key);
+
+        AccountEntry { key, value }
     }
 
     async fn entries(&self) -> Vec<AccountEntry> {
