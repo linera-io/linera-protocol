@@ -96,7 +96,7 @@ Installing and starting the web server:
 cd examples/counter/web-frontend
 npm install --no-save
 
-# Start the server but not open the web page right away.
+# Start the server but do not open the web page right away.
 BROWSER=none npm start &
 ```
 
