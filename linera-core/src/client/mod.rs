@@ -1024,14 +1024,18 @@ where
     }
 
     /// Submits a block proposal to the validators. If it is a slow round, also submits the
-    /// validated block for finalization. Returns the confirmed block certificate.
-    #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal(
+    /// validated block for finalization. Updates the validators about the confirmed block
+    /// certificate, and returns the certificate.
+    #[instrument(level = "trace", skip(proposal, value))]
+    async fn submit_block_proposal_and_update_validators(
         &self,
-        committee: &Committee,
         proposal: Box<BlockProposal>,
         value: HashedCertificateValue,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
+        // Remember what we are trying to do before sending the proposal to the validators.
+        self.state_mut()
+            .set_pending_block(proposal.content.block.clone());
+        let committee = self.local_committee().await?;
         let required_blob_ids = value
             .inner()
             .executed_block()
@@ -1044,15 +1048,40 @@ where
             blob_ids: required_blob_ids,
         };
         let certificate = self
-            .communicate_chain_action(committee, submit_action, value)
+            .communicate_chain_action(&committee, submit_action, value)
             .await?;
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
-        if certificate.inner().is_confirmed() {
-            Ok(certificate.try_into().unwrap()) // shouldn't panic, we just checked.
+        let certificate = if certificate.inner().is_confirmed() {
+            certificate.try_into().unwrap() // shouldn't panic, we just checked.
         } else {
-            self.finalize_block(committee, certificate.into()).await
+            self.finalize_block(&committee, certificate.into()).await?
+        };
+
+        // Communicate the new certificate now.
+        let next_block_height = self.next_block_height();
+        self.communicate_chain_updates(
+            &committee,
+            self.chain_id,
+            next_block_height,
+            self.options.cross_chain_message_delivery,
+        )
+        .await?;
+        if let Ok(new_committee) = self.local_committee().await {
+            if new_committee != committee {
+                // If the configuration just changed, communicate to the new committee as well.
+                // (This is actually more important that updating the previous committee.)
+                let next_block_height = self.next_block_height();
+                self.communicate_chain_updates(
+                    &new_committee,
+                    self.chain_id,
+                    next_block_height,
+                    self.options.cross_chain_message_delivery,
+                )
+                .await?;
+            }
         }
+        Ok(certificate)
     }
 
     /// Broadcasts certified blocks to validators.
@@ -2340,14 +2369,7 @@ where
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         let identity = self.identity().await?;
         let mut info = self.chain_info_with_manager_values().await?;
-        {
-            let state = self.state();
-            ensure!(
-                state.block_hash() == info.block_hash
-                    && state.next_block_height() == info.next_block_height,
-                ChainClientError::BlockProposalError("The chain is not synchronized.")
-            );
-        }
+        self.state().check_info_is_up_to_date(&info)?;
         // If the current round has timed out, we request a timeout certificate and retry in
         // the next round.
         if let Some(round_timeout) = info.manager.round_timeout {
@@ -2418,62 +2440,26 @@ where
             HashedCertificateValue::new_validated(executed_block)
         };
         // Collect the hashed certificate values required for execution.
-        let committee = self.local_committee().await?;
         // Create the final block proposal.
         let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         let key_pair = self.key_pair().await?;
+        let already_handled_locally = info.manager.already_handled_proposal(round, &block);
         let proposal = if let Some(cert) = info.manager.requested_locked {
             Box::new(BlockProposal::new_retry(round, *cert, &key_pair, blobs))
         } else {
-            Box::new(BlockProposal::new_initial(
-                round,
-                block.clone(),
-                &key_pair,
-                blobs,
-            ))
+            Box::new(BlockProposal::new_initial(round, block, &key_pair, blobs))
         };
-        if info
-            .manager
-            .requested_proposed
-            .as_ref()
-            .map(|proposal| &proposal.content)
-            != Some(&proposal.content)
-        {
+        if !already_handled_locally {
             // Check the final block proposal. This will be cheaper after #1401.
             self.client
                 .local_node
                 .handle_block_proposal(*proposal.clone())
                 .await?;
         }
-        // Remember what we are trying to do before sending the proposal to the validators.
-        self.state_mut().set_pending_block(block);
         // Send the query to validators.
         let certificate = self
-            .submit_block_proposal(&committee, proposal, hashed_value)
+            .submit_block_proposal_and_update_validators(proposal, hashed_value)
             .await?;
-        // Communicate the new certificate now.
-        let next_block_height = self.next_block_height();
-        self.communicate_chain_updates(
-            &committee,
-            self.chain_id,
-            next_block_height,
-            self.options.cross_chain_message_delivery,
-        )
-        .await?;
-        if let Ok(new_committee) = self.local_committee().await {
-            if new_committee != committee {
-                // If the configuration just changed, communicate to the new committee as well.
-                // (This is actually more important that updating the previous committee.)
-                let next_block_height = self.next_block_height();
-                self.communicate_chain_updates(
-                    &new_committee,
-                    self.chain_id,
-                    next_block_height,
-                    self.options.cross_chain_message_delivery,
-                )
-                .await?;
-            }
-        }
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 

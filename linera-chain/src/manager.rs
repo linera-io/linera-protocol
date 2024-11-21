@@ -85,7 +85,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
+    data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
     types::{
         ConfirmedBlockCertificate, Hashed, HashedCertificateValue, TimeoutCertificate,
         ValidatedBlockCertificate,
@@ -692,5 +692,12 @@ impl ChainManagerInfo {
             Round::MultiLeader(_) => true,
             Round::SingleLeader(_) | Round::Validator(_) => self.leader.as_ref() == Some(identity),
         }
+    }
+
+    /// Returns whether a proposal with this content was already handled.
+    pub fn already_handled_proposal(&self, round: Round, block: &Block) -> bool {
+        self.requested_proposed.as_ref().is_some_and(|proposal| {
+            proposal.content.round == round && proposal.content.block == *block
+        })
     }
 }
