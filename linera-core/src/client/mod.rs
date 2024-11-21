@@ -2357,15 +2357,15 @@ where
         }
         self.update_from_info(&info);
 
-        let executed_block = if let Some(certificate) = &info.manager.requested_locked {
+        // If there is a validated block in the current round, finalize it.
+        if let Some(certificate) = &info.manager.requested_locked {
             if certificate.round == info.manager.current_round {
-                // If there is a validated block in the current round, finalize it.
                 let committee = self.local_committee().await?;
                 match self.finalize_block(&committee, *certificate.clone()).await {
                     Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
                     Err(ChainClientError::CommunicationError(_)) => {
                         // Communication errors in this case often mean that someone else already
-                        // finalized the block.
+                        // finalized the block or started another round.
                         let timestamp = info.manager.round_timeout.ok_or_else(|| {
                             ChainClientError::BlockProposalError(
                                 "Cannot propose in the current round.",
@@ -2379,10 +2379,12 @@ where
                     }
                     Err(error) => return Err(error),
                 }
-            } else {
-                // Otherwise we have to re-propose the highest validated block.
-                certificate.executed_block().clone()
             }
+        }
+
+        // Otherwise we have to re-propose the highest validated block, if there is one.
+        let executed_block = if let Some(certificate) = &info.manager.requested_locked {
+            certificate.executed_block().clone()
         } else {
             let block = if let Some(proposal) = info
                 .manager
