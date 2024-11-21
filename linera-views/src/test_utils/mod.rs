@@ -418,7 +418,7 @@ pub async fn run_writes_from_blank<C: LocalRestrictedKeyValueStore>(key_value_st
     }
 }
 
-/// Doing a big read of many keys could trigger some error. That need to be tested.
+/// Reading many keys at a time could trigger an error. This needs to be tested.
 pub async fn big_read_multi_values<C: LocalKeyValueStore>(
     config: C::Config,
     value_size: usize,
@@ -503,10 +503,6 @@ pub async fn run_big_write_read<C: LocalRestrictedKeyValueStore>(
     let mut rng = make_deterministic_rng();
     for (pos, value_size) in value_sizes.into_iter().enumerate() {
         let n_entry: usize = target_size / value_size;
-        println!(
-            "n_entry={} target_size={} value_size={}",
-            n_entry, target_size, value_size
-        );
         let mut batch = Batch::new();
         let key_prefix = vec![0, pos as u8];
         for i in 0..n_entry {

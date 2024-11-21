@@ -306,7 +306,7 @@ impl ScyllaDbClient {
         let query2 = &self.write_batch_delete_prefix_bounded;
         ensure!(
             batch.len() <= MAX_BATCH_SIZE,
-            ScyllaDbStoreInternalError::TooLargeBatch
+            ScyllaDbStoreInternalError::BatchTooLong
         );
         for key_prefix in batch.key_prefix_deletions {
             ensure!(
@@ -473,9 +473,9 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     JournalConsistencyError(#[from] JournalConsistencyError),
 
-    /// Too large batch
-    #[error("Too large batch")]
-    TooLargeBatch,
+    /// The batch is too long to be written
+    #[error("The batch is too long to be written")]
+    BatchTooLong,
 }
 
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
