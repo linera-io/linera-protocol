@@ -700,4 +700,11 @@ impl ChainManagerInfo {
             proposal.content.round == round && proposal.content.block == *block
         })
     }
+
+    /// Returns whether there is a locked block in the current round.
+    pub fn has_locked_block_in_current_round(&self) -> bool {
+        self.requested_locked
+            .as_ref()
+            .is_some_and(|certificate| certificate.round == self.current_round)
+    }
 }

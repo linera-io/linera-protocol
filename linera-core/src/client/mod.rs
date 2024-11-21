@@ -2371,26 +2371,9 @@ where
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
         let info = self.request_leader_timeout_if_needed().await?;
 
-        let identity = self.identity().await?;
         // If there is a validated block in the current round, finalize it.
-        if let Some(certificate) = &info.manager.requested_locked {
-            if certificate.round == info.manager.current_round {
-                let committee = self.local_committee().await?;
-                match self.finalize_block(&committee, *certificate.clone()).await {
-                    Ok(certificate) => return Ok(ClientOutcome::Committed(Some(certificate))),
-                    Err(ChainClientError::CommunicationError(error)) => {
-                        // Communication errors in this case often mean that someone else already
-                        // finalized the block or started another round.
-                        let timestamp = info.manager.round_timeout.ok_or(error)?;
-                        return Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
-                            timestamp,
-                            current_round: info.manager.current_round,
-                            next_block_height: info.next_block_height,
-                        }));
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
+        if info.manager.has_locked_block_in_current_round() {
+            return self.finalize_locked_block(info).await;
         }
 
         // Otherwise we have to re-propose the highest validated block, if there is one.
@@ -2413,6 +2396,7 @@ where
             self.stage_block_execution(block).await?.0
         };
 
+        let identity = self.identity().await?;
         let round = match Self::round_for_new_proposal(
             &info.manager,
             &identity,
@@ -2470,6 +2454,34 @@ where
             }
         }
         Ok(info)
+    }
+
+    /// Finalizes the locked block.
+    ///
+    /// Panics if there is no locked block; fails if the locked block is not in the current round.
+    async fn finalize_locked_block(
+        &self,
+        info: Box<ChainInfo>,
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
+        let certificate = info
+            .manager
+            .requested_locked
+            .expect("Should have a locked block");
+        let committee = self.local_committee().await?;
+        match self.finalize_block(&committee, *certificate.clone()).await {
+            Ok(certificate) => Ok(ClientOutcome::Committed(Some(certificate))),
+            Err(ChainClientError::CommunicationError(error)) => {
+                // Communication errors in this case often mean that someone else already
+                // finalized the block or started another round.
+                let timestamp = info.manager.round_timeout.ok_or(error)?;
+                Ok(ClientOutcome::WaitForTimeout(RoundTimeout {
+                    timestamp,
+                    current_round: info.manager.current_round,
+                    next_block_height: info.next_block_height,
+                }))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
