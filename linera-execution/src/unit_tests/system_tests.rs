@@ -115,7 +115,7 @@ async fn open_chain_message_index() {
 /// Tests if an account is removed from storage if it is drained.
 #[tokio::test]
 async fn empty_accounts_are_removed() -> anyhow::Result<()> {
-    let owner = Owner(CryptoHash::test_hash("account owner"));
+    let owner = AccountOwner::User(Owner(CryptoHash::test_hash("account owner")));
     let amount = Amount::from_tokens(99);
 
     let mut view = SystemExecutionState {
@@ -126,9 +126,7 @@ async fn empty_accounts_are_removed() -> anyhow::Result<()> {
     .into_view()
     .await;
 
-    view.system
-        .debit(Some(&AccountOwner::User(owner)), amount)
-        .await?;
+    view.system.debit(Some(&owner), amount).await?;
 
     assert!(view.system.balances.indices().await?.is_empty());
 

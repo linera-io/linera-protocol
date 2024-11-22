@@ -218,7 +218,7 @@ async fn make_transfer_certificate<S>(
     incoming_bundles: Vec<IncomingBundle>,
     committee: &Committee,
     balance: Amount,
-    balances: BTreeMap<Owner, Amount>,
+    balances: BTreeMap<AccountOwner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
 ) -> ConfirmedBlockCertificate
@@ -255,7 +255,7 @@ async fn make_transfer_certificate_for_epoch<S>(
     epoch: Epoch,
     committee: &Committee,
     balance: Amount,
-    balances: BTreeMap<Owner, Amount>,
+    balances: BTreeMap<AccountOwner, Amount>,
     worker: &WorkerState<S>,
     previous_confirmed_block: Option<&ConfirmedBlockCertificate>,
 ) -> ConfirmedBlockCertificate
@@ -2174,7 +2174,7 @@ where
         }],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender, Amount::from_tokens(5))]),
+        BTreeMap::from_iter([(sender.into(), Amount::from_tokens(5))]),
         &worker,
         Some(&certificate00),
     )
@@ -2200,7 +2200,7 @@ where
         Vec::new(),
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender, Amount::from_tokens(2))]),
+        BTreeMap::from_iter([(sender.into(), Amount::from_tokens(2))]),
         &worker,
         Some(&certificate01),
     )
@@ -2272,7 +2272,7 @@ where
         ],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(recipient, Amount::from_tokens(1))]),
+        BTreeMap::from_iter([(recipient.into(), Amount::from_tokens(1))]),
         &worker,
         None,
     )
