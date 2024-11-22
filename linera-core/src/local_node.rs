@@ -130,11 +130,14 @@ where
     where
         T: CertificateProcessor,
     {
-        Ok(self
-            .node
-            .state
-            .fully_handle_certificate_with_notifications(certificate, blobs, notifier)
-            .await?)
+        Ok(
+            Box::pin(self.node.state.fully_handle_certificate_with_notifications(
+                certificate,
+                blobs,
+                notifier,
+            ))
+            .await?,
+        )
     }
 
     #[instrument(level = "trace", skip_all)]
