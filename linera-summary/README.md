@@ -1,6 +1,6 @@
 <!-- cargo-rdme start -->
 
-This module provides the internal tool executable for performance summary generation.
+This crate provides the internal tool executable for performance summary generation.
 
 <!-- cargo-rdme end -->
 
