@@ -86,6 +86,15 @@ impl MockApplication {
     }
 }
 
+impl PartialEq for MockApplication {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.expected_calls, &other.expected_calls)
+            && Arc::ptr_eq(&self.active_instances, &other.active_instances)
+    }
+}
+
+impl Eq for MockApplication {}
+
 impl<Runtime> Drop for MockApplicationInstance<Runtime> {
     fn drop(&mut self) {
         if self.expected_calls.is_empty() {
