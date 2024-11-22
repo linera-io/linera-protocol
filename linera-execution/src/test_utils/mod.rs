@@ -59,11 +59,6 @@ pub fn create_dummy_user_application_description(
     )
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct FakeBlob(String);
-
-impl BcsSignable for FakeBlob {}
-
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///
 /// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
