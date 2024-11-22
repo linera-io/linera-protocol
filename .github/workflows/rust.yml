@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   remote-net-test:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest-8-cores
     timeout-minutes: 40
 
     steps:
@@ -97,8 +97,8 @@ jobs:
         cargo test --locked
 
   default-features-and-witty-integration-test:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v3
@@ -191,7 +191,7 @@ jobs:
   
   storage-service-tests:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 50
+    timeout-minutes: 40
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -420,7 +420,7 @@ jobs:
 
   lint-check-all-features:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 50
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v3

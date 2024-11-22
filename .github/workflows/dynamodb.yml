@@ -34,7 +34,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest-8-cores
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v3
