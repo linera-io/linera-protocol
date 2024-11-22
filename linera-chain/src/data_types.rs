@@ -472,8 +472,8 @@ impl<T> Vote<T> {
     }
 
     /// Returns the value this vote is for.
-    pub fn value(&self) -> &T {
-        self.value.inner()
+    pub fn value(&self) -> &Hashed<T> {
+        &self.value
     }
 }
 

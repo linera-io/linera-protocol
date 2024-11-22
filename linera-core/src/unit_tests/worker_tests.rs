@@ -33,8 +33,8 @@ use linera_chain::{
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
-        HashedCertificateValue, Timeout, TimeoutCertificate, ValidatedBlock,
+        CertificateValueT, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        HashedCertificateValue,
     },
     ChainError, ChainExecutionContext,
 };
@@ -151,7 +151,7 @@ where
     S: Storage,
     T: CertificateValueT,
 {
-    make_certificate_with_round(committee, worker, value, Round::Fast)
+    make_certificate_with_round(committee, worker, value, Round::MultiLeader(0))
 }
 
 fn make_certificate_with_round<S, T>(
@@ -685,13 +685,46 @@ where
         &chain
             .manager
             .get()
+            .validated_vote()
+            .unwrap()
+            .value()
+            .inner()
+            .inner()
+            .block,
+        &block_proposal0.content.block
+    ); // Multi-leader round - it's not confirmed yet.
+    assert!(chain.manager.get().confirmed_vote().is_none());
+    let block_certificate0 = make_certificate(
+        &committee,
+        &worker,
+        chain
+            .manager
+            .get()
+            .validated_vote()
+            .unwrap()
+            .value()
+            .clone()
+            .into(),
+    );
+    drop(chain);
+
+    worker
+        .handle_certificate(block_certificate0, vec![], None)
+        .await?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert_eq!(
+        &chain
+            .manager
+            .get()
             .confirmed_vote()
             .unwrap()
             .value()
             .inner()
+            .inner()
             .block,
         &block_proposal0.content.block
-    ); // In fast round confirm immediately.
+    ); // Should be confirmed after handling the certificate.
     assert!(chain.manager.get().validated_vote().is_none());
     drop(chain);
 
@@ -711,14 +744,15 @@ where
         &chain
             .manager
             .get()
-            .confirmed_vote()
+            .validated_vote()
             .unwrap()
             .value()
+            .inner()
             .inner()
             .block,
         &block_proposal1.content.block
     );
-    assert!(chain.manager.get().validated_vote().is_none());
+    assert!(chain.manager.get().confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
         worker.handle_block_proposal(block_proposal0).await,
@@ -1148,7 +1182,7 @@ where
     B: StorageBuilder,
 {
     let sender_key_pair = KeyPair::generate();
-    let (_, worker) = init_worker_with_chains(
+    let (committee, worker) = init_worker_with_chains(
         storage_builder.build().await?,
         vec![(
             ChainDescription::Root(1),
@@ -1166,7 +1200,28 @@ where
     chain_info_response.check(&ValidatorName(worker.public_key()))?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
-    assert!(chain.manager.get().validated_vote().is_none()); // Into was a fast round.
+    assert!(chain.manager.get().confirmed_vote().is_none()); // It was a multi-leader
+                                                             // round.
+    let validated_certificate = make_certificate(
+        &committee,
+        &worker,
+        chain
+            .manager
+            .get()
+            .validated_vote()
+            .unwrap()
+            .value()
+            .clone(),
+    );
+    drop(chain);
+
+    let (chain_info_response, _actions) = worker
+        .handle_validated_certificate(validated_certificate, vec![])
+        .await?;
+    chain_info_response.check(&ValidatorName(worker.public_key()))?;
+    let chain = worker.chain_state_view(ChainId::root(1)).await?;
+    assert!(chain.is_active());
+    assert!(chain.manager.get().validated_vote().is_none()); // Should be confirmed by now.
     let pending_vote = chain.manager.get().confirmed_vote().unwrap().lite();
     assert_eq!(
         chain_info_response.info.manager.pending.unwrap(),
@@ -1962,10 +2017,10 @@ where
         let ownership = &recipient_chain.manager.get().ownership;
         assert!(
             ownership
-                .super_owners
+                .owners
                 .contains_key(&recipient_key_pair.public().into())
-                && ownership.super_owners.len() == 1
-                && ownership.owners.is_empty()
+                && ownership.super_owners.is_empty()
+                && ownership.owners.len() == 1
         );
         assert_eq!(recipient_chain.confirmed_log.count(), 1);
         assert_eq!(
@@ -3205,7 +3260,7 @@ where
         })
         .with_authenticated_signer(Some(pub_key0.into()));
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0);
+    let value0 = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3238,12 +3293,12 @@ where
     let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
-    let value_timeout: Hashed<Timeout> =
+    let value_timeout =
         HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts, where owner
     // 0 happens to be the leader.
-    let certificate_timeout: TimeoutCertificate = vote
+    let certificate_timeout = vote
         .with_value(value_timeout.clone())
         .unwrap()
         .into_certificate();
@@ -3265,8 +3320,7 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
-    let value1: Hashed<ValidatedBlock> =
-        HashedCertificateValue::new_validated(executed_block1.clone());
+    let value1 = HashedCertificateValue::new_validated(executed_block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
@@ -3279,7 +3333,7 @@ where
     assert_eq!(vote.value, value.lite());
 
     // Instead of submitting the confirmed block certificate, let rounds 2 to 4 time out, too.
-    let certificate_timeout: TimeoutCertificate = make_certificate_with_round(
+    let certificate_timeout = make_certificate_with_round(
         &committee,
         &worker,
         value_timeout.clone(),
@@ -3298,8 +3352,7 @@ where
 
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
     // locked block; certificate1 (with block1) remains locked.
-    let value2: Hashed<ValidatedBlock> =
-        HashedCertificateValue::new_validated(executed_block2.clone());
+    let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
     worker
@@ -3414,7 +3467,7 @@ where
         },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0);
+    let value0 = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3448,7 +3501,7 @@ where
     let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
-    let value_timeout: Hashed<Timeout> =
+    let value_timeout =
         HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
 
     // Once we provide the validator with a timeout certificate, the next round starts.
@@ -3503,7 +3556,7 @@ where
         },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block0);
+    let value0 = HashedCertificateValue::new_confirmed(executed_block0);
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3519,7 +3572,7 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
-    let value1: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(executed_block1);
+    let value1 = HashedCertificateValue::new_confirmed(executed_block1);
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3528,7 +3581,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Once we provide the validator with a timeout certificate, the next round starts.
-    let value_timeout: Hashed<Timeout> =
+    let value_timeout =
         HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
@@ -3556,8 +3609,7 @@ where
 
     // A validated block certificate from a later round can override the locked fast block.
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
-    let value2: Hashed<ValidatedBlock> =
-        HashedCertificateValue::new_validated(executed_block2.clone());
+    let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry(
@@ -3602,7 +3654,7 @@ where
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let manager = response.info.manager;
     assert!(manager.fallback_vote.is_none());
-    assert_eq!(manager.current_round, Round::Fast);
+    assert_eq!(manager.current_round, Round::MultiLeader(0));
     assert!(manager.leader.is_none());
     let fallback_duration = manager.ownership.timeout_config.fallback_duration;
 
@@ -3869,7 +3921,7 @@ where
     .await;
     register_mock_applications::<MemoryContext<TestExecutionRuntimeContext>>(&mut state, 1).await?;
 
-    let value: Hashed<ConfirmedBlock> = HashedCertificateValue::new_confirmed(
+    let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
             messages: vec![],
             events: vec![],
