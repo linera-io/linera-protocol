@@ -9,7 +9,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use futures::future::Either;
 #[cfg(with_testing)]
 use linera_base::crypto::PublicKey;
@@ -413,8 +412,9 @@ where
     }
 }
 
-#[async_trait]
-pub trait CertificateProcessor: CertificateValueT + Send + Sized + 'static {
+#[allow(async_fn_in_trait)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait CertificateProcessor: CertificateValueT + Sized + 'static {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
@@ -422,7 +422,6 @@ pub trait CertificateProcessor: CertificateValueT + Send + Sized + 'static {
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 }
 
-#[async_trait]
 impl CertificateProcessor for CertificateValue {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
@@ -433,7 +432,6 @@ impl CertificateProcessor for CertificateValue {
     }
 }
 
-#[async_trait]
 impl CertificateProcessor for ConfirmedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
@@ -446,7 +444,6 @@ impl CertificateProcessor for ConfirmedBlock {
     }
 }
 
-#[async_trait]
 impl CertificateProcessor for ValidatedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
@@ -459,7 +456,6 @@ impl CertificateProcessor for ValidatedBlock {
     }
 }
 
-#[async_trait]
 impl CertificateProcessor for Timeout {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
