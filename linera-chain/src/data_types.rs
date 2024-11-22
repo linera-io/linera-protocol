@@ -137,6 +137,19 @@ impl Block {
         let config = posted_message.message.matches_open_chain()?;
         Some((in_bundle, posted_message, config))
     }
+
+    pub fn check_proposal_size(
+        &self,
+        maximum_block_proposal_size: u64,
+        blobs: &[Blob],
+    ) -> Result<(), ChainError> {
+        let size = bcs::serialized_size(&(self, blobs))?;
+        ensure!(
+            size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
+            ChainError::BlockProposalTooLarge
+        );
+        Ok(())
+    }
 }
 
 /// A transaction in a block: incoming messages or an operation.
@@ -476,7 +489,7 @@ pub struct LiteVote {
 
 impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
-    #[cfg(with_testing)]
+    #[cfg(any(feature = "benchmark", with_testing))]
     pub fn with_value<T>(self, value: Hashed<T>) -> Option<Vote<T>> {
         if self.value.value_hash != value.hash() {
             return None;
@@ -762,15 +775,6 @@ impl BlockProposal {
             blobs,
             validated_block_certificate: Some(lite_cert),
         }
-    }
-
-    pub fn check_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
-        let size = bcs::serialized_size(&self)?;
-        ensure!(
-            size <= usize::try_from(maximum_block_proposal_size).unwrap_or(usize::MAX),
-            ChainError::BlockProposalTooLarge
-        );
-        Ok(())
     }
 
     pub fn check_signature(&self, public_key: PublicKey) -> Result<(), CryptoError> {
