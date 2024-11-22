@@ -1039,7 +1039,7 @@ where
             blob_ids: required_blob_ids,
         };
         let certificate = self
-            .communicate_chain_action(&committee, submit_action, value)
+            .communicate_chain_action(committee, submit_action, value)
             .await?;
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
