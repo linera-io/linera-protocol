@@ -36,10 +36,10 @@ pub fn create_dummy_user_application_description(
 ) -> (UserApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
     let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
-        compressed_bytes: String::from("contract").as_bytes().to_vec(),
+        compressed_bytes: b"contract".to_vec(),
     });
     let service_blob = Blob::new_service_bytecode(CompressedBytecode {
-        compressed_bytes: String::from("service").as_bytes().to_vec(),
+        compressed_bytes: b"service".to_vec(),
     });
 
     (
