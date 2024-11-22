@@ -10,7 +10,7 @@ mod timeout;
 mod validated;
 mod value;
 
-use std::{borrow::Cow, collections::HashSet};
+use std::collections::HashSet;
 
 pub use generic::GenericCertificate;
 pub use hashed::Hashed;
@@ -87,15 +87,6 @@ impl<'de> Deserialize<'de> for Certificate {
 }
 
 impl Certificate {
-    /// Returns the certificate without the full value.
-    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
-        LiteCertificate {
-            value: self.lite_value(),
-            round: self.round,
-            signatures: Cow::Borrowed(self.signatures()),
-        }
-    }
-
     /// Returns the `LiteValue` corresponding to the certified value.
     pub fn lite_value(&self) -> LiteValue {
         LiteValue {

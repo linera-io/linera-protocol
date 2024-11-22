@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Cow;
-
 use linera_base::{crypto::Signature, data_types::Round, identifiers::BlobId};
 use linera_execution::committee::ValidatorName;
 use serde::{
@@ -12,8 +10,8 @@ use serde::{
 };
 
 use super::{
-    generic::GenericCertificate, hashed::Hashed, lite::LiteCertificate, Certificate,
-    CertificateValue, HashedCertificateValue,
+    generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
+    HashedCertificateValue,
 };
 use crate::{
     block::ValidatedBlock,
@@ -35,15 +33,6 @@ impl GenericCertificate<ValidatedBlock> {
         LiteValue {
             value_hash: self.hash(),
             chain_id: self.executed_block().block.chain_id,
-        }
-    }
-
-    /// Returns the certificate without the full value.
-    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
-        LiteCertificate {
-            value: self.lite_value(),
-            round: self.round,
-            signatures: Cow::Borrowed(self.signatures()),
         }
     }
 

@@ -100,7 +100,7 @@ impl<T> GenericCertificate<T> {
         Ok(())
     }
 
-    pub fn lite_cerificate(&self) -> crate::certificate::LiteCertificate<'_>
+    pub fn lite_certificate(&self) -> crate::certificate::LiteCertificate<'_>
     where
         T: CertificateValueT,
     {

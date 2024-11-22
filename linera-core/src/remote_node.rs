@@ -98,7 +98,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     {
         if certificate.is_signed_by(&self.name) {
             let result = self
-                .handle_lite_certificate(certificate.lite_cerificate(), delivery)
+                .handle_lite_certificate(certificate.lite_certificate(), delivery)
                 .await;
             match result {
                 Err(NodeError::MissingCertificateValue) => {
