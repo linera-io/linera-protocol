@@ -182,7 +182,6 @@ where
             .expect("chain is active");
         check_block_epoch(epoch, block)?;
         let policy = committee.policy().clone();
-        proposal.check_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.
         let public_key = self
             .0
@@ -224,6 +223,7 @@ where
         for blob in blobs {
             Self::check_blob_size(blob.content(), &policy)?;
         }
+        block.check_proposal_size(policy.maximum_block_proposal_size, blobs)?;
 
         let local_time = self.0.storage.clock().current_time();
         ensure!(

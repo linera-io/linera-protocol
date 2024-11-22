@@ -1997,13 +1997,8 @@ where
 
         let incoming_bundles = self.pending_message_bundles().await?;
         let identity = self.identity().await?;
-        let info = self.chain_info_with_manager_values().await?;
-        let round = match Self::round_for_new_proposal(&info, &identity, None)? {
-            Either::Left(round) => round,
-            Either::Right(timeout) => return Ok(ExecuteBlockOutcome::WaitForTimeout(timeout)),
-        };
         let confirmed_value = self
-            .new_pending_block(round, incoming_bundles, operations, identity)
+            .new_pending_block(incoming_bundles, operations, identity)
             .await?;
 
         match self.process_pending_block_without_prepare().await? {
@@ -2031,7 +2026,6 @@ where
     #[instrument(level = "trace", skip(incoming_bundles, operations))]
     async fn new_pending_block(
         &self,
-        round: Round,
         incoming_bundles: Vec<IncomingBundle>,
         operations: Vec<Operation>,
         identity: Owner,
@@ -2066,22 +2060,12 @@ where
         let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
-        let block = executed_block.block.clone();
+        let block = &executed_block.block;
         let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
-        let key_pair = self.key_pair().await?;
-
-        let proposal = Box::new(BlockProposal::new_initial(
-            round,
-            block.clone(),
-            &key_pair,
-            blobs,
-        ));
-        // Check the final block proposal. This will be cheaper after #1401.
-        self.client
-            .local_node
-            .handle_block_proposal(*proposal.clone())
-            .await?;
-        self.state_mut().set_pending_block(block);
+        let committee = self.local_committee().await?;
+        let max_size = committee.policy().maximum_block_proposal_size;
+        block.check_proposal_size(max_size, &blobs)?;
+        self.state_mut().set_pending_block(block.clone());
 
         Ok(HashedCertificateValue::new_confirmed(executed_block))
     }
