@@ -624,7 +624,7 @@ where
             // Put at most 1000 OpenChain operations in each block.
             let num_new_chains = (num_chains - key_pairs.len()).min(1000);
             let config = OpenChainConfig {
-                ownership: ChainOwnership::single(public_key),
+                ownership: ChainOwnership::single_super(public_key),
                 committees,
                 admin_id: self.wallet.genesis_admin_chain(),
                 epoch,

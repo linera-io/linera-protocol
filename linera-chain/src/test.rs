@@ -73,9 +73,10 @@ pub trait BlockTestExt: Sized {
     /// Returns the block with the specified epoch.
     fn with_epoch(self, epoch: impl Into<Epoch>) -> Self;
 
-    /// Returns a block proposal in `Round::Fast` without any hashed certificate values or validated block.
-    fn into_fast_proposal(self, key_pair: &KeyPair) -> BlockProposal {
-        self.into_proposal_with_round(key_pair, Round::Fast)
+    /// Returns a block proposal in the first round in a default ownership configuration
+    /// (`Round::MultiLeader(0)`) without any hashed certificate values or validated block.
+    fn into_first_proposal(self, key_pair: &KeyPair) -> BlockProposal {
+        self.into_proposal_with_round(key_pair, Round::MultiLeader(0))
     }
 
     /// Returns a block proposal without any hashed certificate values or validated block.

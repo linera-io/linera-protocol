@@ -201,8 +201,6 @@ pub enum ExecutionError {
     #[error(transparent)]
     WasmError(#[from] WasmExecutionError),
     #[error(transparent)]
-    JoinError(#[from] linera_base::task::Error),
-    #[error(transparent)]
     DecompressionError(#[from] DecompressionError),
     #[error("The given promise is invalid or was polled once already")]
     InvalidPromise,
@@ -221,6 +219,9 @@ pub enum ExecutionError {
     ServiceWriteAttempt,
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<UserApplicationDescription>),
+    // TODO(#2927): support dynamic loading of modules on the Web
+    #[error("Unsupported dynamic application load: {0:?}")]
+    UnsupportedDynamicApplicationLoad(Box<UserApplicationId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -264,7 +265,10 @@ pub enum ExecutionError {
     // and enforced limits for all oracles.
     #[error("Unstable oracles are disabled on this network.")]
     UnstableOracle,
-
+    #[error("Failed to send contract code to worker thread: {0:?}")]
+    ContractModuleSend(#[from] linera_base::task::SendError<UserContractCode>),
+    #[error("Failed to send service code to worker thread: {0:?}")]
+    ServiceModuleSend(#[from] linera_base::task::SendError<UserServiceCode>),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 }
@@ -349,7 +353,8 @@ pub struct ExecutionRuntimeConfig {}
 
 /// Requirements for the `extra` field in our state views (and notably the
 /// [`ExecutionStateView`]).
-#[async_trait]
+#[cfg_attr(not(web), async_trait)]
+#[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
     fn chain_id(&self) -> ChainId;
 
