@@ -31,6 +31,7 @@ use crate::{
     TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
 };
 
+/// Creates a dummy [`UserApplicationDescription`] for use in tests.
 pub fn create_dummy_user_application_description(
     index: u64,
 ) -> (UserApplicationDescription, Blob, Blob) {
