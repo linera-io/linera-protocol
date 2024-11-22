@@ -201,7 +201,7 @@ impl ChainListener {
             match &notification.reason {
                 Reason::NewIncomingBundle { .. } => timeout = storage.clock().current_time(),
                 Reason::NewBlock { .. } | Reason::NewRound { .. } => {
-                    if let Err(error) = client.update_validators().await {
+                    if let Err(error) = client.update_validators(None).await {
                         warn!(
                             "Failed to update validators about the local chain after \
                             receiving notification {:?} with error: {:?}",

@@ -1023,7 +1023,7 @@ where
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal_and_update_validators<T: CertificateProcessor>(
+    async fn submit_block_proposal<T: CertificateProcessor>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
@@ -1044,6 +1044,40 @@ where
         self.process_certificate(certificate.clone(), proposed_blobs)
             .await?;
         Ok(certificate)
+    }
+
+    /// Attempts to update all validators about the local chain.
+    #[instrument(level = "trace", skip(old_committee))]
+    pub async fn update_validators(
+        &self,
+        old_committee: Option<&Committee>,
+    ) -> Result<(), ChainClientError> {
+        // Communicate the new certificate now.
+        let next_block_height = self.next_block_height();
+        if let Some(old_committee) = old_committee {
+            self.communicate_chain_updates(
+                old_committee,
+                self.chain_id,
+                next_block_height,
+                self.options.cross_chain_message_delivery,
+            )
+            .await?
+        };
+        if let Ok(new_committee) = self.local_committee().await {
+            if Some(&new_committee) != old_committee {
+                // If the configuration just changed, communicate to the new committee as well.
+                // (This is actually more important that updating the previous committee.)
+                let next_block_height = self.next_block_height();
+                self.communicate_chain_updates(
+                    &new_committee,
+                    self.chain_id,
+                    next_block_height,
+                    self.options.cross_chain_message_delivery,
+                )
+                .await?;
+            }
+        }
+        Ok(())
     }
 
     /// Broadcasts certified blocks to validators.
@@ -2226,21 +2260,6 @@ where
         ))
     }
 
-    /// Attempts to update all validators about the local chain.
-    #[instrument(level = "trace")]
-    pub async fn update_validators(&self) -> Result<(), ChainClientError> {
-        let committee = self.local_committee().await?;
-        let next_block_height = self.next_block_height();
-        self.communicate_chain_updates(
-            &committee,
-            self.chain_id,
-            next_block_height,
-            CrossChainMessageDelivery::NonBlocking,
-        )
-        .await?;
-        Ok(())
-    }
-
     /// Requests a `RegisterApplications` message from another chain so the application can be used
     /// on this one.
     #[instrument(level = "trace")]
@@ -2361,19 +2380,16 @@ where
         // Send the query to validators.
         let certificate = if round.is_fast() {
             let hashed_value = HashedCertificateValue::new_confirmed(executed_block);
-            self.submit_block_proposal_and_update_validators(&committee, proposal, hashed_value)
+            self.submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = HashedCertificateValue::new_validated(executed_block);
             let certificate = self
-                .submit_block_proposal_and_update_validators(
-                    &committee,
-                    proposal,
-                    hashed_value.clone(),
-                )
+                .submit_block_proposal(&committee, proposal, hashed_value.clone())
                 .await?;
             self.finalize_block(&committee, certificate).await?
         };
+        self.update_validators(Some(&committee)).await?;
         Ok(ClientOutcome::Committed(Some(certificate)))
     }
 

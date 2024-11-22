@@ -579,7 +579,7 @@ where
                 .make_chain_client(chain_id)
                 .expect("chains in the wallet must exist");
             self.process_inbox(&chain_client).await.unwrap();
-            chain_client.update_validators().await.unwrap();
+            chain_client.update_validators(None).await.unwrap();
             self.update_wallet_from_client(&chain_client).await.unwrap();
         }
     }
