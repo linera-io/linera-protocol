@@ -15,12 +15,20 @@ use tracing::info;
 const API_REQUEST_DELAY_MS: u64 = 100;
 const IGNORED_JOB_PREFIXES: &[&str] = &["lint-", "check-outdated-cli-md"];
 
-struct GithubRepository {
+pub struct GithubRepository {
     owner: String,
     name: String,
 }
 
 impl GithubRepository {
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     fn from_env(is_local: bool) -> Result<Self> {
         let env_repository = env::var("GITHUB_REPOSITORY");
         let repository = if is_local {
@@ -57,6 +65,10 @@ impl GithubContext {
 
     pub fn pr_commit_hash(&self) -> &str {
         &self.pr_commit_hash
+    }
+
+    pub fn repository(&self) -> &GithubRepository {
+        &self.repository
     }
 
     fn get_local_git_info() -> Result<(String, String, String)> {
@@ -152,7 +164,7 @@ impl Github {
         &self.context
     }
 
-    pub async fn comment_on_pr(&self, body: &str) -> Result<()> {
+    pub async fn comment_on_pr(&self, body: String) -> Result<()> {
         if self.is_local {
             info!("Printing summary to stdout:");
             println!("{}", body);

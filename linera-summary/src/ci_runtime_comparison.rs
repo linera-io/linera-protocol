@@ -11,17 +11,39 @@ use tracing::warn;
 type WorkflowName = String;
 
 #[derive(Serialize)]
-struct WorkflowJobRuntimeComparison {
+pub struct WorkflowJobRuntimeComparison {
     name: String,
     workflow_name: String,
-    base_runtime: String,
-    pr_runtime: String,
-    runtime_difference_pct: String,
+    base_runtime: u64,
+    pr_runtime: u64,
+    runtime_difference_pct: f64,
+}
+
+impl WorkflowJobRuntimeComparison {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn workflow_name(&self) -> &str {
+        &self.workflow_name
+    }
+
+    pub fn base_runtime(&self) -> u64 {
+        self.base_runtime
+    }
+
+    pub fn pr_runtime(&self) -> u64 {
+        self.pr_runtime
+    }
+
+    pub fn runtime_difference_pct(&self) -> f64 {
+        self.runtime_difference_pct
+    }
 }
 
 // The key is the name of the workflow, and the value is a list of per job comparisons.
 #[derive(Serialize)]
-pub struct CiRuntimeComparison(HashMap<WorkflowName, Vec<WorkflowJobRuntimeComparison>>);
+pub struct CiRuntimeComparison(pub HashMap<WorkflowName, Vec<WorkflowJobRuntimeComparison>>);
 
 impl CiRuntimeComparison {
     fn get_runtimes(jobs: Vec<Job>) -> Result<HashMap<String, HashMap<String, u64>>> {
@@ -62,14 +84,12 @@ impl CiRuntimeComparison {
                                         return Some(WorkflowJobRuntimeComparison {
                                             name: job_name.clone(),
                                             workflow_name: workflow_name.clone(),
-                                            pr_runtime: format!("{}s", pr_runtime),
-                                            base_runtime: format!("{}s", *base_runtime),
-                                            runtime_difference_pct: format!(
-                                                "{:+.2}%",
+                                            pr_runtime,
+                                            base_runtime: *base_runtime,
+                                            runtime_difference_pct:
                                                 ((pr_runtime as f64) / (*base_runtime as f64)
                                                     - 1.0)
-                                                    * 100.0
-                                            ),
+                                                    * 100.0,
                                         });
                                     } else {
                                         warn!(
