@@ -507,6 +507,9 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Self::check_namespace(namespace)?;
         let mut path_buf = config.path_with_guard.path_buf.clone();
         path_buf.push(namespace);
+        if std::path::Path::exists(&path_buf) {
+            return Err(RocksDbStoreInternalError::AlreadyExist);
+        }
         std::fs::create_dir_all(path_buf)?;
         Ok(())
     }
@@ -544,6 +547,10 @@ impl TestKeyValueStore for RocksDbStoreInternal {
 /// The error type for [`RocksDbStoreInternal`]
 #[derive(Error, Debug)]
 pub enum RocksDbStoreInternalError {
+    /// Store already exists during a create operation
+    #[error("Store already exists during a create operation")]
+    AlreadyExist,
+
     /// Tokio join error in RocksDb.
     #[error("tokio join error: {0}")]
     TokioJoinError(#[from] tokio::task::JoinError),
@@ -603,6 +610,13 @@ impl PathWithGuard {
         }
     }
 }
+
+impl PartialEq for PathWithGuard {
+    fn eq(&self, other: &Self) -> bool {
+        self.path_buf == other.path_buf
+    }
+}
+impl Eq for PathWithGuard {}
 
 /// Returns the test path for RocksDB without common config.
 #[cfg(with_testing)]
