@@ -13,7 +13,7 @@ use linera_base::{
     identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
 };
 use linera_execution::{
-    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
+    test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
     ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     RawExecutionOutcome, ResourceControlPolicy, ResourceController, TransactionTracker,
 };
@@ -117,10 +117,11 @@ async fn test_fee_consumption(
     owner_balance: Option<Amount>,
     initial_grant: Option<Amount>,
 ) -> anyhow::Result<()> {
-    let state = SystemExecutionState {
+    let mut state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
     };
+    let (application_id, application) = state.register_mock_application().await?;
     let mut view = state.into_view().await;
 
     let owner = Owner::from(PublicKey::test_key(0));
@@ -128,11 +129,6 @@ async fn test_fee_consumption(
     if let Some(owner_balance) = owner_balance {
         view.system.balances.insert(&owner, owner_balance)?;
     }
-
-    let mut applications = register_mock_applications(&mut view, 1).await?;
-    let (application_id, application, _contract_blob, _service_blob) = applications
-        .next()
-        .expect("Caller mock application should be registered");
 
     let prices = ResourceControlPolicy {
         block: Amount::from_tokens(2),

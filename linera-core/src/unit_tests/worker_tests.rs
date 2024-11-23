@@ -40,13 +40,12 @@ use linera_execution::{
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
-    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
+    test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
-    SystemExecutionError, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
+    SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    context::MemoryContext,
     memory::MemoryStore,
     random::generate_test_namespace,
     store::TestKeyValueStore as _,
@@ -3918,7 +3917,7 @@ where
     }
     .into_view()
     .await;
-    register_mock_applications::<MemoryContext<TestExecutionRuntimeContext>>(&mut state, 1).await?;
+    let _ = state.register_mock_application().await?;
 
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {
