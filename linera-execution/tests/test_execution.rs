@@ -1477,7 +1477,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
 
 /// Tests the system API calls `open_chain` and `chain_ownership`.
 #[tokio::test]
-async fn test_open_chain() {
+async fn test_open_chain() -> anyhow::Result<()> {
     let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
     let chain_key = PublicKey::test_key(1);
@@ -1510,14 +1510,13 @@ async fn test_open_chain() {
     application.expect_call(ExpectedCall::execute_operation({
         let child_ownership = child_ownership.clone();
         move |runtime, _context, _operation| {
-            assert_eq!(runtime.chain_ownership().unwrap(), ownership);
+            assert_eq!(runtime.chain_ownership()?, ownership);
             let destination = Account::chain(ChainId::root(2));
-            runtime.transfer(None, destination, Amount::ONE).unwrap();
-            let id = runtime.application_id().unwrap();
+            runtime.transfer(None, destination, Amount::ONE)?;
+            let id = runtime.application_id()?;
             let application_permissions = ApplicationPermissions::new_single(id);
-            let (actual_message_id, chain_id) = runtime
-                .open_chain(child_ownership, application_permissions, Amount::ONE)
-                .unwrap();
+            let (actual_message_id, chain_id) =
+                runtime.open_chain(child_ownership, application_permissions, Amount::ONE)?;
             assert_eq!(message_id, actual_message_id);
             assert_eq!(chain_id, ChainId::child(message_id));
             Ok(vec![])
@@ -1538,11 +1537,10 @@ async fn test_open_chain() {
         &mut txn_tracker,
         &mut controller,
     )
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(*view.system.balance.get(), Amount::from_tokens(3));
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let (outcomes, _, _) = txn_tracker.destructure()?;
     let message = outcomes
         .iter()
         .flat_map(|outcome| match outcome {
@@ -1550,7 +1548,7 @@ async fn test_open_chain() {
             ExecutionOutcome::User(_, _) => panic!("Unexpected message"),
         })
         .nth((index - first_message_index) as usize)
-        .unwrap();
+        .ok_or_else(|| anyhow!("Message index out of bounds"))?;
     let RawOutgoingMessage {
         message: SystemMessage::OpenChain(config),
         destination: Destination::Recipient(recipient_id),
@@ -1578,11 +1576,13 @@ async fn test_open_chain() {
         *child_view.system.application_permissions.get(),
         ApplicationPermissions::new_single(application_id)
     );
+
+    Ok(())
 }
 
 /// Tests the system API call `close_chain``.
 #[tokio::test]
-async fn test_close_chain() {
+async fn test_close_chain() -> anyhow::Result<()> {
     let committee = Committee::make_simple(vec![PublicKey::test_key(0).into()]);
     let committees = BTreeMap::from([(Epoch::ZERO, committee)]);
     let ownership = ChainOwnership::single(PublicKey::test_key(1));
@@ -1621,8 +1621,7 @@ async fn test_close_chain() {
         &mut TransactionTracker::new(0, Some(Vec::new())),
         &mut controller,
     )
-    .await
-    .unwrap();
+    .await?;
     assert!(!view.system.closed.get());
 
     // Now we authorize the application and it can close the chain.
@@ -1635,12 +1634,11 @@ async fn test_close_chain() {
         &mut TransactionTracker::new(0, Some(Vec::new())),
         &mut controller,
     )
-    .await
-    .unwrap();
+    .await?;
 
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
-            runtime.close_chain().unwrap();
+            runtime.close_chain()?;
             Ok(vec![])
         },
     ));
@@ -1657,9 +1655,10 @@ async fn test_close_chain() {
         &mut TransactionTracker::new(0, Some(Vec::new())),
         &mut controller,
     )
-    .await
-    .unwrap();
+    .await?;
     assert!(view.system.closed.get());
+
+    Ok(())
 }
 
 /// Tests an application attempting to transfer the tokens in the chain's balance while executing
