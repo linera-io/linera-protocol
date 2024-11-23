@@ -59,6 +59,42 @@ pub fn create_dummy_user_application_description(
     )
 }
 
+/// Registration of [`MockApplication`]s to use in tests.
+#[allow(async_fn_in_trait)]
+pub trait RegisterMockApplication {
+    /// Returns the chain to use for the creation of the application.
+    ///
+    /// This is included in the mocked [`ApplicationId`].
+    fn creator_chain_id(&self) -> ChainId;
+
+    /// Returns the amount of known registrated applications.
+    ///
+    /// Used to avoid duplicate registrations.
+    async fn registered_application_count(&self) -> anyhow::Result<usize>;
+
+    /// Registers a new [`MockApplication`] and returns it with the [`UserApplicationId`] that was
+    /// used for it.
+    async fn register_mock_application(
+        &mut self,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+        let (description, contract, service) = create_dummy_user_application_description(
+            self.registered_application_count().await? as u64,
+        );
+
+        self.register_mock_application_with(description, contract, service)
+            .await
+    }
+
+    /// Registers a new [`MockApplication`] associated with a [`UserApplicationDescription`] and
+    /// its bytecode [`Blob`]s.
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)>;
+}
+
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
 ///
 /// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
