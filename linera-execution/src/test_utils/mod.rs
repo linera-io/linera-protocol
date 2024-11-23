@@ -28,7 +28,8 @@ pub use self::{
 use crate::{
     ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
     QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+    SystemExecutionStateView, TestExecutionRuntimeContext, UserApplicationDescription,
+    UserApplicationId,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.
@@ -93,6 +94,53 @@ pub trait RegisterMockApplication {
         contract: Blob,
         service: Blob,
     ) -> anyhow::Result<(UserApplicationId, MockApplication)>;
+}
+
+impl<C> RegisterMockApplication for SystemExecutionStateView<C>
+where
+    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    fn creator_chain_id(&self) -> ChainId {
+        self.description.get().expect(
+            "Can't register applications on an system state with no associated `ChainDescription`",
+        ).into()
+    }
+
+    async fn registered_application_count(&self) -> anyhow::Result<usize> {
+        let mut count = 0;
+
+        self.registry
+            .known_applications
+            .for_each_index(|_| {
+                count += 1;
+                Ok(())
+            })
+            .await?;
+
+        Ok(count)
+    }
+
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+        let id = self.registry.register_application(description).await?;
+        let extra = self.context().extra();
+        let mock_application = MockApplication::default();
+
+        extra
+            .user_contracts()
+            .insert(id, mock_application.clone().into());
+        extra
+            .user_services()
+            .insert(id, mock_application.clone().into());
+        extra.add_blobs(vec![contract, service]);
+
+        Ok((id, mock_application))
+    }
 }
 
 /// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
