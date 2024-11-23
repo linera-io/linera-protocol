@@ -116,7 +116,7 @@ async fn test_fee_consumption(
     chain_balance: Amount,
     owner_balance: Option<Amount>,
     initial_grant: Option<Amount>,
-) {
+) -> anyhow::Result<()> {
     let state = SystemExecutionState {
         description: Some(ChainDescription::Root(0)),
         ..SystemExecutionState::default()
@@ -126,10 +126,10 @@ async fn test_fee_consumption(
     let owner = Owner::from(PublicKey::test_key(0));
     view.system.balance.set(chain_balance);
     if let Some(owner_balance) = owner_balance {
-        view.system.balances.insert(&owner, owner_balance).unwrap();
+        view.system.balances.insert(&owner, owner_balance)?;
     }
 
-    let mut applications = register_mock_applications(&mut view, 1).await.unwrap();
+    let mut applications = register_mock_applications(&mut view, 1).await?;
     let (application_id, application, _contract_blob, _service_blob) = applications
         .next()
         .expect("Caller mock application should be registered");
@@ -176,7 +176,7 @@ async fn test_fee_consumption(
     application.expect_call(ExpectedCall::execute_message(
         move |runtime, _context, _operation| {
             for spend in spends {
-                spend.execute(runtime).unwrap();
+                spend.execute(runtime)?;
             }
             Ok(())
         },
@@ -213,10 +213,9 @@ async fn test_fee_consumption(
         &mut txn_tracker,
         &mut controller,
     )
-    .await
-    .unwrap();
+    .await?;
 
-    let (outcomes, _, _) = txn_tracker.destructure().unwrap();
+    let (outcomes, _, _) = txn_tracker.destructure()?;
     assert_eq!(
         outcomes,
         vec![
@@ -259,7 +258,7 @@ async fn test_fee_consumption(
             };
             assert_eq!(*view.system.balance.get(), expected_chain_balance);
             assert_eq!(
-                view.system.balances.get(&owner).await.unwrap(),
+                view.system.balances.get(&owner).await?,
                 expected_owner_balance
             );
             assert_eq!(grant, Amount::ZERO);
@@ -282,12 +281,14 @@ async fn test_fee_consumption(
             };
             assert_eq!(*view.system.balance.get(), chain_balance);
             assert_eq!(
-                view.system.balances.get(&owner).await.unwrap(),
+                view.system.balances.get(&owner).await?,
                 expected_owner_balance
             );
             assert_eq!(grant, expected_grant);
         }
     }
+
+    Ok(())
 }
 
 /// A runtime operation that costs some amount of fees.
