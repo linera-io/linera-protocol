@@ -35,4 +35,4 @@ jobs:
           GITHUB_PR_COMMIT_HASH: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
         # The list of workflows that trigger this need to be hardcoded above.
         # Make sure you have the same comma separated list of workflows here.
-        run: cargo run -p linera-summary -- --workflows "Rust" ci
+        run: cargo run -p linera-summary -- --workflows "Rust" ci >> $GITHUB_STEP_SUMMARY
