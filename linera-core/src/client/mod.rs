@@ -2377,11 +2377,10 @@ where
         };
 
         let identity = self.identity().await?;
-        let round =
-            match Self::round_for_new_proposal(&info, &identity, Some(&executed_block.block))? {
-                Either::Left(round) => round,
-                Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
-            };
+        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block.block)? {
+            Either::Left(round) => round,
+            Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
+        };
 
         // Collect the blobs required for execution.
         let block = &executed_block.block;
@@ -2463,14 +2462,13 @@ where
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &Owner,
-        block: Option<&Block>,
+        block: &Block,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         let manager = &info.manager;
         let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == manager.current_round
-                && block.map_or(true, |block| proposal.content.block != *block)
+            proposal.content.round == manager.current_round && proposal.content.block != *block
         });
         let round = if !conflicting_proposal {
             manager.current_round

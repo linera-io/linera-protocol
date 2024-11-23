@@ -220,10 +220,10 @@ where
             missing_published_blob_ids.is_empty(),
             WorkerError::BlobsNotFound(missing_published_blob_ids)
         );
+        block.check_proposal_size(policy.maximum_block_proposal_size, blobs)?;
         for blob in blobs {
             Self::check_blob_size(blob.content(), &policy)?;
         }
-        block.check_proposal_size(policy.maximum_block_proposal_size, blobs)?;
 
         let local_time = self.0.storage.clock().current_time();
         ensure!(
