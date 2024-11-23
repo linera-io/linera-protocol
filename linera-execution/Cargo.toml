@@ -12,7 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["tokio/macros", "linera-views/test"]
+test = ["tokio/macros", "linera-base/test", "linera-views/test"]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []

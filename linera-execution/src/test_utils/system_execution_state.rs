@@ -10,7 +10,7 @@ use std::{
 use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
     identifiers::{ApplicationId, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
@@ -21,6 +21,7 @@ use linera_views::{
     views::{CryptoHashView, View, ViewError},
 };
 
+use super::{MockApplication, RegisterMockApplication};
 use crate::{
     applications::ApplicationRegistry,
     committee::{Committee, Epoch},
@@ -48,6 +49,10 @@ pub struct SystemExecutionState {
     #[debug(skip_if = Not::not)]
     pub closed: bool,
     pub application_permissions: ApplicationPermissions,
+    #[debug(skip_if = Vec::is_empty)]
+    pub extra_blobs: Vec<Blob>,
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub mock_applications: BTreeMap<ApplicationId, MockApplication>,
 }
 
 impl SystemExecutionState {
@@ -105,8 +110,19 @@ impl SystemExecutionState {
             registry,
             closed,
             application_permissions,
+            extra_blobs,
+            mock_applications,
         } = self;
+
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
+        extra.add_blobs(extra_blobs);
+        for (id, mock_application) in mock_applications {
+            extra
+                .user_contracts()
+                .insert(id, mock_application.clone().into());
+            extra.user_services().insert(id, mock_application.into());
+        }
+
         let namespace = generate_test_namespace();
         let root_key = &[];
         let context = MemoryContext::new_for_testing(
@@ -146,5 +162,33 @@ impl SystemExecutionState {
             .application_permissions
             .set(application_permissions);
         view
+    }
+}
+
+impl RegisterMockApplication for SystemExecutionState {
+    fn creator_chain_id(&self) -> ChainId {
+        self.description.expect(
+            "Can't register applications on an system state with no associated `ChainDescription`",
+        ).into()
+    }
+
+    async fn registered_application_count(&self) -> anyhow::Result<usize> {
+        Ok(self.registry.known_applications.len())
+    }
+
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(ApplicationId, MockApplication)> {
+        let id = ApplicationId::from(&description);
+        let application = MockApplication::default();
+
+        self.registry.known_applications.insert(id, description);
+        self.extra_blobs.extend([contract, service]);
+        self.mock_applications.insert(id, application.clone());
+
+        Ok((id, application))
     }
 }
