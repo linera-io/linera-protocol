@@ -96,6 +96,31 @@ pub trait RegisterMockApplication {
     ) -> anyhow::Result<(UserApplicationId, MockApplication)>;
 }
 
+impl<C> RegisterMockApplication for ExecutionStateView<C>
+where
+    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    fn creator_chain_id(&self) -> ChainId {
+        self.system.creator_chain_id()
+    }
+
+    async fn registered_application_count(&self) -> anyhow::Result<usize> {
+        self.system.registered_application_count().await
+    }
+
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+        self.system
+            .register_mock_application_with(description, contract, service)
+            .await
+    }
+}
+
 impl<C> RegisterMockApplication for SystemExecutionStateView<C>
 where
     C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
