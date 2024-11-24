@@ -168,59 +168,6 @@ where
     }
 }
 
-/// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
-///
-/// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
-/// [`MockApplication`]s.
-pub async fn register_mock_applications<C>(
-    state: &mut ExecutionStateView<C>,
-    count: u64,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
-where
-    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
-    C::Extra: ExecutionRuntimeContext,
-{
-    let mock_applications = register_mock_applications_internal(state, count).await?;
-    let extra = state.context().extra();
-    for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
-        extra
-            .add_blobs(vec![contract_blob.clone(), service_blob.clone()])
-            .await?;
-    }
-
-    Ok(mock_applications.into_iter())
-}
-
-pub async fn register_mock_applications_internal<C>(
-    state: &mut ExecutionStateView<C>,
-    count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, MockApplication, Blob, Blob)>>
-where
-    C: Context + Clone + Send + Sync + 'static,
-    C::Extra: ExecutionRuntimeContext,
-{
-    let mock_applications: Vec<_> =
-        create_dummy_user_application_registrations(&mut state.system.registry, count)
-            .await?
-            .into_iter()
-            .map(|(id, _description, contract_blob, service_blob)| {
-                (id, MockApplication::default(), contract_blob, service_blob)
-            })
-            .collect();
-    let extra = state.context().extra();
-
-    for (id, mock_application, _contract_blob, _service_blob) in &mock_applications {
-        extra
-            .user_contracts()
-            .insert(*id, mock_application.clone().into());
-        extra
-            .user_services()
-            .insert(*id, mock_application.clone().into());
-    }
-
-    Ok(mock_applications)
-}
-
 pub async fn create_dummy_user_application_registrations<C>(
     registry: &mut ApplicationRegistryView<C>,
     count: u64,
