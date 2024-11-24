@@ -23,10 +23,10 @@ use linera_execution::{
         create_dummy_user_application_registrations, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
-    MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
-    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemExecutionError,
-    SystemOperation, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
+    Message, MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
+    RawExecutionOutcome, RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response,
+    SystemExecutionError, SystemOperation, TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use test_case::test_case;
