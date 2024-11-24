@@ -180,7 +180,7 @@ async fn test_block_size_limit() {
 }
 
 #[tokio::test]
-async fn test_application_permissions() {
+async fn test_application_permissions() -> anyhow::Result<()> {
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
     let chain_id = ChainId::child(message_id);
@@ -203,8 +203,7 @@ async fn test_application_permissions() {
     };
     chain
         .execute_init_message(message_id, &config, time, time)
-        .await
-        .unwrap();
+        .await?;
     let open_chain_message = Message::System(SystemMessage::OpenChain(config));
 
     let register_app_message = SystemMessage::RegisterApplications {
@@ -246,11 +245,11 @@ async fn test_application_permissions() {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
+    let outcome = chain.execute_block(&valid_block, time, None).await?;
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
-    let invalid_block = make_child_block(&value.clone().try_into().unwrap())
+    let invalid_block = make_child_block(&value.clone().try_into()?)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_operation(app_operation.clone());
     let result = chain.execute_block(&invalid_block, time, None).await;
@@ -259,7 +258,7 @@ async fn test_application_permissions() {
     );
 
     // Also, blocks without an application operation or incoming message are forbidden.
-    let invalid_block = make_child_block(&value.clone().try_into().unwrap());
+    let invalid_block = make_child_block(&value.clone().try_into()?);
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
@@ -268,6 +267,8 @@ async fn test_application_permissions() {
     // But app operations continue to work.
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
-    let valid_block = make_child_block(&value.try_into().unwrap()).with_operation(app_operation);
-    chain.execute_block(&valid_block, time, None).await.unwrap();
+    let valid_block = make_child_block(&value.try_into()?).with_operation(app_operation);
+    chain.execute_block(&valid_block, time, None).await?;
+
+    Ok(())
 }
