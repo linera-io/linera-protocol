@@ -115,7 +115,10 @@ impl SystemExecutionState {
         } = self;
 
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
-        extra.add_blobs(extra_blobs);
+        extra
+            .add_blobs(extra_blobs)
+            .await
+            .expect("Adding blobs to the `TestExecutionRuntimeContext` should not fail");
         for (id, mock_application) in mock_applications {
             extra
                 .user_contracts()

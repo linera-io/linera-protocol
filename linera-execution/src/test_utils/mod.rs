@@ -162,7 +162,7 @@ where
         extra
             .user_services()
             .insert(id, mock_application.clone().into());
-        extra.add_blobs(vec![contract, service]);
+        extra.add_blobs(vec![contract, service]).await?;
 
         Ok((id, mock_application))
     }
@@ -183,7 +183,9 @@ where
     let mock_applications = register_mock_applications_internal(state, count).await?;
     let extra = state.context().extra();
     for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
-        extra.add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
+        extra
+            .add_blobs(vec![contract_blob.clone(), service_blob.clone()])
+            .await?;
     }
 
     Ok(mock_applications.into_iter())

@@ -997,10 +997,11 @@ impl TestExecutionRuntimeContext {
         }
     }
 
-    pub fn add_blobs(&self, blobs: Vec<Blob>) {
+    pub async fn add_blobs(&self, blobs: Vec<Blob>) -> Result<(), ViewError> {
         for blob in blobs {
             self.blobs.insert(blob.id(), blob);
         }
+        Ok(())
     }
 }
 

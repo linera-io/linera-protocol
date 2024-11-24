@@ -94,7 +94,8 @@ where
 
         self.context()
             .extra()
-            .add_blobs(vec![contract_blob, service_blob]);
+            .add_blobs(vec![contract_blob, service_blob])
+            .await?;
 
         let tracker = ResourceTracker::default();
         let policy = ResourceControlPolicy::default();

@@ -41,7 +41,8 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         &create_dummy_user_application_registrations(&mut view.system.registry, 1).await?[0];
     view.context()
         .extra()
-        .add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
+        .add_blobs(vec![contract_blob.clone(), service_blob.clone()])
+        .await?;
 
     let context = make_operation_context();
     let mut controller = ResourceController::default();

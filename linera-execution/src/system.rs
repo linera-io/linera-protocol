@@ -1097,7 +1097,8 @@ mod tests {
         let mut txn_tracker = TransactionTracker::default();
         view.context()
             .extra()
-            .add_blobs(vec![contract_blob, service_blob]);
+            .add_blobs(vec![contract_blob, service_blob])
+            .await?;
         let new_application = view
             .system
             .execute_operation(context, operation, &mut txn_tracker)
