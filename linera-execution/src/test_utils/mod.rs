@@ -98,7 +98,7 @@ pub trait RegisterMockApplication {
 
 impl<C> RegisterMockApplication for ExecutionStateView<C>
 where
-    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     fn creator_chain_id(&self) -> ChainId {
@@ -123,7 +123,7 @@ where
 
 impl<C> RegisterMockApplication for SystemExecutionStateView<C>
 where
-    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
+    C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
     fn creator_chain_id(&self) -> ChainId {
