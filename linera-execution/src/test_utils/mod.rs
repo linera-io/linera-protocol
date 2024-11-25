@@ -68,7 +68,7 @@ pub trait RegisterMockApplication {
     /// This is included in the mocked [`ApplicationId`].
     fn creator_chain_id(&self) -> ChainId;
 
-    /// Returns the amount of known registrated applications.
+    /// Returns the amount of known registered applications.
     ///
     /// Used to avoid duplicate registrations.
     async fn registered_application_count(&self) -> anyhow::Result<usize>;
