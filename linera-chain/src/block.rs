@@ -94,17 +94,6 @@ impl Hashed<ConfirmedBlock> {
     }
 }
 
-impl TryFrom<CertificateValue> for ConfirmedBlock {
-    type Error = &'static str;
-
-    fn try_from(value: CertificateValue) -> Result<Self, Self::Error> {
-        match value {
-            CertificateValue::ConfirmedBlock(confirmed) => Ok(confirmed),
-            _ => Err("Expected a ConfirmedBlock value"),
-        }
-    }
-}
-
 impl TryFrom<HashedCertificateValue> for Hashed<ConfirmedBlock> {
     type Error = ConversionError;
 
