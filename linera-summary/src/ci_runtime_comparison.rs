@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use anyhow::{ensure, Result};
 use octocrab::models::workflows::{Conclusion, Job, Status};
@@ -43,11 +43,11 @@ impl WorkflowJobRuntimeComparison {
 
 // The key is the name of the workflow, and the value is a list of per job comparisons.
 #[derive(Serialize)]
-pub struct CiRuntimeComparison(pub HashMap<WorkflowName, Vec<WorkflowJobRuntimeComparison>>);
+pub struct CiRuntimeComparison(pub BTreeMap<WorkflowName, Vec<WorkflowJobRuntimeComparison>>);
 
 impl CiRuntimeComparison {
-    fn get_runtimes(jobs: Vec<Job>) -> Result<HashMap<String, HashMap<String, u64>>> {
-        let mut runtimes: HashMap<String, HashMap<String, u64>> = HashMap::new();
+    fn get_runtimes(jobs: Vec<Job>) -> Result<BTreeMap<String, BTreeMap<String, u64>>> {
+        let mut runtimes: BTreeMap<String, BTreeMap<String, u64>> = BTreeMap::new();
         for job in jobs {
             ensure!(job.status == Status::Completed);
             ensure!(job.conclusion.is_some());
@@ -109,7 +109,7 @@ impl CiRuntimeComparison {
                             .collect::<Vec<_>>(),
                     )
                 })
-                .collect::<HashMap<_, _>>(),
+                .collect::<BTreeMap<_, _>>(),
         ))
     }
 }
