@@ -21,10 +21,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{
-        Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
-        LiteCertificate,
-    },
+    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -161,16 +158,6 @@ where
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_blob_content(blob_id, sender)
-        })
-        .await
-    }
-
-    async fn download_certificate_value(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<Hashed<ConfirmedBlock>, NodeError> {
-        self.spawn_and_receive(move |validator, sender| {
-            validator.do_download_certificate_value(hash, sender)
         })
         .await
     }
@@ -456,21 +443,6 @@ where
             .await
             .map_err(Into::into);
         sender.send(blob.map(|blob| blob.into_inner_content()))
-    }
-
-    async fn do_download_certificate_value(
-        self,
-        hash: CryptoHash,
-        sender: oneshot::Sender<Result<Hashed<ConfirmedBlock>, NodeError>>,
-    ) -> Result<(), Result<Hashed<ConfirmedBlock>, NodeError>> {
-        let validator = self.client.lock().await;
-        let certificate_value = validator
-            .state
-            .storage_client()
-            .read_hashed_confirmed_block(hash)
-            .await
-            .map_err(Into::into);
-        sender.send(certificate_value)
     }
 
     async fn do_download_certificate(

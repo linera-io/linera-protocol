@@ -58,9 +58,6 @@ service ValidatorNode {
   // Downloads a blob content.
   rpc DownloadBlobContent(BlobId) returns (BlobContent);
 
-  // Downloads a certificate value.
-  rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
-
   // Downloads a certificate.
   rpc DownloadCertificate(CryptoHash) returns (Certificate);
 
@@ -244,10 +241,6 @@ message Certificate {
 
   // Signatures on the value hash and round
   bytes signatures = 3;
-}
-
-message CertificateValue {
-  bytes bytes = 1;
 }
 
 message ChainId {
