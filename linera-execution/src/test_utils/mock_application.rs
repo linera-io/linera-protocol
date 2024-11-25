@@ -7,7 +7,7 @@
 
 use std::{
     collections::VecDeque,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     mem,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -86,6 +86,33 @@ impl MockApplication {
     }
 }
 
+impl Debug for MockApplication {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        let mut struct_formatter = formatter.debug_struct("MockApplication");
+
+        match self.expected_calls.lock() {
+            Ok(expected_calls) => struct_formatter.field("expected_calls", &*expected_calls),
+            Err(_) => struct_formatter.field("expected_calls", &"[POISONED]"),
+        };
+
+        struct_formatter
+            .field(
+                "active_instances",
+                &self.active_instances.load(Ordering::Acquire),
+            )
+            .finish()
+    }
+}
+
+impl PartialEq for MockApplication {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.expected_calls, &other.expected_calls)
+            && Arc::ptr_eq(&self.active_instances, &other.active_instances)
+    }
+}
+
+impl Eq for MockApplication {}
+
 impl<Runtime> Drop for MockApplicationInstance<Runtime> {
     fn drop(&mut self) {
         if self.expected_calls.is_empty() {
@@ -137,17 +164,18 @@ type HandleQueryHandler = Box<
 >;
 
 /// An expected call to a [`MockApplicationInstance`].
+#[derive(custom_debug_derive::Debug)]
 pub enum ExpectedCall {
     /// An expected call to [`UserContract::instantiate`].
-    Instantiate(InstantiateHandler),
+    Instantiate(#[debug(skip)] InstantiateHandler),
     /// An expected call to [`UserContract::execute_operation`].
-    ExecuteOperation(ExecuteOperationHandler),
+    ExecuteOperation(#[debug(skip)] ExecuteOperationHandler),
     /// An expected call to [`UserContract::execute_message`].
-    ExecuteMessage(ExecuteMessageHandler),
+    ExecuteMessage(#[debug(skip)] ExecuteMessageHandler),
     /// An expected call to [`UserContract::finalize`].
-    Finalize(FinalizeHandler),
+    Finalize(#[debug(skip)] FinalizeHandler),
     /// An expected call to [`UserService::handle_query`].
-    HandleQuery(HandleQueryHandler),
+    HandleQuery(#[debug(skip)] HandleQueryHandler),
 }
 
 impl Display for ExpectedCall {

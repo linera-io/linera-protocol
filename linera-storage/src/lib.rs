@@ -401,6 +401,15 @@ where
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         self.storage.contains_blob(blob_id).await
     }
+
+    #[cfg(with_testing)]
+    async fn add_blobs(
+        &self,
+        blobs: impl IntoIterator<Item = Blob> + Send,
+    ) -> Result<(), ViewError> {
+        let blobs = Vec::from_iter(blobs);
+        self.storage.write_blobs(&blobs).await
+    }
 }
 
 /// A clock that can be used to get the current `Timestamp`.

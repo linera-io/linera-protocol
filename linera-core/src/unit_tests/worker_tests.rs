@@ -40,13 +40,12 @@ use linera_execution::{
     system::{
         AdminOperation, OpenChainConfig, Recipient, SystemChannel, SystemMessage, SystemOperation,
     },
-    test_utils::{register_mock_applications, ExpectedCall, SystemExecutionState},
+    test_utils::{ExpectedCall, RegisterMockApplication, SystemExecutionState},
     ChannelSubscription, ExecutionError, Message, MessageKind, Query, QueryContext, Response,
-    SystemExecutionError, SystemQuery, SystemResponse, TestExecutionRuntimeContext,
+    SystemExecutionError, SystemQuery, SystemResponse,
 };
 use linera_storage::{DbStorage, Storage, TestClock};
 use linera_views::{
-    context::MemoryContext,
     memory::MemoryStore,
     random::generate_test_namespace,
     store::TestKeyValueStore as _,
@@ -3736,18 +3735,12 @@ where
         .await
         .unwrap();
 
-    let mut applications;
+    let (application_id, application);
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        applications =
-            crate::test_utils::register_mock_applications(&mut chain.execution_state, 1, storage)
-                .await?;
+        (application_id, application) = chain.execution_state.register_mock_application().await?;
         chain.save().await?;
     }
-
-    let (application_id, application, _, _) = applications
-        .next()
-        .expect("Mock application should be registered");
 
     let query_times = (0..NUM_QUERIES as u64).map(Timestamp::from);
     let query_contexts = query_times.clone().map(|local_time| QueryContext {
@@ -3828,18 +3821,12 @@ where
         .await
         .unwrap();
 
-    let mut applications;
+    let (application_id, application);
     {
         let mut chain = storage.load_chain(chain_id).await?;
-        applications =
-            crate::test_utils::register_mock_applications(&mut chain.execution_state, 1, storage)
-                .await?;
+        (application_id, application) = chain.execution_state.register_mock_application().await?;
         chain.save().await?;
     }
-
-    let (application_id, application, _, _) = applications
-        .next()
-        .expect("Mock application should be registered");
 
     let queries_before_proposal = (0..NUM_QUERIES as u64).map(Timestamp::from);
     let queries_before_confirmation =
@@ -3918,7 +3905,7 @@ where
     }
     .into_view()
     .await;
-    register_mock_applications::<MemoryContext<TestExecutionRuntimeContext>>(&mut state, 1).await?;
+    let _ = state.register_mock_application().await?;
 
     let value = HashedCertificateValue::new_confirmed(
         BlockExecutionOutcome {

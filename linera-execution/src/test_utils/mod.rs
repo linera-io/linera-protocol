@@ -28,18 +28,20 @@ pub use self::{
 use crate::{
     ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
     QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
-    TestExecutionRuntimeContext, UserApplicationDescription, UserApplicationId,
+    SystemExecutionStateView, TestExecutionRuntimeContext, UserApplicationDescription,
+    UserApplicationId,
 };
 
+/// Creates a dummy [`UserApplicationDescription`] for use in tests.
 pub fn create_dummy_user_application_description(
     index: u64,
 ) -> (UserApplicationDescription, Blob, Blob) {
     let chain_id = ChainId::root(1);
     let contract_blob = Blob::new_contract_bytecode(CompressedBytecode {
-        compressed_bytes: String::from("contract").as_bytes().to_vec(),
+        compressed_bytes: b"contract".to_vec(),
     });
     let service_blob = Blob::new_service_bytecode(CompressedBytecode {
-        compressed_bytes: String::from("service").as_bytes().to_vec(),
+        compressed_bytes: b"service".to_vec(),
     });
 
     (
@@ -58,60 +60,112 @@ pub fn create_dummy_user_application_description(
     )
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct FakeBlob(String);
+/// Registration of [`MockApplication`]s to use in tests.
+#[allow(async_fn_in_trait)]
+pub trait RegisterMockApplication {
+    /// Returns the chain to use for the creation of the application.
+    ///
+    /// This is included in the mocked [`ApplicationId`].
+    fn creator_chain_id(&self) -> ChainId;
 
-impl BcsSignable for FakeBlob {}
+    /// Returns the amount of known registered applications.
+    ///
+    /// Used to avoid duplicate registrations.
+    async fn registered_application_count(&self) -> anyhow::Result<usize>;
 
-/// Creates `count` [`MockApplication`]s and registers them in the provided [`ExecutionStateView`].
-///
-/// Returns an iterator over pairs of [`UserApplicationId`]s and their respective
-/// [`MockApplication`]s.
-pub async fn register_mock_applications<C>(
-    state: &mut ExecutionStateView<C>,
-    count: u64,
-) -> anyhow::Result<vec::IntoIter<(UserApplicationId, MockApplication, Blob, Blob)>>
-where
-    C: Context<Extra = TestExecutionRuntimeContext> + Clone + Send + Sync + 'static,
-    C::Extra: ExecutionRuntimeContext,
-{
-    let mock_applications = register_mock_applications_internal(state, count).await?;
-    let extra = state.context().extra();
-    for (_id, _mock_application, contract_blob, service_blob) in &mock_applications {
-        extra.add_blobs(vec![contract_blob.clone(), service_blob.clone()]);
+    /// Registers a new [`MockApplication`] and returns it with the [`UserApplicationId`] that was
+    /// used for it.
+    async fn register_mock_application(
+        &mut self,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+        let (description, contract, service) = create_dummy_user_application_description(
+            self.registered_application_count().await? as u64,
+        );
+
+        self.register_mock_application_with(description, contract, service)
+            .await
     }
 
-    Ok(mock_applications.into_iter())
+    /// Registers a new [`MockApplication`] associated with a [`UserApplicationDescription`] and
+    /// its bytecode [`Blob`]s.
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)>;
 }
 
-pub async fn register_mock_applications_internal<C>(
-    state: &mut ExecutionStateView<C>,
-    count: u64,
-) -> anyhow::Result<Vec<(UserApplicationId, MockApplication, Blob, Blob)>>
+impl<C> RegisterMockApplication for ExecutionStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    let mock_applications: Vec<_> =
-        create_dummy_user_application_registrations(&mut state.system.registry, count)
-            .await?
-            .into_iter()
-            .map(|(id, _description, contract_blob, service_blob)| {
-                (id, MockApplication::default(), contract_blob, service_blob)
-            })
-            .collect();
-    let extra = state.context().extra();
-
-    for (id, mock_application, _contract_blob, _service_blob) in &mock_applications {
-        extra
-            .user_contracts()
-            .insert(*id, mock_application.clone().into());
-        extra
-            .user_services()
-            .insert(*id, mock_application.clone().into());
+    fn creator_chain_id(&self) -> ChainId {
+        self.system.creator_chain_id()
     }
 
-    Ok(mock_applications)
+    async fn registered_application_count(&self) -> anyhow::Result<usize> {
+        self.system.registered_application_count().await
+    }
+
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+        self.system
+            .register_mock_application_with(description, contract, service)
+            .await
+    }
+}
+
+impl<C> RegisterMockApplication for SystemExecutionStateView<C>
+where
+    C: Context + Clone + Send + Sync + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    fn creator_chain_id(&self) -> ChainId {
+        self.description.get().expect(
+            "Can't register applications on an system state with no associated `ChainDescription`",
+        ).into()
+    }
+
+    async fn registered_application_count(&self) -> anyhow::Result<usize> {
+        let mut count = 0;
+
+        self.registry
+            .known_applications
+            .for_each_index(|_| {
+                count += 1;
+                Ok(())
+            })
+            .await?;
+
+        Ok(count)
+    }
+
+    async fn register_mock_application_with(
+        &mut self,
+        description: UserApplicationDescription,
+        contract: Blob,
+        service: Blob,
+    ) -> anyhow::Result<(UserApplicationId, MockApplication)> {
+        let id = self.registry.register_application(description).await?;
+        let extra = self.context().extra();
+        let mock_application = MockApplication::default();
+
+        extra
+            .user_contracts()
+            .insert(id, mock_application.clone().into());
+        extra
+            .user_services()
+            .insert(id, mock_application.clone().into());
+        extra.add_blobs([contract, service]).await?;
+
+        Ok((id, mock_application))
+    }
 }
 
 pub async fn create_dummy_user_application_registrations<C>(
