@@ -99,6 +99,7 @@ impl PerformanceSummary {
         markdown_content
     }
 
+    // Updates an existing comment or creates a new one in the PR.
     pub async fn upsert_pr_comment(&self) -> Result<()> {
         self.github
             .upsert_pr_comment(self.format_comment_body())
