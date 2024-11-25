@@ -5,7 +5,7 @@
 
 use std::{collections::BTreeMap, vec};
 
-use anyhow::anyhow;
+use anyhow::Context as _;
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
@@ -1471,7 +1471,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
             ExecutionOutcome::User(_, _) => panic!("Unexpected message"),
         })
         .nth((index - first_message_index) as usize)
-        .ok_or_else(|| anyhow!("Message index out of bounds"))?;
+        .context("Message index out of bounds")?;
     let RawOutgoingMessage {
         message: SystemMessage::OpenChain(config),
         destination: Destination::Recipient(recipient_id),
