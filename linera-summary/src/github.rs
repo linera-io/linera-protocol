@@ -176,7 +176,7 @@ impl Github {
                     self.context.repository.owner.clone(),
                     self.context.repository.name.clone(),
                 )
-                .create_comment(self.context.pr_number, body.clone())
+                .create_comment(self.context.pr_number, body)
                 .await?;
         }
         Ok(())
