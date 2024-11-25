@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This crate provides the internal tool executable for performance summary generation.
+//! This crate provides the internal tool to summarize performance changes in PRs.
 
 #![deny(clippy::large_futures)]
 #![allow(missing_docs)]

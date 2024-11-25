@@ -3,9 +3,10 @@
 
 use std::collections::HashMap;
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Result};
 use octocrab::models::workflows::{Conclusion, Job, Status};
 use serde::Serialize;
+use tracing::warn;
 
 type WorkflowName = String;
 
@@ -50,34 +51,45 @@ impl CiRuntimeComparison {
             pr_runtimes
                 .into_iter()
                 .map(|(workflow_name, jobs)| {
-                    Ok((
+                    (
                         workflow_name.clone(),
                         jobs.into_iter()
-                            .map(|(job_name, pr_runtime)| {
-                                let base_runtime = *base_runtimes
-                                    .get(&workflow_name)
-                                    .ok_or_else(|| {
-                                        anyhow!("No base runtime for workflow {}", workflow_name)
-                                    })?
-                                    .get(&job_name)
-                                    .ok_or_else(|| {
-                                        anyhow!("No base runtime for job {}", job_name)
-                                    })?;
-                                Ok(WorkflowJobRuntimeComparison {
-                                    name: job_name.clone(),
-                                    workflow_name: workflow_name.clone(),
-                                    pr_runtime: format!("{}s", pr_runtime),
-                                    base_runtime: format!("{}s", base_runtime),
-                                    runtime_difference_pct: format!(
-                                        "{:+.2}%",
-                                        ((pr_runtime as f64) / (base_runtime as f64) - 1.0) * 100.0
-                                    ),
-                                })
+                            .filter_map(|(job_name, pr_runtime)| {
+                                let base_jobs_runtimes = base_runtimes.get(&workflow_name);
+                                if let Some(base_jobs_runtimes) = base_jobs_runtimes {
+                                    let base_runtime = base_jobs_runtimes.get(&job_name);
+                                    if let Some(base_runtime) = base_runtime {
+                                        return Some(WorkflowJobRuntimeComparison {
+                                            name: job_name.clone(),
+                                            workflow_name: workflow_name.clone(),
+                                            pr_runtime: format!("{}s", pr_runtime),
+                                            base_runtime: format!("{}s", *base_runtime),
+                                            runtime_difference_pct: format!(
+                                                "{:+.2}%",
+                                                ((pr_runtime as f64) / (*base_runtime as f64)
+                                                    - 1.0)
+                                                    * 100.0
+                                            ),
+                                        });
+                                    } else {
+                                        warn!(
+                                            "No base runtime information found for job {} of workflow {}",
+                                            job_name, workflow_name
+                                        );
+                                    }
+                                } else {
+                                    warn!(
+                                        "No base runtime information found for workflow {}",
+                                        workflow_name
+                                    );
+                                }
+
+                                None
                             })
-                            .collect::<Result<Vec<_>>>()?,
-                    ))
+                            .collect::<Vec<_>>(),
+                    )
                 })
-                .collect::<Result<HashMap<_, _>>>()?,
+                .collect::<HashMap<_, _>>(),
         ))
     }
 }

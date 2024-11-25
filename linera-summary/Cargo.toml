@@ -14,10 +14,10 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-git2 = "0.19.0"
+git2.workspace = true
 linera-base.workspace = true
 linera-version.workspace = true
-octocrab = "0.42.0"
+octocrab.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

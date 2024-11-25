@@ -1,6 +1,6 @@
 <!-- cargo-rdme start -->
 
-This crate provides the internal tool executable for performance summary generation.
+This crate provides the internal tool to summarize performance changes in PRs.
 
 <!-- cargo-rdme end -->
 

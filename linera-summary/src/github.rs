@@ -169,11 +169,11 @@ impl Github {
         Ok(())
     }
 
-    async fn latest_runs<'octo>(
+    async fn latest_runs(
         &self,
         branch: &str,
         event: &str,
-        workflows_handler: &WorkflowsHandler<'octo>,
+        workflows_handler: &WorkflowsHandler<'_>,
         workflows: &[WorkFlow],
     ) -> Result<Vec<Run>> {
         let mut latest_runs = Vec::new();
@@ -214,11 +214,11 @@ impl Github {
         Ok(latest_runs)
     }
 
-    pub async fn latest_jobs<'octo>(
+    pub async fn latest_jobs(
         &self,
         branch: &str,
         event: &str,
-        workflows_handler: &WorkflowsHandler<'octo>,
+        workflows_handler: &WorkflowsHandler<'_>,
         workflows: &[WorkFlow],
     ) -> Result<Vec<Job>> {
         let latest_runs = self
@@ -263,9 +263,9 @@ impl Github {
         )
     }
 
-    pub async fn workflows<'octo>(
+    pub async fn workflows(
         &self,
-        workflows_handler: &WorkflowsHandler<'octo>,
+        workflows_handler: &WorkflowsHandler<'_>,
     ) -> Result<Vec<WorkFlow>> {
         Ok(workflows_handler.list().send().await?.items)
     }
