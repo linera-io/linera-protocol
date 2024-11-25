@@ -19,7 +19,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::ChannelFullName,
-    types::{ConfirmedBlockCertificate, HashedCertificateValue},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -85,7 +85,7 @@ pub trait Storage: Sized {
     async fn read_hashed_certificate_value(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, ViewError>;
+    ) -> Result<Hashed<ConfirmedBlock>, ViewError>;
 
     /// Reads the blob with the given blob ID.
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
@@ -104,7 +104,7 @@ pub trait Storage: Sized {
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<HashedCertificateValue>, ViewError>;
+    ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError>;
 
     /// Writes the given blob.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;

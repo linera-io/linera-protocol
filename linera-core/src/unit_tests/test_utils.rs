@@ -22,7 +22,7 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        Certificate, ConfirmedBlockCertificate, GenericCertificate, HashedCertificateValue,
+        Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
         LiteCertificate,
     },
 };
@@ -168,7 +168,7 @@ where
     async fn download_certificate_value(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, NodeError> {
+    ) -> Result<Hashed<ConfirmedBlock>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_certificate_value(hash, sender)
         })
@@ -461,8 +461,8 @@ where
     async fn do_download_certificate_value(
         self,
         hash: CryptoHash,
-        sender: oneshot::Sender<Result<HashedCertificateValue, NodeError>>,
-    ) -> Result<(), Result<HashedCertificateValue, NodeError>> {
+        sender: oneshot::Sender<Result<Hashed<ConfirmedBlock>, NodeError>>,
+    ) -> Result<(), Result<Hashed<ConfirmedBlock>, NodeError>> {
         let validator = self.client.lock().await;
         let certificate_value = validator
             .state

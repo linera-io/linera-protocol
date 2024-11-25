@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, Origin},
-    types::{Certificate, GenericCertificate, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, ConfirmedBlock, GenericCertificate, Hashed, LiteCertificate},
     ChainError,
 };
 use linera_execution::{
@@ -94,7 +94,7 @@ pub trait ValidatorNode {
     async fn download_certificate_value(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, NodeError>;
+    ) -> Result<Hashed<ConfirmedBlock>, NodeError>;
 
     async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError>;
 

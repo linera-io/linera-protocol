@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
-    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, ConfirmedBlock, Hashed, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -611,7 +611,7 @@ impl TryFrom<api::BlobContent> for BlobContent {
     }
 }
 
-impl TryFrom<api::CertificateValue> for CertificateValue {
+impl TryFrom<api::CertificateValue> for ConfirmedBlock {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::CertificateValue) -> Result<Self, Self::Error> {
@@ -619,21 +619,21 @@ impl TryFrom<api::CertificateValue> for CertificateValue {
     }
 }
 
-impl TryFrom<CertificateValue> for api::CertificateValue {
+impl TryFrom<ConfirmedBlock> for api::CertificateValue {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(certificate: CertificateValue) -> Result<Self, Self::Error> {
+    fn try_from(block: ConfirmedBlock) -> Result<Self, Self::Error> {
         Ok(Self {
-            bytes: bincode::serialize(&certificate)?,
+            bytes: bincode::serialize(&block)?,
         })
     }
 }
 
-impl TryFrom<HashedCertificateValue> for api::CertificateValue {
+impl TryFrom<Hashed<ConfirmedBlock>> for api::CertificateValue {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(hv: HashedCertificateValue) -> Result<Self, Self::Error> {
-        CertificateValue::from(hv).try_into()
+    fn try_from(value: Hashed<ConfirmedBlock>) -> Result<Self, Self::Error> {
+        value.into_inner().try_into()
     }
 }
 

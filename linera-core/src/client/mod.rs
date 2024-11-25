@@ -2953,7 +2953,7 @@ where
     pub async fn read_hashed_certificate_value(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, ViewError> {
+    ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
         self.client
             .storage_client()
             .read_hashed_certificate_value(hash)
@@ -2975,7 +2975,7 @@ where
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<HashedCertificateValue>, ViewError> {
+    ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError> {
         self.client
             .storage_client()
             .read_hashed_certificate_values_downward(from, limit)

@@ -149,9 +149,7 @@ async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) {
     );
 
     // checking indexer operation
-    let Some(executed_block) = last_block.value.executed_block else {
-        panic!("last block is a new round")
-    };
+    let executed_block = last_block.value.executed_block;
     let last_operation = executed_block.block.operations[0].clone();
     let variables = get_operation::Variables {
         key: get_operation::OperationKeyKind::Last(chain0),

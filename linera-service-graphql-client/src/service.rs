@@ -303,10 +303,10 @@ mod from {
         type Error = String;
         fn try_from(val: block::BlockBlock) -> Result<Self, Self::Error> {
             match (val.value.status.as_str(), val.value.executed_block) {
-                ("validated", Some(executed_block)) => {
+                ("validated", executed_block) => {
                     Ok(HashedCertificateValue::new_validated(executed_block.into()).into())
                 }
-                ("confirmed", Some(executed_block)) => {
+                ("confirmed", executed_block) => {
                     Ok(HashedCertificateValue::new_confirmed(executed_block.into()).into())
                 }
                 _ => Err(val.value.status),

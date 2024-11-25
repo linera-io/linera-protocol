@@ -447,13 +447,13 @@ where
         request: Request<CryptoHash>,
     ) -> Result<Response<CertificateValue>, Status> {
         let hash = request.into_inner().try_into()?;
-        let certificate = self
+        let confirmed_block = self
             .0
             .storage
             .read_hashed_certificate_value(hash)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
-        Ok(Response::new(certificate.try_into()?))
+        Ok(Response::new(confirmed_block.into_inner().try_into()?))
     }
 
     #[instrument(skip_all, err(Display))]

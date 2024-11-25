@@ -1520,8 +1520,8 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .block()
-        .unwrap()
+        .inner()
+        .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1533,8 +1533,8 @@ where
     assert_eq!(
         hashed_certificate_values[1]
             .inner()
-            .block()
-            .unwrap()
+            .inner()
+            .block
             .operations,
         blob_0_1_operations,
     );
@@ -1661,8 +1661,8 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .block()
-        .unwrap()
+        .inner()
+        .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1673,8 +1673,8 @@ where
     // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
     assert!(hashed_certificate_values[1]
         .inner()
-        .block()
-        .unwrap()
+        .inner()
+        .block
         .operations
         .contains(&owner_change_op));
     Ok(())
@@ -1932,8 +1932,8 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .block()
-        .unwrap()
+        .inner()
+        .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1945,8 +1945,8 @@ where
     assert_eq!(
         hashed_certificate_values[1]
             .inner()
-            .block()
-            .unwrap()
+            .inner()
+            .block
             .operations,
         blob_2_3_operations,
     );
@@ -1954,8 +1954,8 @@ where
     // Previous should be the `ChangeOwnership` operation
     assert!(hashed_certificate_values[2]
         .inner()
-        .block()
-        .unwrap()
+        .inner()
+        .block
         .operations
         .contains(&owner_change_op));
     Ok(())

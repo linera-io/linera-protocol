@@ -14,9 +14,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{
-        Certificate, CertificateValue, GenericCertificate, HashedCertificateValue, LiteCertificate,
-    },
+    types::{Certificate, ConfirmedBlock, GenericCertificate, Hashed, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -150,11 +148,11 @@ impl ValidatorNode for SimpleClient {
     async fn download_certificate_value(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, NodeError> {
-        let certificate_value: CertificateValue = self
-            .query(RpcMessage::DownloadCertificateValue(Box::new(hash)))
+    ) -> Result<Hashed<ConfirmedBlock>, NodeError> {
+        let confirmed_block: ConfirmedBlock = self
+            .query(RpcMessage::DownloadConfirmedBlock(Box::new(hash)))
             .await?;
-        Ok(certificate_value.with_hash_checked(hash)?)
+        Ok(confirmed_block.with_hash_checked(hash)?)
     }
 
     async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {

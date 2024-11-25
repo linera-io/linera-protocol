@@ -37,7 +37,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
-    linera_chain::types::{Certificate, CertificateValueT, GenericCertificate},
+    linera_chain::types::{CertificateValueT, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
@@ -916,7 +916,10 @@ where
         validator_clients
     }
 
-    pub async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
+    pub async fn update_wallet_from_certificates(
+        &mut self,
+        certificates: Vec<ConfirmedBlockCertificate>,
+    ) {
         let node = self.client.local_node().clone();
         // Replay the certificates locally.
         for certificate in certificates {
