@@ -512,11 +512,9 @@ where
         &mut self,
         new_trackers: BTreeMap<ValidatorName, u64>,
     ) -> Result<(), WorkerError> {
-        for (name, tracker) in new_trackers {
-            self.state
-                .chain
-                .update_received_certificate_tracker(name, tracker);
-        }
+        self.state
+            .chain
+            .update_received_certificate_trackers(new_trackers);
         self.save().await?;
         Ok(())
     }

@@ -535,19 +535,24 @@ where
         Ok(new_outbox_entries)
     }
 
-    /// Updates the `received_log` tracker for the given validator.
-    pub fn update_received_certificate_tracker(&mut self, name: ValidatorName, tracker: u64) {
-        self.received_certificate_trackers
-            .get_mut()
-            .entry(name)
-            .and_modify(|t| {
-                // Because several synchronizations could happen in parallel, we need to make
-                // sure to never go backward.
-                if tracker > *t {
-                    *t = tracker;
-                }
-            })
-            .or_insert(tracker);
+    /// Updates the `received_log` trackers.
+    pub fn update_received_certificate_trackers(
+        &mut self,
+        new_trackers: BTreeMap<ValidatorName, u64>,
+    ) {
+        for (name, tracker) in new_trackers {
+            self.received_certificate_trackers
+                .get_mut()
+                .entry(name)
+                .and_modify(|t| {
+                    // Because several synchronizations could happen in parallel, we need to make
+                    // sure to never go backward.
+                    if tracker > *t {
+                        *t = tracker;
+                    }
+                })
+                .or_insert(tracker);
+        }
     }
 
     pub async fn execute_init_message(
