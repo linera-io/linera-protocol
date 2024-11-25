@@ -52,7 +52,7 @@ impl From<ValidatedBlock> for HashedCertificateValue {
 }
 
 impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
-    type Error = &'static str;
+    type Error = ConversionError;
 
     fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
         let hash = value.hash();
@@ -60,7 +60,7 @@ impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
             CertificateValue::ValidatedBlock(validated) => {
                 Ok(Hashed::unchecked_new(validated, hash))
             }
-            _ => Err("Expected a ValidatedBlock value"),
+            _ => Err(ConversionError::ValidatedBlock),
         }
     }
 }
