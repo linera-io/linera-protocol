@@ -162,7 +162,7 @@ where
         extra
             .user_services()
             .insert(id, mock_application.clone().into());
-        extra.add_blobs(vec![contract, service]).await?;
+        extra.add_blobs([contract, service]).await?;
 
         Ok((id, mock_application))
     }

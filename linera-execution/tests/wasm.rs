@@ -64,7 +64,7 @@ async fn test_fuel_for_counter_wasm_application(
 
     view.context()
         .extra()
-        .add_blobs(vec![contract_blob, service_blob])
+        .add_blobs([contract_blob, service_blob])
         .await?;
 
     let app_id = app_id.with_abi::<CounterAbi>();

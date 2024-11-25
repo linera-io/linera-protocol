@@ -194,7 +194,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
-    extra.add_blobs(vec![contract_blob, service_blob]).await?;
+    extra.add_blobs([contract_blob, service_blob]).await?;
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {
