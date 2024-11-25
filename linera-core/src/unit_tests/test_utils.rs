@@ -467,7 +467,7 @@ where
         let certificate_value = validator
             .state
             .storage_client()
-            .read_hashed_certificate_value(hash)
+            .read_hashed_confirmed_block(hash)
             .await
             .map_err(Into::into);
         sender.send(certificate_value)

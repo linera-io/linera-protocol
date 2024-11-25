@@ -87,10 +87,10 @@ static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
 /// The metric counting how often a hashed certificate value is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+pub static READ_HASHED_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "read_hashed_certificate_value",
-        "The metric counting how often a hashed certificate value is read from storage",
+        "read_hashed_confirmed_block",
+        "The metric counting how often a hashed confirmed block is read from storage",
         &[],
     )
 });
@@ -398,14 +398,14 @@ where
         Ok(test)
     }
 
-    async fn read_hashed_certificate_value(
+    async fn read_hashed_confirmed_block(
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
         let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
         #[cfg(with_metrics)]
-        READ_HASHED_CERTIFICATE_VALUE_COUNTER
+        READ_HASHED_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
             .inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
@@ -472,7 +472,7 @@ where
         Ok(blob_states)
     }
 
-    async fn read_hashed_certificate_values_downward(
+    async fn read_hashed_confirmed_blocks_downward(
         &self,
         from: CryptoHash,
         limit: u32,
@@ -483,7 +483,7 @@ where
             let Some(next_hash) = hash else {
                 break;
             };
-            let value = self.read_hashed_certificate_value(next_hash).await?;
+            let value = self.read_hashed_confirmed_block(next_hash).await?;
             hash = value.inner().inner().block.previous_block_hash;
             values.push(value);
         }

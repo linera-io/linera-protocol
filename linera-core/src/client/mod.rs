@@ -2950,13 +2950,13 @@ where
     }
 
     #[instrument(level = "trace", skip(hash))]
-    pub async fn read_hashed_certificate_value(
+    pub async fn read_hashed_confirmed_block(
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
         self.client
             .storage_client()
-            .read_hashed_certificate_value(hash)
+            .read_hashed_confirmed_block(hash)
             .await
     }
 
@@ -2971,14 +2971,14 @@ where
     }
 
     #[instrument(level = "trace", skip(from, limit))]
-    pub async fn read_hashed_certificate_values_downward(
+    pub async fn read_hashed_confirmed_blocks_downward(
         &self,
         from: CryptoHash,
         limit: u32,
     ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError> {
         self.client
             .storage_client()
-            .read_hashed_certificate_values_downward(from, limit)
+            .read_hashed_confirmed_blocks_downward(from, limit)
             .await
     }
 

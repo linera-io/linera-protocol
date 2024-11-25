@@ -1513,7 +1513,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
+        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1654,7 +1654,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
+        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
@@ -1925,7 +1925,7 @@ where
         .unwrap();
 
     let hashed_certificate_values = client3_c
-        .read_hashed_certificate_values_downward(bt_certificate.hash(), 3)
+        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 3)
         .await
         .unwrap();
 

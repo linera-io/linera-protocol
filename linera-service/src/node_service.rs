@@ -712,7 +712,7 @@ where
             }
         };
         if let Some(hash) = hash {
-            let block = client.read_hashed_certificate_value(hash).await?;
+            let block = client.read_hashed_confirmed_block(hash).await?;
             Ok(Some(block))
         } else {
             Ok(None)
@@ -736,7 +736,7 @@ where
         };
         if let Some(from) = from {
             let values = client
-                .read_hashed_certificate_values_downward(from, limit)
+                .read_hashed_confirmed_blocks_downward(from, limit)
                 .await?;
             Ok(values)
         } else {

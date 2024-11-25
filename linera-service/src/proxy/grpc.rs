@@ -450,7 +450,7 @@ where
         let confirmed_block = self
             .0
             .storage
-            .read_hashed_certificate_value(hash)
+            .read_hashed_confirmed_block(hash)
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
         Ok(Response::new(confirmed_block.into_inner().try_into()?))

@@ -307,7 +307,7 @@ where
             DownloadConfirmedBlock(hash) => {
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
                     self.storage
-                        .read_hashed_certificate_value(*hash)
+                        .read_hashed_confirmed_block(*hash)
                         .await?
                         .into_inner(),
                 ))))
