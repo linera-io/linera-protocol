@@ -377,6 +377,12 @@ pub trait ExecutionRuntimeContext {
     async fn get_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
+
+    #[cfg(with_testing)]
+    async fn add_blobs(
+        &self,
+        blobs: impl IntoIterator<Item = Blob> + Send,
+    ) -> Result<(), ViewError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -996,12 +1002,6 @@ impl TestExecutionRuntimeContext {
             blobs: Arc::default(),
         }
     }
-
-    pub fn add_blobs(&self, blobs: Vec<Blob>) {
-        for blob in blobs {
-            self.blobs.insert(blob.id(), blob);
-        }
-    }
 }
 
 #[cfg(with_testing)]
@@ -1062,6 +1062,18 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
         Ok(self.blobs.contains_key(&blob_id))
+    }
+
+    #[cfg(with_testing)]
+    async fn add_blobs(
+        &self,
+        blobs: impl IntoIterator<Item = Blob> + Send,
+    ) -> Result<(), ViewError> {
+        for blob in blobs {
+            self.blobs.insert(blob.id(), blob);
+        }
+
+        Ok(())
     }
 }
 

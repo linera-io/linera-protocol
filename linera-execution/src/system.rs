@@ -1080,7 +1080,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn application_message_index() {
+    async fn application_message_index() -> anyhow::Result<()> {
         let (mut view, context) = new_view_and_context().await;
         let contract = Bytecode::new(b"contract".into());
         let service = Bytecode::new(b"service".into());
@@ -1097,13 +1097,13 @@ mod tests {
         let mut txn_tracker = TransactionTracker::default();
         view.context()
             .extra()
-            .add_blobs(vec![contract_blob, service_blob]);
+            .add_blobs([contract_blob, service_blob])
+            .await?;
         let new_application = view
             .system
             .execute_operation(context, operation, &mut txn_tracker)
-            .await
-            .unwrap();
-        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure().unwrap().0[..] else {
+            .await?;
+        let [ExecutionOutcome::System(result)] = &txn_tracker.destructure()?.0[..] else {
             panic!("Unexpected outcome");
         };
         assert_eq!(
@@ -1120,6 +1120,8 @@ mod tests {
             creation,
         };
         assert_eq!(new_application, Some((id, vec![])));
+
+        Ok(())
     }
 
     #[tokio::test]

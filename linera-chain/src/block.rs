@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::ChainId};
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     data_types::ExecutedBlock,
@@ -43,7 +44,7 @@ impl ValidatedBlock {
 impl BcsHashable for ValidatedBlock {}
 
 impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
-    type Error = &'static str;
+    type Error = ConversionError;
 
     fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
         let hash = value.hash();
@@ -51,7 +52,7 @@ impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
             CertificateValue::ValidatedBlock(validated) => {
                 Ok(Hashed::unchecked_new(validated, hash))
             }
-            _ => Err("Expected a ValidatedBlock value"),
+            _ => Err(ConversionError::ValidatedBlock),
         }
     }
 }
@@ -64,7 +65,7 @@ pub struct ConfirmedBlock {
 }
 
 impl TryFrom<HashedCertificateValue> for Hashed<ConfirmedBlock> {
-    type Error = &'static str;
+    type Error = ConversionError;
 
     fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
         let hash = value.hash();
@@ -72,7 +73,7 @@ impl TryFrom<HashedCertificateValue> for Hashed<ConfirmedBlock> {
             CertificateValue::ConfirmedBlock(confirmed) => {
                 Ok(Hashed::unchecked_new(confirmed, hash))
             }
-            _ => Err("Expected a ConfirmedBlock value"),
+            _ => Err(ConversionError::ConfirmedBlock),
         }
     }
 }
@@ -147,3 +148,15 @@ impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
 }
 
 impl BcsHashable for Timeout {}
+
+/// Failure to convert a [`HashedCertificateValue`] into one of the block types.
+#[derive(Clone, Copy, Debug, Error)]
+pub enum ConversionError {
+    /// Failure to convert to [`ConfirmedBlock`].
+    #[error("Expected a `ConfirmedBlock` value")]
+    ConfirmedBlock,
+
+    /// Failure to convert to [`ValidatedBlock`].
+    #[error("Expected a `ValidatedBlock` value")]
+    ValidatedBlock,
+}

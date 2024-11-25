@@ -1251,8 +1251,10 @@ where
         chain_worker_limit: usize,
     ) -> Result<ReceivedCertificatesFromValidator, ChainClientError> {
         let mut tracker = self
-            .state()
-            .received_certificate_trackers()
+            .chain_state_view()
+            .await?
+            .received_certificate_trackers
+            .get()
             .get(&remote_node.name)
             .copied()
             .unwrap_or(0);
@@ -1304,7 +1306,6 @@ where
 
         // Download the block certificates.
         let remote_certificates = remote_node
-            .node
             .download_certificates(certificate_hashes)
             .await?;
 
@@ -1456,9 +1457,16 @@ where
         stream.for_each(future::ready).await;
 
         // Update the trackers.
-        let mut state = self.state_mut();
-        for (name, tracker) in new_trackers {
-            state.update_received_certificate_tracker(name, tracker);
+        if let Err(error) = self
+            .client
+            .local_node
+            .update_received_certificate_trackers(self.chain_id, new_trackers)
+            .await
+        {
+            error!(
+                "Failed to update the certificate trackers for chain {:.8}: {error}",
+                self.chain_id
+            );
         }
     }
 
@@ -1479,8 +1487,6 @@ where
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
         let nodes = self.make_nodes(&local_committee)?;
-        // Synchronize the state of the admin chain from the network.
-        self.synchronize_chain_state(&nodes, self.admin_id).await?;
         let client = self.clone();
         // Proceed to downloading received certificates. Split the available chain workers so that
         // the tasks don't use more than the limit in total.
@@ -1688,7 +1694,6 @@ where
         let info = remote_node.handle_chain_info_query(query).await?;
 
         let certificates: Vec<ConfirmedBlockCertificate> = remote_node
-            .node
             .download_certificates(info.requested_sent_certificate_hashes)
             .await?
             .into_iter()
@@ -2305,8 +2310,15 @@ where
     /// `process_inbox` must be called separately.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+        if self.chain_id != self.admin_id {
+            // Synchronize the state of the admin chain from the network.
+            let local_committee = self.local_committee().await?;
+            let nodes = self.make_nodes(&local_committee)?;
+            self.synchronize_chain_state(&nodes, self.admin_id).await?;
+        }
+        let info = self.prepare_chain().await?;
         self.find_received_certificates().await?;
-        self.prepare_chain().await
+        Ok(info)
     }
 
     /// Processes the last pending block
@@ -2351,11 +2363,10 @@ where
         };
 
         let identity = self.identity().await?;
-        let round =
-            match Self::round_for_new_proposal(&info, &identity, Some(&executed_block.block))? {
-                Either::Left(round) => round,
-                Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
-            };
+        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block.block)? {
+            Either::Left(round) => round,
+            Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
+        };
 
         // Collect the blobs required for execution.
         let block = &executed_block.block;
@@ -2442,14 +2453,13 @@ where
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &Owner,
-        block: Option<&Block>,
+        block: &Block,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
         let manager = &info.manager;
         let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
-            proposal.content.round == manager.current_round
-                && block.map_or(true, |block| proposal.content.block != *block)
+            proposal.content.round == manager.current_round && proposal.content.block != *block
         });
         let round = if !conflicting_proposal {
             manager.current_round

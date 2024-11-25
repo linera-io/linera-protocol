@@ -2,10 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use linera_base::{
     crypto::{CryptoHash, KeyPair, PublicKey},
@@ -15,7 +12,6 @@ use linera_base::{
     ownership::ChainOwnership,
 };
 use linera_chain::data_types::Block;
-use linera_execution::committee::ValidatorName;
 use tokio::sync::Mutex;
 
 use super::ChainClientError;
@@ -38,9 +34,6 @@ pub struct ChainClientState {
     /// Known key pairs from present and past identities.
     known_key_pairs: BTreeMap<Owner, KeyPair>,
 
-    /// For each validator, up to which index we have synchronized their
-    /// [`ChainStateView::received_log`].
-    received_certificate_trackers: HashMap<ValidatorName, u64>,
     /// This contains blobs belonging to our `pending_block` that may not even have
     /// been processed by (i.e. been proposed to) our own local chain manager yet.
     pending_blobs: BTreeMap<BlobId, Blob>,
@@ -70,7 +63,6 @@ impl ChainClientState {
             next_block_height,
             pending_block: None,
             pending_blobs,
-            received_certificate_trackers: HashMap::new(),
             client_mutex: Arc::default(),
         };
         if let Some(block) = pending_block {
@@ -130,27 +122,6 @@ impl ChainClientState {
         let new_public_key = key_pair.public();
         self.known_key_pairs.insert(new_public_key.into(), key_pair);
         new_public_key
-    }
-
-    pub fn received_certificate_trackers(&self) -> &HashMap<ValidatorName, u64> {
-        &self.received_certificate_trackers
-    }
-
-    pub(super) fn update_received_certificate_tracker(
-        &mut self,
-        name: ValidatorName,
-        tracker: u64,
-    ) {
-        self.received_certificate_trackers
-            .entry(name)
-            .and_modify(|t| {
-                // Because several synchronizations could happen in parallel, we need to make
-                // sure to never go backward.
-                if tracker > *t {
-                    *t = tracker;
-                }
-            })
-            .or_insert(tracker);
     }
 
     pub(super) fn update_from_info(&mut self, info: &ChainInfo) {

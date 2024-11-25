@@ -180,7 +180,7 @@ async fn test_block_size_limit() {
 }
 
 #[tokio::test]
-async fn test_application_permissions() {
+async fn test_application_permissions() -> anyhow::Result<()> {
     let time = Timestamp::from(0);
     let message_id = make_admin_message_id(BlockHeight(3));
     let chain_id = ChainId::child(message_id);
@@ -194,7 +194,7 @@ async fn test_application_permissions() {
     extra
         .user_contracts()
         .insert(application_id, application.clone().into());
-    extra.add_blobs(vec![contract_blob, service_blob]);
+    extra.add_blobs([contract_blob, service_blob]).await?;
 
     // Initialize the chain, with a chain application.
     let config = OpenChainConfig {
@@ -203,8 +203,7 @@ async fn test_application_permissions() {
     };
     chain
         .execute_init_message(message_id, &config, time, time)
-        .await
-        .unwrap();
+        .await?;
     let open_chain_message = Message::System(SystemMessage::OpenChain(config));
 
     let register_app_message = SystemMessage::RegisterApplications {
@@ -246,7 +245,7 @@ async fn test_application_permissions() {
     let valid_block = make_first_block(chain_id)
         .with_incoming_bundle(bundle)
         .with_operation(app_operation.clone());
-    let outcome = chain.execute_block(&valid_block, time, None).await.unwrap();
+    let outcome = chain.execute_block(&valid_block, time, None).await?;
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
@@ -269,5 +268,7 @@ async fn test_application_permissions() {
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
     let valid_block = make_child_block(&value).with_operation(app_operation);
-    chain.execute_block(&valid_block, time, None).await.unwrap();
+    chain.execute_block(&valid_block, time, None).await?;
+
+    Ok(())
 }

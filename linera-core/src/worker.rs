@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
@@ -32,7 +32,10 @@ use linera_chain::{
     },
     ChainError, ChainStateView,
 };
-use linera_execution::{committee::Epoch, ExecutionError, Query, Response};
+use linera_execution::{
+    committee::{Epoch, ValidatorName},
+    ExecutionError, Query, Response,
+};
 use linera_storage::Storage;
 use linera_views::views::ViewError;
 use lru::LruCache;
@@ -1033,6 +1036,21 @@ where
                 Ok(NetworkActions::default())
             }
         }
+    }
+
+    /// Updates the received certificate trackers to at least the given values.
+    pub async fn update_received_certificate_trackers(
+        &self,
+        chain_id: ChainId,
+        new_trackers: BTreeMap<ValidatorName, u64>,
+    ) -> Result<(), WorkerError> {
+        self.query_chain_worker(chain_id, move |callback| {
+            ChainWorkerRequest::UpdateReceivedCertificateTrackers {
+                new_trackers,
+                callback,
+            }
+        })
+        .await
     }
 }
 

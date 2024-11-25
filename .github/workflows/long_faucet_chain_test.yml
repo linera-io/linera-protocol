@@ -16,7 +16,7 @@ env:
 jobs:
   long-faucet-chain-test:
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 60
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v3

@@ -530,7 +530,7 @@ where
             .certificate_for(&sub_message_id)
             .await
             .unwrap(),
-        certificate.clone()
+        certificate
     );
 
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
