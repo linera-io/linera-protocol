@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::ChainId};
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     data_types::ExecutedBlock,
@@ -170,4 +171,16 @@ impl Has<ChainId> for Timeout {
     fn get(&self) -> &ChainId {
         &self.chain_id
     }
+}
+
+/// Failure to convert a [`HashedCertificateValue`] into one of the block types.
+#[derive(Clone, Copy, Debug, Error)]
+pub enum ConversionError {
+    /// Failure to convert to [`ConfirmedBlock`].
+    #[error("Expected a `ConfirmedBlock` value")]
+    ConfirmedBlock,
+
+    /// Failure to convert to [`ValidatedBlock`].
+    #[error("Expected a `ValidatedBlock` value")]
+    ValidatedBlock,
 }
