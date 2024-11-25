@@ -17,7 +17,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::{Committee, Epoch},
+    committee::{Committee, Epoch, ValidatorName},
     BlobState,
 };
 use linera_storage::{Clock as _, Storage};
@@ -505,6 +505,17 @@ where
             .delivery_notifier
             .notify(height_with_fully_delivered_messages);
 
+        Ok(())
+    }
+
+    pub async fn update_received_certificate_trackers(
+        &mut self,
+        new_trackers: BTreeMap<ValidatorName, u64>,
+    ) -> Result<(), WorkerError> {
+        self.state
+            .chain
+            .update_received_certificate_trackers(new_trackers);
+        self.save().await?;
         Ok(())
     }
 

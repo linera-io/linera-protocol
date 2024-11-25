@@ -26,7 +26,8 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
+    committee::{Epoch, ValidatorName},
+    Message, Query, QueryContext, Response, ServiceRuntimeEndpoint, SystemMessage,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::views::{ClonableView, ViewError};
@@ -539,6 +540,17 @@ where
             }
         }
         Ok(true)
+    }
+
+    /// Updates the received certificate trackers to at least the given values.
+    pub async fn update_received_certificate_trackers(
+        &mut self,
+        new_trackers: BTreeMap<ValidatorName, u64>,
+    ) -> Result<(), WorkerError> {
+        ChainWorkerStateWithAttemptedChanges::new(self)
+            .await
+            .update_received_certificate_trackers(new_trackers)
+            .await
     }
 }
 

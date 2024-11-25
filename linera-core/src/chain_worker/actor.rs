@@ -4,7 +4,7 @@
 //! An actor that runs a chain worker.
 
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fmt,
     sync::{Arc, RwLock},
 };
@@ -24,7 +24,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    committee::Epoch, Query, QueryContext, Response, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+    committee::{Epoch, ValidatorName},
+    Query, QueryContext, Response, ServiceRuntimeEndpoint, ServiceSyncRuntime,
 };
 use linera_storage::Storage;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
@@ -142,6 +143,12 @@ where
         query: ChainInfoQuery,
         #[debug(skip)]
         callback: oneshot::Sender<Result<(ChainInfoResponse, NetworkActions), WorkerError>>,
+    },
+
+    /// Update the received certificate trackers to at least the given values.
+    UpdateReceivedCertificateTrackers {
+        new_trackers: BTreeMap<ValidatorName, u64>,
+        callback: oneshot::Sender<Result<(), WorkerError>>,
     },
 }
 
@@ -329,6 +336,16 @@ where
                     .is_ok(),
                 ChainWorkerRequest::HandleChainInfoQuery { query, callback } => callback
                     .send(self.worker.handle_chain_info_query(query).await)
+                    .is_ok(),
+                ChainWorkerRequest::UpdateReceivedCertificateTrackers {
+                    new_trackers,
+                    callback,
+                } => callback
+                    .send(
+                        self.worker
+                            .update_received_certificate_trackers(new_trackers)
+                            .await,
+                    )
                     .is_ok(),
             };
 

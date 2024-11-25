@@ -273,6 +273,17 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(hashes)
     }
 
+    #[instrument(level = "trace")]
+    pub async fn download_certificates(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> Result<Vec<Certificate>, NodeError> {
+        if hashes.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.node.download_certificates(hashes).await
+    }
+
     #[instrument(level = "trace", skip(validators))]
     async fn download_blob(validators: &[Self], blob_id: BlobId) -> Option<Blob> {
         // Sequentially try each validator in random order.
