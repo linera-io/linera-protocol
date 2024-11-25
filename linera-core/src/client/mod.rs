@@ -1314,7 +1314,6 @@ where
 
         // Download the block certificates.
         let remote_certificates = remote_node
-            .node
             .download_certificates(certificate_hashes)
             .await?;
 
@@ -1496,8 +1495,6 @@ where
         let chain_id = self.chain_id;
         let local_committee = self.local_committee().await?;
         let nodes = self.make_nodes(&local_committee)?;
-        // Synchronize the state of the admin chain from the network.
-        self.synchronize_chain_state(&nodes, self.admin_id).await?;
         let client = self.clone();
         // Proceed to downloading received certificates. Split the available chain workers so that
         // the tasks don't use more than the limit in total.
@@ -1705,7 +1702,6 @@ where
         let info = remote_node.handle_chain_info_query(query).await?;
 
         let certificates: Vec<ConfirmedBlockCertificate> = remote_node
-            .node
             .download_certificates(info.requested_sent_certificate_hashes)
             .await?
             .into_iter()
@@ -2340,8 +2336,15 @@ where
     /// `process_inbox` must be called separately.
     #[instrument(level = "trace")]
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+        if self.chain_id != self.admin_id {
+            // Synchronize the state of the admin chain from the network.
+            let local_committee = self.local_committee().await?;
+            let nodes = self.make_nodes(&local_committee)?;
+            self.synchronize_chain_state(&nodes, self.admin_id).await?;
+        }
+        let info = self.prepare_chain().await?;
         self.find_received_certificates().await?;
-        self.prepare_chain().await
+        Ok(info)
     }
 
     /// Processes the last pending block
