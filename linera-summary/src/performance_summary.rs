@@ -9,6 +9,8 @@ use serde::Serialize;
 
 use crate::{ci_runtime_comparison::CiRuntimeComparison, github::Github};
 
+pub const PR_COMMENT_HEADER: &str = "## Performance Summary for commit";
+
 #[derive(Serialize)]
 pub struct PerformanceSummary {
     #[serde(skip_serializing)]
@@ -65,8 +67,8 @@ impl PerformanceSummary {
         );
 
         let mut markdown_content = format!(
-            "## Performance Summary for commit [{}]({})\n\n",
-            short_commit_hash, commit_url
+            "{} [{}]({})\n\n",
+            PR_COMMENT_HEADER, short_commit_hash, commit_url
         );
 
         markdown_content.push_str("### CI Runtime Comparison\n\n");
@@ -97,10 +99,9 @@ impl PerformanceSummary {
         markdown_content
     }
 
-    pub async fn comment_on_pr(&self) -> Result<()> {
+    pub async fn upsert_pr_comment(&self) -> Result<()> {
         self.github
-            .comment_on_pr(self.format_comment_body())
-            .await?;
-        Ok(())
+            .upsert_pr_comment(self.format_comment_body())
+            .await
     }
 }

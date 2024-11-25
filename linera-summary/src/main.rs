@@ -13,7 +13,7 @@ async fn run(options: SummaryOptions) -> Result<()> {
     let tracked_workflows = options.workflows();
     let github = Github::new(options.is_local(), options.pr_number())?;
     let summary = PerformanceSummary::init(github, tracked_workflows).await?;
-    summary.comment_on_pr().await?;
+    summary.upsert_pr_comment().await?;
     Ok(())
 }
 
