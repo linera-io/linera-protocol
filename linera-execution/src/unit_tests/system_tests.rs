@@ -111,3 +111,24 @@ async fn open_chain_message_index() {
         SystemMessage::OpenChain(config)
     );
 }
+
+/// Tests if an account is removed from storage if it is drained.
+#[tokio::test]
+async fn empty_accounts_are_removed() -> anyhow::Result<()> {
+    let owner = Owner(CryptoHash::test_hash("account owner"));
+    let amount = Amount::from_tokens(99);
+
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balances: BTreeMap::from([(owner, amount)]),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    view.system.debit(Some(&owner), amount).await?;
+
+    assert!(view.system.balances.indices().await?.is_empty());
+
+    Ok(())
+}
