@@ -1,9 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
+use humantime::format_duration;
 use serde::Serialize;
 
 use crate::{ci_runtime_comparison::CiRuntimeComparison, github::Github};
@@ -24,6 +25,7 @@ impl PerformanceSummary {
             .into_iter()
             .filter(|workflow| tracked_workflows.contains(&workflow.name))
             .collect::<Vec<_>>();
+
         let base_jobs = Box::pin(github.latest_jobs(
             github.context().base_branch(),
             "push",
@@ -31,6 +33,10 @@ impl PerformanceSummary {
             &workflows,
         ))
         .await?;
+        if base_jobs.is_empty() {
+            bail!("No base jobs found!");
+        }
+
         let pr_jobs = Box::pin(github.latest_jobs(
             github.context().pr_branch(),
             "pull_request",
@@ -38,6 +44,9 @@ impl PerformanceSummary {
             &workflows,
         ))
         .await?;
+        if pr_jobs.is_empty() {
+            bail!("No PR jobs found!");
+        }
 
         Ok(Self {
             github,
@@ -45,14 +54,53 @@ impl PerformanceSummary {
         })
     }
 
-    pub async fn comment_on_pr(&self) -> Result<()> {
-        let body = format!(
-            "## CI Performance Summary for commit {}\n\n```json\n{}\n```",
-            &self.github.context().pr_commit_hash()[..7],
-            serde_json::to_string_pretty(self)?
+    fn format_comment_body(&self) -> String {
+        let commit_hash = self.github.context().pr_commit_hash();
+        let short_commit_hash = &commit_hash[..7];
+        let commit_url = format!(
+            "https://github.com/{}/{}/commit/{}",
+            self.github.context().repository().owner(),
+            self.github.context().repository().name(),
+            commit_hash
         );
 
-        self.github.comment_on_pr(&body).await?;
+        let mut markdown_content = format!(
+            "## Performance Summary for commit [{}]({})\n\n",
+            short_commit_hash, commit_url
+        );
+
+        markdown_content.push_str("### CI Runtime Comparison\n\n");
+        for (workflow_name, comparisons) in self.ci_runtime_comparison.0.iter() {
+            markdown_content.push_str(&format!("#### Workflow: {}\n\n", workflow_name));
+            markdown_content
+                .push_str("| Job Name | Base Runtime | PR Runtime | Runtime Difference (%) |\n");
+            markdown_content.push_str("| --- | --- | --- | --- |\n");
+
+            for comparison in comparisons {
+                let base_runtime =
+                    format_duration(Duration::from_secs(comparison.base_runtime())).to_string();
+                let pr_runtime =
+                    format_duration(Duration::from_secs(comparison.pr_runtime())).to_string();
+                let runtime_difference_pct = format!("{:.2}%", comparison.runtime_difference_pct());
+
+                markdown_content.push_str(&format!(
+                    "| {} | {} | {} | {} |\n",
+                    comparison.name(),
+                    base_runtime,
+                    pr_runtime,
+                    runtime_difference_pct
+                ));
+            }
+
+            markdown_content.push('\n');
+        }
+        markdown_content
+    }
+
+    pub async fn comment_on_pr(&self) -> Result<()> {
+        self.github
+            .comment_on_pr(self.format_comment_body())
+            .await?;
         Ok(())
     }
 }

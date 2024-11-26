@@ -4718,11 +4718,11 @@ dependencies = [
  "anyhow",
  "clap",
  "git2",
+ "humantime",
  "linera-base",
  "linera-version",
  "octocrab",
  "serde",
- "serde_json",
  "tokio",
  "tracing",
 ]
