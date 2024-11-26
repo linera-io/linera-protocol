@@ -948,8 +948,7 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
-        let (info, actions) = self.process_timeout(certificate).await?;
-        Ok((info, actions))
+        self.process_timeout(certificate).await
     }
 
     #[instrument(skip_all, fields(
