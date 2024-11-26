@@ -768,6 +768,12 @@ where
             .try_sub_assign(amount)
             .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
 
+        if let Some(owner) = account {
+            if balance.is_zero() {
+                self.balances.remove(owner)?;
+            }
+        }
+
         Ok(())
     }
 
