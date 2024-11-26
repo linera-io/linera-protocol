@@ -162,7 +162,10 @@ where
         .await
     }
 
-    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_certificate(hash, sender)
         })
@@ -850,13 +853,12 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.inner().is_confirmed()
-                                && cert.inner().chain_id() == chain_id
-                                && cert.inner().height() == block_height
+                            if cert.inner().inner().block.chain_id == chain_id
+                                && cert.inner().inner().block.height == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;
-                                certificate = Some(cert.try_into().unwrap());
+                                certificate = Some(cert);
                             }
                         }
                     }

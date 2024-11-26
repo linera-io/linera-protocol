@@ -8,7 +8,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, GenericCertificate, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -149,7 +149,10 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    async fn download_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.download_certificate(hash).await?,
 
