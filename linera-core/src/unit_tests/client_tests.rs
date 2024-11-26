@@ -815,7 +815,7 @@ where
         .add_initial_chain(ChainDescription::Root(2), Amount::from_tokens(4))
         .await?;
 
-    let certificate = client1.close_chain().await.unwrap().unwrap();
+    let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
     assert_matches!(
         certificate.executed_block().block.operations[..],
         [Operation::System(SystemOperation::CloseChain)],
@@ -890,6 +890,10 @@ where
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::ClosedChain)
     );
+
+    // Trying to close the chain again returns None.
+    let maybe_certificate = client1.close_chain().await.unwrap().unwrap();
+    assert_matches!(maybe_certificate, None);
     Ok(())
 }
 

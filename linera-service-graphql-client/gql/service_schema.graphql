@@ -628,9 +628,9 @@ type MutationRoot {
 		fallbackDurationMs: Int! = 86400000
 	): ChainId!
 	"""
-	Closes the chain.
+	Closes the chain. Returns `None` if it was already closed.
 	"""
-	closeChain(chainId: ChainId!): CryptoHash!
+	closeChain(chainId: ChainId!): CryptoHash
 	"""
 	Changes the authentication key of the chain.
 	"""

@@ -8,7 +8,7 @@ use comfy_table::{
 use linera_base::identifiers::{ChainId, Owner};
 pub use linera_client::wallet::*;
 
-pub fn pretty_print(wallet: &Wallet, chain_id: Option<ChainId>) {
+pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -18,26 +18,16 @@ pub fn pretty_print(wallet: &Wallet, chain_id: Option<ChainId>) {
             Cell::new("Chain ID").add_attribute(Attribute::Bold),
             Cell::new("Latest Block").add_attribute(Attribute::Bold),
         ]);
-    if let Some(chain_id) = chain_id {
-        if let Some(user_chain) = wallet.chains.get(&chain_id) {
-            update_table_with_chain(
-                &mut table,
-                chain_id,
-                user_chain,
-                Some(chain_id) == wallet.default,
-            );
-        } else {
+    for chain_id in chain_ids {
+        let Some(user_chain) = wallet.chains.get(&chain_id) else {
             panic!("Chain {} not found.", chain_id);
-        }
-    } else {
-        for (chain_id, user_chain) in &wallet.chains {
-            update_table_with_chain(
-                &mut table,
-                *chain_id,
-                user_chain,
-                Some(chain_id) == wallet.default.as_ref(),
-            );
-        }
+        };
+        update_table_with_chain(
+            &mut table,
+            chain_id,
+            user_chain,
+            Some(chain_id) == wallet.default,
+        );
     }
     println!("{}", table);
 }
