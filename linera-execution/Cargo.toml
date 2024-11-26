@@ -76,7 +76,6 @@ wasmer = { workspace = true, optional = true, features = ["js-default"] }
 anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
-counter.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", default-features = false, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
