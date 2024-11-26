@@ -418,6 +418,38 @@ pub async fn run_writes_from_blank<C: LocalRestrictedKeyValueStore>(key_value_st
     }
 }
 
+/// Reading many keys at a time could trigger an error. This needs to be tested.
+pub async fn big_read_multi_values<C: LocalKeyValueStore>(
+    config: C::Config,
+    value_size: usize,
+    n_entries: usize,
+) {
+    let mut rng = make_deterministic_rng();
+    let namespace = generate_test_namespace();
+    let root_key = &[];
+    //
+    let store = C::recreate_and_connect(&config, &namespace, root_key)
+        .await
+        .unwrap();
+    let key_prefix = vec![42, 54];
+    let mut batch = Batch::new();
+    let mut keys = Vec::new();
+    let mut values = Vec::new();
+    for i in 0..n_entries {
+        let mut key = key_prefix.clone();
+        bcs::serialize_into(&mut key, &i).unwrap();
+        let value = get_random_byte_vector(&mut rng, &[], value_size);
+        batch.put_key_value_bytes(key.clone(), value.clone());
+        keys.push(key);
+        values.push(Some(value));
+    }
+    store.write_batch(batch).await.unwrap();
+    // We reconnect so that the read is not using the cache.
+    let store = C::connect(&config, &namespace, root_key).await.unwrap();
+    let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+    assert_eq!(values, values_read);
+}
+
 /// That test is especially challenging for ScyllaDB.
 /// In its default settings, Scylla has a limitation to 10000 tombstones.
 /// A tombstone is an indication that the data has been deleted. That

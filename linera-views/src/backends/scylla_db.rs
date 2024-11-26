@@ -7,10 +7,6 @@
 //! "namespace". The maximum number of concurrent queries is controlled by
 //! `max_concurrent_queries`.
 
-/// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
-/// The limit is in reality 100. But we need one entry for the root key.
-const MAX_MULTI_KEYS: usize = 99;
-
 use std::{
     collections::{hash_map::Entry, HashMap},
     ops::Deref,
@@ -35,16 +31,59 @@ use crate::metering::MeteredStore;
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::UnorderedBatch,
-    common::get_upper_bound_option,
+    common::{get_uleb128_size, get_upper_bound_option},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, LruSplittingConfig},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
     },
+    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 
-/// The client for ScyllaDb.
+/// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
+/// The limit is in reality 100. But we need one entry for the root key.
+const MAX_MULTI_KEYS: usize = 99;
+
+/// The maximal size of an operation on ScyllaDB seems to be 16M
+/// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
+/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
+///  at the database at any particular time"
+/// So, we set up the maximal size of 16M - 10K for the values and 10K for the keys
+/// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
+/// taken internally by the database.
+const RAW_MAX_VALUE_SIZE: usize = 16762976;
+const MAX_KEY_SIZE: usize = 10240;
+const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
+
+/// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
+/// However, the value being written can also be the serialization of a SimpleUnorderedBatch
+/// Therefore the actual `MAX_VALUE_SIZE` is lower.
+/// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
+/// So if the key has 1024 bytes this gets us the inequality
+/// `1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE`.
+/// and so this simplifies to `1 + 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE`
+/// Note on the above formula:
+/// * We write 4 because `get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)`
+/// * We write `1 + 1 + 1`  because the `UnorderedBatch` has three entries.
+///
+/// This gets us to a maximal value of 16752727.
+const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
+    - MAX_KEY_SIZE
+    - get_uleb128_size(RAW_MAX_VALUE_SIZE)
+    - get_uleb128_size(MAX_KEY_SIZE)
+    - 1
+    - 1
+    - 1;
+
+/// The constant 14000 is an empirical constant that was found to be necessary
+/// to make the ScyllaDB system work. We have not been able to find this or
+/// a similar constant in the source code or the documentation.
+/// An experimental approach gets us that 14796 is the latest value that is
+/// correct.
+const MAX_BATCH_SIZE: usize = 5000;
+
+/// The client for ScyllaDbB:
 /// * The session allows to pass queries
 /// * The namespace that is being assigned to the database
 /// * The prepared queries used for implementing the features of `KeyValueStore`.
@@ -64,6 +103,30 @@ struct ScyllaDbClient {
 }
 
 impl ScyllaDbClient {
+    fn check_key_size(key: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
+        ensure!(
+            key.len() <= MAX_KEY_SIZE,
+            ScyllaDbStoreInternalError::KeyTooLong
+        );
+        Ok(())
+    }
+
+    fn check_value_size(value: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
+        ensure!(
+            value.len() <= RAW_MAX_VALUE_SIZE,
+            ScyllaDbStoreInternalError::ValueTooLong
+        );
+        Ok(())
+    }
+
+    fn check_batch_len(batch: &UnorderedBatch) -> Result<(), ScyllaDbStoreInternalError> {
+        ensure!(
+            batch.len() <= MAX_BATCH_SIZE,
+            ScyllaDbStoreInternalError::BatchTooLong
+        );
+        Ok(())
+    }
+
     fn new(session: Session, namespace: &str) -> Self {
         let namespace = namespace.to_string();
         let query = format!(
@@ -134,8 +197,8 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreError::KeyTooLong);
+    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key)?;
         let session = &self.session;
         // Read the value of a key
         let values = (root_key.to_vec(), key);
@@ -151,7 +214,7 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
         let num_keys = keys.len();
         if num_keys == 0 {
             return Ok(Vec::new());
@@ -161,7 +224,7 @@ impl ScyllaDbClient {
         let mut inputs = Vec::new();
         inputs.push(root_key.to_vec());
         for (i_key, key) in keys.into_iter().enumerate() {
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreError::KeyTooLong);
+            Self::check_key_size(&key)?;
             match map.entry(key.clone()) {
                 Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
@@ -197,7 +260,7 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<bool>, ScyllaDbStoreError> {
+    ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
         let num_keys = keys.len();
         if num_keys == 0 {
             return Ok(Vec::new());
@@ -207,7 +270,7 @@ impl ScyllaDbClient {
         let mut inputs = Vec::new();
         inputs.push(root_key.to_vec());
         for (i_key, key) in keys.into_iter().enumerate() {
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreError::KeyTooLong);
+            Self::check_key_size(&key)?;
             match map.entry(key.clone()) {
                 Entry::Occupied(entry) => {
                     let entry = entry.into_mut();
@@ -242,8 +305,8 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         key: Vec<u8>,
-    ) -> Result<bool, ScyllaDbStoreError> {
-        ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreError::KeyTooLong);
+    ) -> Result<bool, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key)?;
         let session = &self.session;
         // Read the value of a key
         let values = (root_key.to_vec(), key);
@@ -256,17 +319,15 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         batch: UnorderedBatch,
-    ) -> Result<(), ScyllaDbStoreError> {
+    ) -> Result<(), ScyllaDbStoreInternalError> {
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Logged);
         let mut batch_values = Vec::new();
         let query1 = &self.write_batch_delete_prefix_unbounded;
         let query2 = &self.write_batch_delete_prefix_bounded;
+        Self::check_batch_len(&batch)?;
         for key_prefix in batch.key_prefix_deletions {
-            ensure!(
-                key_prefix.len() <= MAX_KEY_SIZE,
-                ScyllaDbStoreError::KeyTooLong
-            );
+            Self::check_key_size(&key_prefix)?;
             match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = vec![root_key.to_vec(), key_prefix];
@@ -282,13 +343,15 @@ impl ScyllaDbClient {
         }
         let query3 = &self.write_batch_deletion;
         for key in batch.simple_unordered_batch.deletions {
+            Self::check_key_size(&key)?;
             let values = vec![root_key.to_vec(), key];
             batch_values.push(values);
             batch_query.append_statement(query3.clone());
         }
         let query4 = &self.write_batch_insertion;
         for (key, value) in batch.simple_unordered_batch.insertions {
-            ensure!(key.len() <= MAX_KEY_SIZE, ScyllaDbStoreError::KeyTooLong);
+            Self::check_key_size(&key)?;
+            Self::check_value_size(&value)?;
             let values = vec![root_key.to_vec(), key, value];
             batch_values.push(values);
             batch_query.append_statement(query4.clone());
@@ -301,11 +364,8 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         key_prefix: Vec<u8>,
-    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            ScyllaDbStoreError::KeyTooLong
-        );
+    ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key_prefix)?;
         let session = &self.session;
         // Read the value of a key
         let len = key_prefix.len();
@@ -334,11 +394,8 @@ impl ScyllaDbClient {
         &self,
         root_key: &[u8],
         key_prefix: Vec<u8>,
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            ScyllaDbStoreError::KeyTooLong
-        );
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key_prefix)?;
         let session = &self.session;
         // Read the value of a key
         let len = key_prefix.len();
@@ -364,14 +421,6 @@ impl ScyllaDbClient {
     }
 }
 
-/// The maximal size of an operation on ScyllaDB seems to be 16M
-/// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
-/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
-///  at the database at any particular time"
-/// So, we set up the maximal size of 15M for the values and 1M for the keys
-const MAX_VALUE_SIZE: usize = 15728640;
-const MAX_KEY_SIZE: usize = 1048576;
-
 /// The client itself and the keeping of the count of active connections.
 #[derive(Clone)]
 pub struct ScyllaDbStoreInternal {
@@ -383,14 +432,18 @@ pub struct ScyllaDbStoreInternal {
 
 /// The error type for [`ScyllaDbStoreInternal`]
 #[derive(Error, Debug)]
-pub enum ScyllaDbStoreError {
+pub enum ScyllaDbStoreInternalError {
     /// BCS serialization error.
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// The key must have at most 1M bytes
-    #[error("The key must have at most 1M")]
+    /// The key must have at most ['MAX_KEY_SIZE'] bytes
+    #[error("The key must have at most MAX_KEY_SIZE")]
     KeyTooLong,
+
+    /// The value must have at most ['MAX_VALUE_SIZE'] bytes
+    #[error("The value must have at most MAX_VALUE_SIZE")]
+    ValueTooLong,
 
     /// A row error in ScyllaDB
     #[error(transparent)]
@@ -419,14 +472,18 @@ pub enum ScyllaDbStoreError {
     /// The journal is not coherent
     #[error(transparent)]
     JournalConsistencyError(#[from] JournalConsistencyError),
+
+    /// The batch is too long to be written
+    #[error("The batch is too long to be written")]
+    BatchTooLong,
 }
 
-impl KeyValueStoreError for ScyllaDbStoreError {
+impl KeyValueStoreError for ScyllaDbStoreInternalError {
     const BACKEND: &'static str = "scylla_db";
 }
 
 impl WithError for ScyllaDbStoreInternal {
-    type Error = ScyllaDbStoreError;
+    type Error = ScyllaDbStoreInternalError;
 }
 
 impl ReadableKeyValueStore for ScyllaDbStoreInternal {
@@ -438,7 +495,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         self.max_stream_queries
     }
 
-    async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ScyllaDbStoreError> {
+    async fn read_value_bytes(
+        &self,
+        key: &[u8],
+    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
@@ -446,7 +506,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .await
     }
 
-    async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbStoreError> {
+    async fn contains_key(&self, key: &[u8]) -> Result<bool, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
@@ -454,7 +514,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .await
     }
 
-    async fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, ScyllaDbStoreError> {
+    async fn contains_keys(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
@@ -473,7 +536,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     async fn read_multi_values_bytes(
         &self,
         keys: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreError> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
@@ -492,7 +555,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::Keys, ScyllaDbStoreError> {
+    ) -> Result<Self::Keys, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
@@ -503,7 +566,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
-    ) -> Result<Self::KeyValues, ScyllaDbStoreError> {
+    ) -> Result<Self::KeyValues, ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store
@@ -514,15 +577,9 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 
 #[async_trait]
 impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
-    // The constant 14000 is an empirical constant that was found to be necessary
-    // to make the ScyllaDb system work. We have not been able to find this or
-    // a similar constant in the source code or the documentation.
-    // An experimental approach gets us that 14796 is the latest value that is
-    // correct.
-    const MAX_BATCH_SIZE: usize = 5000;
-    /// The total size is 16M
-    const MAX_BATCH_TOTAL_SIZE: usize = 16000000;
-    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
+    const MAX_BATCH_SIZE: usize = MAX_BATCH_SIZE;
+    const MAX_BATCH_TOTAL_SIZE: usize = MAX_BATCH_TOTAL_SIZE;
+    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
 
     // ScyllaDB cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
     // followed by a write, then the delete takes priority. See the sentence "The first
@@ -531,7 +588,7 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     // https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
     type Batch = UnorderedBatch;
 
-    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreError> {
+    async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store.write_batch_internal(&self.root_key, batch).await
@@ -565,7 +622,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         config: &Self::Config,
         namespace: &str,
         root_key: &[u8],
-    ) -> Result<Self, ScyllaDbStoreError> {
+    ) -> Result<Self, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -588,7 +645,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         })
     }
 
-    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ScyllaDbStoreError> {
+    fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ScyllaDbStoreInternalError> {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
@@ -601,7 +658,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -626,7 +683,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
                     if invalid_or_not_found {
                         return Ok(Vec::new());
                     } else {
-                        return Err(ScyllaDbStoreError::ScyllaDbQueryError(error));
+                        return Err(ScyllaDbStoreInternalError::ScyllaDbQueryError(error));
                     }
                 }
             };
@@ -650,7 +707,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         }
     }
 
-    async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreError> {
+    async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreInternalError> {
         let session = SessionBuilder::new()
             .known_node(store_config.uri.as_str())
             .build()
@@ -661,7 +718,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<bool, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -701,11 +761,14 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         if missing_table {
             Ok(false)
         } else {
-            Err(ScyllaDbStoreError::ScyllaDbQueryError(error))
+            Err(ScyllaDbStoreInternalError::ScyllaDbQueryError(error))
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -730,7 +793,10 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
@@ -752,7 +818,7 @@ impl ScyllaDbStoreInternal {
         }
     }
 
-    fn check_namespace(namespace: &str) -> Result<(), ScyllaDbStoreError> {
+    fn check_namespace(namespace: &str) -> Result<(), ScyllaDbStoreInternalError> {
         if !namespace.is_empty()
             && namespace.len() <= 48
             && namespace
@@ -761,7 +827,7 @@ impl ScyllaDbStoreInternal {
         {
             return Ok(());
         }
-        Err(ScyllaDbStoreError::InvalidTableName)
+        Err(ScyllaDbStoreInternalError::InvalidTableName)
     }
 }
 
@@ -775,7 +841,7 @@ const TEST_SCYLLA_DB_MAX_STREAM_QUERIES: usize = 10;
 
 #[cfg(with_testing)]
 impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
-    async fn new_test_config() -> Result<ScyllaDbStoreInternalConfig, ScyllaDbStoreError> {
+    async fn new_test_config() -> Result<ScyllaDbStoreInternalConfig, ScyllaDbStoreInternalError> {
         let uri = "localhost:9042".to_string();
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: Some(TEST_SCYLLA_DB_MAX_CONCURRENT_QUERIES),
@@ -787,12 +853,40 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
 
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
-pub type ScyllaDbStore =
-    MeteredStore<LruCachingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>>;
+pub type ScyllaDbStore = MeteredStore<
+    LruCachingStore<
+        MeteredStore<
+            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
+        >,
+    >,
+>;
 
 /// The `ScyllaDbStore` composed type
 #[cfg(not(with_metrics))]
-pub type ScyllaDbStore = LruCachingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>;
+pub type ScyllaDbStore =
+    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;
+
+/// The combined error type for the `ScyllaDbStore`.
+pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;
+
+#[cfg(test)]
+mod tests {
+    use bcs::serialized_size;
+
+    use crate::{
+        batch::UnorderedBatch,
+        common::get_uleb128_size,
+        scylla_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
+    };
+
+    #[test]
+    fn test_raw_visible_sizes() {
+        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
+        vis_computed -= serialized_size(&UnorderedBatch::default()).unwrap();
+        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
+        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
+    }
+}

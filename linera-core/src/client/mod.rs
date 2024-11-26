@@ -2664,12 +2664,21 @@ where
     }
 
     /// Closes the chain (and loses everything in it!!).
+    /// Returns `None` if the chain was already closed.
     #[instrument(level = "trace")]
     pub async fn close_chain(
         &self,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::CloseChain))
-            .await
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
+        let operation = Operation::System(SystemOperation::CloseChain);
+        match self.execute_operation(operation).await {
+            Ok(outcome) => Ok(outcome.map(Some)),
+            Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(chain_error),
+            ))) if matches!(*chain_error, ChainError::ClosedChain) => {
+                Ok(ClientOutcome::Committed(None)) // Chain is already closed.
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Publishes some bytecode.

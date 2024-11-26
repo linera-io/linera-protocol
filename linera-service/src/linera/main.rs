@@ -272,13 +272,20 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(chain_id)?;
                 info!("Closing chain {}", chain_id);
                 let time_start = Instant::now();
-                let certificate = context
+                let result = context
                     .apply_client_command(&chain_client, |chain_client| {
                         let chain_client = chain_client.clone();
                         async move { chain_client.close_chain().await }
                     })
-                    .await
-                    .context("Failed to close chain")?;
+                    .await;
+                let certificate = match result {
+                    Ok(Some(certificate)) => certificate,
+                    Ok(None) => {
+                        tracing::info!("Chain is already closed; nothing to do.");
+                        return Ok(());
+                    }
+                    Err(error) => Err(error).context("Failed to close chain")?,
+                };
                 let time_total = time_start.elapsed();
                 info!(
                     "Closing chain confirmed after {} ms",
@@ -1708,14 +1715,26 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
         }
 
         ClientCommand::Wallet(wallet_command) => match wallet_command {
-            WalletCommand::Show { chain_id, short } => {
+            WalletCommand::Show {
+                chain_id,
+                short,
+                owned,
+            } => {
                 let start_time = Instant::now();
+                let chain_ids = if let Some(chain_id) = chain_id {
+                    ensure!(!owned, "Cannot specify both --owned and a chain ID");
+                    vec![*chain_id]
+                } else if *owned {
+                    options.wallet().await?.owned_chain_ids()
+                } else {
+                    options.wallet().await?.chain_ids()
+                };
                 if *short {
-                    for chain_id in options.wallet().await?.chains.keys() {
+                    for chain_id in chain_ids {
                         println!("{chain_id}");
                     }
                 } else {
-                    wallet::pretty_print(&*options.wallet().await?, *chain_id);
+                    wallet::pretty_print(&*options.wallet().await?, chain_ids);
                 }
                 info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
                 Ok(0)
