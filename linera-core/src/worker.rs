@@ -837,7 +837,7 @@ where
         }
     }
 
-    /// Processes a block certificate.
+    /// Processes a certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
         chain_id = format!("{:.8}", certificate.inner().chain_id()),
