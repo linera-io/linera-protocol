@@ -417,7 +417,7 @@ where
 
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
-pub trait CertificateProcessor: CertificateValueT + Sized + 'static {
+pub trait ProcessableCertificate: CertificateValueT + Sized + 'static {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
@@ -425,7 +425,7 @@ pub trait CertificateProcessor: CertificateValueT + Sized + 'static {
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 }
 
-impl CertificateProcessor for CertificateValue {
+impl ProcessableCertificate for CertificateValue {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<CertificateValue>,
@@ -435,7 +435,7 @@ impl CertificateProcessor for CertificateValue {
     }
 }
 
-impl CertificateProcessor for ConfirmedBlock {
+impl ProcessableCertificate for ConfirmedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
@@ -447,7 +447,7 @@ impl CertificateProcessor for ConfirmedBlock {
     }
 }
 
-impl CertificateProcessor for ValidatedBlock {
+impl ProcessableCertificate for ValidatedBlock {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: ValidatedBlockCertificate,
@@ -459,7 +459,7 @@ impl CertificateProcessor for ValidatedBlock {
     }
 }
 
-impl CertificateProcessor for Timeout {
+impl ProcessableCertificate for Timeout {
     async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
         worker: &WorkerState<S>,
         certificate: TimeoutCertificate,
@@ -482,7 +482,7 @@ where
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, WorkerError>
     where
-        T: CertificateProcessor,
+        T: ProcessableCertificate,
     {
         self.fully_handle_certificate_with_notifications(certificate, blobs, &())
             .await
@@ -497,13 +497,13 @@ where
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, WorkerError>
     where
-        T: CertificateProcessor,
+        T: ProcessableCertificate,
     {
         let notifications = (*notifier).clone();
         let this = self.clone();
         linera_base::task::spawn(async move {
             let (response, actions) =
-                CertificateProcessor::process_certificate(&this, certificate, blobs).await?;
+                ProcessableCertificate::process_certificate(&this, certificate, blobs).await?;
             notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
@@ -837,12 +837,12 @@ where
         }
     }
 
-    /// Processes a block certificate.
+    /// Processes a certificate.
     #[instrument(skip_all, fields(
-            nick = self.nickname,
-            chain_id = format!("{:.8}", certificate.inner().chain_id()),
-            height = %certificate.inner().height(),
-        ))]
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.inner().chain_id()),
+        height = %certificate.inner().height(),
+    ))]
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,
@@ -948,8 +948,7 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname, certificate);
-        let (info, actions) = self.process_timeout(certificate).await?;
-        Ok((info, actions))
+        self.process_timeout(certificate).await
     }
 
     #[instrument(skip_all, fields(

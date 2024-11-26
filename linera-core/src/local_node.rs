@@ -27,7 +27,7 @@ use tracing::{instrument, warn};
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
-    worker::{CertificateProcessor, WorkerError, WorkerState},
+    worker::{ProcessableCertificate, WorkerError, WorkerState},
 };
 
 /// A local node with a single worker, typically used by clients.
@@ -128,7 +128,7 @@ where
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError>
     where
-        T: CertificateProcessor,
+        T: ProcessableCertificate,
     {
         Ok(
             Box::pin(self.node.state.fully_handle_certificate_with_notifications(

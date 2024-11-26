@@ -186,19 +186,19 @@ impl CertificateValueT for ValidatedBlock {
 
 impl CertificateValueT for ConfirmedBlock {
     fn chain_id(&self) -> ChainId {
-        self.inner().block.chain_id
+        self.executed_block().block.chain_id
     }
 
     fn epoch(&self) -> Epoch {
-        self.inner().block.epoch
+        self.executed_block().block.epoch
     }
 
     fn height(&self) -> BlockHeight {
-        self.inner().block.height
+        self.executed_block().block.height
     }
 
     fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.inner().outcome.required_blob_ids().clone()
+        self.executed_block().outcome.required_blob_ids().clone()
     }
 }
 

@@ -484,7 +484,7 @@ where
                 break;
             };
             let value = self.read_hashed_confirmed_block(next_hash).await?;
-            hash = value.inner().inner().block.previous_block_hash;
+            hash = value.inner().executed_block().block.previous_block_hash;
             values.push(value);
         }
         Ok(values)

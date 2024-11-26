@@ -9,8 +9,8 @@ use linera_views::{
     random::make_deterministic_rng,
     store::TestKeyValueStore as _,
     test_utils::{
-        get_random_test_scenarios, run_big_write_read, run_reads, run_writes_from_blank,
-        run_writes_from_state,
+        big_read_multi_values, get_random_test_scenarios, run_big_write_read, run_reads,
+        run_writes_from_blank, run_writes_from_state,
     },
     value_splitting::create_value_splitting_memory_store,
 };
@@ -19,6 +19,31 @@ use wasm_bindgen_test::wasm_bindgen_test;
 
 #[cfg(web)]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
+#[ignore]
+#[tokio::test]
+async fn test_read_multi_values_memory() {
+    let config = MemoryStore::new_test_config().await.unwrap();
+    big_read_multi_values::<MemoryStore>(config, 2200000, 1000).await;
+}
+
+#[ignore]
+#[cfg(with_dynamodb)]
+#[tokio::test]
+async fn test_read_multi_values_dynamo_db() {
+    use linera_views::dynamo_db::DynamoDbStore;
+    let config = DynamoDbStore::new_test_config().await.unwrap();
+    big_read_multi_values::<DynamoDbStore>(config, 22000000, 1000).await;
+}
+
+#[ignore]
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_read_multi_values_scylla_db() {
+    use linera_views::scylla_db::ScyllaDbStore;
+    let config = ScyllaDbStore::new_test_config().await.unwrap();
+    big_read_multi_values::<ScyllaDbStore>(config, 22200000, 200).await;
+}
 
 #[tokio::test]
 async fn test_reads_test_memory() {

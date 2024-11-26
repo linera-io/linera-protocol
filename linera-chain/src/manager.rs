@@ -373,7 +373,7 @@ impl ChainManager {
         let new_block = &certificate.executed_block().block;
         let new_round = certificate.round;
         if let Some(Vote { value, round, .. }) = &self.confirmed_vote {
-            if value.inner().inner().block == *new_block && *round == new_round {
+            if value.inner().executed_block().block == *new_block && *round == new_round {
                 return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }

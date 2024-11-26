@@ -232,6 +232,16 @@ fn build_key_value(
     .into()
 }
 
+/// Checks that a key is of the correct size
+fn check_key_size(key: &[u8]) -> Result<(), DynamoDbStoreInternalError> {
+    ensure!(!key.is_empty(), DynamoDbStoreInternalError::ZeroLengthKey);
+    ensure!(
+        key.len() <= MAX_KEY_SIZE,
+        DynamoDbStoreInternalError::KeyTooLong
+    );
+    Ok(())
+}
+
 /// Extracts the key attribute from an item.
 fn extract_key(
     prefix_len: usize,
@@ -554,11 +564,7 @@ impl DynamoDbStoreInternal {
         root_key: &[u8],
         key: Vec<u8>,
     ) -> Result<TransactWriteItem, DynamoDbStoreInternalError> {
-        ensure!(!key.is_empty(), DynamoDbStoreInternalError::ZeroLengthKey);
-        ensure!(
-            key.len() <= MAX_KEY_SIZE,
-            DynamoDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(&key)?;
         let request = Delete::builder()
             .table_name(&self.namespace)
             .set_key(Some(build_key(root_key, key)))
@@ -572,11 +578,7 @@ impl DynamoDbStoreInternal {
         key: Vec<u8>,
         value: Vec<u8>,
     ) -> Result<TransactWriteItem, DynamoDbStoreInternalError> {
-        ensure!(!key.is_empty(), DynamoDbStoreInternalError::ZeroLengthKey);
-        ensure!(
-            key.len() <= MAX_KEY_SIZE,
-            DynamoDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(&key)?;
         ensure!(
             value.len() <= RAW_MAX_VALUE_SIZE,
             DynamoDbStoreInternalError::ValueLengthTooLarge
@@ -669,14 +671,7 @@ impl DynamoDbStoreInternal {
         root_key: &[u8],
         key_prefix: &[u8],
     ) -> Result<QueryResponses, DynamoDbStoreInternalError> {
-        ensure!(
-            !key_prefix.is_empty(),
-            DynamoDbStoreInternalError::ZeroLengthKeyPrefix
-        );
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            DynamoDbStoreInternalError::KeyPrefixTooLong
-        );
+        check_key_size(key_prefix)?;
         let mut responses = Vec::new();
         let mut start_key = None;
         loop {
@@ -887,19 +882,13 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         &self,
         key: &[u8],
     ) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
-        ensure!(
-            key.len() <= MAX_KEY_SIZE,
-            DynamoDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(key)?;
         let key_db = build_key(&self.root_key, key.to_vec());
         self.read_value_bytes_general(key_db).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbStoreInternalError> {
-        ensure!(
-            key.len() <= MAX_KEY_SIZE,
-            DynamoDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(key)?;
         let key_db = build_key(&self.root_key, key.to_vec());
         self.contains_key_general(key_db).await
     }
@@ -910,10 +899,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     ) -> Result<Vec<bool>, DynamoDbStoreInternalError> {
         let mut handles = Vec::new();
         for key in keys {
-            ensure!(
-                key.len() <= MAX_KEY_SIZE,
-                DynamoDbStoreInternalError::KeyTooLong
-            );
+            check_key_size(&key)?;
             let key_db = build_key(&self.root_key, key);
             let handle = self.contains_key_general(key_db);
             handles.push(handle);
@@ -930,10 +916,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
     ) -> Result<Vec<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
         let mut handles = Vec::new();
         for key in keys {
-            ensure!(
-                key.len() <= MAX_KEY_SIZE,
-                DynamoDbStoreInternalError::KeyTooLong
-            );
+            check_key_size(&key)?;
             let key_db = build_key(&self.root_key, key);
             let handle = self.read_value_bytes_general(key_db);
             handles.push(handle);

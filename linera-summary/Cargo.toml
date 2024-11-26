@@ -1,0 +1,28 @@
+[package]
+name = "linera-summary"
+version = "0.1.0"
+description = "Executable for performance summary generation."
+readme = "README.md"
+publish = false
+
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+git2.workspace = true
+humantime.workspace = true
+linera-base.workspace = true
+linera-version.workspace = true
+octocrab.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[[bin]]
+name = "linera-summary"
+path = "src/main.rs"

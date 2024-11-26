@@ -815,7 +815,7 @@ where
         .add_initial_chain(ChainDescription::Root(2), Amount::from_tokens(4))
         .await?;
 
-    let certificate = client1.close_chain().await.unwrap().unwrap();
+    let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
     assert_matches!(
         certificate.executed_block().block.operations[..],
         [Operation::System(SystemOperation::CloseChain)],
@@ -890,6 +890,10 @@ where
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::ClosedChain)
     );
+
+    // Trying to close the chain again returns None.
+    let maybe_certificate = client1.close_chain().await.unwrap().unwrap();
+    assert_matches!(maybe_certificate, None);
     Ok(())
 }
 
@@ -1520,7 +1524,7 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .inner()
+        .executed_block()
         .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
@@ -1533,7 +1537,7 @@ where
     assert_eq!(
         hashed_certificate_values[1]
             .inner()
-            .inner()
+            .executed_block()
             .block
             .operations,
         blob_0_1_operations,
@@ -1661,7 +1665,7 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .inner()
+        .executed_block()
         .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
@@ -1673,7 +1677,7 @@ where
     // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
     assert!(hashed_certificate_values[1]
         .inner()
-        .inner()
+        .executed_block()
         .block
         .operations
         .contains(&owner_change_op));
@@ -1932,7 +1936,7 @@ where
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .inner()
+        .executed_block()
         .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
@@ -1945,7 +1949,7 @@ where
     assert_eq!(
         hashed_certificate_values[1]
             .inner()
-            .inner()
+            .executed_block()
             .block
             .operations,
         blob_2_3_operations,
@@ -1954,7 +1958,7 @@ where
     // Previous should be the `ChangeOwnership` operation
     assert!(hashed_certificate_values[2]
         .inner()
-        .inner()
+        .executed_block()
         .block
         .operations
         .contains(&owner_change_op));

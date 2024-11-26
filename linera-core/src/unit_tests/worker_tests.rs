@@ -403,7 +403,7 @@ fn update_recipient_direct(
     recipient: ChainId,
     certificate: &ConfirmedBlockCertificate,
 ) -> CrossChainRequest {
-    let sender = certificate.inner().inner().block.chain_id;
+    let sender = certificate.inner().executed_block().block.chain_id;
     let bundles = certificate.message_bundles_for(&Medium::Direct, recipient);
     CrossChainRequest::UpdateRecipient {
         sender,
@@ -720,7 +720,7 @@ where
             .unwrap()
             .value()
             .inner()
-            .inner()
+            .executed_block()
             .block,
         &block_proposal0.content.block
     ); // Should be confirmed after handling the certificate.

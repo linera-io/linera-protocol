@@ -79,7 +79,7 @@ use crate::{
     notifier::ChannelNotifier,
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{CertificateProcessor, Notification, Reason, WorkerError, WorkerState},
+    worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
 };
 
 mod chain_client_state;
@@ -384,7 +384,7 @@ where
         info
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -1023,7 +1023,7 @@ where
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal<T: CertificateProcessor>(
+    async fn submit_block_proposal<T: ProcessableCertificate>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
@@ -1578,7 +1578,7 @@ where
 
     /// Handles the certificate in the local node and the resulting notifications.
     #[instrument(level = "trace", skip(certificate))]
-    async fn process_certificate<T: CertificateProcessor>(
+    async fn process_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -1997,7 +1997,8 @@ where
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if certificate.executed_block().block == confirmed_value.inner().inner().block =>
+                if certificate.executed_block().block
+                    == confirmed_value.inner().executed_block().block =>
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
@@ -2664,12 +2665,21 @@ where
     }
 
     /// Closes the chain (and loses everything in it!!).
+    /// Returns `None` if the chain was already closed.
     #[instrument(level = "trace")]
     pub async fn close_chain(
         &self,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.execute_operation(Operation::System(SystemOperation::CloseChain))
-            .await
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, ChainClientError> {
+        let operation = Operation::System(SystemOperation::CloseChain);
+        match self.execute_operation(operation).await {
+            Ok(outcome) => Ok(outcome.map(Some)),
+            Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
+                WorkerError::ChainError(chain_error),
+            ))) if matches!(*chain_error, ChainError::ClosedChain) => {
+                Ok(ClientOutcome::Committed(None)) // Chain is already closed.
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Publishes some bytecode.

@@ -1,0 +1,38 @@
+name: Performance Summary
+
+on:
+  workflow_run:
+    workflows:
+      - Rust
+    types:
+      - completed
+  workflow_dispatch:
+
+# This allows a subsequently queued workflow run to interrupt previous runs on pull-requests
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.head_ref || github.event.workflow_run.head_commit.id || github.event.workflow_run.id || github.run_id }}'
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  performance-summary:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Post Performance Summary comment on PR
+        if: ${{ github.event.workflow_run.event == 'pull_request' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          GITHUB_BASE_BRANCH: ${{ github.event.workflow_run.pull_requests[0].base.ref}}
+          GITHUB_PR_BRANCH: ${{ github.event.workflow_run.pull_requests[0].head.ref }}
+          GITHUB_PR_COMMIT_HASH: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
+        # The list of workflows that trigger this need to be hardcoded above.
+        # Make sure you have the same comma separated list of workflows here.
+        run: cargo run -p linera-summary -- --workflows "Rust" ci >> $GITHUB_STEP_SUMMARY

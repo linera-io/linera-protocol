@@ -54,7 +54,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{CertificateProcessor, NetworkActions, Notification, WorkerState},
+    worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -120,7 +120,7 @@ where
         .await
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -304,7 +304,7 @@ where
         }
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
@@ -353,7 +353,7 @@ where
         sender.send(result)
     }
 
-    async fn do_handle_certificate_internal<T: CertificateProcessor>(
+    async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
@@ -388,7 +388,7 @@ where
         }
     }
 
-    async fn do_handle_certificate<T: CertificateProcessor>(
+    async fn do_handle_certificate<T: ProcessableCertificate>(
         self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -853,8 +853,8 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.inner().inner().block.chain_id == chain_id
-                                && cert.inner().inner().block.height == block_height
+                            if cert.inner().executed_block().block.chain_id == chain_id
+                                && cert.inner().executed_block().block.height == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;

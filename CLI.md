@@ -730,6 +730,7 @@ Show the contents of the wallet
 ###### **Options:**
 
 * `--short` — Only print a non-formatted list of the wallet's chain IDs
+* `--owned` — Print only the chains that we have a key pair for
 
 
 

@@ -23,7 +23,7 @@ use crate::{
 /// Creates a new child of the given block, with the same timestamp.
 pub fn make_child_block(parent: &Hashed<ConfirmedBlock>) -> Block {
     let parent_value = parent.inner();
-    let parent_block = &parent_value.inner().block;
+    let parent_block = &parent_value.executed_block().block;
     Block {
         epoch: parent_block.epoch,
         chain_id: parent_block.chain_id,

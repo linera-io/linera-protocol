@@ -218,7 +218,7 @@ impl ChainListener {
                 context.lock().await.update_wallet(&client).await?;
             }
             let value = storage.read_hashed_confirmed_block(hash).await?;
-            let executed_block = value.inner().inner();
+            let executed_block = value.inner().executed_block();
             let new_chains = executed_block
                 .messages()
                 .iter()

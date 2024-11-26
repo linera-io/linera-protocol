@@ -310,7 +310,7 @@ impl CustomSerialize for u128 {
 /// The formula that should be satisfied is
 /// serialized_size(vec![v_1, ...., v_n]) = get_uleb128_size(n)
 ///  + serialized_size(v_1)? + .... serialized_size(v_n)?
-pub(crate) fn get_uleb128_size(len: usize) -> usize {
+pub(crate) const fn get_uleb128_size(len: usize) -> usize {
     let mut power = 128;
     let mut expo = 1;
     while len >= power {
