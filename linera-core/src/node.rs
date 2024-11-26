@@ -28,7 +28,7 @@ use thiserror::Error;
 
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    worker::{ProcessableCertificate, Notification, WorkerError},
+    worker::{Notification, ProcessableCertificate, WorkerError},
 };
 
 /// A pinned [`Stream`] of Notifications.

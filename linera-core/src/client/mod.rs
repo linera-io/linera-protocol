@@ -79,7 +79,7 @@ use crate::{
     notifier::ChannelNotifier,
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{ProcessableCertificate, Notification, Reason, WorkerError, WorkerState},
+    worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
 };
 
 mod chain_client_state;

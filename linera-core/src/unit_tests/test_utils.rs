@@ -57,7 +57,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{ProcessableCertificate, NetworkActions, Notification, WorkerState},
+    worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
