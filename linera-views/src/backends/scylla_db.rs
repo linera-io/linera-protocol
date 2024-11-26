@@ -31,7 +31,7 @@ use crate::metering::MeteredStore;
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::UnorderedBatch,
-    common::get_upper_bound_option,
+    common::{get_uleb128_size, get_upper_bound_option},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingStore, LruSplittingConfig},
     store::{
@@ -63,11 +63,18 @@ const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
 /// So if the key has 1024 bytes this gets us the inequality
 /// `1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE`.
 /// and so this simplifies to `1 + 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE`
-/// Note:
+/// Note on the above formula:
 /// * We write 4 because `get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)`
 /// * We write `1 + 1 + 1`  because the `UnorderedBatch` has three entries.
+///
 /// This gets us to a maximal value of 16752727.
-const VISIBLE_MAX_VALUE_SIZE: usize = 16752727;
+const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
+    - MAX_KEY_SIZE
+    - get_uleb128_size(RAW_MAX_VALUE_SIZE)
+    - get_uleb128_size(MAX_KEY_SIZE)
+    - 1
+    - 1
+    - 1;
 
 /// The constant 14000 is an empirical constant that was found to be necessary
 /// to make the ScyllaDB system work. We have not been able to find this or
@@ -844,25 +851,6 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use bcs::serialized_size;
-
-    use crate::{
-        batch::UnorderedBatch,
-        common::get_uleb128_size,
-        scylla_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
-    };
-
-    #[test]
-    fn test_raw_visible_sizes() {
-        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
-        vis_computed -= serialized_size(&UnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
-        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
-    }
-}
-
 /// The `ScyllaDbStore` composed type with metrics
 #[cfg(with_metrics)]
 pub type ScyllaDbStore = MeteredStore<
@@ -883,3 +871,22 @@ pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;
 
 /// The combined error type for the `ScyllaDbStore`.
 pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;
+
+#[cfg(test)]
+mod tests {
+    use bcs::serialized_size;
+
+    use crate::{
+        batch::UnorderedBatch,
+        common::get_uleb128_size,
+        scylla_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
+    };
+
+    #[test]
+    fn test_raw_visible_sizes() {
+        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
+        vis_computed -= serialized_size(&UnorderedBatch::default()).unwrap();
+        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
+        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
+    }
+}

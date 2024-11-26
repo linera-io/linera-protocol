@@ -93,7 +93,6 @@ fn check_key_size(key: &[u8]) -> Result<(), RocksDbStoreInternalError> {
     Ok(())
 }
 
-
 #[derive(Clone)]
 struct RocksDbStoreExecutor {
     db: Arc<DB>,
@@ -130,7 +129,7 @@ impl RocksDbStoreExecutor {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreInternalError> {
         for key in &keys {
-            check_key_size(&key)?;
+            check_key_size(key)?;
         }
         let full_keys = keys
             .into_iter()
@@ -323,7 +322,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         key: &[u8],
     ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
-        check_key_size(&key)?;
+        check_key_size(key)?;
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
@@ -333,7 +332,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreInternalError> {
-        check_key_size(&key)?;
+        check_key_size(key)?;
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);

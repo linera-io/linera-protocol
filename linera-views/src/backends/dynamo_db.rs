@@ -671,7 +671,7 @@ impl DynamoDbStoreInternal {
         root_key: &[u8],
         key_prefix: &[u8],
     ) -> Result<QueryResponses, DynamoDbStoreInternalError> {
-        check_key_size(&key_prefix)?;
+        check_key_size(key_prefix)?;
         let mut responses = Vec::new();
         let mut start_key = None;
         loop {
@@ -882,13 +882,13 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         &self,
         key: &[u8],
     ) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
-        check_key_size(&key)?;
+        check_key_size(key)?;
         let key_db = build_key(&self.root_key, key.to_vec());
         self.read_value_bytes_general(key_db).await
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, DynamoDbStoreInternalError> {
-        check_key_size(&key)?;
+        check_key_size(key)?;
         let key_db = build_key(&self.root_key, key.to_vec());
         self.contains_key_general(key_db).await
     }
