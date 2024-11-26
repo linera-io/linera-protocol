@@ -18,6 +18,7 @@ members = [
     "linera-service-graphql-client",
     "linera-storage",
     "linera-storage-service",
+    "linera-summary",
     "linera-views",
     "linera-views-derive",
     "linera-witty",
@@ -72,7 +73,12 @@ dashmap = "5.5.3"
 derive_more = "1.0.0"
 dirs = "5.0.1"
 dyn-clone = "1.0.17"
-ed25519-dalek = { version = "2.1.1", default-features = false, features = ["batch", "fast", "serde", "zeroize"] }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = [
+    "batch",
+    "fast",
+    "serde",
+    "zeroize",
+] }
 either = "1.10.0"
 ethers = { version = "2.0.14", features = ["solc"] }
 flarch = "0.7.0"
@@ -84,6 +90,7 @@ futures = "0.3.30"
 genawaiter = "0.99.1"
 generic-array = { version = "0.14.7", features = ["serde"] }
 getrandom = "0.2.12"
+git2 = "0.19.0"
 hex = "0.4.3"
 http = "1.1.0"
 glob = "0.3.1"
@@ -98,6 +105,7 @@ lru = "0.12.3"
 linked-hash-map = "0.5.6"
 num-bigint = "0.4.3"
 num-traits = "0.2.18"
+octocrab = "0.42.1"
 oneshot = "0.1.6"
 port-selector = "0.1.6"
 prettyplease = "0.2.16"
@@ -115,7 +123,9 @@ k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
 pathdiff = "0.2.1"
 kube = "0.88.1"
 rcgen = "0.12.1"
-reqwest = { version = "0.11.24", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.11.24", default-features = false, features = [
+    "rustls-tls",
+] }
 rocksdb = "0.21.0"
 scylla = "0.12.0"
 semver = "1.0.22"
@@ -133,7 +143,9 @@ stdext = "0.3.3"
 syn = "2.0.52"
 tempfile = "3.10.1"
 test-case = "3.3.1"
-test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
+test-log = { version = "0.2.15", default-features = false, features = [
+    "trace",
+] }
 test-strategy = "0.3.1"
 thiserror = "1.0.65"
 thiserror-context = "0.1.1"
@@ -151,7 +163,9 @@ toml = "0.8.10"
 tower-http = "0.5.2"
 tower = "0.4.13"
 tracing = { version = "0.1.40", features = ["release_max_level_debug"] }
-tracing-subscriber = { version = "0.3.18", default-features = false, features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+    "env-filter",
+] }
 tracing-web = "0.1.3"
 trait-variant = "0.1.1"
 url = "2.4"
@@ -162,9 +176,17 @@ wasm-encoder = "0.24.1"
 wasm-instrument = "0.4.0"
 wasm_thread = "0.3.0"
 wasmer = { package = "linera-wasmer", version = "4.4.0-linera.6", default-features = false }
-wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.6", default-features = false, features = ["std", "unwind", "avx"] }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.6", default-features = false, features = [
+    "std",
+    "unwind",
+    "avx",
+] }
 wasmparser = "0.101.1"
-wasmtime = { version = "25.0.0", default-features = false, features = ["cranelift", "runtime", "std"] }
+wasmtime = { version = "25.0.0", default-features = false, features = [
+    "cranelift",
+    "runtime",
+    "std",
+] }
 wasmtimer = "0.2.0"
 webassembly-test = "0.1.0"
 web-sys = "0.3.69"
@@ -191,7 +213,7 @@ linera-views = { version = "0.14.0", path = "./linera-views", default-features =
 linera-views-derive = { version = "0.14.0", path = "./linera-views-derive" }
 linera-witty = { version = "0.14.0", path = "./linera-witty" }
 linera-witty-macros = { version = "0.14.0", path = "./linera-witty-macros" }
-linera-witty-test-modules  = { version = "0.14.0", path = "./linera-witty/test-modules" }
+linera-witty-test-modules = { version = "0.14.0", path = "./linera-witty/test-modules" }
 linera-sdk-derive = { version = "0.14.0", path = "./linera-sdk-derive" }
 linera-service = { version = "0.14.0", path = "./linera-service", default-features = false }
 linera-service-graphql-client = { version = "0.14.0", path = "./linera-service-graphql-client" }
@@ -237,4 +259,3 @@ branch = "no-uuid-wasm-bindgen"
 [patch.crates-io.wasm_thread]
 git = "https://github.com/Twey/wasm_thread"
 branch = "post-message"
-
