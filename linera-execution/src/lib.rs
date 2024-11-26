@@ -1088,15 +1088,23 @@ impl Operation {
         Operation::System(operation)
     }
 
+    /// Creates a new user application operation following the `application_id`'s [`Abi`].
     pub fn user<A: Abi>(
         application_id: UserApplicationId<A>,
         operation: &A::Operation,
     ) -> Result<Self, bcs::Error> {
-        let application_id = application_id.forget_abi();
-        let bytes = bcs::to_bytes(&operation)?;
+        Self::user_without_abi(application_id.forget_abi(), operation)
+    }
+
+    /// Creates a new user application operation assuming that the `operation` is valid for the
+    /// `application_id`.
+    pub fn user_without_abi(
+        application_id: UserApplicationId<()>,
+        operation: &impl Serialize,
+    ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
             application_id,
-            bytes,
+            bytes: bcs::to_bytes(&operation)?,
         })
     }
 
