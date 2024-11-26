@@ -1193,15 +1193,23 @@ impl Query {
         Query::System(query)
     }
 
+    /// Creates a new user application query following the `application_id`'s [`Abi`].
     pub fn user<A: Abi>(
         application_id: UserApplicationId<A>,
         query: &A::Query,
     ) -> Result<Self, serde_json::Error> {
-        let application_id = application_id.forget_abi();
-        let bytes = serde_json::to_vec(&query)?;
+        Self::user_without_abi(application_id.forget_abi(), query)
+    }
+
+    /// Creates a new user application query assuming that the `query` is valid for the
+    /// `application_id`.
+    pub fn user_without_abi(
+        application_id: UserApplicationId<()>,
+        query: &impl Serialize,
+    ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {
             application_id,
-            bytes,
+            bytes: serde_json::to_vec(&query)?,
         })
     }
 
