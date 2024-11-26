@@ -697,13 +697,7 @@ where
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectTransferAmount
         );
-        let balance = match &owner {
-            Some(owner) => self.balances.get_mut_or_default(owner).await?,
-            None => self.balance.get_mut(),
-        };
-        balance
-            .try_sub_assign(amount)
-            .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+        self.debit(owner.as_ref(), amount).await?;
         match recipient {
             Recipient::Account(account) => {
                 let message = RawOutgoingMessage {
@@ -754,6 +748,29 @@ where
         })
     }
 
+    /// Debits an [`Amount`] of tokens from an account's balance.
+    async fn debit(
+        &mut self,
+        account: Option<&Owner>,
+        amount: Amount,
+    ) -> Result<(), SystemExecutionError> {
+        let balance = if let Some(owner) = account {
+            self.balances.get_mut(owner).await?.ok_or_else(|| {
+                SystemExecutionError::InsufficientFunding {
+                    balance: Amount::ZERO,
+                }
+            })?
+        } else {
+            self.balance.get_mut()
+        };
+
+        balance
+            .try_sub_assign(amount)
+            .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+
+        Ok(())
+    }
+
     /// Executes a cross-chain message that represents the recipient's side of an operation.
     pub async fn execute_message(
         &mut self,
@@ -791,10 +808,7 @@ where
                     SystemExecutionError::UnauthenticatedClaimOwner
                 );
 
-                let balance = self.balances.get_mut_or_default(&owner).await?;
-                balance
-                    .try_sub_assign(amount)
-                    .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+                self.debit(Some(&owner), amount).await?;
                 match recipient {
                     Recipient::Account(account) => {
                         let message = RawOutgoingMessage {
@@ -933,10 +947,7 @@ where
                 epoch: config.epoch,
             }
         );
-        let balance = self.balance.get_mut();
-        balance
-            .try_sub_assign(config.balance)
-            .map_err(|_| SystemExecutionError::InsufficientFunding { balance: *balance })?;
+        self.debit(None, config.balance).await?;
         let open_chain_message = RawOutgoingMessage {
             destination: Destination::Recipient(child_id),
             authenticated: false,
