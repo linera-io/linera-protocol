@@ -165,10 +165,11 @@ impl Github {
     }
 
     pub async fn comment_on_pr(&self, body: String) -> Result<()> {
-        if self.is_local {
-            info!("Printing summary to stdout:");
-            println!("{}", body);
-        } else {
+        // Always print the summary to stdout, as we'll use it to set the job summary in CI.
+        info!("Printing summary to stdout...");
+        println!("{}", body);
+
+        if !self.is_local {
             info!("Commenting on PR {}", self.context.pr_number);
             self.octocrab
                 .issues(
