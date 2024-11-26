@@ -449,7 +449,7 @@ where
         match operation {
             OpenChain(config) => {
                 let next_message_id = context.next_message_id(txn_tracker.next_message_index());
-                let messages = self.open_chain(config, next_message_id)?;
+                let messages = self.open_chain(config, next_message_id).await?;
                 outcome.messages.extend(messages);
                 #[cfg(with_metrics)]
                 OPEN_CHAIN_COUNT.with_label_values(&[]).inc();
@@ -911,7 +911,7 @@ where
 
     /// Returns the messages to open a new chain, and subtracts the new chain's balance
     /// from this chain's.
-    pub fn open_chain(
+    pub async fn open_chain(
         &mut self,
         config: OpenChainConfig,
         next_message_id: MessageId,
