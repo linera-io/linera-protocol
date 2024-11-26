@@ -77,14 +77,13 @@ anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
 linera-base = { workspace = true, features = ["test"] }
-linera-execution = { path = ".", default-features = false, features = ["test"] }
-linera-storage = { workspace = true, features = ["test"] }
+linera-execution = { path = ".", default-features = false, features = ["fs", "test"] }
 linera-witty = { workspace = true, features = ["log", "macros", "test"] }
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
 tokio = { workspace = true, features = ["rt", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
-wasmer = { workspace = true, features = ["wat"] }
+wasmer = { workspace = true, features = ["singlepass", "wat"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

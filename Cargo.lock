@@ -4247,7 +4247,6 @@ dependencies = [
  "js-sys",
  "linera-base",
  "linera-execution",
- "linera-storage",
  "linera-views",
  "linera-views-derive",
  "linera-wasmer",
