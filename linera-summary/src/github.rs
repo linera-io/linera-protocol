@@ -12,6 +12,8 @@ use octocrab::{
 };
 use tracing::info;
 
+use crate::performance_summary::PR_COMMENT_HEADER;
+
 const API_REQUEST_DELAY_MS: u64 = 100;
 const IGNORED_JOB_PREFIXES: &[&str] = &["lint-", "check-outdated-cli-md"];
 
@@ -164,18 +166,57 @@ impl Github {
         &self.context
     }
 
-    pub async fn comment_on_pr(&self, body: String) -> Result<()> {
+    // Updates an existing comment or creates a new one in the PR.
+    pub async fn upsert_pr_comment(&self, body: String) -> Result<()> {
+        let issue_handler = self.octocrab.issues(
+            self.context.repository.owner.clone(),
+            self.context.repository.name.clone(),
+        );
+        let existing_comment_id = issue_handler
+            .list_comments(self.context.pr_number)
+            .send()
+            .await?
+            .items
+            .into_iter()
+            .find_map(|comment| {
+                if comment.user.login == "github-actions[bot]"
+                    && comment
+                        .body
+                        .is_some_and(|body| body.starts_with(PR_COMMENT_HEADER))
+                {
+                    Some(comment.id)
+                } else {
+                    None
+                }
+            });
+
         // Always print the summary to stdout, as we'll use it to set the job summary in CI.
         info!("Printing summary to stdout...");
         println!("{}", body);
 
-        if !self.is_local {
+        if let Some(existing_comment_id) = existing_comment_id {
+            if self.is_local {
+                info!(
+                    "Would have updated comment {} on PR {}, but is local",
+                    existing_comment_id, self.context.pr_number
+                );
+            } else {
+                info!(
+                    "Updating existing comment {} on PR {}",
+                    existing_comment_id, self.context.pr_number
+                );
+                issue_handler
+                    .update_comment(existing_comment_id, body)
+                    .await?;
+            }
+        } else if self.is_local {
+            info!(
+                "Would have commented on PR {}, but is local",
+                self.context.pr_number
+            );
+        } else {
             info!("Commenting on PR {}", self.context.pr_number);
-            self.octocrab
-                .issues(
-                    self.context.repository.owner.clone(),
-                    self.context.repository.name.clone(),
-                )
+            issue_handler
                 .create_comment(self.context.pr_number, body)
                 .await?;
         }
