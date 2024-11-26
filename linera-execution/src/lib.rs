@@ -1088,15 +1088,23 @@ impl Operation {
         Operation::System(operation)
     }
 
+    /// Creates a new user application operation following the `application_id`'s [`Abi`].
     pub fn user<A: Abi>(
         application_id: UserApplicationId<A>,
         operation: &A::Operation,
     ) -> Result<Self, bcs::Error> {
-        let application_id = application_id.forget_abi();
-        let bytes = bcs::to_bytes(&operation)?;
+        Self::user_without_abi(application_id.forget_abi(), operation)
+    }
+
+    /// Creates a new user application operation assuming that the `operation` is valid for the
+    /// `application_id`.
+    pub fn user_without_abi(
+        application_id: UserApplicationId<()>,
+        operation: &impl Serialize,
+    ) -> Result<Self, bcs::Error> {
         Ok(Operation::User {
             application_id,
-            bytes,
+            bytes: bcs::to_bytes(&operation)?,
         })
     }
 
@@ -1119,7 +1127,9 @@ impl Message {
         Message::System(message)
     }
 
-    pub fn user<A: Abi, M: Serialize>(
+    /// Creates a new user application message assuming that the `message` is valid for the
+    /// `application_id`.
+    pub fn user<A, M: Serialize>(
         application_id: UserApplicationId<A>,
         message: &M,
     ) -> Result<Self, bcs::Error> {
@@ -1183,15 +1193,23 @@ impl Query {
         Query::System(query)
     }
 
+    /// Creates a new user application query following the `application_id`'s [`Abi`].
     pub fn user<A: Abi>(
         application_id: UserApplicationId<A>,
         query: &A::Query,
     ) -> Result<Self, serde_json::Error> {
-        let application_id = application_id.forget_abi();
-        let bytes = serde_json::to_vec(&query)?;
+        Self::user_without_abi(application_id.forget_abi(), query)
+    }
+
+    /// Creates a new user application query assuming that the `query` is valid for the
+    /// `application_id`.
+    pub fn user_without_abi(
+        application_id: UserApplicationId<()>,
+        query: &impl Serialize,
+    ) -> Result<Self, serde_json::Error> {
         Ok(Query::User {
             application_id,
-            bytes,
+            bytes: serde_json::to_vec(&query)?,
         })
     }
 
