@@ -767,7 +767,7 @@ where
                         .track_executed_block_size_of(&incoming_bundle)
                         .with_execution_context(chain_execution_context)?;
                     for (message_id, posted_message) in incoming_bundle.messages_and_ids() {
-                        self.execute_message_in_block(
+                        Box::pin(self.execute_message_in_block(
                             message_id,
                             posted_message,
                             incoming_bundle,
@@ -776,7 +776,7 @@ where
                             local_time,
                             &mut txn_tracker,
                             &mut resource_controller,
-                        )
+                        ))
                         .await?;
                     }
                 }
@@ -793,16 +793,15 @@ where
                         authenticated_signer: block.authenticated_signer,
                         authenticated_caller_id: None,
                     };
-                    self.execution_state
-                        .execute_operation(
-                            context,
-                            local_time,
-                            operation.clone(),
-                            &mut txn_tracker,
-                            &mut resource_controller,
-                        )
-                        .await
-                        .with_execution_context(chain_execution_context)?;
+                    Box::pin(self.execution_state.execute_operation(
+                        context,
+                        local_time,
+                        operation.clone(),
+                        &mut txn_tracker,
+                        &mut resource_controller,
+                    ))
+                    .await
+                    .with_execution_context(chain_execution_context)?;
                     resource_controller
                         .with_state(&mut self.execution_state)
                         .await?
@@ -942,17 +941,16 @@ where
                 // Once a chain is closed, accepting incoming messages is not allowed.
                 ensure!(!self.is_closed(), ChainError::ClosedChain);
 
-                self.execution_state
-                    .execute_message(
-                        context,
-                        local_time,
-                        posted_message.message.clone(),
-                        (grant > Amount::ZERO).then_some(&mut grant),
-                        txn_tracker,
-                        resource_controller,
-                    )
-                    .await
-                    .with_execution_context(ChainExecutionContext::IncomingBundle(txn_index))?;
+                Box::pin(self.execution_state.execute_message(
+                    context,
+                    local_time,
+                    posted_message.message.clone(),
+                    (grant > Amount::ZERO).then_some(&mut grant),
+                    txn_tracker,
+                    resource_controller,
+                ))
+                .await
+                .with_execution_context(ChainExecutionContext::IncomingBundle(txn_index))?;
                 if grant > Amount::ZERO {
                     if let Some(refund_grant_to) = posted_message.refund_grant_to {
                         self.execution_state
