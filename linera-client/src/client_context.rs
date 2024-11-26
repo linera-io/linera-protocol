@@ -574,7 +574,7 @@ where
     W: Persist<Target = Wallet>,
 {
     pub async fn process_inboxes_and_force_validator_updates(&mut self) {
-        for chain_id in self.wallet.own_chain_ids() {
+        for chain_id in self.wallet.owned_chain_ids() {
             let chain_client = self
                 .make_chain_client(chain_id)
                 .expect("chains in the wallet must exist");
@@ -592,7 +592,7 @@ where
         balance: Amount,
     ) -> Result<HashMap<ChainId, KeyPair>, Error> {
         let mut key_pairs = HashMap::new();
-        for chain_id in self.wallet.own_chain_ids() {
+        for chain_id in self.wallet.owned_chain_ids() {
             if key_pairs.len() == num_chains {
                 break;
             }
