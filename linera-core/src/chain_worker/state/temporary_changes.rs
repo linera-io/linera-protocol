@@ -4,7 +4,7 @@
 //! Operations that don't persist any changes to the chain state.
 
 use linera_base::{
-    data_types::{ArithmeticError, BlobContent, Timestamp, UserApplicationDescription},
+    data_types::{ArithmeticError, Blob, BlobContent, Timestamp, UserApplicationDescription},
     ensure,
     identifiers::{GenericApplicationId, UserApplicationId},
 };
@@ -210,15 +210,10 @@ where
         self.0.chain.remove_bundles_from_inboxes(block).await?;
         // Verify that no unrelated blobs were provided.
         let published_blob_ids = block.published_blob_ids();
-        self.0
-            .check_for_unneeded_blobs(&published_blob_ids, blobs)?;
-        let missing_published_blob_ids = published_blob_ids
-            .difference(&blobs.iter().map(|blob| blob.id()).collect())
-            .cloned()
-            .collect::<Vec<_>>();
+        let provided_blob_ids = blobs.iter().map(Blob::id);
         ensure!(
-            missing_published_blob_ids.is_empty(),
-            WorkerError::BlobsNotFound(missing_published_blob_ids)
+            published_blob_ids.iter().copied().eq(provided_blob_ids),
+            WorkerError::WrongBlobsInProposal
         );
         block.check_proposal_size(policy.maximum_block_proposal_size, blobs)?;
         for blob in blobs {
