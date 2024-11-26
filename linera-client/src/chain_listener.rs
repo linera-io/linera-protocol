@@ -217,11 +217,8 @@ impl ChainListener {
             {
                 context.lock().await.update_wallet(&client).await?;
             }
-            let value = storage.read_hashed_certificate_value(hash).await?;
-            let Some(executed_block) = value.inner().executed_block() else {
-                error!("NewBlock notification about value without a block: {hash}");
-                continue;
-            };
+            let value = storage.read_hashed_confirmed_block(hash).await?;
+            let executed_block = value.inner().executed_block();
             let new_chains = executed_block
                 .messages()
                 .iter()
@@ -239,7 +236,7 @@ impl ChainListener {
                             .cloned()
                             .collect::<Vec<_>>();
                         let timestamp = executed_block.block.timestamp;
-                        Some((*new_id, keys, timestamp))
+                        Some((new_id, keys, timestamp))
                     } else {
                         None
                     }
@@ -255,10 +252,10 @@ impl ChainListener {
                     .find_map(|public_key| context_guard.wallet().key_pair_for_pk(public_key));
                 if key_pair.is_some() {
                     context_guard
-                        .update_wallet_for_new_chain(new_id, key_pair, timestamp)
+                        .update_wallet_for_new_chain(*new_id, key_pair, timestamp)
                         .await?;
                     Self::run_with_chain_id(
-                        new_id,
+                        *new_id,
                         context.clone(),
                         storage.clone(),
                         config.clone(),

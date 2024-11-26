@@ -5,7 +5,6 @@
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::BlockHeight,
-    ensure,
     identifiers::ChainId,
 };
 use linera_execution::committee::Epoch;
@@ -17,7 +16,6 @@ use crate::data_types::OutgoingMessage;
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
     data_types::{Block, ExecutedBlock},
-    ChainError,
 };
 
 /// A statement to be certified by the validators.
@@ -53,19 +51,6 @@ impl CertificateValue {
             CertificateValue::ValidatedBlock(validated) => validated.inner().block.epoch,
             CertificateValue::Timeout(Timeout { epoch, .. }) => *epoch,
         }
-    }
-
-    /// Creates a `HashedCertificateValue` checking that this is the correct hash.
-    pub fn with_hash_checked(self, hash: CryptoHash) -> Result<HashedCertificateValue, ChainError> {
-        let hashed_certificate_value = self.with_hash();
-        ensure!(
-            hashed_certificate_value.hash() == hash,
-            ChainError::CertificateValueHashMismatch {
-                expected: hash,
-                actual: hashed_certificate_value.hash()
-            }
-        );
-        Ok(hashed_certificate_value)
     }
 
     /// Creates a `HashedCertificateValue` by hashing `self`. No hash checks are made!
@@ -211,18 +196,5 @@ impl From<Hashed<Timeout>> for HashedCertificateValue {
         let hash = timeout.hash();
         let value = timeout.into_inner();
         Hashed::unchecked_new(CertificateValue::Timeout(value), hash)
-    }
-}
-
-#[async_graphql::Object(cache_control(no_cache))]
-impl HashedCertificateValue {
-    #[graphql(derived(name = "hash"))]
-    async fn _hash(&self) -> CryptoHash {
-        self.hash()
-    }
-
-    #[graphql(derived(name = "value"))]
-    async fn _value(&self) -> CertificateValue {
-        self.inner().clone()
     }
 }

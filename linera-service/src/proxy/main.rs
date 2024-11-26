@@ -304,13 +304,14 @@ where
                     .into_inner_content()
                     .into(),
             )),
-            DownloadCertificateValue(hash) => Ok(Some(
-                self.storage
-                    .read_hashed_certificate_value(*hash)
-                    .await?
-                    .into_inner()
-                    .into(),
-            )),
+            DownloadConfirmedBlock(hash) => {
+                Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
+                    self.storage
+                        .read_hashed_confirmed_block(*hash)
+                        .await?
+                        .into_inner(),
+                ))))
+            }
             DownloadCertificate(hash) => {
                 Ok(Some(self.storage.read_certificate(*hash).await?.into()))
             }
@@ -336,7 +337,7 @@ where
             | DownloadBlobContentResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
-            | DownloadCertificateValueResponse(_)
+            | DownloadConfirmedBlockResponse(_)
             | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))

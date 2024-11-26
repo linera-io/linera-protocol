@@ -31,10 +31,10 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificateValue,
-            CertificatesBatchRequest, CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult,
-            CryptoHash, HandleCertificateRequest, LiteCertificate, Notification,
-            SubscriptionRequest, VersionInfo,
+            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
+            CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
+            HandleCertificateRequest, LiteCertificate, Notification, SubscriptionRequest,
+            VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -439,21 +439,6 @@ where
             .await
             .map_err(|err| Status::from_error(Box::new(err)))?;
         Ok(Response::new(blob.into_inner_content().try_into()?))
-    }
-
-    #[instrument(skip_all, err(Display))]
-    async fn download_certificate_value(
-        &self,
-        request: Request<CryptoHash>,
-    ) -> Result<Response<CertificateValue>, Status> {
-        let hash = request.into_inner().try_into()?;
-        let certificate = self
-            .0
-            .storage
-            .read_hashed_certificate_value(hash)
-            .await
-            .map_err(|err| Status::from_error(Box::new(err)))?;
-        Ok(Response::new(certificate.try_into()?))
     }
 
     #[instrument(skip_all, err(Display))]

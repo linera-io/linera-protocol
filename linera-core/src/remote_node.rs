@@ -176,9 +176,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             );
             return Err(NodeError::InvalidCertificateForBlob(blob_id));
         }
-        certificate.try_into().map_err(|_| NodeError::ChainError {
-            error: "Expected ConfirmedBlock certificate".to_string(),
-        })
+        Ok(certificate)
     }
 
     /// Tries to download the given blobs from this node. Returns `None` if not all could be found.

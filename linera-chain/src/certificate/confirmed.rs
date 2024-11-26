@@ -10,7 +10,7 @@ use super::{
     HashedCertificateValue,
 };
 use crate::{
-    block::{ConfirmedBlock, ValidatedBlock},
+    block::{ConfirmedBlock, ConversionError, ValidatedBlock},
     data_types::{ExecutedBlock, Medium, MessageBundle},
 };
 
@@ -57,7 +57,7 @@ impl GenericCertificate<ConfirmedBlock> {
 }
 
 impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
-    type Error = &'static str;
+    type Error = ConversionError;
 
     fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
         let hash = cert.hash();
@@ -68,7 +68,7 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
                 round,
                 signatures,
             )),
-            _ => Err("Expected a confirmed block certificate"),
+            _ => Err(ConversionError::ConfirmedBlock),
         }
     }
 }

@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
+
 use custom_debug_derive::Debug;
 use linera_base::crypto::{BcsHashable, CryptoHash};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -86,6 +88,12 @@ impl<T: Clone> Clone for Hashed<T> {
             value: self.value.clone(),
             hash: self.hash,
         }
+    }
+}
+
+impl<T: async_graphql::OutputType> async_graphql::TypeName for Hashed<T> {
+    fn type_name() -> Cow<'static, str> {
+        format!("Hashed{}", T::type_name(),).into()
     }
 }
 
