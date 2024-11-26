@@ -2,8 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Cow;
-
 use linera_base::{crypto::Signature, data_types::Round, identifiers::BlobId};
 use linera_execution::committee::ValidatorName;
 use serde::{
@@ -12,8 +10,8 @@ use serde::{
 };
 
 use super::{
-    generic::GenericCertificate, hashed::Hashed, lite::LiteCertificate, Certificate,
-    CertificateValue, HashedCertificateValue,
+    generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
+    HashedCertificateValue,
 };
 use crate::{
     block::ValidatedBlock,
@@ -35,15 +33,6 @@ impl GenericCertificate<ValidatedBlock> {
         LiteValue {
             value_hash: self.hash(),
             chain_id: self.executed_block().block.chain_id,
-        }
-    }
-
-    /// Returns the certificate without the full value.
-    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
-        LiteCertificate {
-            value: self.lite_value(),
-            round: self.round,
-            signatures: Cow::Borrowed(self.signatures()),
         }
     }
 
@@ -72,7 +61,7 @@ impl From<GenericCertificate<ValidatedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ValidatedBlock>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
         Certificate::new(
-            HashedCertificateValue::new_validated(value.into_inner().into_inner()),
+            HashedCertificateValue::new_validated(value.into_inner().into_inner()).into(),
             round,
             signatures,
         )
@@ -102,11 +91,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
             signatures: Vec<(ValidatorName, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
-        let validated_hashed: HashedCertificateValue = inner.value.clone().into();
-        Ok(Self::new(
-            Hashed::unchecked_new(inner.value, validated_hashed.hash()),
-            inner.round,
-            inner.signatures,
-        ))
+        let validated_hashed = HashedCertificateValue::new_validated(inner.value.into_inner());
+        Ok(Self::new(validated_hashed, inner.round, inner.signatures))
     }
 }

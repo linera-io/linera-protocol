@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::Certificate,
+    types::{Certificate, GenericCertificate},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
@@ -30,6 +30,7 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    worker::ProcessableCertificate,
 };
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
@@ -209,11 +210,14 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate(
+    async fn send_certificate<T: 'static + ProcessableCertificate>(
         &mut self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
+    ) -> Result<Box<ChainInfo>, ChainClientError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         let result = self
             .remote_node
             .handle_optimized_certificate(&certificate, delivery)
@@ -319,12 +323,12 @@ where
             let storage = self.local_node.storage_client();
             let certs = storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
-                self.send_certificate(cert.into(), delivery).await?;
+                self.send_certificate(cert, delivery).await?;
             }
         }
         if let Some(cert) = manager.timeout {
             if cert.inner().chain_id == chain_id {
-                self.send_certificate(cert.into(), CrossChainMessageDelivery::NonBlocking)
+                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
                     .await?;
             }
         }

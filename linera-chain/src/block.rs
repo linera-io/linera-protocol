@@ -4,14 +4,19 @@
 
 use std::fmt::Debug;
 
-use linera_base::{crypto::BcsHashable, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    crypto::{BcsHashable, CryptoHash},
+    data_types::BlockHeight,
+    identifiers::ChainId,
+};
 use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     data_types::ExecutedBlock,
-    types::{CertificateValue, Has, Hashed, HashedCertificateValue},
+    types::{CertificateValue, Hashed, HashedCertificateValue},
+    ChainError,
 };
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
@@ -35,21 +40,13 @@ impl ValidatedBlock {
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
     }
+
+    pub fn to_log_str(&self) -> &'static str {
+        "validated_block"
+    }
 }
 
 impl BcsHashable for ValidatedBlock {}
-
-impl Has<ChainId> for ValidatedBlock {
-    fn get(&self) -> &ChainId {
-        &self.executed_block.block.chain_id
-    }
-}
-
-impl From<ValidatedBlock> for HashedCertificateValue {
-    fn from(value: ValidatedBlock) -> Self {
-        HashedCertificateValue::new_validated(value.executed_block)
-    }
-}
 
 impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
     type Error = ConversionError;
@@ -72,9 +69,28 @@ pub struct ConfirmedBlock {
     executed_block: ExecutedBlock,
 }
 
-impl From<ConfirmedBlock> for HashedCertificateValue {
-    fn from(value: ConfirmedBlock) -> Self {
-        HashedCertificateValue::new_confirmed(value.executed_block)
+#[async_graphql::Object(cache_control(no_cache))]
+impl ConfirmedBlock {
+    #[graphql(derived(name = "executed_block"))]
+    async fn _executed_block(&self) -> ExecutedBlock {
+        self.executed_block.clone()
+    }
+
+    async fn status(&self) -> String {
+        "confirmed".to_string()
+    }
+}
+
+#[async_graphql::Object(cache_control(no_cache), name_type)]
+impl Hashed<ConfirmedBlock> {
+    #[graphql(derived(name = "hash"))]
+    async fn _hash(&self) -> CryptoHash {
+        self.hash()
+    }
+
+    #[graphql(derived(name = "value"))]
+    async fn _value(&self) -> ConfirmedBlock {
+        self.inner().clone()
     }
 }
 
@@ -115,7 +131,7 @@ impl ConfirmedBlock {
     }
 
     /// Returns a reference to the `ExecutedBlock` contained in this `ConfirmedBlock`.
-    pub fn inner(&self) -> &ExecutedBlock {
+    pub fn executed_block(&self) -> &ExecutedBlock {
         &self.executed_block
     }
 
@@ -123,11 +139,32 @@ impl ConfirmedBlock {
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
     }
-}
 
-impl Has<ChainId> for ConfirmedBlock {
-    fn get(&self) -> &ChainId {
-        &self.executed_block.block.chain_id
+    pub fn to_log_str(&self) -> &'static str {
+        "confirmed_block"
+    }
+
+    /// Creates a `HashedCertificateValue` without checking that this is the correct hash!
+    pub fn with_hash_unchecked(self, hash: CryptoHash) -> Hashed<ConfirmedBlock> {
+        Hashed::unchecked_new(self, hash)
+    }
+
+    fn with_hash(self) -> Hashed<Self> {
+        let hash = CryptoHash::new(&self);
+        Hashed::unchecked_new(self, hash)
+    }
+
+    /// Creates a `HashedCertificateValue` checking that this is the correct hash.
+    pub fn with_hash_checked(self, hash: CryptoHash) -> Result<Hashed<ConfirmedBlock>, ChainError> {
+        let hashed_certificate_value = self.with_hash();
+        if hashed_certificate_value.hash() == hash {
+            Ok(hashed_certificate_value)
+        } else {
+            Err(ChainError::CertificateValueHashMismatch {
+                expected: hash,
+                actual: hashed_certificate_value.hash(),
+            })
+        }
     }
 }
 
@@ -146,11 +183,9 @@ impl Timeout {
             epoch,
         }
     }
-}
 
-impl From<Timeout> for HashedCertificateValue {
-    fn from(value: Timeout) -> Self {
-        HashedCertificateValue::new_timeout(value.chain_id, value.height, value.epoch)
+    pub fn to_log_str(&self) -> &'static str {
+        "timeout"
     }
 }
 
@@ -166,12 +201,6 @@ impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
 }
 
 impl BcsHashable for Timeout {}
-
-impl Has<ChainId> for Timeout {
-    fn get(&self) -> &ChainId {
-        &self.chain_id
-    }
-}
 
 /// Failure to convert a [`HashedCertificateValue`] into one of the block types.
 #[derive(Clone, Copy, Debug, Error)]

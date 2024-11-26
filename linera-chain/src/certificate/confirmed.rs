@@ -10,7 +10,7 @@ use super::{
     HashedCertificateValue,
 };
 use crate::{
-    block::{ConfirmedBlock, ValidatedBlock},
+    block::{ConfirmedBlock, ConversionError, ValidatedBlock},
     data_types::{ExecutedBlock, Medium, MessageBundle},
 };
 
@@ -29,7 +29,7 @@ impl GenericCertificate<ConfirmedBlock> {
 
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        self.inner().inner()
+        self.inner().executed_block()
     }
 
     /// Returns whether this value contains the message with the specified ID.
@@ -57,7 +57,7 @@ impl GenericCertificate<ConfirmedBlock> {
 }
 
 impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
-    type Error = &'static str;
+    type Error = ConversionError;
 
     fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
         let hash = cert.hash();
@@ -68,7 +68,7 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
                 round,
                 signatures,
             )),
-            _ => Err("Expected a confirmed block certificate"),
+            _ => Err(ConversionError::ConfirmedBlock),
         }
     }
 }
@@ -76,10 +76,9 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
 impl From<GenericCertificate<ConfirmedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ConfirmedBlock>) -> Certificate {
         let (value, round, signatures) = cert.destructure();
-        Certificate::new(
-            HashedCertificateValue::new_confirmed(value.into_inner().into_inner()),
-            round,
-            signatures,
-        )
+        let hash = value.hash();
+        let value =
+            Hashed::unchecked_new(CertificateValue::ConfirmedBlock(value.into_inner()), hash);
+        Certificate::new(value, round, signatures)
     }
 }

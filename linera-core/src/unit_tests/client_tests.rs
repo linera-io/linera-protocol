@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{IncomingBundle, Medium, MessageBundle, Origin, PostedMessage},
-    types::{CertificateValue, Timeout},
+    types::Timeout,
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{
@@ -1517,15 +1517,15 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
+        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .block()
-        .unwrap()
+        .executed_block()
+        .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1537,8 +1537,8 @@ where
     assert_eq!(
         hashed_certificate_values[1]
             .inner()
-            .block()
-            .unwrap()
+            .executed_block()
+            .block
             .operations,
         blob_0_1_operations,
     );
@@ -1658,15 +1658,15 @@ where
         .unwrap();
 
     let hashed_certificate_values = client2_b
-        .read_hashed_certificate_values_downward(bt_certificate.hash(), 2)
+        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 2)
         .await
         .unwrap();
 
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .block()
-        .unwrap()
+        .executed_block()
+        .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1677,8 +1677,8 @@ where
     // Previous should be the `ChangeOwnership` operation, as the blob operations shouldn't be executed here.
     assert!(hashed_certificate_values[1]
         .inner()
-        .block()
-        .unwrap()
+        .executed_block()
+        .block
         .operations
         .contains(&owner_change_op));
     Ok(())
@@ -1814,7 +1814,7 @@ where
     let resubmission_result = builder
         .node(2)
         .handle_certificate(
-            validated_block_certificate.into(),
+            validated_block_certificate,
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1886,7 +1886,7 @@ where
     let resubmission_result = builder
         .node(3)
         .handle_certificate(
-            validated_block_certificate.into(),
+            validated_block_certificate,
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )
@@ -1929,15 +1929,15 @@ where
         .unwrap();
 
     let hashed_certificate_values = client3_c
-        .read_hashed_certificate_values_downward(bt_certificate.hash(), 3)
+        .read_hashed_confirmed_blocks_downward(bt_certificate.hash(), 3)
         .await
         .unwrap();
 
     // Latest block should be the burn
     assert!(hashed_certificate_values[0]
         .inner()
-        .block()
-        .unwrap()
+        .executed_block()
+        .block
         .operations
         .contains(&Operation::System(SystemOperation::Transfer {
             owner: None,
@@ -1949,8 +1949,8 @@ where
     assert_eq!(
         hashed_certificate_values[1]
             .inner()
-            .block()
-            .unwrap()
+            .executed_block()
+            .block
             .operations,
         blob_2_3_operations,
     );
@@ -1958,8 +1958,8 @@ where
     // Previous should be the `ChangeOwnership` operation
     assert!(hashed_certificate_values[2]
         .inner()
-        .block()
-        .unwrap()
+        .executed_block()
+        .block
         .operations
         .contains(&owner_change_op));
     Ok(())
@@ -2018,7 +2018,7 @@ where
     let certificate = client.request_leader_timeout().await.unwrap();
     assert_eq!(
         *certificate.inner(),
-        CertificateValue::Timeout(Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO))
+        Timeout::new(chain_id, BlockHeight::from(1), Epoch::ZERO)
     );
     assert_eq!(certificate.round, Round::SingleLeader(0));
 
@@ -2289,7 +2289,7 @@ where
     builder
         .node(0)
         .handle_certificate(
-            validated_block_certificate.into(),
+            validated_block_certificate,
             Vec::new(),
             CrossChainMessageDelivery::Blocking,
         )

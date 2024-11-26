@@ -13,10 +13,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, UserApplicationId},
 };
 use linera_chain::{
-    types::{
-        Certificate, CertificateValue, ConfirmedBlockCertificate, HashedCertificateValue,
-        LiteCertificate,
-    },
+    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -90,10 +87,10 @@ static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| 
 /// The metric counting how often a hashed certificate value is read from storage.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static READ_HASHED_CERTIFICATE_VALUE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
+pub static READ_HASHED_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec(
-        "read_hashed_certificate_value",
-        "The metric counting how often a hashed certificate value is read from storage",
+        "read_hashed_confirmed_block",
+        "The metric counting how often a hashed confirmed block is read from storage",
         &[],
     )
 });
@@ -202,7 +199,7 @@ pub struct DbStorage<Store, Clock> {
 enum BaseKey {
     ChainState(ChainId),
     Certificate(CryptoHash),
-    CertificateValue(CryptoHash),
+    ConfirmedBlock(CryptoHash),
     Blob(BlobId),
     BlobState(BlobId),
 }
@@ -401,17 +398,14 @@ where
         Ok(test)
     }
 
-    async fn read_hashed_certificate_value(
+    async fn read_hashed_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, ViewError> {
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        let maybe_value = self
-            .store
-            .read_value::<CertificateValue>(&value_key)
-            .await?;
+    ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
+        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
         #[cfg(with_metrics)]
-        READ_HASHED_CERTIFICATE_VALUE_COUNTER
+        READ_HASHED_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
             .inc();
         let value = maybe_value.ok_or_else(|| ViewError::not_found("value for hash", hash))?;
@@ -478,22 +472,19 @@ where
         Ok(blob_states)
     }
 
-    async fn read_hashed_certificate_values_downward(
+    async fn read_hashed_confirmed_blocks_downward(
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> Result<Vec<HashedCertificateValue>, ViewError> {
+    ) -> Result<Vec<Hashed<ConfirmedBlock>>, ViewError> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {
             let Some(next_hash) = hash else {
                 break;
             };
-            let value = self.read_hashed_certificate_value(next_hash).await?;
-            let Some(executed_block) = value.inner().executed_block() else {
-                break;
-            };
-            hash = executed_block.block.previous_block_hash;
+            let value = self.read_hashed_confirmed_block(next_hash).await?;
+            hash = value.inner().executed_block().block.previous_block_hash;
             values.push(value);
         }
         Ok(values)
@@ -654,7 +645,7 @@ where
             .iter()
             .flat_map(|hash| {
                 let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
-                let value_key = bcs::to_bytes(&BaseKey::CertificateValue(*hash));
+                let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
                 vec![cert_key, value_key]
             })
             .collect::<Result<_, _>>()?)
@@ -671,13 +662,11 @@ where
             .as_ref()
             .ok_or_else(|| ViewError::not_found("value bytes for hash", hash))?;
         let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
-        let value = bcs::from_bytes::<CertificateValue>(value_bytes)?;
+        let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
         let certificate = cert
             .with_value(value.with_hash_unchecked(hash))
             .ok_or(ViewError::InconsistentEntries)?;
-        Ok(certificate
-            .try_into()
-            .expect("To store only confirmed certificates"))
+        Ok(certificate)
     }
 
     fn add_blob_to_batch(blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {
@@ -706,10 +695,9 @@ where
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
         let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let value_key = bcs::to_bytes(&BaseKey::CertificateValue(hash))?;
-        let old_certificate: Certificate = certificate.clone().into();
-        batch.put_key_value(cert_key.to_vec(), &old_certificate.lite_certificate())?;
-        batch.put_key_value(value_key.to_vec(), old_certificate.value())?;
+        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
+        batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
+        batch.put_key_value(value_key.to_vec(), certificate.value())?;
         Ok(())
     }
 

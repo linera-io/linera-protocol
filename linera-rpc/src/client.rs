@@ -8,11 +8,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    worker::ProcessableCertificate,
 };
 
 use crate::grpc::GrpcClient;
@@ -75,12 +76,15 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_certificate(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError> {
+    ) -> Result<ChainInfoResponse, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
@@ -145,19 +149,10 @@ impl ValidatorNode for Client {
         })
     }
 
-    async fn download_certificate_value(
+    async fn download_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, NodeError> {
-        Ok(match self {
-            Client::Grpc(grpc_client) => grpc_client.download_certificate_value(hash).await?,
-
-            #[cfg(with_simple_network)]
-            Client::Simple(simple_client) => simple_client.download_certificate_value(hash).await?,
-        })
-    }
-
-    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.download_certificate(hash).await?,
 

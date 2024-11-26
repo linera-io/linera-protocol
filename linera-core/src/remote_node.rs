@@ -13,7 +13,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, CertificateValue, ConfirmedBlockCertificate, LiteCertificate},
+    types::{
+        Certificate, CertificateValueT, ConfirmedBlockCertificate, GenericCertificate,
+        LiteCertificate,
+    },
 };
 use linera_execution::committee::ValidatorName;
 use rand::seq::SliceRandom as _;
@@ -22,6 +25,7 @@ use tracing::{instrument, warn};
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
+    worker::ProcessableCertificate,
 };
 
 /// A validator node together with the validator's name.
@@ -53,13 +57,15 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    #[instrument(level = "trace")]
-    pub(crate) async fn handle_certificate(
+    pub(crate) async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
+    ) -> Result<Box<ChainInfo>, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         let chain_id = certificate.inner().chain_id();
         let response = self
             .node
@@ -82,11 +88,14 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_certificate(
+    pub(crate) async fn handle_optimized_certificate<T: ProcessableCertificate>(
         &mut self,
-        certificate: &Certificate,
+        certificate: &GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
+    ) -> Result<Box<ChainInfo>, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>,
+    {
         if certificate.is_signed_by(&self.name) {
             let result = self
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
@@ -167,9 +176,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
             );
             return Err(NodeError::InvalidCertificateForBlob(blob_id));
         }
-        certificate.try_into().map_err(|_| NodeError::ChainError {
-            error: "Expected ConfirmedBlock certificate".to_string(),
-        })
+        Ok(certificate)
     }
 
     /// Tries to download the given blobs from this node. Returns `None` if not all could be found.
@@ -315,17 +322,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found(
+    pub fn check_blobs_not_found<T: CertificateValueT>(
         &self,
-        certificate: &Certificate,
+        certificate: &GenericCertificate<T>,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
         // Find the missing blobs locally and retry.
-        let required = match certificate.inner() {
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().required_blob_ids(),
-            CertificateValue::ValidatedBlock(validated) => validated.inner().required_blob_ids(),
-            CertificateValue::Timeout(_) => HashSet::new(),
-        };
+        let required = certificate.inner().required_blob_ids();
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 warn!(

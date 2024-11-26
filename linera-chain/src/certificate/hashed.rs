@@ -2,13 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
+
 use custom_debug_derive::Debug;
-use linera_base::{
-    crypto::{BcsHashable, CryptoHash},
-    identifiers::ChainId,
-};
+use linera_base::crypto::{BcsHashable, CryptoHash};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use super::CertificateValueT;
 use crate::data_types::LiteValue;
 
 /// Wrapper type around hashed instance of `T` type.
@@ -55,11 +55,11 @@ impl<T> Hashed<T> {
 
     pub fn lite(&self) -> LiteValue
     where
-        T: Has<ChainId>,
+        T: CertificateValueT,
     {
         LiteValue {
             value_hash: self.hash,
-            chain_id: *self.value.get(),
+            chain_id: self.value.chain_id(),
         }
     }
 }
@@ -91,6 +91,12 @@ impl<T: Clone> Clone for Hashed<T> {
     }
 }
 
+impl<T: async_graphql::OutputType> async_graphql::TypeName for Hashed<T> {
+    fn type_name() -> Cow<'static, str> {
+        format!("Hashed{}", T::type_name(),).into()
+    }
+}
+
 #[cfg(with_testing)]
 impl<T> PartialEq for Hashed<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -100,8 +106,3 @@ impl<T> PartialEq for Hashed<T> {
 
 #[cfg(with_testing)]
 impl<T> Eq for Hashed<T> {}
-
-/// A constraint summing a value of type `T`.
-pub trait Has<T> {
-    fn get(&self) -> &T;
-}

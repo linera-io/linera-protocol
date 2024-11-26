@@ -779,7 +779,7 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobId
     5:
-      DownloadCertificateValue:
+      DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
     6:
@@ -829,9 +829,9 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlobContent
     18:
-      DownloadCertificateValueResponse:
+      DownloadConfirmedBlockResponse:
         NEWTYPE:
-          TYPENAME: CertificateValue
+          TYPENAME: ConfirmedBlock
     19:
       DownloadCertificateResponse:
         NEWTYPE:

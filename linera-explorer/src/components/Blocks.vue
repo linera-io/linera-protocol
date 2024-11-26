@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { HashedCertificateValue } from '../../gql/service'
+import { HashedConfirmedBlock } from '../../gql/service'
 
-defineProps<{blocks: HashedCertificateValue[]}>()
+defineProps<{blocks: HashedConfirmedBlock[]}>()
 </script>
 
 <template>
@@ -23,16 +23,16 @@ defineProps<{blocks: HashedCertificateValue[]}>()
       </thead>
       <tbody>
         <tr v-for="b in blocks" :key="'blocks-block-'+b.hash">
-          <td>{{ b.value.executedBlock?.block.height }}</td>
+          <td>{{ b.value.executedBlock.block.height }}</td>
           <td :title="b.hash">
             <a @click="$root.route('block', [['block', b.hash]])" class="btn btn-link">{{ short_hash(b.hash) }}</a>
           </td>
-          <td>{{ (new Date(b.value.executedBlock?.block.timestamp/1000)).toLocaleString() }}</td>
-          <td :title="b.value.executedBlock?.block.authenticatedSigner">{{ short_hash(b.value.executedBlock?.block.authenticatedSigner) }}</td>
+          <td>{{ (new Date(b.value.executedBlock.block.timestamp/1000)).toLocaleString() }}</td>
+          <td :title="b.value.executedBlock.block.authenticatedSigner">{{ short_hash(b.value.executedBlock.block.authenticatedSigner) }}</td>
           <td>{{ b.value.status }}</td>
-          <td>{{ b.value.executedBlock?.block.incomingBundles.length }}</td>
-          <td>{{ b.value.executedBlock?.outcome.messages.length }}</td>
-          <td>{{ b.value.executedBlock?.block.operations.length }}</td>
+          <td>{{ b.value.executedBlock.block.incomingBundles.length }}</td>
+          <td>{{ b.value.executedBlock.outcome.messages.length }}</td>
+          <td>{{ b.value.executedBlock.block.operations.length }}</td>
           <td>
             <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+b.hash+'-modal'" @click="json_load(b.hash+'-json', b)">
               <i class="bi bi-braces"></i>

@@ -14,7 +14,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, Origin},
-    types::{Certificate, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainError,
 };
 use linera_execution::{
@@ -28,7 +28,7 @@ use thiserror::Error;
 
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    worker::{Notification, WorkerError},
+    worker::{Notification, ProcessableCertificate, WorkerError},
 };
 
 /// A pinned [`Stream`] of Notifications.
@@ -65,12 +65,14 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
-    async fn handle_certificate(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError>;
+    ) -> Result<ChainInfoResponse, NodeError>
+    where
+        Certificate: From<GenericCertificate<T>>;
 
     /// Handles information queries for this chain.
     async fn handle_chain_info_query(
@@ -89,12 +91,10 @@ pub trait ValidatorNode {
 
     async fn download_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
 
-    async fn download_certificate_value(
+    async fn download_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, NodeError>;
-
-    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError>;
+    ) -> Result<ConfirmedBlockCertificate, NodeError>;
 
     /// Requests a batch of certificates from the validator.
     async fn download_certificates(

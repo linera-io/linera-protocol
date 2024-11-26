@@ -249,7 +249,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let value = HashedCertificateValue::new_confirmed(outcome.with(valid_block));
 
     // In the second block, other operations are still not allowed.
-    let invalid_block = make_child_block(&value.clone().try_into()?)
+    let invalid_block = make_child_block(&value.clone())
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_operation(app_operation.clone());
     let result = chain.execute_block(&invalid_block, time, None).await;
@@ -258,7 +258,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     );
 
     // Also, blocks without an application operation or incoming message are forbidden.
-    let invalid_block = make_child_block(&value.clone().try_into()?);
+    let invalid_block = make_child_block(&value.clone());
     let result = chain.execute_block(&invalid_block, time, None).await;
     assert_matches!(result, Err(ChainError::MissingMandatoryApplications(app_ids))
         if app_ids == vec![application_id]
@@ -267,7 +267,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     // But app operations continue to work.
     application.expect_call(ExpectedCall::execute_operation(|_, _, _| Ok(vec![])));
     application.expect_call(ExpectedCall::default_finalize());
-    let valid_block = make_child_block(&value.try_into()?).with_operation(app_operation);
+    let valid_block = make_child_block(&value).with_operation(app_operation);
     chain.execute_block(&valid_block, time, None).await?;
 
     Ok(())

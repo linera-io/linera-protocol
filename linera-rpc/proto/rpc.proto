@@ -58,9 +58,6 @@ service ValidatorNode {
   // Downloads a blob content.
   rpc DownloadBlobContent(BlobId) returns (BlobContent);
 
-  // Downloads a certificate value.
-  rpc DownloadCertificateValue(CryptoHash) returns (CertificateValue);
-
   // Downloads a certificate.
   rpc DownloadCertificate(CryptoHash) returns (Certificate);
 
@@ -171,10 +168,10 @@ message ChainInfoQuery {
   bool request_leader_timeout = 8;
 
   // Query the balance of a given owner.
-  optional Owner request_owner_balance = 10;
+  optional Owner request_owner_balance = 9;
 
   // Request a signed vote for fallback mode.
-  bool request_fallback = 11;
+  bool request_fallback = 10;
 }
 
 // An authenticated proposal for a new block.
@@ -225,13 +222,13 @@ message HandleCertificateRequest {
 
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
-  bool wait_for_outgoing_messages = 6;
+  bool wait_for_outgoing_messages = 2;
 
   // Blobs required by this certificate
-  bytes blobs = 7;
+  bytes blobs = 3;
 
   // A certified statement from the committee.
-  Certificate certificate = 8;
+  Certificate certificate = 4;
 }
 
 // A certified statement from the committee.
@@ -244,10 +241,6 @@ message Certificate {
 
   // Signatures on the value hash and round
   bytes signatures = 3;
-}
-
-message CertificateValue {
-  bytes bytes = 1;
 }
 
 message ChainId {

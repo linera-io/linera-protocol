@@ -142,11 +142,6 @@ A unique identifier for an application bytecode
 """
 scalar BytecodeId
 
-type CertificateValue {
-	executedBlock: ExecutedBlock
-	status: String!
-}
-
 """
 A chain ID with a block height.
 """
@@ -328,6 +323,11 @@ input Committee {
 	policy: ResourceControlPolicy!
 }
 
+type ConfirmedBlock {
+	executedBlock: ExecutedBlock!
+	status: String!
+}
+
 """
 The version of the Linera crates used in this build
 """
@@ -421,9 +421,9 @@ A unique identifier for a user application or for the system application
 """
 scalar GenericApplicationId
 
-type HashedCertificateValue {
+type HashedConfirmedBlock {
 	hash: CryptoHash!
-	value: CertificateValue!
+	value: ConfirmedBlock!
 }
 
 
@@ -814,8 +814,8 @@ type QueryRoot {
 	chain(chainId: ChainId!): ChainStateExtendedView!
 	applications(chainId: ChainId!): [ApplicationOverview!]!
 	chains: Chains!
-	block(hash: CryptoHash, chainId: ChainId!): HashedCertificateValue
-	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedCertificateValue!]!
+	block(hash: CryptoHash, chainId: ChainId!): HashedConfirmedBlock
+	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [HashedConfirmedBlock!]!
 	"""
 	Returns the version information on this node service.
 	"""

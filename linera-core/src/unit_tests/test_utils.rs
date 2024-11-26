@@ -10,6 +10,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{
+    future::Either,
     lock::{Mutex, MutexGuard},
     Future,
 };
@@ -20,7 +21,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlockCertificate, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -53,7 +54,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{NetworkActions, Notification, WorkerState},
+    worker::{NetworkActions, Notification, ProcessableCertificate, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -119,9 +120,9 @@ where
         .await
     }
 
-    async fn handle_certificate(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -161,17 +162,10 @@ where
         .await
     }
 
-    async fn download_certificate_value(
+    async fn download_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<HashedCertificateValue, NodeError> {
-        self.spawn_and_receive(move |validator, sender| {
-            validator.do_download_certificate_value(hash, sender)
-        })
-        .await
-    }
-
-    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_certificate(hash, sender)
         })
@@ -310,8 +304,8 @@ where
         }
     }
 
-    async fn handle_certificate(
-        certificate: Certificate,
+    async fn handle_certificate<T: ProcessableCertificate>(
+        certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
@@ -344,17 +338,24 @@ where
         let client = self.client.clone();
         let mut validator = client.lock().await;
         let result = async move {
-            let certificate = validator.state.full_certificate(certificate).await?;
-            self.do_handle_certificate_internal(certificate, &mut validator, vec![])
-                .await
+            match validator.state.full_certificate(certificate).await? {
+                Either::Left(confirmed) => {
+                    self.do_handle_certificate_internal(confirmed, &mut validator, vec![])
+                        .await
+                }
+                Either::Right(validated) => {
+                    self.do_handle_certificate_internal(validated, &mut validator, vec![])
+                        .await
+                }
+            }
         }
         .await;
         sender.send(result)
     }
 
-    async fn do_handle_certificate_internal(
+    async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -387,9 +388,9 @@ where
         }
     }
 
-    async fn do_handle_certificate(
+    async fn do_handle_certificate<T: ProcessableCertificate>(
         self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
@@ -445,21 +446,6 @@ where
             .await
             .map_err(Into::into);
         sender.send(blob.map(|blob| blob.into_inner_content()))
-    }
-
-    async fn do_download_certificate_value(
-        self,
-        hash: CryptoHash,
-        sender: oneshot::Sender<Result<HashedCertificateValue, NodeError>>,
-    ) -> Result<(), Result<HashedCertificateValue, NodeError>> {
-        let validator = self.client.lock().await;
-        let certificate_value = validator
-            .state
-            .storage_client()
-            .read_hashed_certificate_value(hash)
-            .await
-            .map_err(Into::into);
-        sender.send(certificate_value)
     }
 
     async fn do_download_certificate(
@@ -867,13 +853,12 @@ where
                     debug_assert!(requested_sent_certificate_hashes.len() <= 1);
                     if let Some(cert_hash) = requested_sent_certificate_hashes.pop() {
                         if let Ok(cert) = validator.download_certificate(cert_hash).await {
-                            if cert.inner().is_confirmed()
-                                && cert.inner().chain_id() == chain_id
-                                && cert.inner().height() == block_height
+                            if cert.inner().executed_block().block.chain_id == chain_id
+                                && cert.inner().executed_block().block.height == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
                                 count += 1;
-                                certificate = Some(cert.try_into().unwrap());
+                                certificate = Some(cert);
                             }
                         }
                     }

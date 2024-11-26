@@ -7,14 +7,14 @@ use std::{
     sync::Arc,
 };
 
-use futures::{stream, StreamExt as _, TryStreamExt as _};
+use futures::{future::Either, stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlockHeight, UserApplicationDescription},
     identifiers::{BlobId, ChainId, MessageId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock},
-    types::{Certificate, ConfirmedBlockCertificate, LiteCertificate},
+    types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{committee::ValidatorName, Query, Response};
@@ -27,7 +27,7 @@ use tracing::{instrument, warn};
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
-    worker::{WorkerError, WorkerState},
+    worker::{ProcessableCertificate, WorkerError, WorkerState},
 };
 
 /// A local node with a single worker, typically used by clients.
@@ -110,29 +110,34 @@ where
         certificate: LiteCertificate<'_>,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let full_cert = self.node.state.full_certificate(certificate).await?;
-        let response = self
-            .node
-            .state
-            .fully_handle_certificate_with_notifications(full_cert, vec![], notifier)
-            .await?;
-        Ok(response)
+        match self.node.state.full_certificate(certificate).await? {
+            Either::Left(confirmed) => {
+                Ok(self.handle_certificate(confirmed, vec![], notifier).await?)
+            }
+            Either::Right(validated) => {
+                Ok(self.handle_certificate(validated, vec![], notifier).await?)
+            }
+        }
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_certificate(
+    pub async fn handle_certificate<T>(
         &self,
-        certificate: Certificate,
+        certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
         notifier: &impl Notifier,
-    ) -> Result<ChainInfoResponse, LocalNodeError> {
-        let response = Box::pin(self.node.state.fully_handle_certificate_with_notifications(
-            certificate,
-            blobs,
-            notifier,
-        ))
-        .await?;
-        Ok(response)
+    ) -> Result<ChainInfoResponse, LocalNodeError>
+    where
+        T: ProcessableCertificate,
+    {
+        Ok(
+            Box::pin(self.node.state.fully_handle_certificate_with_notifications(
+                certificate,
+                blobs,
+                notifier,
+            ))
+            .await?,
+        )
     }
 
     #[instrument(level = "trace", skip_all)]

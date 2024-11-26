@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_execution::committee::{Committee, ValidatorName};
 
-use super::hashed::Hashed;
+use super::{hashed::Hashed, CertificateValueT};
 use crate::ChainError;
 
 /// Generic type representing a certificate for `value` of type `T`.
@@ -98,6 +98,18 @@ impl<T> GenericCertificate<T> {
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         crate::data_types::check_signatures(self.hash(), self.round, &self.signatures, committee)?;
         Ok(())
+    }
+
+    pub fn lite_certificate(&self) -> crate::certificate::LiteCertificate<'_>
+    where
+        T: CertificateValueT,
+    {
+        let value = self.value.lite();
+        crate::certificate::LiteCertificate {
+            value,
+            round: self.round,
+            signatures: std::borrow::Cow::Borrowed(&self.signatures),
+        }
     }
 }
 

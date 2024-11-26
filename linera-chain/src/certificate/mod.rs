@@ -10,13 +10,13 @@ mod timeout;
 mod validated;
 mod value;
 
-use std::borrow::Cow;
+use std::collections::HashSet;
 
 pub use generic::GenericCertificate;
-pub use hashed::{Has, Hashed};
+pub use hashed::Hashed;
 use linera_base::{
     crypto::Signature,
-    data_types::Round,
+    data_types::{BlockHeight, Round},
     identifiers::{BlobId, ChainId},
 };
 use linera_execution::committee::{Epoch, ValidatorName};
@@ -87,15 +87,6 @@ impl<'de> Deserialize<'de> for Certificate {
 }
 
 impl Certificate {
-    /// Returns the certificate without the full value.
-    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
-        LiteCertificate {
-            value: self.lite_value(),
-            round: self.round,
-            signatures: Cow::Borrowed(self.signatures()),
-        }
-    }
-
     /// Returns the `LiteValue` corresponding to the certified value.
     pub fn lite_value(&self) -> LiteValue {
         LiteValue {
@@ -134,5 +125,113 @@ impl Certificate {
             return 0;
         };
         executed_block.messages().iter().map(Vec::len).sum()
+    }
+}
+
+pub trait CertificateValueT: Clone {
+    fn chain_id(&self) -> ChainId;
+
+    fn epoch(&self) -> Epoch;
+
+    fn height(&self) -> BlockHeight;
+
+    fn required_blob_ids(&self) -> HashSet<BlobId>;
+
+    #[cfg(with_testing)]
+    fn is_validated(&self) -> bool {
+        false
+    }
+}
+
+impl CertificateValueT for Timeout {
+    fn chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
+    fn height(&self) -> BlockHeight {
+        self.height
+    }
+
+    fn required_blob_ids(&self) -> HashSet<BlobId> {
+        HashSet::new()
+    }
+}
+
+impl CertificateValueT for ValidatedBlock {
+    fn chain_id(&self) -> ChainId {
+        self.inner().block.chain_id
+    }
+
+    fn epoch(&self) -> Epoch {
+        self.inner().block.epoch
+    }
+
+    fn height(&self) -> BlockHeight {
+        self.inner().block.height
+    }
+
+    fn required_blob_ids(&self) -> HashSet<BlobId> {
+        self.inner().outcome.required_blob_ids().clone()
+    }
+
+    #[cfg(with_testing)]
+    fn is_validated(&self) -> bool {
+        true
+    }
+}
+
+impl CertificateValueT for ConfirmedBlock {
+    fn chain_id(&self) -> ChainId {
+        self.executed_block().block.chain_id
+    }
+
+    fn epoch(&self) -> Epoch {
+        self.executed_block().block.epoch
+    }
+
+    fn height(&self) -> BlockHeight {
+        self.executed_block().block.height
+    }
+
+    fn required_blob_ids(&self) -> HashSet<BlobId> {
+        self.executed_block().outcome.required_blob_ids().clone()
+    }
+}
+
+impl CertificateValueT for CertificateValue {
+    fn chain_id(&self) -> ChainId {
+        match self {
+            CertificateValue::ValidatedBlock(validated) => validated.chain_id(),
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.chain_id(),
+            CertificateValue::Timeout(timeout) => timeout.chain_id(),
+        }
+    }
+
+    fn epoch(&self) -> Epoch {
+        match self {
+            CertificateValue::ValidatedBlock(validated) => validated.epoch(),
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.epoch(),
+            CertificateValue::Timeout(timeout) => timeout.epoch(),
+        }
+    }
+
+    fn height(&self) -> BlockHeight {
+        match self {
+            CertificateValue::ValidatedBlock(validated) => validated.height(),
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.height(),
+            CertificateValue::Timeout(timeout) => timeout.height(),
+        }
+    }
+
+    fn required_blob_ids(&self) -> HashSet<BlobId> {
+        match self {
+            CertificateValue::ValidatedBlock(validated) => validated.required_blob_ids(),
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.required_blob_ids(),
+            CertificateValue::Timeout(timeout) => timeout.required_blob_ids(),
+        }
     }
 }

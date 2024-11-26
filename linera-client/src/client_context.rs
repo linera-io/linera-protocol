@@ -37,7 +37,7 @@ use {
         identifiers::{AccountOwner, ApplicationId, Owner},
     },
     linera_chain::data_types::{Block, BlockProposal, ExecutedBlock, SignatureAggregator, Vote},
-    linera_chain::types::{Certificate, GenericCertificate, Has},
+    linera_chain::types::{CertificateValueT, GenericCertificate},
     linera_core::data_types::ChainInfoQuery,
     linera_execution::{
         committee::Epoch,
@@ -579,7 +579,7 @@ where
                 .make_chain_client(chain_id)
                 .expect("chains in the wallet must exist");
             self.process_inbox(&chain_client).await.unwrap();
-            chain_client.update_validators().await.unwrap();
+            chain_client.update_validators(None).await.unwrap();
             self.update_wallet_from_client(&chain_client).await.unwrap();
         }
     }
@@ -807,7 +807,7 @@ where
         votes: Vec<Vote<T>>,
     ) -> Vec<GenericCertificate<T>>
     where
-        T: std::fmt::Debug + Clone + Has<ChainId>,
+        T: std::fmt::Debug + CertificateValueT,
     {
         let committee = self.wallet.genesis_config().create_committee();
         let mut aggregators = HashMap::new();
@@ -815,7 +815,7 @@ where
         let mut done_senders = HashSet::new();
         for vote in votes {
             // We aggregate votes indexed by sender.
-            let chain_id = *Has::<ChainId>::get(vote.value());
+            let chain_id = vote.value().inner().chain_id();
             if done_senders.contains(&chain_id) {
                 continue;
             }
@@ -916,7 +916,10 @@ where
         validator_clients
     }
 
-    pub async fn update_wallet_from_certificates(&mut self, certificates: Vec<Certificate>) {
+    pub async fn update_wallet_from_certificates(
+        &mut self,
+        certificates: Vec<ConfirmedBlockCertificate>,
+    ) {
         let node = self.client.local_node().clone();
         // Replay the certificates locally.
         for certificate in certificates {

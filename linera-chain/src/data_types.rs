@@ -27,10 +27,8 @@ use linera_execution::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
-    block::Timeout,
     types::{
-        CertificateValue, GenericCertificate, Has, Hashed, LiteCertificate,
-        ValidatedBlockCertificate,
+        CertificateValueT, GenericCertificate, Hashed, LiteCertificate, ValidatedBlockCertificate,
     },
     ChainError,
 };
@@ -450,16 +448,6 @@ pub struct Vote<T> {
     pub signature: Signature,
 }
 
-impl Has<ChainId> for CertificateValue {
-    fn get(&self) -> &ChainId {
-        match self {
-            CertificateValue::ConfirmedBlock(confirmed) => &confirmed.inner().block.chain_id,
-            CertificateValue::ValidatedBlock(validated) => &validated.inner().block.chain_id,
-            CertificateValue::Timeout(Timeout { chain_id, .. }) => chain_id,
-        }
-    }
-}
-
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
     pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self {
@@ -476,7 +464,7 @@ impl<T> Vote<T> {
     /// Returns the vote, with a `LiteValue` instead of the full value.
     pub fn lite(&self) -> LiteVote
     where
-        T: Has<ChainId>,
+        T: CertificateValueT,
     {
         LiteVote {
             value: self.value.lite(),
@@ -487,8 +475,8 @@ impl<T> Vote<T> {
     }
 
     /// Returns the value this vote is for.
-    pub fn value(&self) -> &T {
-        self.value.inner()
+    pub fn value(&self) -> &Hashed<T> {
+        &self.value
     }
 }
 

@@ -216,7 +216,8 @@ impl BlockBuilder {
             .stage_block_execution(self.block)
             .await?;
 
-        let value = HashedCertificateValue::new_confirmed(executed_block);
+        let value: HashedCertificateValue =
+            HashedCertificateValue::new_confirmed(executed_block).into();
         let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
         let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder

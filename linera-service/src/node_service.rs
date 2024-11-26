@@ -28,7 +28,7 @@ use linera_base::{
     BcsHexParseError,
 };
 use linera_chain::{
-    types::{GenericCertificate, HashedCertificateValue},
+    types::{ConfirmedBlock, GenericCertificate, Hashed},
     ChainStateView,
 };
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
@@ -702,7 +702,7 @@ where
         &self,
         hash: Option<CryptoHash>,
         chain_id: ChainId,
-    ) -> Result<Option<HashedCertificateValue>, Error> {
+    ) -> Result<Option<Hashed<ConfirmedBlock>>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id)?;
         let hash = match hash {
             Some(hash) => Some(hash),
@@ -712,7 +712,7 @@ where
             }
         };
         if let Some(hash) = hash {
-            let block = client.read_hashed_certificate_value(hash).await?;
+            let block = client.read_hashed_confirmed_block(hash).await?;
             Ok(Some(block))
         } else {
             Ok(None)
@@ -724,7 +724,7 @@ where
         from: Option<CryptoHash>,
         chain_id: ChainId,
         limit: Option<u32>,
-    ) -> Result<Vec<HashedCertificateValue>, Error> {
+    ) -> Result<Vec<Hashed<ConfirmedBlock>>, Error> {
         let client = self.context.lock().await.make_chain_client(chain_id)?;
         let limit = limit.unwrap_or(10);
         let from = match from {
@@ -736,7 +736,7 @@ where
         };
         if let Some(from) = from {
             let values = client
-                .read_hashed_certificate_values_downward(from, limit)
+                .read_hashed_confirmed_blocks_downward(from, limit)
                 .await?;
             Ok(values)
         } else {

@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
-    types::{Certificate, CertificateValue, HashedCertificateValue, LiteCertificate},
+    types::{Certificate, HashedCertificateValue, LiteCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -611,32 +611,6 @@ impl TryFrom<api::BlobContent> for BlobContent {
     }
 }
 
-impl TryFrom<api::CertificateValue> for CertificateValue {
-    type Error = GrpcProtoConversionError;
-
-    fn try_from(certificate: api::CertificateValue) -> Result<Self, Self::Error> {
-        Ok(bincode::deserialize(certificate.bytes.as_slice())?)
-    }
-}
-
-impl TryFrom<CertificateValue> for api::CertificateValue {
-    type Error = GrpcProtoConversionError;
-
-    fn try_from(certificate: CertificateValue) -> Result<Self, Self::Error> {
-        Ok(Self {
-            bytes: bincode::serialize(&certificate)?,
-        })
-    }
-}
-
-impl TryFrom<HashedCertificateValue> for api::CertificateValue {
-    type Error = GrpcProtoConversionError;
-
-    fn try_from(hv: HashedCertificateValue) -> Result<Self, Self::Error> {
-        CertificateValue::from(hv).try_into()
-    }
-}
-
 impl From<CryptoHash> for api::CryptoHash {
     fn from(hash: CryptoHash) -> Self {
         Self {
@@ -850,7 +824,8 @@ pub mod tests {
                     ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
-            ),
+            )
+            .into(),
             Round::MultiLeader(3),
             vec![(
                 ValidatorName::from(key_pair.public()),
@@ -899,7 +874,8 @@ pub mod tests {
                     ..BlockExecutionOutcome::default()
                 }
                 .with(get_block()),
-            ),
+            )
+            .into(),
             Round::SingleLeader(2),
             vec![(
                 ValidatorName::from(key_pair.public()),
