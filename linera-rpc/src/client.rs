@@ -13,7 +13,7 @@ use linera_chain::{
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
-    worker::CertificateProcessor,
+    worker::ProcessableCertificate,
 };
 
 use crate::grpc::GrpcClient;
@@ -76,7 +76,7 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

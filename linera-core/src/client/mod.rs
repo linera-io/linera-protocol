@@ -79,7 +79,7 @@ use crate::{
     notifier::ChannelNotifier,
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
-    worker::{CertificateProcessor, Notification, Reason, WorkerError, WorkerState},
+    worker::{ProcessableCertificate, Notification, Reason, WorkerError, WorkerState},
 };
 
 mod chain_client_state;
@@ -384,7 +384,7 @@ where
         info
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -1023,7 +1023,7 @@ where
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip(committee, proposal, value))]
-    async fn submit_block_proposal<T: CertificateProcessor>(
+    async fn submit_block_proposal<T: ProcessableCertificate>(
         &self,
         committee: &Committee,
         proposal: Box<BlockProposal>,
@@ -1578,7 +1578,7 @@ where
 
     /// Handles the certificate in the local node and the resulting notifications.
     #[instrument(level = "trace", skip(certificate))]
-    async fn process_certificate<T: CertificateProcessor>(
+    async fn process_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

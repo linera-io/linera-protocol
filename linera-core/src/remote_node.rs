@@ -25,7 +25,7 @@ use tracing::{instrument, warn};
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
-    worker::CertificateProcessor,
+    worker::ProcessableCertificate,
 };
 
 /// A validator node together with the validator's name.
@@ -57,7 +57,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_certificate<T: CertificateProcessor>(
+    pub(crate) async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -88,7 +88,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_certificate<T: CertificateProcessor>(
+    pub(crate) async fn handle_optimized_certificate<T: ProcessableCertificate>(
         &mut self,
         certificate: &GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,

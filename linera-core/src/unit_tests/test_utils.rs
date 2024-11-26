@@ -57,7 +57,7 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{CertificateProcessor, NetworkActions, Notification, WorkerState},
+    worker::{ProcessableCertificate, NetworkActions, Notification, WorkerState},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -123,7 +123,7 @@ where
         .await
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
@@ -314,7 +314,7 @@ where
         }
     }
 
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
@@ -363,7 +363,7 @@ where
         sender.send(result)
     }
 
-    async fn do_handle_certificate_internal<T: CertificateProcessor>(
+    async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
@@ -398,7 +398,7 @@ where
         }
     }
 
-    async fn do_handle_certificate<T: CertificateProcessor>(
+    async fn do_handle_certificate<T: ProcessableCertificate>(
         self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

@@ -30,7 +30,7 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
-    worker::CertificateProcessor,
+    worker::ProcessableCertificate,
 };
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
@@ -210,7 +210,7 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate<T: 'static + CertificateProcessor>(
+    async fn send_certificate<T: 'static + ProcessableCertificate>(
         &mut self,
         certificate: GenericCertificate<T>,
         delivery: CrossChainMessageDelivery,

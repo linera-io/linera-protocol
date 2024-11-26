@@ -28,7 +28,7 @@ use thiserror::Error;
 
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    worker::{CertificateProcessor, Notification, WorkerError},
+    worker::{ProcessableCertificate, Notification, WorkerError},
 };
 
 /// A pinned [`Stream`] of Notifications.
@@ -65,7 +65,7 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
-    async fn handle_certificate<T: CertificateProcessor>(
+    async fn handle_certificate<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,
