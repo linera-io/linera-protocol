@@ -2219,7 +2219,7 @@ where
         Vec::new(),
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender, Amount::from_tokens(0))]),
+        BTreeMap::new(),
         &worker,
         Some(&certificate1),
     )
@@ -2313,7 +2313,7 @@ where
         }],
         &committee,
         Amount::ZERO,
-        BTreeMap::from_iter([(sender, Amount::from_tokens(0))]),
+        BTreeMap::new(),
         &worker,
         Some(&certificate2),
     )

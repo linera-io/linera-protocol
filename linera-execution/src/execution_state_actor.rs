@@ -269,7 +269,7 @@ where
                     balance,
                     application_permissions,
                 };
-                let messages = self.system.open_chain(config, next_message_id)?;
+                let messages = self.system.open_chain(config, next_message_id).await?;
                 callback.respond(messages)
             }
 
