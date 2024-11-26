@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlock, GenericCertificate, Hashed, LiteCertificate},
+    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
@@ -83,14 +83,10 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn download_certificate_value(
+    async fn download_certificate(
         &self,
         _: CryptoHash,
-    ) -> Result<Hashed<ConfirmedBlock>, NodeError> {
-        Err(NodeError::UnexpectedMessage)
-    }
-
-    async fn download_certificate(&self, _: CryptoHash) -> Result<Certificate, NodeError> {
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 

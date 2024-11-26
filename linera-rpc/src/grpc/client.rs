@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{self},
-    types::{self, Certificate, ConfirmedBlock, GenericCertificate, Hashed},
+    types::{self, Certificate, ConfirmedBlockCertificate, GenericCertificate},
 };
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -323,18 +323,16 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn download_certificate_value(
+    async fn download_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Hashed<ConfirmedBlock>, NodeError> {
-        let value = client_delegate!(self, download_certificate_value, hash)?;
-        let confirmed_block = ConfirmedBlock::try_from(value).unwrap();
-        Ok(confirmed_block.with_hash_checked(hash)?)
-    }
-
-    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn download_certificate(&self, hash: CryptoHash) -> Result<Certificate, NodeError> {
-        Ok(client_delegate!(self, download_certificate, hash)?.try_into()?)
+    ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        ConfirmedBlockCertificate::try_from(Certificate::try_from(client_delegate!(
+            self,
+            download_certificate,
+            hash
+        )?)?)
+        .map_err(|_| NodeError::UnexpectedCertificateValue)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
