@@ -85,6 +85,15 @@ impl RocksDbSpawnMode {
     }
 }
 
+fn check_key_size(key: &[u8]) -> Result<(), RocksDbStoreInternalError> {
+    ensure!(
+        key.len() <= MAX_KEY_SIZE,
+        RocksDbStoreInternalError::KeyTooLong
+    );
+    Ok(())
+}
+
+
 #[derive(Clone)]
 struct RocksDbStoreExecutor {
     db: Arc<DB>,
@@ -101,10 +110,7 @@ impl RocksDbStoreExecutor {
         let mut indices = Vec::new();
         let mut keys_red = Vec::new();
         for (i, key) in keys.into_iter().enumerate() {
-            ensure!(
-                key.len() <= MAX_KEY_SIZE,
-                RocksDbStoreInternalError::KeyTooLong
-            );
+            check_key_size(&key)?;
             let mut full_key = self.root_key.to_vec();
             full_key.extend(key);
             if self.db.key_may_exist(&full_key) {
@@ -124,10 +130,7 @@ impl RocksDbStoreExecutor {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, RocksDbStoreInternalError> {
         for key in &keys {
-            ensure!(
-                key.len() <= MAX_KEY_SIZE,
-                RocksDbStoreInternalError::KeyTooLong
-            );
+            check_key_size(&key)?;
         }
         let full_keys = keys
             .into_iter()
@@ -145,10 +148,7 @@ impl RocksDbStoreExecutor {
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, RocksDbStoreInternalError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            RocksDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(&key_prefix)?;
         let mut prefix = self.root_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
@@ -172,10 +172,7 @@ impl RocksDbStoreExecutor {
         &self,
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            RocksDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(&key_prefix)?;
         let mut prefix = self.root_key.clone();
         prefix.extend(key_prefix);
         let len = prefix.len();
@@ -223,28 +220,19 @@ impl RocksDbStoreExecutor {
         for operation in batch.operations {
             match operation {
                 WriteOperation::Delete { key } => {
-                    ensure!(
-                        key.len() <= MAX_KEY_SIZE,
-                        RocksDbStoreInternalError::KeyTooLong
-                    );
+                    check_key_size(&key)?;
                     let mut full_key = self.root_key.to_vec();
                     full_key.extend(key);
                     inner_batch.delete(&full_key)
                 }
                 WriteOperation::Put { key, value } => {
-                    ensure!(
-                        key.len() <= MAX_KEY_SIZE,
-                        RocksDbStoreInternalError::KeyTooLong
-                    );
+                    check_key_size(&key)?;
                     let mut full_key = self.root_key.to_vec();
                     full_key.extend(key);
                     inner_batch.put(&full_key, value)
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
-                    ensure!(
-                        key_prefix.len() <= MAX_KEY_SIZE,
-                        RocksDbStoreInternalError::KeyTooLong
-                    );
+                    check_key_size(&key_prefix)?;
                     if let Excluded(upper_bound) = get_upper_bound(&key_prefix) {
                         let mut full_key1 = self.root_key.to_vec();
                         full_key1.extend(key_prefix);
@@ -335,10 +323,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         key: &[u8],
     ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
-        ensure!(
-            key.len() <= MAX_KEY_SIZE,
-            RocksDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(&key)?;
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);
@@ -348,10 +333,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, RocksDbStoreInternalError> {
-        ensure!(
-            key.len() <= MAX_KEY_SIZE,
-            RocksDbStoreInternalError::KeyTooLong
-        );
+        check_key_size(&key)?;
         let db = self.executor.db.clone();
         let mut full_key = self.executor.root_key.to_vec();
         full_key.extend(key);

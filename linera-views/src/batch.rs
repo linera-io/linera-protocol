@@ -156,7 +156,7 @@ impl UnorderedBatch {
 
     /// Tests whether the batch is empty or not
     pub fn is_empty(&self) -> bool {
-        self.key_prefix_deletions.len() == 0 && self.simple_unordered_batch.len() == 0
+        self.key_prefix_deletions.is_empty() && self.simple_unordered_batch.is_empty()
     }
 }
 
