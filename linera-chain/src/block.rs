@@ -101,7 +101,7 @@ impl ConfirmedBlock {
     }
 
     /// Returns a reference to the `ExecutedBlock` contained in this `ConfirmedBlock`.
-    pub fn inner(&self) -> &ExecutedBlock {
+    pub fn executed_block(&self) -> &ExecutedBlock {
         &self.executed_block
     }
 

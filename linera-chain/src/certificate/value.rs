@@ -31,7 +31,9 @@ pub enum CertificateValue {
 impl CertificateValue {
     pub fn chain_id(&self) -> ChainId {
         match self {
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.chain_id,
+            CertificateValue::ConfirmedBlock(confirmed) => {
+                confirmed.executed_block().block.chain_id
+            }
             CertificateValue::ValidatedBlock(validated) => validated.inner().block.chain_id,
             CertificateValue::Timeout(Timeout { chain_id, .. }) => *chain_id,
         }
@@ -39,7 +41,7 @@ impl CertificateValue {
 
     pub fn height(&self) -> BlockHeight {
         match self {
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.height,
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.executed_block().block.height,
             CertificateValue::ValidatedBlock(validated) => validated.inner().block.height,
             CertificateValue::Timeout(Timeout { height, .. }) => *height,
         }
@@ -47,7 +49,7 @@ impl CertificateValue {
 
     pub fn epoch(&self) -> Epoch {
         match self {
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.inner().block.epoch,
+            CertificateValue::ConfirmedBlock(confirmed) => confirmed.executed_block().block.epoch,
             CertificateValue::ValidatedBlock(validated) => validated.inner().block.epoch,
             CertificateValue::Timeout(Timeout { epoch, .. }) => *epoch,
         }
@@ -96,7 +98,7 @@ impl CertificateValue {
 
     pub fn executed_block(&self) -> Option<&ExecutedBlock> {
         match self {
-            CertificateValue::ConfirmedBlock(confirmed) => Some(confirmed.inner()),
+            CertificateValue::ConfirmedBlock(confirmed) => Some(confirmed.executed_block()),
             CertificateValue::ValidatedBlock(validated) => Some(validated.inner()),
             CertificateValue::Timeout(_) => None,
         }

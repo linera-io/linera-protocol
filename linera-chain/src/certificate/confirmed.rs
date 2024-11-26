@@ -29,7 +29,7 @@ impl GenericCertificate<ConfirmedBlock> {
 
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        self.inner().inner()
+        self.inner().executed_block()
     }
 
     /// Returns whether this value contains the message with the specified ID.

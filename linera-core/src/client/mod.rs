@@ -1997,7 +1997,8 @@ where
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
-                if certificate.executed_block().block == confirmed_value.inner().inner().block =>
+                if certificate.executed_block().block
+                    == confirmed_value.inner().executed_block().block =>
             {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
