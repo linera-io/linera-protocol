@@ -67,6 +67,7 @@ impl CiRuntimeComparison {
     }
 
     pub fn from_jobs(base_jobs: Vec<Job>, pr_jobs: Vec<Job>) -> Result<Self> {
+        // test
         let base_runtimes = Self::get_runtimes(base_jobs)?;
         let pr_runtimes = Self::get_runtimes(pr_jobs)?;
         Ok(Self(
