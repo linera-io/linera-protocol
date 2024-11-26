@@ -1127,7 +1127,9 @@ impl Message {
         Message::System(message)
     }
 
-    pub fn user<A: Abi, M: Serialize>(
+    /// Creates a new user application message assuming that the `message` is valid for the
+    /// `application_id`.
+    pub fn user<A, M: Serialize>(
         application_id: UserApplicationId<A>,
         message: &M,
     ) -> Result<Self, bcs::Error> {
