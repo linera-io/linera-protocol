@@ -986,7 +986,7 @@ impl Drop for ClientWrapper {
 
         let Ok(wallet_show_output) = wallet_show_command
             .current_dir(working_directory)
-            .args(["wallet", "show", "--short"])
+            .args(["wallet", "show", "--short", "--owned"])
             .output()
         else {
             warn!("Failed to execute `wallet show --short` to list chains to close");

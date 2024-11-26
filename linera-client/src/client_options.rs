@@ -1068,6 +1068,9 @@ pub enum WalletCommand {
         /// Only print a non-formatted list of the wallet's chain IDs.
         #[arg(long)]
         short: bool,
+        /// Print only the chains that we have a key pair for.
+        #[arg(long)]
+        owned: bool,
     },
 
     /// Change the wallet default chain.

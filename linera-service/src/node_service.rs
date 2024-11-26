@@ -27,7 +27,10 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     BcsHexParseError,
 };
-use linera_chain::{types::HashedCertificateValue, ChainStateView};
+use linera_chain::{
+    types::{GenericCertificate, HashedCertificateValue},
+    ChainStateView,
+};
 use linera_client::chain_listener::{ChainListener, ChainListenerConfig, ClientContext};
 use linera_core::{
     client::{ChainClient, ChainClientError},
@@ -423,15 +426,15 @@ where
         Ok(ChainId::child(message_id))
     }
 
-    /// Closes the chain.
-    async fn close_chain(&self, chain_id: ChainId) -> Result<CryptoHash, Error> {
-        let certificate = self
+    /// Closes the chain. Returns `None` if it was already closed.
+    async fn close_chain(&self, chain_id: ChainId) -> Result<Option<CryptoHash>, Error> {
+        let maybe_cert = self
             .apply_client_command(&chain_id, |client| async move {
                 let result = client.close_chain().await.map_err(Error::from);
                 (result, client)
             })
             .await?;
-        Ok(certificate.hash())
+        Ok(maybe_cert.as_ref().map(GenericCertificate::hash))
     }
 
     /// Changes the authentication key of the chain.
