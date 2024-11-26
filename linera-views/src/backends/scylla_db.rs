@@ -7,39 +7,6 @@
 //! "namespace". The maximum number of concurrent queries is controlled by
 //! `max_concurrent_queries`.
 
-/// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
-/// The limit is in reality 100. But we need one entry for the root key.
-const MAX_MULTI_KEYS: usize = 99;
-
-/// The maximal size of an operation on ScyllaDB seems to be 16M
-/// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
-/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
-///  at the database at any particular time"
-/// So, we set up the maximal size of 16M - 10K for the values and 10K for the keys
-/// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
-/// taken internally by the database.
-const RAW_MAX_VALUE_SIZE: usize = 16762976;
-const MAX_KEY_SIZE: usize = 10240;
-const MAX_BATCH_TOTAL_SIZE: usize = 16773216;
-
-/// The RAW_MAX_VALUE_SIZE is the maximum size on the ScyllaDB storage.
-/// However, the value being written can also be the serialization of a SimpleUnorderedBatch
-/// Therefore the actual MAX_VALUE_SIZE might be lower.
-/// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
-/// So if the key has 1024 bytes this gets us the inequality
-/// 1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE
-/// and so this simplifies to 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE
-/// (we write 4 because get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)
-/// and so to a maximal value of 408569;
-const VISIBLE_MAX_VALUE_SIZE: usize = 16752727;
-
-/// The constant 14000 is an empirical constant that was found to be necessary
-/// to make the ScyllaDB system work. We have not been able to find this or
-/// a similar constant in the source code or the documentation.
-/// An experimental approach gets us that 14796 is the latest value that is
-/// correct.
-const MAX_BATCH_SIZE: usize = 5000;
-
 use std::{
     collections::{hash_map::Entry, HashMap},
     ops::Deref,
@@ -73,6 +40,41 @@ use crate::{
     },
     value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
+
+/// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
+/// The limit is in reality 100. But we need one entry for the root key.
+const MAX_MULTI_KEYS: usize = 99;
+
+/// The maximal size of an operation on ScyllaDB seems to be 16M
+/// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
+/// "There is a hard limit at 16MB, and nothing bigger than that can arrive at once
+///  at the database at any particular time"
+/// So, we set up the maximal size of 16M - 10K for the values and 10K for the keys
+/// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
+/// taken internally by the database.
+const RAW_MAX_VALUE_SIZE: usize = 16762976;
+const MAX_KEY_SIZE: usize = 10240;
+const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
+
+/// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
+/// However, the value being written can also be the serialization of a SimpleUnorderedBatch
+/// Therefore the actual `MAX_VALUE_SIZE` is lower.
+/// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
+/// So if the key has 1024 bytes this gets us the inequality
+/// `1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE`.
+/// and so this simplifies to `1 + 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE`
+/// Note:
+/// * We write 4 because `get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)`
+/// * We write `1 + 1 + 1`  because the `UnorderedBatch` has three entries.
+/// This gets us to a maximal value of 16752727.
+const VISIBLE_MAX_VALUE_SIZE: usize = 16752727;
+
+/// The constant 14000 is an empirical constant that was found to be necessary
+/// to make the ScyllaDB system work. We have not been able to find this or
+/// a similar constant in the source code or the documentation.
+/// An experimental approach gets us that 14796 is the latest value that is
+/// correct.
+const MAX_BATCH_SIZE: usize = 5000;
 
 /// The client for ScyllaDbB:
 /// * The session allows to pass queries
