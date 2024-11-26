@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, fmt};
+use std::{
+    collections::{BTreeSet, HashSet},
+    fmt,
+};
 
 use async_graphql::SimpleObject;
 use custom_debug_derive::Debug;
@@ -74,8 +77,8 @@ pub struct Block {
 
 impl Block {
     /// Returns all the published blob IDs in this block's operations.
-    pub fn published_blob_ids(&self) -> HashSet<BlobId> {
-        let mut blob_ids = HashSet::new();
+    pub fn published_blob_ids(&self) -> BTreeSet<BlobId> {
+        let mut blob_ids = BTreeSet::new();
         for operation in &self.operations {
             if let Operation::System(SystemOperation::PublishDataBlob { blob_hash }) = operation {
                 blob_ids.insert(BlobId::new(*blob_hash, BlobType::Data));
