@@ -949,7 +949,7 @@ where
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
-    async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+    pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
@@ -1926,16 +1926,6 @@ where
         &self,
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.prepare_chain().await?;
-        self.execute_without_prepare(operations).await
-    }
-
-    /// Executes a list of operations, without calling `prepare_chain`.
-    #[instrument(level = "trace", skip(operations))]
-    pub async fn execute_without_prepare(
-        &self,
-        operations: Vec<Operation>,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone())).await? {
@@ -2627,7 +2617,6 @@ where
         application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ClientOutcome<(MessageId, ConfirmedBlockCertificate)>, ChainClientError> {
-        self.prepare_chain().await?;
         loop {
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -2823,7 +2812,6 @@ where
         committee: Committee,
     ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
         loop {
-            self.prepare_chain().await?;
             let epoch = self.epoch().await?;
             match self
                 .execute_block(vec![Operation::System(SystemOperation::Admin(
@@ -2936,7 +2924,7 @@ where
                 }
             })
             .collect();
-        self.execute_without_prepare(operations).await
+        self.execute_operations(operations).await
     }
 
     /// Sends money to a chain.

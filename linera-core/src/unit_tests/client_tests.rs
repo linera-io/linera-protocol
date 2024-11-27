@@ -1459,6 +1459,7 @@ where
     // Try to read the blob. This is a different client but on the same chain, so when we synchronize this with the validators
     // before executing the block, we'll actually download and cache locally the blobs that were published by `client_a`.
     // So this will succeed.
+    client1_b.prepare_chain().await?;
     let certificate = client1_b
         .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
         .await?
@@ -1651,6 +1652,7 @@ where
     builder.set_fault_type([2], FaultType::Offline).await;
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
+    client2_b.prepare_chain().await.unwrap();
     let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1))
         .await
@@ -2178,6 +2180,7 @@ where
     assert!(client0.pending_block().is_none());
 
     // Burn another token so Client 1 sees that the blob is already published
+    client1.prepare_chain().await.unwrap();
     client1.burn(None, Amount::from_tokens(1)).await.unwrap();
     client1.synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
