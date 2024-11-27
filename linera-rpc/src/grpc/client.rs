@@ -339,14 +339,21 @@ impl ValidatorNode for GrpcClient {
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Certificate>, NodeError> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         let mut missing_hashes = hashes;
         let mut certs_collected = Vec::with_capacity(missing_hashes.len());
         loop {
             // Macro doesn't compile if we pass `missing_hashes.clone()` directly to `client_delegate!`.
             let missing = missing_hashes.clone();
-            let mut received: Vec<Certificate> =
-                client_delegate!(self, download_certificates, missing)?.try_into()?;
+            let mut received: Vec<ConfirmedBlockCertificate> = Vec::<Certificate>::try_from(
+                client_delegate!(self, download_certificates, missing)?,
+            )?
+            .into_iter()
+            .map(|cert| {
+                ConfirmedBlockCertificate::try_from(cert)
+                    .map_err(|_| NodeError::UnexpectedCertificateValue)
+            })
+            .collect::<Result<_, _>>()?;
 
             // In the case of the server not returning any certificates, we break the loop.
             if received.is_empty() {
