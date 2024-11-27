@@ -12,7 +12,7 @@ use std::{sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{Blob, BlockHeight, CompressedBytecode, OracleResponse},
+    data_types::{Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
     identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner},
 };
 use linera_views::{
@@ -85,6 +85,15 @@ pub fn create_dummy_message_context(authenticated_signer: Option<Owner>) -> Mess
             height: BlockHeight(0),
             index: 0,
         },
+    }
+}
+
+/// Creates a dummy [`QueryContext`] to use in tests.
+pub fn create_dummy_query_context() -> QueryContext {
+    QueryContext {
+        chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
     }
 }
 
