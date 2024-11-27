@@ -611,16 +611,12 @@ where
                 outcome.messages.push(message);
             }
             PublishBytecode { bytecode_id } => {
-                self.record_blob_usage(
-                    txn_tracker,
-                    BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode),
-                )
-                .await?;
-                self.record_blob_usage(
-                    txn_tracker,
-                    BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode),
-                )
-                .await?;
+                let contract_bytecode_id =
+                    BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
+                self.used_blobs.insert(&contract_bytecode_id)?;
+                let service_bytecode_id =
+                    BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
+                self.used_blobs.insert(&service_bytecode_id)?;
             }
             CreateApplication {
                 bytecode_id,
@@ -668,8 +664,8 @@ where
                 outcome.messages.push(message);
             }
             PublishDataBlob { blob_hash } => {
-                self.record_blob_usage(txn_tracker, BlobId::new(blob_hash, BlobType::Data))
-                    .await?;
+                self.used_blobs
+                    .insert(&BlobId::new(blob_hash, BlobType::Data))?;
             }
             ReadBlob { blob_id } => {
                 self.read_blob_content(blob_id).await?;
@@ -1008,7 +1004,7 @@ where
         Ok(messages)
     }
 
-    pub async fn record_blob_usage(
+    async fn record_blob_usage(
         &mut self,
         txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
