@@ -8,17 +8,20 @@
 mod mock_application;
 mod system_execution_state;
 
-use std::{sync::Arc, thread, vec};
+use std::{collections::BTreeMap, sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
-    identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner},
+    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
+    identifiers::{
+        AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
+    },
 };
 use linera_views::{
     context::Context,
     views::{View, ViewError},
 };
+use proptest::{prelude::any, strategy::Strategy};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
@@ -245,4 +248,14 @@ impl QueryContext {
             runtime_request_sender,
         }
     }
+}
+
+/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`AccountOwner`]s with an initial
+/// non-zero [`Amount`] of tokens.
+pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<AccountOwner, Amount>> {
+    proptest::collection::btree_map(
+        any::<AccountOwner>(),
+        (1_u128..).prop_map(Amount::from_tokens),
+        0..5,
+    )
 }

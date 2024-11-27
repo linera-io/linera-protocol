@@ -23,15 +23,14 @@ use linera_base::{
 };
 use linera_execution::{
     test_utils::{
-        create_dummy_message_context, create_dummy_operation_context, ExpectedCall,
-        RegisterMockApplication, SystemExecutionState,
+        create_dummy_message_context, create_dummy_operation_context, test_accounts_strategy,
+        ExpectedCall, RegisterMockApplication, SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
     Operation, OperationContext, ResourceController, SystemExecutionError,
     SystemExecutionStateView, TestExecutionRuntimeContext, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
-use proptest::{prelude::any, strategy::Strategy};
 use test_case::test_matrix;
 use test_strategy::proptest;
 
@@ -627,16 +626,6 @@ async fn test_read_balance_owners_system_api(
     )
     .await
     .unwrap();
-}
-
-/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`AccountOwner`]s with an initial
-/// non-zero [`Amount`] of tokens.
-fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<AccountOwner, Amount>> {
-    proptest::collection::btree_map(
-        any::<AccountOwner>(),
-        (1_u128..).prop_map(Amount::from_tokens),
-        0..5,
-    )
 }
 
 /// A test helper representing a transfer endpoint.

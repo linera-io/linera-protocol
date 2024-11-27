@@ -12,7 +12,7 @@ repository.workspace = true
 version.workspace = true
 
 [features]
-test = ["tokio/macros", "linera-base/test", "linera-views/test"]
+test = ["tokio/macros", "linera-base/test", "linera-views/test", "proptest"]
 fs = ["tokio/fs"]
 metrics = ["prometheus", "linera-views/metrics"]
 unstable-oracles = []
@@ -52,6 +52,7 @@ linera-witty = { workspace = true, features = ["log", "macros"] }
 lru.workspace = true
 oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
+proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }
 serde.workspace = true
 serde_bytes.workspace = true
