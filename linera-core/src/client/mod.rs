@@ -1693,13 +1693,7 @@ where
 
         let certificates: Vec<ConfirmedBlockCertificate> = remote_node
             .download_certificates(info.requested_sent_certificate_hashes)
-            .await?
-            .into_iter()
-            .map(|c| {
-                ConfirmedBlockCertificate::try_from(c)
-                    .map_err(|_| NodeError::InvalidChainInfoResponse)
-            })
-            .collect::<Result<_, _>>()?;
+            .await?;
 
         if !certificates.is_empty()
             && self
