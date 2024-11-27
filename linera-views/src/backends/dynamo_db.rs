@@ -29,11 +29,6 @@ use aws_smithy_types::error::operation::BuildError;
 use futures::future::{join_all, FutureExt as _};
 use linera_base::ensure;
 use thiserror::Error;
-#[cfg(with_testing)]
-use {
-    anyhow::Error,
-    tokio::sync::{Mutex, MutexGuard},
-};
 
 #[cfg(with_metrics)]
 use crate::metering::MeteredStore;
@@ -41,23 +36,19 @@ use crate::metering::MeteredStore;
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
+    common::get_uleb128_size,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
-    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
-/// The configuration to connect to DynamoDB.
-pub type Config = aws_sdk_dynamodb::Config;
-
 /// Gets the AWS configuration from the environment
-pub async fn get_base_config() -> Result<Config, DynamoDbStoreInternalError> {
+pub async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -73,7 +64,7 @@ fn get_endpoint_address() -> Option<String> {
 }
 
 /// Gets the localstack config
-pub async fn get_localstack_config() -> Result<Config, DynamoDbStoreInternalError> {
+pub async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -87,43 +78,11 @@ pub async fn get_localstack_config() -> Result<Config, DynamoDbStoreInternalErro
 /// Getting a configuration for the system
 pub async fn get_config_internal(
     use_localstack: bool,
-) -> Result<Config, DynamoDbStoreInternalError> {
+) -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     if use_localstack {
         get_localstack_config().await
     } else {
         get_base_config().await
-    }
-}
-
-/// A type to help tests that need a LocalStack instance.
-#[cfg(with_testing)]
-pub struct LocalStackTestContext {
-    config: Config,
-    _guard: MutexGuard<'static, ()>,
-}
-
-#[cfg(with_testing)]
-impl LocalStackTestContext {
-    /// Creates an instance of [`LocalStackTestContext`], loading the necessary LocalStack
-    /// configuration.
-    ///
-    /// An address to the LocalStack instance must be specified using a `LOCALSTACK_ENDPOINT`
-    /// environment variable.
-    ///
-    /// This also locks the `LOCALSTACK_GUARD` to enforce that only one test has access to the
-    /// LocalStack instance.
-    pub async fn new() -> Result<LocalStackTestContext, Error> {
-        let config = get_localstack_config().await?;
-        let _guard = LOCALSTACK_GUARD.lock().await;
-
-        let context = LocalStackTestContext { config, _guard };
-
-        Ok(context)
-    }
-
-    /// Creates a new [`aws_sdk_dynamodb::Config`] for tests, using a LocalStack instance.
-    pub fn dynamo_db_config(&self) -> aws_sdk_dynamodb::Config {
-        self.config.clone()
     }
 }
 
@@ -155,11 +114,15 @@ const RAW_MAX_VALUE_SIZE: usize = 409600;
 /// Therefore the actual MAX_VALUE_SIZE might be lower.
 /// At the maximum the key_size is 1024 bytes (see below) and we pack just one entry.
 /// So if the key has 1024 bytes this gets us the inequality
-/// 1 + 1 + serialized_size(1024)? + serialized_size(x)? <= 400*1024
-/// and so this simplifies to 1 + 1 + (2 + 1024) + (3 + x) <= 400 * 1024
-/// (we write 3 because get_uleb128_size(400*1024) = 3)
-/// and so to a maximal value of 408569;
-const VISIBLE_MAX_VALUE_SIZE: usize = 408569;
+/// `1 + 1 + serialized_size(1024)? + serialized_size(x)? <= 400*1024`
+/// and so this simplifies to `1 + 1 + (2 + 1024) + (3 + x) <= 400 * 1024`
+/// Note on the following formula:
+/// * We write 3 because get_uleb128_size(400*1024) = 3
+/// * We write `1 + 1` because the `SimpleUnorderedBatch` has two entries
+///
+/// This gets us a maximal value of 408569;
+const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE
+    - get_uleb128_size(RAW_MAX_VALUE_SIZE) - get_uleb128_size(MAX_KEY_SIZE) - 1 - 1;
 
 /// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
@@ -355,7 +318,7 @@ pub struct DynamoDbStoreInternal {
 #[derive(Debug)]
 pub struct DynamoDbStoreInternalConfig {
     /// The AWS configuration
-    pub config: Config,
+    pub config: aws_sdk_dynamodb::Config,
     /// The common configuration of the key value store
     pub common_config: CommonStoreInternalConfig,
 }
@@ -1150,32 +1113,6 @@ impl KeyValueStoreError for DynamoDbStoreInternalError {
     const BACKEND: &'static str = "dynamo_db";
 }
 
-/// A shared DB client for DynamoDb implementing LruCaching and metrics
-#[cfg(with_metrics)]
-pub type DynamoDbStore = MeteredStore<
-    LruCachingStore<
-        MeteredStore<
-            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
-        >,
-    >,
->;
-
-/// A shared DB client for DynamoDb implementing LruCaching
-#[cfg(not(with_metrics))]
-pub type DynamoDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
-
-/// The combined error type for the `DynamoDbStore`.
-pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
-
-/// The config type for DynamoDbStore
-pub type DynamoDbStoreConfig = LruSplittingConfig<DynamoDbStoreInternalConfig>;
-
-/// Getting a configuration for the system
-pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {
-    Ok(get_config_internal(use_localstack).await?)
-}
-
 #[cfg(with_testing)]
 impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
     async fn new_test_config() -> Result<DynamoDbStoreInternalConfig, DynamoDbStoreInternalError> {
@@ -1192,20 +1129,11 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
     }
 }
 
-/// A static lock to prevent multiple tests from using the same LocalStack instance at the same
-/// time.
-#[cfg(with_testing)]
-static LOCALSTACK_GUARD: Mutex<()> = Mutex::const_new(());
-
 #[cfg(test)]
 mod tests {
     use bcs::serialized_size;
 
-    use crate::{
-        batch::SimpleUnorderedBatch,
-        common::get_uleb128_size,
-        dynamo_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
-    };
+    use crate::common::get_uleb128_size;
 
     #[test]
     fn test_serialization_len() {
@@ -1215,13 +1143,5 @@ mod tests {
             let serial_size = serialized_size(&vec).unwrap();
             assert_eq!(est_size, serial_size);
         }
-    }
-
-    #[test]
-    fn test_raw_visible_sizes() {
-        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
-        vis_computed -= serialized_size(&SimpleUnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
-        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
     }
 }

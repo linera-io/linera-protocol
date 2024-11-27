@@ -92,14 +92,10 @@ pub mod random;
 #[cfg(with_testing)]
 pub mod test_utils;
 
-#[cfg(with_dynamodb)]
-pub use backends::dynamo_db;
 #[cfg(with_indexeddb)]
 pub use backends::indexed_db;
 #[cfg(with_metrics)]
 pub use backends::metering;
-#[cfg(with_rocksdb)]
-pub use backends::rocks_db;
 #[cfg(with_scylladb)]
 pub use backends::scylla_db;
 pub use backends::{journaling, lru_caching, memory, value_splitting};

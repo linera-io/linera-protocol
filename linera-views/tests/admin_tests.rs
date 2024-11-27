@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::backends::DynamoDbStore;
 #[cfg(with_rocksdb)]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::backends::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::backends::ScyllaDbStore;
 use linera_views::{memory::MemoryStore, test_utils::admin_test};
 
 #[tokio::test]
