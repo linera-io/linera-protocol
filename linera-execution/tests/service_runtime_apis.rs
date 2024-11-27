@@ -81,3 +81,42 @@ async fn test_read_owner_balance_system_api(
 
     view.query_application(context, query, None).await.unwrap();
 }
+
+/// Tests the contract system API to read all account balances.
+#[proptest(async = "tokio")]
+async fn test_read_owner_balances_system_api(
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<AccountOwner, Amount>,
+) {
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balances: accounts.clone(),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let (application_id, application) = view.register_mock_application().await.unwrap();
+
+    application.expect_call(ExpectedCall::handle_query(
+        move |runtime, _context, _query| {
+            assert_eq!(
+                runtime
+                    .read_owner_balances()
+                    .unwrap()
+                    .into_iter()
+                    .collect::<BTreeMap<_, _>>(),
+                accounts
+            );
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_query_context();
+    let query = Query::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    view.query_application(context, query, None).await.unwrap();
+}
