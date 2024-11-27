@@ -162,9 +162,9 @@ impl ValidatorNode for SimpleClient {
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         let certificates = self
-            .query::<Vec<ConfirmedBlockCertificate>>(RpcMessage::DownloadCertificates(Box::new(
+            .query::<Vec<ConfirmedBlockCertificate>>(RpcMessage::DownloadCertificates(
                 hashes.clone(),
-            )))
+            ))
             .await?;
 
         if certificates.len() != hashes.len() {

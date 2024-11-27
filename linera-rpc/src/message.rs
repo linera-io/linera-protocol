@@ -30,7 +30,7 @@ pub enum RpcMessage {
     ChainInfoQuery(Box<ChainInfoQuery>),
     DownloadBlobContent(Box<BlobId>),
     DownloadConfirmedBlock(Box<CryptoHash>),
-    DownloadCertificates(Box<Vec<CryptoHash>>),
+    DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Box<Vec<BlobId>>),
     VersionInfoQuery,
@@ -44,7 +44,7 @@ pub enum RpcMessage {
     GenesisConfigHashResponse(Box<CryptoHash>),
     DownloadBlobContentResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
-    DownloadCertificatesResponse(Box<Vec<ConfirmedBlockCertificate>>),
+    DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Box<Vec<BlobId>>),
 
@@ -169,7 +169,7 @@ impl TryFrom<RpcMessage> for Vec<ConfirmedBlockCertificate> {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
-            RpcMessage::DownloadCertificatesResponse(certificates) => Ok(*certificates),
+            RpcMessage::DownloadCertificatesResponse(certificates) => Ok(certificates),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
@@ -219,7 +219,7 @@ impl From<HandleCertificateRequest> for RpcMessage {
 
 impl From<Vec<CryptoHash>> for RpcMessage {
     fn from(hashes: Vec<CryptoHash>) -> Self {
-        RpcMessage::DownloadCertificates(Box::new(hashes))
+        RpcMessage::DownloadCertificates(hashes)
     }
 }
 
@@ -273,6 +273,6 @@ impl From<ConfirmedBlock> for RpcMessage {
 
 impl From<Vec<ConfirmedBlockCertificate>> for RpcMessage {
     fn from(certificates: Vec<ConfirmedBlockCertificate>) -> Self {
-        RpcMessage::DownloadCertificatesResponse(Box::new(certificates))
+        RpcMessage::DownloadCertificatesResponse(certificates)
     }
 }
