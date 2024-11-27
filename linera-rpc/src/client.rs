@@ -164,7 +164,7 @@ impl ValidatorNode for Client {
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Certificate>, NodeError> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         Ok(match self {
             Client::Grpc(grpc_client) => grpc_client.download_certificates(hashes).await?,
 
