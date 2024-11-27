@@ -240,16 +240,10 @@ where
                 .with_value(value)
                 .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
         }
-        if round.is_fast() {
-            ensure!(
-                outcome
-                    .oracle_responses
-                    .iter()
-                    .flatten()
-                    .all(|response| response.is_permitted_in_fast_blocks()),
-                WorkerError::FastBlockUsingOracles
-            );
-        }
+        ensure!(
+            !round.is_fast() || !outcome.has_oracle_responses(),
+            WorkerError::FastBlockUsingOracles
+        );
         // Check if the counters of tip_state would be valid.
         self.0
             .chain

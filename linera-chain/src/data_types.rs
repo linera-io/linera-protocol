@@ -728,6 +728,12 @@ impl BlockExecutionOutcome {
 
         required_blob_ids
     }
+
+    pub fn has_oracle_responses(&self) -> bool {
+        self.oracle_responses
+            .iter()
+            .any(|responses| !responses.is_empty())
+    }
 }
 
 /// The data a block proposer signs.
