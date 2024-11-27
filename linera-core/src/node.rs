@@ -100,7 +100,7 @@ pub trait ValidatorNode {
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Certificate>, NodeError>;
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError>;
 
     /// Returns the hash of the `Certificate` that last used a blob.
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError>;

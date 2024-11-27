@@ -284,7 +284,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     pub async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Certificate>, NodeError> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }

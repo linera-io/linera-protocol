@@ -1311,13 +1311,11 @@ where
 
         // Check the signatures and keep only the ones that are valid.
         let mut certificates = Vec::new();
-        for certificate in remote_certificates {
-            let sender_chain_id = certificate.inner().chain_id();
-            let height = certificate.inner().height();
-            let epoch = certificate.inner().epoch();
-            let confirmed_block_certificate = certificate
-                .try_into()
-                .map_err(|_| NodeError::UnexpectedCertificateValue)?;
+        for confirmed_block_certificate in remote_certificates {
+            let block = &confirmed_block_certificate.inner().executed_block().block;
+            let sender_chain_id = block.chain_id;
+            let height = block.height;
+            let epoch = block.epoch;
             match self.check_certificate(max_epoch, &committees, &confirmed_block_certificate)? {
                 CheckCertificateResult::FutureEpoch => {
                     warn!(

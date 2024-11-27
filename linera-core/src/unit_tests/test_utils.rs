@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -176,12 +176,11 @@ where
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Certificate>, NodeError> {
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_download_certificates(hashes, sender)
         })
         .await
-        .map(|certs| certs.into_iter().map(Certificate::from).collect())
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
