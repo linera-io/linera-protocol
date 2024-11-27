@@ -312,9 +312,6 @@ where
                         .into_inner(),
                 ))))
             }
-            DownloadCertificate(hash) => {
-                Ok(Some(self.storage.read_certificate(*hash).await?.into()))
-            }
             DownloadCertificates(hashes) => {
                 Ok(Some(self.storage.read_certificates(*hashes).await?.into()))
             }
@@ -338,7 +335,6 @@ where
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
-            | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }

@@ -30,7 +30,6 @@ pub enum RpcMessage {
     ChainInfoQuery(Box<ChainInfoQuery>),
     DownloadBlobContent(Box<BlobId>),
     DownloadConfirmedBlock(Box<CryptoHash>),
-    DownloadCertificate(Box<CryptoHash>),
     DownloadCertificates(Box<Vec<CryptoHash>>),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Box<Vec<BlobId>>),
@@ -45,7 +44,6 @@ pub enum RpcMessage {
     GenesisConfigHashResponse(Box<CryptoHash>),
     DownloadBlobContentResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
-    DownloadCertificateResponse(Box<ConfirmedBlockCertificate>),
     DownloadCertificatesResponse(Box<Vec<ConfirmedBlockCertificate>>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Box<Vec<BlobId>>),
@@ -78,13 +76,11 @@ impl RpcMessage {
             | DownloadBlobContentResponse(_)
             | DownloadConfirmedBlock(_)
             | DownloadConfirmedBlockResponse(_)
-            | DownloadCertificate(_)
             | DownloadCertificates(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
-            | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {
                 return None;
             }
@@ -105,7 +101,6 @@ impl RpcMessage {
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | MissingBlobIds(_)
-            | DownloadCertificate(_)
             | DownloadCertificates(_) => true,
             BlockProposal(_)
             | LiteCertificate(_)
@@ -121,7 +116,6 @@ impl RpcMessage {
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
-            | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => false,
         }
     }
@@ -165,17 +159,6 @@ impl TryFrom<RpcMessage> for ConfirmedBlock {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::DownloadConfirmedBlockResponse(certificate) => Ok(*certificate),
-            RpcMessage::Error(error) => Err(*error),
-            _ => Err(NodeError::UnexpectedMessage),
-        }
-    }
-}
-
-impl TryFrom<RpcMessage> for ConfirmedBlockCertificate {
-    type Error = NodeError;
-    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
-        match message {
-            RpcMessage::DownloadCertificateResponse(certificate) => Ok(*certificate),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }
@@ -285,12 +268,6 @@ impl From<BlobContent> for RpcMessage {
 impl From<ConfirmedBlock> for RpcMessage {
     fn from(block: ConfirmedBlock) -> Self {
         RpcMessage::DownloadConfirmedBlockResponse(Box::new(block))
-    }
-}
-
-impl From<ConfirmedBlockCertificate> for RpcMessage {
-    fn from(certificate: ConfirmedBlockCertificate) -> Self {
-        RpcMessage::DownloadCertificateResponse(Box::new(certificate))
     }
 }
 

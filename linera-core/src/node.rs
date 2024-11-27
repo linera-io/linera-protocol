@@ -188,6 +188,10 @@ pub enum NodeError {
     #[error("We don't have the value for the certificate.")]
     MissingCertificateValue,
 
+    #[error("Reponse doesn't contain requested ceritifcates: {missing}")]
+    // NOTE: Can't use Vec<CryptoHash> b/c we cannot write Display impl for it.
+    MissingCertificates { missing: String },
+
     #[error("Validator's response to block proposal failed to include a vote")]
     MissingVoteInValidatorResponse,
 

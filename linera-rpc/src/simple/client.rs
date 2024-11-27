@@ -149,8 +149,15 @@ impl ValidatorNode for SimpleClient {
         &self,
         hash: CryptoHash,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        self.query::<ConfirmedBlockCertificate>(RpcMessage::DownloadCertificate(Box::new(hash)))
-            .await
+        let response = self.download_certificates(vec![hash]).await?;
+        if response.len() != 1 {
+            Err(NodeError::MissingCertificates {
+                missing: hash.to_string(),
+            })
+        } else {
+            // UNWRAP: Safe b/c we just checked if len != 1.
+            Ok(response.into_iter().next().unwrap())
+        }
     }
 
     async fn download_certificates(

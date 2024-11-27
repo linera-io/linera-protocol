@@ -310,9 +310,7 @@ where
             | RpcMessage::BlobLastUsedByResponse(_)
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
-            | RpcMessage::DownloadCertificate(_)
             | RpcMessage::DownloadCertificates(_)
-            | RpcMessage::DownloadCertificateResponse(_)
             | RpcMessage::DownloadCertificatesResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
