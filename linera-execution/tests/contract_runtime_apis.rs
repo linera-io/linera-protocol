@@ -22,8 +22,8 @@ use linera_execution::{
         create_dummy_message_context, create_dummy_operation_context, ExpectedCall,
         RegisterMockApplication, SystemExecutionState,
     },
-    ContractRuntime, ExecutionOutcome, Message, Operation, OperationContext, ResourceController,
-    SystemExecutionStateView, TestExecutionRuntimeContext, TransactionTracker,
+    ContractRuntime, ExecutionOutcome, Message, MessageContext, Operation, OperationContext,
+    ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
@@ -106,6 +106,152 @@ async fn test_transfer_system_api(
     .await?;
 
     recipient.verify_recipient(&view.system, amount).await?;
+
+    Ok(())
+}
+
+/// Tests the contract system API to claim tokens from a remote account.
+#[test_matrix(
+    [TransferTestEndpoint::User, TransferTestEndpoint::Application],
+    [TransferTestEndpoint::Chain, TransferTestEndpoint::User, TransferTestEndpoint::Application]
+)]
+#[test_log::test(tokio::test)]
+async fn test_claim_system_api(
+    sender: TransferTestEndpoint,
+    recipient: TransferTestEndpoint,
+) -> anyhow::Result<()> {
+    let amount = Amount::ONE;
+
+    let claimer_chain_description = ChainDescription::Root(1);
+
+    let source_state = sender.create_system_state(amount);
+    let claimer_state = SystemExecutionState {
+        description: Some(claimer_chain_description),
+        ..SystemExecutionState::default()
+    };
+
+    let source_chain_id = ChainId::from(
+        source_state
+            .description
+            .expect("System state created by sender should have a `ChainDescription`"),
+    );
+    let claimer_chain_id = ChainId::from(claimer_chain_description);
+
+    let mut source_view = source_state.into_view().await;
+    let mut claimer_view = claimer_state.into_view().await;
+
+    let (application_id, application) = claimer_view
+        .register_mock_application_with(
+            TransferTestEndpoint::sender_application_description(),
+            TransferTestEndpoint::sender_application_contract_blob(),
+            TransferTestEndpoint::sender_application_service_blob(),
+        )
+        .await?;
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, context, _operation| {
+            runtime.claim(
+                Account {
+                    owner: sender.sender_account_owner(),
+                    chain_id: source_chain_id,
+                },
+                Account {
+                    owner: recipient.recipient_account_owner(),
+                    chain_id: context.chain_id,
+                },
+                amount,
+            )?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = OperationContext {
+        authenticated_signer: sender.signer(),
+        chain_id: claimer_chain_id,
+        ..create_dummy_operation_context()
+    };
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    claimer_view
+        .execute_operation(
+            context,
+            Timestamp::from(0),
+            operation,
+            &mut tracker,
+            &mut controller,
+        )
+        .await?;
+
+    let (outcomes, oracle_responses, next_message_index) = tracker.destructure()?;
+    assert_eq!(outcomes.len(), 3);
+    assert!(oracle_responses.is_empty());
+    assert_eq!(next_message_index, 1);
+
+    let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
+        bail!("Missing system outcome with expected withdraw message");
+    };
+
+    assert_eq!(outcome.messages.len(), 1);
+
+    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    source_view
+        .execute_message(
+            create_dummy_message_context(None),
+            Timestamp::from(0),
+            Message::System(outcome.messages[0].message.clone()),
+            None,
+            &mut tracker,
+            &mut controller,
+        )
+        .await?;
+
+    assert_eq!(*source_view.system.balance.get(), Amount::ZERO);
+    source_view
+        .system
+        .balances
+        .for_each_index_value(|owner, balance| {
+            panic!(
+                "No accounts should have tokens after the claim message has been handled, \
+                but {owner} has {balance} tokens"
+            );
+        })
+        .await?;
+
+    let (outcomes, oracle_responses, next_message_index) = tracker.destructure()?;
+    assert_eq!(outcomes.len(), 1);
+    assert!(oracle_responses.is_empty());
+    assert_eq!(next_message_index, 1);
+
+    let ExecutionOutcome::System(ref outcome) = outcomes[0] else {
+        bail!("Missing system outcome with expected credit message");
+    };
+
+    assert_eq!(outcome.messages.len(), 1);
+
+    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let context = MessageContext {
+        chain_id: claimer_chain_id,
+        ..create_dummy_message_context(None)
+    };
+    claimer_view
+        .execute_message(
+            context,
+            Timestamp::from(0),
+            Message::System(outcome.messages[0].message.clone()),
+            None,
+            &mut tracker,
+            &mut controller,
+        )
+        .await?;
+
+    recipient
+        .verify_recipient(&claimer_view.system, amount)
+        .await?;
 
     Ok(())
 }
