@@ -329,6 +329,87 @@ async fn test_claim_system_api(
     Ok(())
 }
 
+/// Tests the contract system API to claim tokens from an unauthorized remote account.
+#[test_matrix(
+    [TransferTestEndpoint::User, TransferTestEndpoint::Application],
+    [TransferTestEndpoint::Chain, TransferTestEndpoint::User, TransferTestEndpoint::Application]
+)]
+#[test_log::test(tokio::test)]
+async fn test_unauthorized_claims(
+    sender: TransferTestEndpoint,
+    recipient: TransferTestEndpoint,
+) -> anyhow::Result<()> {
+    let amount = Amount::ONE;
+
+    let claimer_chain_description = ChainDescription::Root(1);
+
+    let claimer_state = SystemExecutionState {
+        description: Some(claimer_chain_description),
+        ..SystemExecutionState::default()
+    };
+
+    let source_chain_id = ChainId::root(0);
+    let claimer_chain_id = ChainId::from(claimer_chain_description);
+
+    let mut claimer_view = claimer_state.into_view().await;
+
+    let (application_id, application) = claimer_view
+        .register_mock_application_with(
+            TransferTestEndpoint::sender_application_description(),
+            TransferTestEndpoint::sender_application_contract_blob(),
+            TransferTestEndpoint::sender_application_service_blob(),
+        )
+        .await?;
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, context, _operation| {
+            runtime.claim(
+                Account {
+                    owner: sender.unauthorized_sender_account_owner(),
+                    chain_id: source_chain_id,
+                },
+                Account {
+                    owner: recipient.recipient_account_owner(),
+                    chain_id: context.chain_id,
+                },
+                amount,
+            )?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = OperationContext {
+        authenticated_signer: sender.unauthorized_signer(),
+        chain_id: claimer_chain_id,
+        ..create_dummy_operation_context()
+    };
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    let mut tracker = TransactionTracker::new(0, Some(Vec::new()));
+    let result = claimer_view
+        .execute_operation(
+            context,
+            Timestamp::from(0),
+            operation,
+            &mut tracker,
+            &mut controller,
+        )
+        .await;
+
+    assert_matches!(
+        result,
+        Err(ExecutionError::SystemError(
+            SystemExecutionError::UnauthenticatedClaimOwner
+        ))
+    );
+
+    Ok(())
+}
+
 /// Tests the contract system API to read the chain balance.
 #[proptest(async = "tokio")]
 async fn test_read_chain_balance_system_api(chain_balance: Amount) {
