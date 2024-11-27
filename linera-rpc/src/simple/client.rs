@@ -172,13 +172,7 @@ impl ValidatorNode for SimpleClient {
                 .into_iter()
                 .filter(|hash| !certificates.iter().any(|cert| cert.hash() == *hash))
                 .collect();
-            Err(NodeError::MissingCertificates {
-                missing: missing_hashes
-                    .iter()
-                    .map(|hash| hash.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            })
+            Err(NodeError::MissingCertificates(missing_hashes))
         } else {
             Ok(certificates)
         }
