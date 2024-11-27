@@ -311,20 +311,13 @@ where
 
             ReadBlobContent { blob_id, callback } => {
                 let blob = self.system.read_blob_content(blob_id).await?;
-                let is_new = !self.system.used_blobs.contains(&blob_id).await?;
-                if is_new {
-                    self.system.used_blobs.insert(&blob_id)?;
-                }
-                callback.respond((blob, is_new));
+                let is_new = self.system.blob_used(None, blob_id).await?;
+                callback.respond((blob, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
-                let is_new = !self.system.used_blobs.contains(&blob_id).await?;
-                if is_new {
-                    self.system.used_blobs.insert(&blob_id)?;
-                }
-                callback.respond(is_new)
+                callback.respond(self.system.blob_used(None, blob_id).await?)
             }
         }
 

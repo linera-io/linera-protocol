@@ -611,12 +611,14 @@ where
                 outcome.messages.push(message);
             }
             PublishBytecode { bytecode_id } => {
-                let contract_bytecode_id =
-                    BlobId::new(bytecode_id.contract_blob_hash, BlobType::ContractBytecode);
-                self.used_blobs.insert(&contract_bytecode_id)?;
-                let service_bytecode_id =
-                    BlobId::new(bytecode_id.service_blob_hash, BlobType::ServiceBytecode);
-                self.used_blobs.insert(&service_bytecode_id)?;
+                self.blob_published(&BlobId::new(
+                    bytecode_id.contract_blob_hash,
+                    BlobType::ContractBytecode,
+                ))?;
+                self.blob_published(&BlobId::new(
+                    bytecode_id.service_blob_hash,
+                    BlobType::ServiceBytecode,
+                ))?;
             }
             CreateApplication {
                 bytecode_id,
@@ -664,12 +666,11 @@ where
                 outcome.messages.push(message);
             }
             PublishDataBlob { blob_hash } => {
-                self.used_blobs
-                    .insert(&BlobId::new(blob_hash, BlobType::Data))?;
+                self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
             }
             ReadBlob { blob_id } => {
                 self.read_blob_content(blob_id).await?;
-                self.record_blob_usage(txn_tracker, blob_id).await?;
+                self.blob_used(Some(txn_tracker), blob_id).await?;
             }
         }
 
@@ -1004,16 +1005,27 @@ where
         Ok(messages)
     }
 
-    async fn record_blob_usage(
+    /// Records a blob that is used in this block. If this is the first use on this chain, creates
+    /// an oracle response for it.
+    pub(crate) async fn blob_used(
         &mut self,
-        txn_tracker: &mut TransactionTracker,
+        txn_tracker: Option<&mut TransactionTracker>,
         blob_id: BlobId,
-    ) -> Result<(), SystemExecutionError> {
+    ) -> Result<bool, SystemExecutionError> {
         if self.used_blobs.contains(&blob_id).await? {
-            return Ok(()); // Nothing to do.
+            return Ok(false); // Nothing to do.
         }
         self.used_blobs.insert(&blob_id)?;
-        txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
+        if let Some(txn_tracker) = txn_tracker {
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
+        }
+        Ok(true)
+    }
+
+    /// Records a blob that is published in this block. This does not create an oracle entry, and
+    /// the blob can be used without using an oracle in the future on this chain.
+    fn blob_published(&mut self, blob_id: &BlobId) -> Result<(), SystemExecutionError> {
+        self.used_blobs.insert(blob_id)?;
         Ok(())
     }
 
@@ -1023,7 +1035,7 @@ where
     ) -> Result<BlobContent, SystemExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
             Ok(blob) => Ok(blob.into()),
-            Err(ViewError::BlobsNotFound(_) | ViewError::NotFound(_)) => {
+            Err(ViewError::BlobsNotFound(_)) => {
                 Err(SystemExecutionError::BlobsNotFound(vec![blob_id]))
             }
             Err(error) => Err(error.into()),
@@ -1074,9 +1086,10 @@ where
             missing_blobs.is_empty(),
             SystemExecutionError::BlobsNotFound(missing_blobs)
         );
-        self.record_blob_usage(txn_tracker, contract_bytecode_blob_id)
+        self.blob_used(Some(txn_tracker), contract_bytecode_blob_id)
             .await?;
-        self.record_blob_usage(txn_tracker, service_bytecode_blob_id)
-            .await
+        self.blob_used(Some(txn_tracker), service_bytecode_blob_id)
+            .await?;
+        Ok(())
     }
 }
