@@ -2352,7 +2352,7 @@ where
         };
 
         let identity = self.identity().await?;
-        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block.block)? {
+        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block)? {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -2442,15 +2442,18 @@ where
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &Owner,
-        block: &Block,
+        executed_block: &ExecutedBlock,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
+        let manager = &info.manager;
+        let block = &executed_block.block;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        let manager = &info.manager;
-        let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
+        // Similarly, we cannot propose a block that uses oracles in the fast round.
+        let conflict = manager.requested_proposed.as_ref().is_some_and(|proposal| {
             proposal.content.round == manager.current_round && proposal.content.block != *block
-        });
-        let round = if !conflicting_proposal {
+        }) || (manager.current_round.is_fast()
+            && executed_block.outcome.has_oracle_responses());
+        let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
             .ownership
