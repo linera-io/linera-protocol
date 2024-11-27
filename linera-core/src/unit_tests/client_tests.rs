@@ -1435,7 +1435,8 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids))) if not_found_blob_ids == [blob0_id]
+        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
+            if not_found_blob_ids == [blob0_id]
     );
 
     // Take one validator down
@@ -1456,16 +1457,17 @@ where
     // But another one goes down
     builder.set_fault_type([3], FaultType::Offline).await;
 
-    // Try to read the blob. This is a different client but on the same chain, so when we synchronize this with the validators
-    // before executing the block, we'll actually download and cache locally the blobs that were published by `client_a`.
-    // So this will succeed.
+    // Try to read the blob. This is a different client but on the same chain, so when we
+    // synchronize this with the validators before executing the block, we'll actually download
+    // and cache locally the blobs that were published by `client_a`. So this will succeed.
     client1_b.prepare_chain().await?;
     let certificate = client1_b
         .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    assert!(certificate.executed_block().requires_blob(&blob0_id));
+    // The blob is not new on this chain, so it is not required.
+    assert!(!certificate.executed_block().requires_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)

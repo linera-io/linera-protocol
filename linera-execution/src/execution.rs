@@ -87,6 +87,9 @@ where
             .register_application(application_description)
             .await?;
 
+        self.system.used_blobs.insert(&contract_blob.id())?;
+        self.system.used_blobs.insert(&service_blob.id())?;
+
         self.context()
             .extra()
             .user_contracts()

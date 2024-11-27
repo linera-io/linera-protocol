@@ -697,11 +697,14 @@ impl ExecutedBlock {
     }
 
     pub fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.outcome.required_blob_ids()
+        let mut blob_ids = self.outcome.oracle_blob_ids();
+        blob_ids.extend(self.block.published_blob_ids());
+        blob_ids
     }
 
     pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.required_blob_ids().contains(blob_id)
+        self.outcome.oracle_blob_ids().contains(blob_id)
+            || self.block.published_blob_ids().contains(blob_id)
     }
 }
 
@@ -713,7 +716,7 @@ impl BlockExecutionOutcome {
         }
     }
 
-    pub fn required_blob_ids(&self) -> HashSet<BlobId> {
+    pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
             for response in responses {

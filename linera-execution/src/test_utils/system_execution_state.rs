@@ -11,7 +11,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{ApplicationId, ChainDescription, ChainId, Owner},
+    identifiers::{ApplicationId, BlobId, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -46,6 +46,7 @@ pub struct SystemExecutionState {
     pub balances: BTreeMap<Owner, Amount>,
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
+    pub used_blobs: BTreeSet<BlobId>,
     #[debug(skip_if = Not::not)]
     pub closed: bool,
     pub application_permissions: ApplicationPermissions,
@@ -108,6 +109,7 @@ impl SystemExecutionState {
             balances,
             timestamp,
             registry,
+            used_blobs,
             closed,
             application_permissions,
             extra_blobs,
@@ -160,6 +162,12 @@ impl SystemExecutionState {
             .registry
             .import(registry)
             .expect("serialization of registry components should not fail");
+        for blob_id in used_blobs {
+            view.system
+                .used_blobs
+                .insert(&blob_id)
+                .expect("inserting blob IDs should not fail");
+        }
         view.system.closed.set(closed);
         view.system
             .application_permissions

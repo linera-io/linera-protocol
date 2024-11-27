@@ -95,6 +95,8 @@ pub struct SystemExecutionStateView<C> {
     pub closed: HashedRegisterView<C, bool>,
     /// Permissions for applications on this chain.
     pub application_permissions: HashedRegisterView<C, ApplicationPermissions>,
+    /// Blobs that have been used or published on this chain.
+    pub used_blobs: HashedSetView<C, BlobId>,
 }
 
 /// The configuration for a new chain.
@@ -609,14 +611,14 @@ where
                 outcome.messages.push(message);
             }
             PublishBytecode { bytecode_id } => {
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                self.blob_published(&BlobId::new(
                     bytecode_id.contract_blob_hash,
                     BlobType::ContractBytecode,
-                )))?;
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
+                ))?;
+                self.blob_published(&BlobId::new(
                     bytecode_id.service_blob_hash,
                     BlobType::ServiceBytecode,
-                )))?;
+                ))?;
             }
             CreateApplication {
                 bytecode_id,
@@ -664,14 +666,11 @@ where
                 outcome.messages.push(message);
             }
             PublishDataBlob { blob_hash } => {
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(BlobId::new(
-                    blob_hash,
-                    BlobType::Data,
-                )))?;
+                self.blob_published(&BlobId::new(blob_hash, BlobType::Data))?;
             }
             ReadBlob { blob_id } => {
-                txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
                 self.read_blob_content(blob_id).await?;
+                self.blob_used(Some(txn_tracker), blob_id).await?;
             }
         }
 
@@ -1006,12 +1005,41 @@ where
         Ok(messages)
     }
 
-    pub async fn read_blob_content(&mut self, blob_id: BlobId) -> Result<BlobContent, ViewError> {
-        self.context()
-            .extra()
-            .get_blob(blob_id)
-            .await
-            .map(Into::into)
+    /// Records a blob that is used in this block. If this is the first use on this chain, creates
+    /// an oracle response for it.
+    pub(crate) async fn blob_used(
+        &mut self,
+        txn_tracker: Option<&mut TransactionTracker>,
+        blob_id: BlobId,
+    ) -> Result<bool, SystemExecutionError> {
+        if self.used_blobs.contains(&blob_id).await? {
+            return Ok(false); // Nothing to do.
+        }
+        self.used_blobs.insert(&blob_id)?;
+        if let Some(txn_tracker) = txn_tracker {
+            txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
+        }
+        Ok(true)
+    }
+
+    /// Records a blob that is published in this block. This does not create an oracle entry, and
+    /// the blob can be used without using an oracle in the future on this chain.
+    fn blob_published(&mut self, blob_id: &BlobId) -> Result<(), SystemExecutionError> {
+        self.used_blobs.insert(blob_id)?;
+        Ok(())
+    }
+
+    pub async fn read_blob_content(
+        &mut self,
+        blob_id: BlobId,
+    ) -> Result<BlobContent, SystemExecutionError> {
+        match self.context().extra().get_blob(blob_id).await {
+            Ok(blob) => Ok(blob.into()),
+            Err(ViewError::BlobsNotFound(_)) => {
+                Err(SystemExecutionError::BlobsNotFound(vec![blob_id]))
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     pub async fn assert_blob_exists(
@@ -1054,12 +1082,14 @@ where
             missing_blobs.push(service_bytecode_blob_id);
         }
 
-        if missing_blobs.is_empty() {
-            txn_tracker.replay_oracle_response(OracleResponse::Blob(contract_bytecode_blob_id))?;
-            txn_tracker.replay_oracle_response(OracleResponse::Blob(service_bytecode_blob_id))?;
-            Ok(())
-        } else {
-            Err(SystemExecutionError::BlobsNotFound(missing_blobs))
-        }
+        ensure!(
+            missing_blobs.is_empty(),
+            SystemExecutionError::BlobsNotFound(missing_blobs)
+        );
+        self.blob_used(Some(txn_tracker), contract_bytecode_blob_id)
+            .await?;
+        self.blob_used(Some(txn_tracker), service_bytecode_blob_id)
+            .await?;
+        Ok(())
     }
 }
