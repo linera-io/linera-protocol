@@ -96,8 +96,6 @@ pub mod test_utils;
 pub use backends::indexed_db;
 #[cfg(with_metrics)]
 pub use backends::metering;
-#[cfg(with_scylladb)]
-pub use backends::scylla_db;
 pub use backends::{journaling, lru_caching, memory, value_splitting};
 pub use views::{
     bucket_queue_view, collection_view, hashable_wrapper, key_value_store_view, log_view, map_view,

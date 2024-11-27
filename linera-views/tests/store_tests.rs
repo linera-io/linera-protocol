@@ -200,7 +200,7 @@ async fn test_big_value_read_write() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn scylla_db_tombstone_triggering_test() {
-    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
+    let store = linera_views::backends::ScyllaDbStore::new_test_store()
         .await
         .unwrap();
     linera_views::test_utils::tombstone_triggering_test(store).await;
@@ -209,7 +209,7 @@ async fn scylla_db_tombstone_triggering_test() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_big_write_read() {
-    let store = linera_views::scylla_db::ScyllaDbStore::new_test_store()
+    let store = linera_views::backends::ScyllaDbStore::new_test_store()
         .await
         .unwrap();
     let value_sizes = vec![100, 1000, 200000, 5000000];

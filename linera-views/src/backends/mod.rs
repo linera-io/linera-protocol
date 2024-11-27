@@ -15,7 +15,7 @@ pub mod lru_caching;
 pub mod dual;
 
 #[cfg(with_scylladb)]
-pub mod scylla_db;
+mod scylla_db;
 
 #[cfg(with_rocksdb)]
 mod rocks_db;
@@ -73,3 +73,26 @@ pub type DynamoDbStoreConfig = crate::lru_caching::LruSplittingConfig<crate::bac
 pub async fn get_config(use_localstack: bool) -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreError> {
     Ok(crate::backends::dynamo_db::get_config_internal(use_localstack).await?)
 }
+
+/// The `ScyllaDbStore` composed type with metrics
+#[cfg(all(with_scylladb,with_metrics))]
+pub type ScyllaDbStore = MeteredStore<
+    crate::lru_caching::LruCachingStore<
+	MeteredStore<
+            crate::value_splitting::ValueSplittingStore<MeteredStore<crate::journaling::JournalingKeyValueStore<crate::backends::scylla_db::ScyllaDbStoreInternal>>>,
+        >,
+    >,
+>;
+
+/// The `ScyllaDbStore` composed type
+#[cfg(all(with_scylladb, not(with_metrics)))]
+pub type ScyllaDbStore =
+    crate::lru_caching::LruCachingStore<crate::value_splitting::ValueSplittingStore<crate::journaling::JournalingKeyValueStore<crate::backends::scylla_db::ScyllaDbStoreInternal>>>;
+
+/// The `ScyllaDbStoreConfig` input type
+#[cfg(with_scylladb)]
+pub type ScyllaDbStoreConfig = crate::lru_caching::LruSplittingConfig<crate::backends::scylla_db::ScyllaDbStoreInternalConfig>;
+
+/// The combined error type for the `ScyllaDbStore`.
+#[cfg(with_scylladb)]
+pub type ScyllaDbStoreError = crate::value_splitting::ValueSplittingError<crate::backends::scylla_db::ScyllaDbStoreInternalError>;

@@ -33,12 +33,10 @@ use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
     },
-    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
@@ -848,45 +846,5 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
             max_stream_queries: TEST_SCYLLA_DB_MAX_STREAM_QUERIES,
         };
         Ok(ScyllaDbStoreInternalConfig { uri, common_config })
-    }
-}
-
-/// The `ScyllaDbStore` composed type with metrics
-#[cfg(with_metrics)]
-pub type ScyllaDbStore = MeteredStore<
-    LruCachingStore<
-        MeteredStore<
-            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
-        >,
-    >,
->;
-
-/// The `ScyllaDbStore` composed type
-#[cfg(not(with_metrics))]
-pub type ScyllaDbStore =
-    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
-
-/// The `ScyllaDbStoreConfig` input type
-pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;
-
-/// The combined error type for the `ScyllaDbStore`.
-pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;
-
-#[cfg(test)]
-mod tests {
-    use bcs::serialized_size;
-
-    use crate::{
-        batch::UnorderedBatch,
-        common::get_uleb128_size,
-        scylla_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
-    };
-
-    #[test]
-    fn test_raw_visible_sizes() {
-        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
-        vis_computed -= serialized_size(&UnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
-        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
     }
 }
