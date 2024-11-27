@@ -14,8 +14,6 @@ use linera_base::ensure;
 use tempfile::TempDir;
 use thiserror::Error;
 
-#[cfg(with_metrics)]
-use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
 use crate::{

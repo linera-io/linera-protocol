@@ -30,8 +30,6 @@ use futures::future::{join_all, FutureExt as _};
 use linera_base::ensure;
 use thiserror::Error;
 
-#[cfg(with_metrics)]
-use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
 use crate::{
@@ -64,7 +62,8 @@ fn get_endpoint_address() -> Option<String> {
 }
 
 /// Gets the localstack config
-pub async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
+pub async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError>
+{
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -121,8 +120,12 @@ const RAW_MAX_VALUE_SIZE: usize = 409600;
 /// * We write `1 + 1` because the `SimpleUnorderedBatch` has two entries
 ///
 /// This gets us a maximal value of 408569;
-const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE
-    - get_uleb128_size(RAW_MAX_VALUE_SIZE) - get_uleb128_size(MAX_KEY_SIZE) - 1 - 1;
+const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
+    - MAX_KEY_SIZE
+    - get_uleb128_size(RAW_MAX_VALUE_SIZE)
+    - get_uleb128_size(MAX_KEY_SIZE)
+    - 1
+    - 1;
 
 /// Fundamental constant in DynamoDB: The maximum size of a key is 1024 bytes
 /// See https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html
