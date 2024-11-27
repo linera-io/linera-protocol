@@ -761,13 +761,6 @@ pub enum OracleResponse {
     Assert,
 }
 
-impl OracleResponse {
-    /// Wether an `OracleResponse` is permitted in fast blocks or not.
-    pub fn is_permitted_in_fast_blocks(&self) -> bool {
-        matches!(self, OracleResponse::Blob(_))
-    }
-}
-
 impl Display for OracleResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

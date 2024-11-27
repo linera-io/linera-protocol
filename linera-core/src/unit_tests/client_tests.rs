@@ -2432,6 +2432,18 @@ where
     let client2 = builder.add_initial_chain(description2, Amount::ONE).await?;
     let client3 = builder.add_initial_chain(description3, Amount::ONE).await?;
 
+    // Use fast blocks by default on all chains.
+    for client in [&client1, &client2, &client3] {
+        let pub_key = client.public_key().await?;
+        let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: vec![pub_key],
+            owners: vec![],
+            multi_leader_rounds: 10,
+            timeout_config: TimeoutConfig::default(),
+        });
+        client.execute_operation(owner_change_op.clone()).await?;
+    }
+
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
 
@@ -2440,19 +2452,21 @@ where
         CryptoHash::new(&BlobBytes(blob_bytes.clone())),
         BlobType::Data,
     );
-    client1
+    let certificate = client1
         .publish_data_blob(blob_bytes)
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(certificate.round, Round::Fast);
 
     // Send a message from chain 2 to chain 3.
-    client2
+    let certificate = client2
         .transfer(None, Amount::from_millis(1), Recipient::chain(chain_id3))
         .await
         .unwrap()
         .unwrap();
     client3.synchronize_from_validators().await.unwrap();
+    assert_eq!(certificate.round, Round::Fast);
 
     builder.set_fault_type([2], FaultType::Offline).await;
     builder.set_fault_type([3], FaultType::Honest).await;
@@ -2463,6 +2477,8 @@ where
         .await
         .unwrap()
         .unwrap();
+    // This read a new blob, so it cannot be a fast block.
+    assert_eq!(certificate.round, Round::MultiLeader(0));
     let executed_block = certificate.executed_block();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);
