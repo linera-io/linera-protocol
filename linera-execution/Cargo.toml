@@ -79,8 +79,10 @@ bcs.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-execution = { path = ".", default-features = false, features = ["fs", "test"] }
 linera-witty = { workspace = true, features = ["log", "macros", "test"] }
+proptest.workspace = true
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }
+test-strategy.workspace = true
 tokio = { workspace = true, features = ["rt", "test-util"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 wasmer = { workspace = true, features = ["singlepass", "wat"] }

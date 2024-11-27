@@ -22,11 +22,13 @@ use linera_execution::{
         create_dummy_message_context, create_dummy_operation_context, ExpectedCall,
         RegisterMockApplication, SystemExecutionState,
     },
-    ContractRuntime, ExecutionOutcome, Message, MessageContext, Operation, OperationContext,
-    ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionOutcome, Message, MessageContext, Operation,
+    OperationContext, ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext,
+    TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 use test_case::test_matrix;
+use test_strategy::proptest;
 
 /// Tests the contract system API to transfer tokens between accounts.
 #[test_matrix(
@@ -254,6 +256,45 @@ async fn test_claim_system_api(
         .await?;
 
     Ok(())
+}
+
+/// Tests the contract system API to read the chain balance.
+#[proptest(async = "tokio")]
+async fn test_read_chain_balance_system_api(chain_balance: Amount) {
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balance: chain_balance,
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let (application_id, application) = view.register_mock_application().await.unwrap();
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            assert_eq!(runtime.read_chain_balance().unwrap(), chain_balance);
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context();
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        operation,
+        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut controller,
+    )
+    .await
+    .unwrap();
 }
 
 /// A test helper representing a transfer endpoint.
