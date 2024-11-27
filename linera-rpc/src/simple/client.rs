@@ -149,25 +149,39 @@ impl ValidatorNode for SimpleClient {
         &self,
         hash: CryptoHash,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        let response = self.download_certificates(vec![hash]).await?;
-        if response.len() != 1 {
-            Err(NodeError::MissingCertificates {
-                missing: hash.to_string(),
-            })
-        } else {
-            // UNWRAP: Safe b/c we just checked if len != 1.
-            Ok(response.into_iter().next().unwrap())
-        }
+        Ok(self
+            .download_certificates(vec![hash])
+            .await?
+            .into_iter()
+            .next()
+            .unwrap()) // UNWRAP: We know there is exactly one certificate, otherwise we would have an error.
     }
 
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        self.query::<Vec<ConfirmedBlockCertificate>>(RpcMessage::DownloadCertificates(Box::new(
-            hashes,
-        )))
-        .await
+        let certificates = self
+            .query::<Vec<ConfirmedBlockCertificate>>(RpcMessage::DownloadCertificates(Box::new(
+                hashes.clone(),
+            )))
+            .await?;
+
+        if certificates.len() != hashes.len() {
+            let missing_hashes: Vec<CryptoHash> = hashes
+                .into_iter()
+                .filter(|hash| !certificates.iter().any(|cert| cert.hash() == *hash))
+                .collect();
+            Err(NodeError::MissingCertificates {
+                missing: missing_hashes
+                    .iter()
+                    .map(|hash| hash.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            })
+        } else {
+            Ok(certificates)
+        }
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
