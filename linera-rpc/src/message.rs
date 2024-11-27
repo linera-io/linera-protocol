@@ -9,7 +9,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -45,8 +45,8 @@ pub enum RpcMessage {
     GenesisConfigHashResponse(Box<CryptoHash>),
     DownloadBlobContentResponse(Box<BlobContent>),
     DownloadConfirmedBlockResponse(Box<ConfirmedBlock>),
-    DownloadCertificateResponse(Box<Certificate>),
-    DownloadCertificatesResponse(Box<Vec<Certificate>>),
+    DownloadCertificateResponse(Box<ConfirmedBlockCertificate>),
+    DownloadCertificatesResponse(Box<Vec<ConfirmedBlockCertificate>>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Box<Vec<BlobId>>),
 
@@ -171,7 +171,7 @@ impl TryFrom<RpcMessage> for ConfirmedBlock {
     }
 }
 
-impl TryFrom<RpcMessage> for Certificate {
+impl TryFrom<RpcMessage> for ConfirmedBlockCertificate {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
@@ -182,7 +182,7 @@ impl TryFrom<RpcMessage> for Certificate {
     }
 }
 
-impl TryFrom<RpcMessage> for Vec<Certificate> {
+impl TryFrom<RpcMessage> for Vec<ConfirmedBlockCertificate> {
     type Error = NodeError;
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
@@ -288,28 +288,14 @@ impl From<ConfirmedBlock> for RpcMessage {
     }
 }
 
-impl From<Certificate> for RpcMessage {
-    fn from(certificate: Certificate) -> Self {
-        RpcMessage::DownloadCertificateResponse(Box::new(certificate))
-    }
-}
-
 impl From<ConfirmedBlockCertificate> for RpcMessage {
     fn from(certificate: ConfirmedBlockCertificate) -> Self {
-        RpcMessage::DownloadCertificateResponse(Box::new(certificate.into()))
-    }
-}
-
-impl From<Vec<Certificate>> for RpcMessage {
-    fn from(certificates: Vec<Certificate>) -> Self {
-        RpcMessage::DownloadCertificatesResponse(Box::new(certificates))
+        RpcMessage::DownloadCertificateResponse(Box::new(certificate))
     }
 }
 
 impl From<Vec<ConfirmedBlockCertificate>> for RpcMessage {
     fn from(certificates: Vec<ConfirmedBlockCertificate>) -> Self {
-        RpcMessage::DownloadCertificatesResponse(Box::new(
-            certificates.into_iter().map(|c| c.into()).collect(),
-        ))
+        RpcMessage::DownloadCertificatesResponse(Box::new(certificates))
     }
 }

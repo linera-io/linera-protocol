@@ -342,6 +342,17 @@ ConfirmedBlock:
   STRUCT:
     - executed_block:
         TYPENAME: ExecutedBlock
+ConfirmedBlockCertificate:
+  STRUCT:
+    - value:
+        TYPENAME: ConfirmedBlock
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 CrateVersion:
   STRUCT:
     - major: U32
@@ -835,12 +846,12 @@ RpcMessage:
     19:
       DownloadCertificateResponse:
         NEWTYPE:
-          TYPENAME: Certificate
+          TYPENAME: ConfirmedBlockCertificate
     20:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
-            TYPENAME: Certificate
+            TYPENAME: ConfirmedBlockCertificate
     21:
       BlobLastUsedByResponse:
         NEWTYPE:

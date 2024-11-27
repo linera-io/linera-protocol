@@ -149,24 +149,18 @@ impl ValidatorNode for SimpleClient {
         &self,
         hash: CryptoHash,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        self.query::<Certificate>(RpcMessage::DownloadCertificate(Box::new(hash)))
-            .await?
-            .try_into()
-            .map_err(|_| NodeError::UnexpectedCertificateValue)
+        self.query::<ConfirmedBlockCertificate>(RpcMessage::DownloadCertificate(Box::new(hash)))
+            .await
     }
 
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        self.query::<Vec<Certificate>>(RpcMessage::DownloadCertificates(Box::new(hashes)))
-            .await?
-            .into_iter()
-            .map(|cert| {
-                cert.try_into()
-                    .map_err(|_| NodeError::UnexpectedCertificateValue)
-            })
-            .collect()
+        self.query::<Vec<ConfirmedBlockCertificate>>(RpcMessage::DownloadCertificates(Box::new(
+            hashes,
+        )))
+        .await
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {

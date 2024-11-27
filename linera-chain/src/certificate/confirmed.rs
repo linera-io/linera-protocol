@@ -2,8 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::identifiers::{BlobId, ChainId, MessageId};
-use linera_execution::committee::Epoch;
+use linera_base::{
+    crypto::Signature,
+    data_types::Round,
+    identifiers::{BlobId, ChainId, MessageId},
+};
+use linera_execution::committee::{Epoch, ValidatorName};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use super::{
     generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
@@ -11,7 +16,7 @@ use super::{
 };
 use crate::{
     block::{ConfirmedBlock, ConversionError, ValidatedBlock},
-    data_types::{ExecutedBlock, Medium, MessageBundle},
+    data_types::{is_strictly_ordered, ExecutedBlock, Medium, MessageBundle},
 };
 
 impl GenericCertificate<ConfirmedBlock> {
@@ -80,5 +85,50 @@ impl From<GenericCertificate<ConfirmedBlock>> for Certificate {
         let value =
             Hashed::unchecked_new(CertificateValue::ConfirmedBlock(value.into_inner()), hash);
         Certificate::new(value, round, signatures)
+    }
+}
+
+impl Serialize for GenericCertificate<ConfirmedBlock> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(Debug, Serialize)]
+        #[serde(rename = "ConfirmedBlockCertificate")]
+        struct CertificateHelper<'a> {
+            value: &'a ConfirmedBlock,
+            round: Round,
+            signatures: &'a Vec<(ValidatorName, Signature)>,
+        }
+
+        let helper = CertificateHelper {
+            value: self.inner(),
+            round: self.round,
+            signatures: self.signatures(),
+        };
+
+        helper.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for GenericCertificate<ConfirmedBlock> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename = "ConfirmedBlockCertificate")]
+        struct CertificateHelper {
+            value: Hashed<ConfirmedBlock>,
+            round: Round,
+            signatures: Vec<(ValidatorName, Signature)>,
+        }
+
+        let helper: CertificateHelper = Deserialize::deserialize(deserializer)?;
+        if !is_strictly_ordered(&helper.signatures) {
+            Err(serde::de::Error::custom("Vector is not strictly sorted"))
+        } else {
+            Ok(Self::new(helper.value, helper.round, helper.signatures))
+        }
     }
 }
