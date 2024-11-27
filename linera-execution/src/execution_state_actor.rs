@@ -159,6 +159,7 @@ where
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             } => {
                 let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
@@ -167,7 +168,7 @@ where
                     .system
                     .claim(
                         signer,
-                        None,
+                        Some(application_id),
                         AccountOwner::User(owner),
                         source.chain_id,
                         Recipient::Account(destination),
@@ -389,6 +390,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
+        application_id: UserApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },

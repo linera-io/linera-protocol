@@ -1298,21 +1298,24 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let signer = self.inner().current_application().signer;
-        let execution_outcome = self
-            .inner()
+        let mut this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        let execution_outcome = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
                 source,
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             })?
             .recv_response()?
             .with_authenticated_signer(signer);
-        self.inner()
-            .transaction_tracker
+        this.transaction_tracker
             .add_system_outcome(execution_outcome)?;
         Ok(())
     }
