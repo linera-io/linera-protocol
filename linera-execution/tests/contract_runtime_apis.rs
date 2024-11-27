@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::bail;
+use assert_matches::assert_matches;
 use linera_base::{
     crypto::{CryptoHash, PublicKey},
     data_types::{
@@ -25,9 +26,9 @@ use linera_execution::{
         create_dummy_message_context, create_dummy_operation_context, ExpectedCall,
         RegisterMockApplication, SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionOutcome, Message, MessageContext, Operation,
-    OperationContext, ResourceController, SystemExecutionStateView, TestExecutionRuntimeContext,
-    TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, Message, MessageContext,
+    Operation, OperationContext, ResourceController, SystemExecutionError,
+    SystemExecutionStateView, TestExecutionRuntimeContext, TransactionTracker,
 };
 use linera_views::context::MemoryContext;
 use proptest::{prelude::any, strategy::Strategy};
@@ -112,6 +113,72 @@ async fn test_transfer_system_api(
     .await?;
 
     recipient.verify_recipient(&view.system, amount).await?;
+
+    Ok(())
+}
+
+/// Tests the contract system API to transfer tokens between accounts.
+#[test_matrix(
+    [TransferTestEndpoint::Chain, TransferTestEndpoint::User, TransferTestEndpoint::Application],
+    [TransferTestEndpoint::Chain, TransferTestEndpoint::User, TransferTestEndpoint::Application]
+)]
+#[test_log::test(tokio::test)]
+async fn test_unauthorized_transfer_system_api(
+    sender: TransferTestEndpoint,
+    recipient: TransferTestEndpoint,
+) -> anyhow::Result<()> {
+    let amount = Amount::ONE;
+
+    let mut view = sender.create_system_state(amount).into_view().await;
+
+    let (application_id, application) = view
+        .register_mock_application_with(
+            TransferTestEndpoint::sender_application_description(),
+            TransferTestEndpoint::sender_application_contract_blob(),
+            TransferTestEndpoint::sender_application_service_blob(),
+        )
+        .await?;
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, context, _operation| {
+            runtime.transfer(
+                sender.unauthorized_sender_account_owner(),
+                Account {
+                    owner: recipient.recipient_account_owner(),
+                    chain_id: context.chain_id,
+                },
+                amount,
+            )?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = OperationContext {
+        authenticated_signer: sender.unauthorized_signer(),
+        ..create_dummy_operation_context()
+    };
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+    let result = view
+        .execute_operation(
+            context,
+            Timestamp::from(0),
+            operation,
+            &mut TransactionTracker::new(0, Some(Vec::new())),
+            &mut controller,
+        )
+        .await;
+
+    assert_matches!(
+        result,
+        Err(ExecutionError::SystemError(
+            SystemExecutionError::UnauthenticatedTransferOwner
+        ))
+    );
 
     Ok(())
 }
@@ -618,11 +685,35 @@ impl TransferTestEndpoint {
         }
     }
 
+    /// Returns the [`AccountOwner`] to represent this transfer endpoint as an unauthorized sender.
+    pub fn unauthorized_sender_account_owner(&self) -> Option<AccountOwner> {
+        match self {
+            TransferTestEndpoint::Chain => None,
+            TransferTestEndpoint::User => {
+                Some(AccountOwner::User(Owner(CryptoHash::test_hash("attacker"))))
+            }
+            TransferTestEndpoint::Application => {
+                Some(AccountOwner::Application(Self::recipient_application_id()))
+            }
+        }
+    }
+
     /// Returns the [`Owner`] that should be used as the authenticated signer in the transfer
     /// operation.
     pub fn signer(&self) -> Option<Owner> {
         match self {
             TransferTestEndpoint::Chain | TransferTestEndpoint::User => Some(Self::sender_owner()),
+            TransferTestEndpoint::Application => None,
+        }
+    }
+
+    /// Returns the [`Owner`] that should be used as the authenticated signer when testing an
+    /// unauthorized transfer operation.
+    pub fn unauthorized_signer(&self) -> Option<Owner> {
+        match self {
+            TransferTestEndpoint::Chain | TransferTestEndpoint::User => {
+                Some(Self::recipient_owner())
+            }
             TransferTestEndpoint::Application => None,
         }
     }
