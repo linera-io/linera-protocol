@@ -146,10 +146,7 @@ where
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
             state_hash: publisher_state_hash,
-            oracle_responses: vec![vec![
-                OracleResponse::Blob(contract_blob_id),
-                OracleResponse::Blob(service_blob_id),
-            ]],
+            oracle_responses: vec![vec![]],
         }
         .with(publish_block),
     );
