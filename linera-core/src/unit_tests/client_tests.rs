@@ -2432,7 +2432,7 @@ where
     let client2 = builder.add_initial_chain(description2, Amount::ONE).await?;
     let client3 = builder.add_initial_chain(description3, Amount::ONE).await?;
 
-    // Use fast blocks by default on all chains.
+    // Configure the clients as super owners, so they make fast blocks by default.
     for client in [&client1, &client2, &client3] {
         let pub_key = client.public_key().await?;
         let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
