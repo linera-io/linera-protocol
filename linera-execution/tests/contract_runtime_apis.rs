@@ -27,6 +27,7 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::context::MemoryContext;
+use proptest::{prelude::any, strategy::Strategy};
 use test_case::test_matrix;
 use test_strategy::proptest;
 
@@ -295,6 +296,59 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
     )
     .await
     .unwrap();
+}
+
+/// Tests the contract system API to read a single account balance.
+#[proptest(async = "tokio")]
+async fn test_read_owner_balance_system_api(
+    #[strategy(test_accounts_strategy())] accounts: BTreeMap<AccountOwner, Amount>,
+) {
+    let mut view = SystemExecutionState {
+        description: Some(ChainDescription::Root(0)),
+        balances: accounts.clone(),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let (application_id, application) = view.register_mock_application().await.unwrap();
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _context, _operation| {
+            for (owner, balance) in accounts {
+                assert_eq!(runtime.read_owner_balance(owner).unwrap(), balance);
+            }
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context();
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    view.execute_operation(
+        context,
+        Timestamp::from(0),
+        operation,
+        &mut TransactionTracker::new(0, Some(Vec::new())),
+        &mut controller,
+    )
+    .await
+    .unwrap();
+}
+
+/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`AccountOwner`]s with an initial
+/// non-zero [`Amount`] of tokens.
+fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<AccountOwner, Amount>> {
+    proptest::collection::btree_map(
+        any::<AccountOwner>(),
+        (1_u128..).prop_map(Amount::from_tokens),
+        0..5,
+    )
 }
 
 /// A test helper representing a transfer endpoint.
