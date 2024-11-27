@@ -311,12 +311,20 @@ where
 
             ReadBlobContent { blob_id, callback } => {
                 let blob = self.system.read_blob_content(blob_id).await?;
-                callback.respond(blob);
+                let is_new = !self.system.used_blobs.contains(&blob_id).await?;
+                if is_new {
+                    self.system.used_blobs.insert(&blob_id)?;
+                }
+                callback.respond((blob, is_new));
             }
 
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
-                callback.respond(())
+                let is_new = !self.system.used_blobs.contains(&blob_id).await?;
+                if is_new {
+                    self.system.used_blobs.insert(&blob_id)?;
+                }
+                callback.respond(is_new)
             }
         }
 
@@ -480,12 +488,12 @@ pub enum ExecutionRequest {
     ReadBlobContent {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<BlobContent>,
+        callback: Sender<(BlobContent, bool)>,
     },
 
     AssertBlobExists {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<bool>,
     },
 }

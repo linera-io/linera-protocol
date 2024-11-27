@@ -1033,7 +1033,12 @@ where
         self.state_mut()
             .set_pending_block(proposal.content.block.clone());
         let required_blob_ids: HashSet<BlobId> = value.inner().required_blob_ids();
-        let proposed_blobs = proposal.blobs.clone();
+        let required_blobs = proposal
+            .blobs
+            .iter()
+            .filter(|blob| required_blob_ids.contains(&blob.id()))
+            .cloned()
+            .collect();
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,
             blob_ids: required_blob_ids,
@@ -1041,7 +1046,7 @@ where
         let certificate = self
             .communicate_chain_action(committee, submit_action, value)
             .await?;
-        self.process_certificate(certificate.clone(), proposed_blobs)
+        self.process_certificate(certificate.clone(), required_blobs)
             .await?;
         Ok(certificate)
     }

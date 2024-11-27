@@ -1024,22 +1024,27 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
 
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
         let blob_id = BlobId::new(*hash, BlobType::Data);
-        self.transaction_tracker
-            .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-        let blob_content = self
+        let (blob_content, is_new) = self
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
+        if is_new {
+            self.transaction_tracker
+                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+        }
         Ok(blob_content.inner_bytes())
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
         let blob_id = BlobId::new(*hash, BlobType::Data);
-        self.transaction_tracker
-            .replay_oracle_response(OracleResponse::Blob(blob_id))?;
-        self.execution_state_sender
+        let is_new = self
+            .execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
+        if is_new {
+            self.transaction_tracker
+                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+        }
         Ok(())
     }
 }

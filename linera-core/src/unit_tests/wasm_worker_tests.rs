@@ -10,6 +10,8 @@
 #![allow(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
+use std::collections::BTreeSet;
+
 use linera_base::{
     crypto::KeyPair,
     data_types::{
@@ -135,6 +137,7 @@ where
         committees: [(Epoch::ZERO, committee.clone())].into_iter().collect(),
         ownership: ChainOwnership::single(publisher_key_pair.public()),
         timestamp: Timestamp::from(1),
+        used_blobs: BTreeSet::from([contract_blob_id, service_blob_id]),
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
