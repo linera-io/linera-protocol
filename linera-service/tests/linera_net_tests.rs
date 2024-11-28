@@ -406,7 +406,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     };
 
     // Setting up the validators
-    let (_net, client) = config.instantiate().await?;
+    let (net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     // Change the ownership so that the blocks inserted are not
@@ -465,6 +465,11 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         (address1.clone(), U256::from(10)),
     ])
     .await;
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
     Ok(())
 }
 
