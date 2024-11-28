@@ -32,7 +32,7 @@ use {
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
+    linera_views::backends::{ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -380,14 +380,7 @@ impl StorageConfigNamespace {
             }
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { uri } => {
-                let inner_config = ScyllaDbStoreInternalConfig {
-                    uri: uri.to_string(),
-                    common_config: common_config.reduced(),
-                };
-                let config = ScyllaDbStoreConfig {
-                    inner_config,
-                    cache_size: common_config.cache_size,
-                };
+                let config = ScyllaDbStoreConfig::new(uri.to_string(), common_config);
                 Ok(StoreConfig::ScyllaDb(config, namespace))
             }
         }

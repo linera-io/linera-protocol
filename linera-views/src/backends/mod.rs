@@ -150,6 +150,18 @@ pub type ScyllaDbStore = crate::lru_caching::LruCachingStore<
 pub type ScyllaDbStoreConfig =
     crate::lru_caching::LruSplittingConfig<crate::backends::scylla_db::ScyllaDbStoreInternalConfig>;
 
+impl ScyllaDbStoreConfig {
+    /// Creates a `ScyllaDbStoreConfig` from the inputs.
+    pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
+        let inner_config = crate::backends::scylla_db::ScyllaDbStoreInternalConfig {
+            uri,
+            common_config: common_config.reduced(),
+        };
+        ScyllaDbStoreConfig { inner_config, cache_size: common_config.cache_size }
+    }
+}
+
+
 /// The combined error type for the `ScyllaDbStore`.
 #[cfg(with_scylladb)]
 pub type ScyllaDbStoreError = crate::value_splitting::ValueSplittingError<
