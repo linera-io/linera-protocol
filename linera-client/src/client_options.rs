@@ -205,7 +205,7 @@ impl ClientOptions {
             cfg_if::cfg_if! {
                 if #[cfg(all(feature = "rocksdb", feature = "fs"))] {
                     // The block_in_place is enabled since the client is run in multi-threaded
-                    let spawn_mode = linera_views::rocks_db::RocksDbSpawnMode::get_spawn_mode_from_runtime();
+                    let spawn_mode = linera_views::backends::RocksDbSpawnMode::get_spawn_mode_from_runtime();
                     let storage_config = crate::storage::StorageConfig::RocksDb {
                         path: self.config_path()?.join("wallet.db"),
                         spawn_mode,

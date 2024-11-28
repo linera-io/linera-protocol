@@ -36,11 +36,11 @@ use linera_execution::{
 };
 use linera_storage::{DbStorage, Storage};
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::backends::DynamoDbStore;
 #[cfg(feature = "rocksdb")]
-use linera_views::rocks_db::RocksDbStore;
+use linera_views::backends::RocksDbStore;
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::backends::ScyllaDbStore;
 use linera_views::{memory::MemoryStore, views::CryptoHashView};
 use test_case::test_case;
 

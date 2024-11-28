@@ -32,9 +32,9 @@ use linera_storage::{DbStorage, Storage, TestClock};
 use linera_storage_service::client::ServiceStoreClient;
 use linera_version::VersionInfo;
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbStore;
+use linera_views::backends::DynamoDbStore;
 #[cfg(feature = "scylladb")]
-use linera_views::scylla_db::ScyllaDbStore;
+use linera_views::backends::ScyllaDbStore;
 use linera_views::{
     memory::MemoryStore, random::generate_test_namespace, store::TestKeyValueStore as _,
 };
@@ -42,7 +42,7 @@ use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::rocks_db::RocksDbStore,
+    linera_views::backends::RocksDbStore,
     tokio::sync::{Semaphore, SemaphorePermit},
 };
 

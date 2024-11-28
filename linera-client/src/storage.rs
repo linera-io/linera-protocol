@@ -25,9 +25,8 @@ use linera_views::{
 use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::rocks_db::{
+    linera_views::backends::{
         PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
-        RocksDbStoreInternalConfig,
     },
     std::path::PathBuf,
 };
@@ -58,11 +57,11 @@ util::impl_from_dynamic!(Error:Backend, linera_views::memory::MemoryStoreError);
 #[cfg(feature = "storage-service")]
 util::impl_from_dynamic!(Error:Backend, linera_storage_service::common::ServiceStoreError);
 #[cfg(feature = "rocksdb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::rocks_db::RocksDbStoreError);
+util::impl_from_dynamic!(Error:Backend, linera_views::backends::RocksDbStoreError);
 #[cfg(feature = "dynamodb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreError);
+util::impl_from_dynamic!(Error:Backend, linera_views::backends::DynamoDbStoreError);
 #[cfg(feature = "scylladb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
+util::impl_from_dynamic!(Error:Backend, linera_views::backends::ScyllaDbStoreError);
 
 /// The configuration of the key value store in use.
 pub enum StoreConfig {
@@ -363,15 +362,7 @@ impl StorageConfigNamespace {
             StorageConfig::RocksDb { path, spawn_mode } => {
                 let path_buf = path.to_path_buf();
                 let path_with_guard = PathWithGuard::new(path_buf);
-                let inner_config = RocksDbStoreInternalConfig {
-                    path_with_guard,
-                    spawn_mode: *spawn_mode,
-                    common_config: common_config.reduced(),
-                };
-                let config = RocksDbStoreConfig {
-                    inner_config,
-                    cache_size: common_config.cache_size,
-                };
+                let config = RocksDbStoreConfig::new(*spawn_mode, path_with_guard, common_config);
                 Ok(StoreConfig::RocksDb(config, namespace))
             }
             #[cfg(feature = "dynamodb")]

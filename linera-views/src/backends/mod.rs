@@ -26,6 +26,9 @@ mod dynamo_db;
 #[cfg(with_indexeddb)]
 pub mod indexed_db;
 
+
+pub use rocks_db::{PathWithGuard, RocksDbSpawnMode};
+
 /// The `RocksDbStore` composed type with metrics
 #[cfg(all(with_rocksdb, with_metrics))]
 pub type RocksDbStore = crate::metering::MeteredStore<
@@ -54,6 +57,22 @@ pub type RocksDbStoreError = crate::value_splitting::ValueSplittingError<
 #[cfg(with_rocksdb)]
 pub type RocksDbStoreConfig =
     crate::lru_caching::LruSplittingConfig<crate::backends::rocks_db::RocksDbStoreInternalConfig>;
+
+impl RocksDbStoreConfig {
+    /// Creates a new `RocksDbStoreConfig` from the input.
+    pub fn new(spawn_mode: RocksDbSpawnMode, path_with_guard: PathWithGuard, common_config: crate::store::CommonStoreConfig) -> RocksDbStoreConfig {
+        let inner_config = crate::backends::rocks_db::RocksDbStoreInternalConfig {
+            path_with_guard,
+            spawn_mode,
+            common_config: common_config.reduced(),
+        };
+        RocksDbStoreConfig {
+	    inner_config,
+            cache_size: common_config.cache_size,
+        }
+    }
+}
+
 
 /// A shared DB client for DynamoDb implementing LruCaching and metrics
 #[cfg(all(with_dynamodb, with_metrics))]
