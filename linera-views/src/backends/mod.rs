@@ -26,7 +26,6 @@ mod dynamo_db;
 #[cfg(with_indexeddb)]
 pub mod indexed_db;
 
-
 pub use rocks_db::{PathWithGuard, RocksDbSpawnMode};
 
 /// The `RocksDbStore` composed type with metrics
@@ -60,19 +59,22 @@ pub type RocksDbStoreConfig =
 
 impl RocksDbStoreConfig {
     /// Creates a new `RocksDbStoreConfig` from the input.
-    pub fn new(spawn_mode: RocksDbSpawnMode, path_with_guard: PathWithGuard, common_config: crate::store::CommonStoreConfig) -> RocksDbStoreConfig {
+    pub fn new(
+        spawn_mode: RocksDbSpawnMode,
+        path_with_guard: PathWithGuard,
+        common_config: crate::store::CommonStoreConfig,
+    ) -> RocksDbStoreConfig {
         let inner_config = crate::backends::rocks_db::RocksDbStoreInternalConfig {
             path_with_guard,
             spawn_mode,
             common_config: common_config.reduced(),
         };
         RocksDbStoreConfig {
-	    inner_config,
+            inner_config,
             cache_size: common_config.cache_size,
         }
     }
 }
-
 
 /// A shared DB client for DynamoDb implementing LruCaching and metrics
 #[cfg(all(with_dynamodb, with_metrics))]
@@ -113,7 +115,10 @@ pub type DynamoDbStoreConfig =
 
 impl DynamoDbStoreConfig {
     /// Creates a `DynamoDbStoreConfig` from the input.
-    pub fn new(config: aws_sdk_dynamodb::Config, common_config: crate::store::CommonStoreConfig) -> DynamoDbStoreConfig {
+    pub fn new(
+        config: aws_sdk_dynamodb::Config,
+        common_config: crate::store::CommonStoreConfig,
+    ) -> DynamoDbStoreConfig {
         let inner_config = crate::backends::dynamo_db::DynamoDbStoreInternalConfig {
             config,
             common_config: common_config.reduced(),
@@ -171,10 +176,12 @@ impl ScyllaDbStoreConfig {
             uri,
             common_config: common_config.reduced(),
         };
-        ScyllaDbStoreConfig { inner_config, cache_size: common_config.cache_size }
+        ScyllaDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
     }
 }
-
 
 /// The combined error type for the `ScyllaDbStore`.
 #[cfg(with_scylladb)]

@@ -12,9 +12,7 @@ use linera_storage_service::{
     common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
-use linera_views::backends::{
-    get_config, DynamoDbStore, DynamoDbStoreConfig,
-};
+use linera_views::backends::{get_config, DynamoDbStore, DynamoDbStoreConfig};
 #[cfg(with_storage)]
 use linera_views::store::LocalAdminKeyValueStore as _;
 use linera_views::{
@@ -25,9 +23,7 @@ use linera_views::{
 use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::backends::{
-        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
-    },
+    linera_views::backends::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
 #[cfg(feature = "scylladb")]

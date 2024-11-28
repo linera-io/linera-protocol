@@ -7,17 +7,15 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use async_lock::RwLock;
 use linera_storage_service::common::{KeyTag, MAX_PAYLOAD_SIZE};
+#[cfg(with_rocksdb)]
+use linera_views::{
+    backends::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    store::AdminKeyValueStore as _,
+};
 use linera_views::{
     batch::Batch,
     memory::MemoryStore,
     store::{CommonStoreConfig, ReadableKeyValueStore, WritableKeyValueStore},
-};
-#[cfg(with_rocksdb)]
-use linera_views::{
-    backends::{
-        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
-    },
-    store::AdminKeyValueStore as _,
 };
 use serde::Serialize;
 use tonic::{transport::Server, Request, Response, Status};
