@@ -52,7 +52,7 @@ pub struct Account {
 }
 
 impl Account {
-    /// Creates an Account with a ChainId
+    /// Creates an [`Account`] representing the balance shared by a chain's owners.
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
@@ -60,7 +60,7 @@ impl Account {
         }
     }
 
-    /// Creates an Account with a ChainId and an Owner
+    /// Creates an [`Account`] for a specific [`Owner`] on a chain.
     pub fn owner(chain_id: ChainId, owner: Owner) -> Self {
         Account {
             chain_id,
