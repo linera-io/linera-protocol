@@ -81,18 +81,23 @@ impl Display for Account {
 impl FromStr for Account {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts = s.split(':').collect::<Vec<_>>();
-        anyhow::ensure!(
-            parts.len() <= 2,
-            "Expecting format `chain-id:address` or `chain-id`"
-        );
-        if parts.len() == 1 {
-            Ok(Account::chain(s.parse()?))
-        } else {
-            let chain_id = parts[0].parse()?;
-            let owner = parts[1].parse()?;
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        let mut parts = string.splitn(2, ':');
+
+        let chain_id = parts
+            .next()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Expecting an account formatted as `chain-id` or `chain-id:owner-type:address`"
+                )
+            })?
+            .parse()?;
+
+        if let Some(owner_string) = parts.next() {
+            let owner = owner_string.parse()?;
             Ok(Account::owner(chain_id, owner))
+        } else {
+            Ok(Account::chain(chain_id))
         }
     }
 }
