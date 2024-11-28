@@ -111,6 +111,20 @@ pub type DynamoDbStoreError = crate::value_splitting::ValueSplittingError<
 pub type DynamoDbStoreConfig =
     crate::lru_caching::LruSplittingConfig<crate::backends::dynamo_db::DynamoDbStoreInternalConfig>;
 
+impl DynamoDbStoreConfig {
+    /// Creates a `DynamoDbStoreConfig` from the input.
+    pub fn new(config: aws_sdk_dynamodb::Config, common_config: crate::store::CommonStoreConfig) -> DynamoDbStoreConfig {
+        let inner_config = crate::backends::dynamo_db::DynamoDbStoreInternalConfig {
+            config,
+            common_config: common_config.reduced(),
+        };
+        DynamoDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
+    }
+}
+
 /// Getting a configuration for the system
 #[cfg(with_dynamodb)]
 pub async fn get_config(

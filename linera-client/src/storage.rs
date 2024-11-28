@@ -12,8 +12,8 @@ use linera_storage_service::{
     common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::{
-    get_config, DynamoDbStore, DynamoDbStoreConfig, DynamoDbStoreInternalConfig,
+use linera_views::backends::{
+    get_config, DynamoDbStore, DynamoDbStoreConfig,
 };
 #[cfg(with_storage)]
 use linera_views::store::LocalAdminKeyValueStore as _;
@@ -368,14 +368,7 @@ impl StorageConfigNamespace {
             #[cfg(feature = "dynamodb")]
             StorageConfig::DynamoDb { use_localstack } => {
                 let aws_config = get_config(*use_localstack).await?;
-                let inner_config = DynamoDbStoreInternalConfig {
-                    config: aws_config,
-                    common_config: common_config.reduced(),
-                };
-                let config = DynamoDbStoreConfig {
-                    inner_config,
-                    cache_size: common_config.cache_size,
-                };
+                let config = DynamoDbStoreConfig::new(aws_config, common_config);
                 Ok(StoreConfig::DynamoDb(config, namespace))
             }
             #[cfg(feature = "scylladb")]
