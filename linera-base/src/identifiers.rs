@@ -86,11 +86,9 @@ impl FromStr for Account {
 
         let chain_id = parts
             .next()
-            .ok_or_else(|| {
-                anyhow!(
-                    "Expecting an account formatted as `chain-id` or `chain-id:owner-type:address`"
-                )
-            })?
+            .context(
+                "Expecting an account formatted as `chain-id` or `chain-id:owner-type:address`",
+            )?
             .parse()?;
 
         if let Some(owner_string) = parts.next() {
