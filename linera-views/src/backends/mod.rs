@@ -26,6 +26,7 @@ mod dynamo_db;
 #[cfg(with_indexeddb)]
 pub mod indexed_db;
 
+#[cfg(with_rocksdb)]
 pub use rocks_db::{PathWithGuard, RocksDbSpawnMode};
 
 /// The `RocksDbStore` composed type with metrics
@@ -57,6 +58,7 @@ pub type RocksDbStoreError = crate::value_splitting::ValueSplittingError<
 pub type RocksDbStoreConfig =
     crate::lru_caching::LruSplittingConfig<crate::backends::rocks_db::RocksDbStoreInternalConfig>;
 
+#[cfg(with_rocksdb)]
 impl RocksDbStoreConfig {
     /// Creates a new `RocksDbStoreConfig` from the input.
     pub fn new(
@@ -113,6 +115,7 @@ pub type DynamoDbStoreError = crate::value_splitting::ValueSplittingError<
 pub type DynamoDbStoreConfig =
     crate::lru_caching::LruSplittingConfig<crate::backends::dynamo_db::DynamoDbStoreInternalConfig>;
 
+#[cfg(with_dynamodb)]
 impl DynamoDbStoreConfig {
     /// Creates a `DynamoDbStoreConfig` from the input.
     pub fn new(
@@ -169,6 +172,7 @@ pub type ScyllaDbStore = crate::lru_caching::LruCachingStore<
 pub type ScyllaDbStoreConfig =
     crate::lru_caching::LruSplittingConfig<crate::backends::scylla_db::ScyllaDbStoreInternalConfig>;
 
+#[cfg(with_scylladb)]
 impl ScyllaDbStoreConfig {
     /// Creates a `ScyllaDbStoreConfig` from the inputs.
     pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
