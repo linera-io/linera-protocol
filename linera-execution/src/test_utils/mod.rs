@@ -8,17 +8,20 @@
 mod mock_application;
 mod system_execution_state;
 
-use std::{sync::Arc, thread, vec};
+use std::{collections::BTreeMap, sync::Arc, thread, vec};
 
 use linera_base::{
     crypto::{BcsSignable, CryptoHash},
-    data_types::{Blob, BlockHeight, CompressedBytecode, OracleResponse},
-    identifiers::{ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId},
+    data_types::{Amount, Blob, BlockHeight, CompressedBytecode, OracleResponse, Timestamp},
+    identifiers::{
+        AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
+    },
 };
 use linera_views::{
     context::Context,
     views::{View, ViewError},
 };
+use proptest::{prelude::any, strategy::Strategy};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
@@ -27,9 +30,9 @@ pub use self::{
 };
 use crate::{
     ApplicationRegistryView, ExecutionRequest, ExecutionRuntimeContext, ExecutionStateView,
-    QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest, ServiceSyncRuntime,
-    SystemExecutionStateView, TestExecutionRuntimeContext, UserApplicationDescription,
-    UserApplicationId,
+    MessageContext, OperationContext, QueryContext, ServiceRuntimeEndpoint, ServiceRuntimeRequest,
+    ServiceSyncRuntime, SystemExecutionStateView, TestExecutionRuntimeContext,
+    UserApplicationDescription, UserApplicationId,
 };
 
 /// Creates a dummy [`UserApplicationDescription`] for use in tests.
@@ -58,6 +61,43 @@ pub fn create_dummy_user_application_description(
         contract_blob,
         service_blob,
     )
+}
+
+/// Creates a dummy [`OperationContext`] to use in tests.
+pub fn create_dummy_operation_context() -> OperationContext {
+    OperationContext {
+        chain_id: ChainId::root(0),
+        height: BlockHeight(0),
+        index: Some(0),
+        authenticated_signer: None,
+        authenticated_caller_id: None,
+    }
+}
+
+/// Creates a dummy [`MessageContext`] to use in tests.
+pub fn create_dummy_message_context(authenticated_signer: Option<Owner>) -> MessageContext {
+    MessageContext {
+        chain_id: ChainId::root(0),
+        is_bouncing: false,
+        authenticated_signer,
+        refund_grant_to: None,
+        height: BlockHeight(0),
+        certificate_hash: CryptoHash::test_hash("block receiving a message"),
+        message_id: MessageId {
+            chain_id: ChainId::root(0),
+            height: BlockHeight(0),
+            index: 0,
+        },
+    }
+}
+
+/// Creates a dummy [`QueryContext`] to use in tests.
+pub fn create_dummy_query_context() -> QueryContext {
+    QueryContext {
+        chain_id: ChainId::root(0),
+        next_block_height: BlockHeight(0),
+        local_time: Timestamp::from(0),
+    }
 }
 
 /// Registration of [`MockApplication`]s to use in tests.
@@ -208,4 +248,14 @@ impl QueryContext {
             runtime_request_sender,
         }
     }
+}
+
+/// Creates a [`Strategy`] for creating a [`BTreeMap`] of [`AccountOwner`]s with an initial
+/// non-zero [`Amount`] of tokens.
+pub fn test_accounts_strategy() -> impl Strategy<Value = BTreeMap<AccountOwner, Amount>> {
+    proptest::collection::btree_map(
+        any::<AccountOwner>(),
+        (1_u128..).prop_map(Amount::from_tokens),
+        0..5,
+    )
 }

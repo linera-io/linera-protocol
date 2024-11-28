@@ -5,7 +5,7 @@
 
 use fungible::{FungibleResponse, FungibleTokenAbi, InitialState, Operation, Parameters};
 use linera_sdk::{
-    base::{Account, AccountOwner, ChainId, Owner, WithContractAbi},
+    base::{Account, AccountOwner, ChainId, WithContractAbi},
     Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
@@ -36,7 +36,6 @@ impl Contract for NativeFungibleTokenContract {
             "Only NAT is accepted as ticker symbol"
         );
         for (owner, amount) in state.accounts {
-            let owner = self.normalize_owner(owner);
             let account = Account {
                 chain_id: self.runtime.chain_id(),
                 owner: Some(owner),
@@ -48,8 +47,6 @@ impl Contract for NativeFungibleTokenContract {
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Balance { owner } => {
-                let owner = self.normalize_owner(owner);
-
                 let balance = self.runtime.owner_balance(owner);
                 FungibleResponse::Balance(balance)
             }
@@ -62,7 +59,6 @@ impl Contract for NativeFungibleTokenContract {
                 target_account,
             } => {
                 self.check_account_authentication(owner);
-                let owner = self.normalize_owner(owner);
 
                 let fungible_target_account = target_account;
                 let target_account = self.normalize_account(target_account);
@@ -130,18 +126,10 @@ impl NativeFungibleTokenContract {
         }
     }
 
-    fn normalize_owner(&self, account_owner: AccountOwner) -> Owner {
-        match account_owner {
-            AccountOwner::User(owner) => owner,
-            AccountOwner::Application(_) => panic!("Applications not supported yet!"),
-        }
-    }
-
     fn normalize_account(&self, account: fungible::Account) -> Account {
-        let owner = self.normalize_owner(account.owner);
         Account {
             chain_id: account.chain_id,
-            owner: Some(owner),
+            owner: Some(account.owner),
         }
     }
 

@@ -9,7 +9,7 @@ use std::{
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt, TryStreamExt};
 use linera_base::{
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainId, Destination, Owner},
+    identifiers::{Account, AccountOwner, ChainId, Destination, Owner},
 };
 use linera_views::{
     context::Context,
@@ -462,7 +462,7 @@ where
             kind: MessageKind::Tracked,
             message: SystemMessage::Credit {
                 amount,
-                source: context.authenticated_signer,
+                source: context.authenticated_signer.map(AccountOwner::User),
                 target: account.owner,
             },
         };

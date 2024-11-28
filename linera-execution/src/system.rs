@@ -23,7 +23,8 @@ use linera_base::{
     },
     ensure, hex_debug,
     identifiers::{
-        Account, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId, Owner,
+        Account, AccountOwner, BlobId, BlobType, BytecodeId, ChainDescription, ChainId, MessageId,
+        Owner,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -86,7 +87,7 @@ pub struct SystemExecutionStateView<C> {
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
-    pub balances: HashedMapView<C, Owner, Amount>,
+    pub balances: HashedMapView<C, AccountOwner, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
     /// Track the locations of known bytecodes as well as the descriptions of known applications.
@@ -208,16 +209,16 @@ pub enum SystemMessage {
     /// bouncing, in which case `source` is credited instead.
     Credit {
         #[debug(skip_if = Option::is_none)]
-        target: Option<Owner>,
+        target: Option<AccountOwner>,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
     },
     /// Withdraws `amount` units of value from the account and starts a transfer to credit
     /// the recipient. The message must be properly authenticated. Receiver chains may
     /// refuse it depending on their configuration.
     Withdraw {
-        owner: Owner,
+        owner: AccountOwner,
         amount: Amount,
         recipient: Recipient,
     },
@@ -493,7 +494,13 @@ where
                 ..
             } => {
                 let message = self
-                    .transfer(context.authenticated_signer, owner, recipient, amount)
+                    .transfer(
+                        context.authenticated_signer,
+                        None,
+                        owner.map(AccountOwner::User),
+                        recipient,
+                        amount,
+                    )
                     .await?;
 
                 if let Some(message) = message {
@@ -509,7 +516,8 @@ where
                 let message = self
                     .claim(
                         context.authenticated_signer,
-                        owner,
+                        None,
+                        AccountOwner::User(owner),
                         target_id,
                         recipient,
                         amount,
@@ -681,26 +689,35 @@ where
     pub async fn transfer(
         &mut self,
         authenticated_signer: Option<Owner>,
-        owner: Option<Owner>,
+        authenticated_application_id: Option<UserApplicationId>,
+        source: Option<AccountOwner>,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<Option<RawOutgoingMessage<SystemMessage, Amount>>, SystemExecutionError> {
-        match (owner, authenticated_signer) {
-            (Some(_), _) => ensure!(
-                authenticated_signer == owner,
+        match (source, authenticated_signer, authenticated_application_id) {
+            (Some(AccountOwner::User(owner)), Some(signer), _) => ensure!(
+                signer == owner,
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
-            (None, Some(signer)) => ensure!(
+            (
+                Some(AccountOwner::Application(account_application)),
+                _,
+                Some(authorized_application),
+            ) => ensure!(
+                account_application == authorized_application,
+                SystemExecutionError::UnauthenticatedTransferOwner
+            ),
+            (None, Some(signer), _) => ensure!(
                 self.ownership.get().verify_owner(&signer).is_some(),
                 SystemExecutionError::UnauthenticatedTransferOwner
             ),
-            (None, None) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
+            (_, _, _) => return Err(SystemExecutionError::UnauthenticatedTransferOwner),
         }
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectTransferAmount
         );
-        self.debit(owner.as_ref(), amount).await?;
+        self.debit(source.as_ref(), amount).await?;
         match recipient {
             Recipient::Account(account) => {
                 let message = RawOutgoingMessage {
@@ -710,7 +727,7 @@ where
                     kind: MessageKind::Tracked,
                     message: SystemMessage::Credit {
                         amount,
-                        source: owner,
+                        source,
                         target: account.owner,
                     },
                 };
@@ -724,15 +741,22 @@ where
     pub async fn claim(
         &self,
         authenticated_signer: Option<Owner>,
-        owner: Owner,
+        authenticated_application_id: Option<UserApplicationId>,
+        source: AccountOwner,
         target_id: ChainId,
         recipient: Recipient,
         amount: Amount,
     ) -> Result<RawOutgoingMessage<SystemMessage, Amount>, SystemExecutionError> {
-        ensure!(
-            authenticated_signer.as_ref() == Some(&owner),
-            SystemExecutionError::UnauthenticatedClaimOwner
-        );
+        match source {
+            AccountOwner::User(owner) => ensure!(
+                authenticated_signer == Some(owner),
+                SystemExecutionError::UnauthenticatedClaimOwner
+            ),
+            AccountOwner::Application(owner) => ensure!(
+                authenticated_application_id == Some(owner),
+                SystemExecutionError::UnauthenticatedClaimOwner
+            ),
+        }
         ensure!(
             amount > Amount::ZERO,
             SystemExecutionError::IncorrectClaimAmount
@@ -745,7 +769,7 @@ where
             kind: MessageKind::Simple,
             message: SystemMessage::Withdraw {
                 amount,
-                owner,
+                owner: source,
                 recipient,
             },
         })
@@ -754,7 +778,7 @@ where
     /// Debits an [`Amount`] of tokens from an account's balance.
     async fn debit(
         &mut self,
-        account: Option<&Owner>,
+        account: Option<&AccountOwner>,
         amount: Amount,
     ) -> Result<(), SystemExecutionError> {
         let balance = if let Some(owner) = account {
@@ -812,11 +836,6 @@ where
                 owner,
                 recipient,
             } => {
-                ensure!(
-                    context.authenticated_signer == Some(owner),
-                    SystemExecutionError::UnauthenticatedClaimOwner
-                );
-
                 self.debit(Some(&owner), amount).await?;
                 match recipient {
                     Recipient::Account(account) => {

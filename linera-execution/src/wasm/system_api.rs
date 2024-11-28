@@ -6,7 +6,9 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, BlockHeight, SendMessageRequest, Timestamp},
-    identifiers::{Account, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, ChainId, ChannelName, MessageId, Owner, StreamName,
+    },
     ownership::{ChainOwnership, CloseChainError},
 };
 use linera_views::batch::{Batch, WriteOperation};
@@ -185,7 +187,10 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    fn read_owner_balance(caller: &mut Caller, owner: Owner) -> Result<Amount, RuntimeError> {
+    fn read_owner_balance(
+        caller: &mut Caller,
+        owner: AccountOwner,
+    ) -> Result<Amount, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -235,7 +240,7 @@ where
     /// balance) to `destination`.
     fn transfer(
         caller: &mut Caller,
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
     ) -> Result<(), RuntimeError> {
@@ -470,7 +475,10 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    fn read_owner_balance(caller: &mut Caller, owner: Owner) -> Result<Amount, RuntimeError> {
+    fn read_owner_balance(
+        caller: &mut Caller,
+        owner: AccountOwner,
+    ) -> Result<Amount, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -488,7 +496,9 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    fn read_owner_balances(caller: &mut Caller) -> Result<Vec<(Owner, Amount)>, RuntimeError> {
+    fn read_owner_balances(
+        caller: &mut Caller,
+    ) -> Result<Vec<(AccountOwner, Amount)>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
@@ -497,7 +507,7 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<Owner>, RuntimeError> {
+    fn read_balance_owners(caller: &mut Caller) -> Result<Vec<AccountOwner>, RuntimeError> {
         caller
             .user_data_mut()
             .runtime

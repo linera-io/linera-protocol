@@ -8,7 +8,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::{BcsSignable, CryptoError, CryptoHash, KeyPair, Signature},
     data_types::{Amount, BlockHeight, Round, Timestamp},
-    identifiers::{ChainDescription, ChainId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId},
 };
 use linera_chain::{
     data_types::{ChainAndHeight, IncomingBundle, Medium, MessageBundle},
@@ -67,9 +67,9 @@ pub struct ChainInfoQuery {
     /// Optionally test that the block height is the one expected.
     #[debug(skip_if = Option::is_none)]
     pub test_next_block_height: Option<BlockHeight>,
-    /// Request the balance of a given `Owner`.
+    /// Request the balance of a given [`AccountOwner`].
     #[debug(skip_if = Option::is_none)]
-    pub request_owner_balance: Option<Owner>,
+    pub request_owner_balance: Option<AccountOwner>,
     /// Query the current committees.
     #[debug(skip_if = Not::not)]
     pub request_committees: bool,
@@ -119,7 +119,7 @@ impl ChainInfoQuery {
         self
     }
 
-    pub fn with_owner_balance(mut self, owner: Owner) -> Self {
+    pub fn with_owner_balance(mut self, owner: AccountOwner) -> Self {
         self.request_owner_balance = Some(owner);
         self
     }

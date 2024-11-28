@@ -17,8 +17,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId, Owner,
-        StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, ChannelName, MessageId,
+        Owner, StreamName,
     },
     ownership::ChainOwnership,
 };
@@ -593,15 +593,15 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
         self.inner().read_chain_balance()
     }
 
-    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
         self.inner().read_owner_balance(owner)
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
         self.inner().read_owner_balances()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
         self.inner().read_balance_owners()
     }
 
@@ -758,19 +758,19 @@ impl<UserInstance> BaseRuntime for SyncRuntimeInternal<UserInstance> {
             .recv_response()
     }
 
-    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError> {
+    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalance { owner, callback })?
             .recv_response()
     }
 
-    fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError> {
+    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::OwnerBalances { callback })?
             .recv_response()
     }
 
-    fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError> {
+    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError> {
         self.execution_state_sender
             .send_request(|callback| ExecutionRequest::BalanceOwners { callback })?
             .recv_response()
@@ -1266,24 +1266,28 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
     fn transfer(
         &mut self,
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let signer = self.inner().current_application().signer;
-        let execution_outcome = self
-            .inner()
+        let mut this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        let execution_outcome = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Transfer {
                 source,
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             })?
             .recv_response()?;
-        self.inner()
-            .transaction_tracker
+
+        this.transaction_tracker
             .add_system_outcome(execution_outcome)?;
         Ok(())
     }
@@ -1294,21 +1298,24 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError> {
-        let signer = self.inner().current_application().signer;
-        let execution_outcome = self
-            .inner()
+        let mut this = self.inner();
+        let current_application = this.current_application();
+        let application_id = current_application.id;
+        let signer = current_application.signer;
+
+        let execution_outcome = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
                 source,
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             })?
             .recv_response()?
             .with_authenticated_signer(signer);
-        self.inner()
-            .transaction_tracker
+        this.transaction_tracker
             .add_system_outcome(execution_outcome)?;
         Ok(())
     }

@@ -5,7 +5,7 @@ use linera_base::{
     crypto::{CryptoError, CryptoHash, PublicKey, Signature},
     data_types::{BlobContent, BlockHeight},
     ensure,
-    identifiers::{BlobId, ChainId, Owner},
+    identifiers::{AccountOwner, BlobId, ChainId, Owner},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -408,11 +408,15 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             .request_sent_certificate_hashes_in_range
             .map(|range| bincode::serialize(&range))
             .transpose()?;
+        let request_owner_balance = chain_info_query
+            .request_owner_balance
+            .map(|owner| owner.try_into())
+            .transpose()?;
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
             request_committees: chain_info_query.request_committees,
-            request_owner_balance: chain_info_query.request_owner_balance.map(Into::into),
+            request_owner_balance,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_sent_certificate_hashes_in_range,
@@ -524,6 +528,24 @@ impl From<BlockHeight> for api::BlockHeight {
 impl From<api::BlockHeight> for BlockHeight {
     fn from(block_height: api::BlockHeight) -> Self {
         Self(block_height.height)
+    }
+}
+
+impl TryFrom<AccountOwner> for api::AccountOwner {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(account_owner: AccountOwner) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&account_owner)?,
+        })
+    }
+}
+
+impl TryFrom<api::AccountOwner> for AccountOwner {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(account_owner: api::AccountOwner) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&account_owner.bytes)?)
     }
 }
 

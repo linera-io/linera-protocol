@@ -7,10 +7,10 @@ interface service-system-api {
     get-application-creator-chain-id: func() -> chain-id;
     get-application-parameters: func() -> list<u8>;
     read-chain-balance: func() -> amount;
-    read-owner-balance: func(owner: owner) -> amount;
+    read-owner-balance: func(owner: account-owner) -> amount;
     read-system-timestamp: func() -> timestamp;
-    read-owner-balances: func() -> list<tuple<owner, amount>>;
-    read-balance-owners: func() -> list<owner>;
+    read-owner-balances: func() -> list<tuple<account-owner, amount>>;
+    read-balance-owners: func() -> list<account-owner>;
     try-query-application: func(application: application-id, argument: list<u8>) -> list<u8>;
     fetch-url: func(url: string) -> list<u8>;
     query-service: func(application-id: application-id, query: list<u8>) -> list<u8>;
@@ -19,6 +19,11 @@ interface service-system-api {
     assert-data-blob-exists: func(hash: crypto-hash);
     assert-before: func(timestamp: timestamp);
     log: func(message: string, level: log-level);
+
+    variant account-owner {
+        user(owner),
+        application(application-id),
+    }
 
     record amount {
         inner0: u128,

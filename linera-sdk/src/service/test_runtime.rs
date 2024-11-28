@@ -11,7 +11,7 @@ use std::{
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 
 use crate::{DataBlobHash, KeyValueStore, Service, ViewStorageContext};
@@ -27,7 +27,7 @@ where
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
-    owner_balances: RefCell<Option<HashMap<Owner, Amount>>>,
+    owner_balances: RefCell<Option<HashMap<AccountOwner, Amount>>>,
     query_application_handler: RefCell<Option<QueryApplicationHandler>>,
     url_blobs: RefCell<Option<HashMap<String, Vec<u8>>>>,
     blobs: RefCell<Option<HashMap<DataBlobHash, Vec<u8>>>>,
@@ -211,7 +211,7 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn with_owner_balances(
         self,
-        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
     ) -> Self {
         *self.owner_balances.borrow_mut() = Some(owner_balances.into_iter().collect());
         self
@@ -220,20 +220,20 @@ where
     /// Configures the balances on the chain to use during the test.
     pub fn set_owner_balances(
         &self,
-        owner_balances: impl IntoIterator<Item = (Owner, Amount)>,
+        owner_balances: impl IntoIterator<Item = (AccountOwner, Amount)>,
     ) -> &Self {
         *self.owner_balances.borrow_mut() = Some(owner_balances.into_iter().collect());
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn with_owner_balance(self, owner: Owner, balance: Amount) -> Self {
+    pub fn with_owner_balance(self, owner: AccountOwner, balance: Amount) -> Self {
         self.set_owner_balance(owner, balance);
         self
     }
 
     /// Configures the balance of one account on the chain to use during the test.
-    pub fn set_owner_balance(&self, owner: Owner, balance: Amount) -> &Self {
+    pub fn set_owner_balance(&self, owner: AccountOwner, balance: Amount) -> &Self {
         self.owner_balances
             .borrow_mut()
             .get_or_insert_with(HashMap::new)
@@ -242,7 +242,7 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: Owner) -> Amount {
+    pub fn owner_balance(&self, owner: AccountOwner) -> Amount {
         self.owner_balances
             .borrow_mut()
             .as_mut()
@@ -257,7 +257,7 @@ where
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(Owner, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(AccountOwner, Amount)> {
         self.owner_balances
             .borrow_mut()
             .as_ref()
@@ -271,7 +271,7 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<Owner> {
+    pub fn balance_owners(&self) -> Vec<AccountOwner> {
         self.owner_balances
             .borrow_mut()
             .as_ref()

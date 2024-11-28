@@ -6,7 +6,7 @@
 use linera_base::{
     data_types::{ArithmeticError, Blob, BlobContent, Timestamp, UserApplicationDescription},
     ensure,
-    identifiers::{GenericApplicationId, UserApplicationId},
+    identifiers::{AccountOwner, GenericApplicationId, UserApplicationId},
 };
 use linera_chain::{
     data_types::{
@@ -139,7 +139,7 @@ where
                 .execution_state
                 .system
                 .balances
-                .get(&signer)
+                .get(&AccountOwner::User(signer))
                 .await?;
         }
 

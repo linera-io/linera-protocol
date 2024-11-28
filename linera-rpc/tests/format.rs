@@ -4,7 +4,7 @@
 
 use linera_base::{
     data_types::{BlobContent, OracleResponse, Round},
-    identifiers::{BlobType, ChainDescription, Destination, GenericApplicationId},
+    identifiers::{AccountOwner, BlobType, ChainDescription, Destination, GenericApplicationId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -55,6 +55,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<RpcMessage>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
     tracer.trace_type::<BlobContent>(&samples)?;
+    tracer.trace_type::<AccountOwner>(&samples)?;
     tracer.registry()
 }
 
