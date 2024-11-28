@@ -2,12 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::{
-    crypto::Signature,
-    data_types::Round,
-    identifiers::{BlobId, ChainId, MessageId},
-};
-use linera_execution::committee::{Epoch, ValidatorName};
+use linera_base::identifiers::{BlobId, ChainId, MessageId};
+use linera_execution::committee::Epoch;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::{
@@ -16,7 +12,7 @@ use super::{
 };
 use crate::{
     block::{ConfirmedBlock, ConversionError, ValidatedBlock},
-    data_types::{is_strictly_ordered, ExecutedBlock, Medium, MessageBundle},
+    data_types::{ExecutedBlock, Medium, MessageBundle},
 };
 
 impl GenericCertificate<ConfirmedBlock> {
@@ -93,21 +89,8 @@ impl Serialize for GenericCertificate<ConfirmedBlock> {
     where
         S: serde::Serializer,
     {
-        #[derive(Debug, Serialize)]
-        #[serde(rename = "ConfirmedBlockCertificate")]
-        struct CertificateHelper<'a> {
-            value: &'a ConfirmedBlock,
-            round: Round,
-            signatures: &'a Vec<(ValidatorName, Signature)>,
-        }
-
-        let helper = CertificateHelper {
-            value: self.inner(),
-            round: self.round,
-            signatures: self.signatures(),
-        };
-
-        helper.serialize(serializer)
+        let certificate: Certificate = self.clone().into();
+        certificate.serialize(serializer)
     }
 }
 
@@ -116,19 +99,10 @@ impl<'de> Deserialize<'de> for GenericCertificate<ConfirmedBlock> {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Debug, Deserialize)]
-        #[serde(rename = "ConfirmedBlockCertificate")]
-        struct CertificateHelper {
-            value: Hashed<ConfirmedBlock>,
-            round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
-        }
-
-        let helper: CertificateHelper = Deserialize::deserialize(deserializer)?;
-        if !is_strictly_ordered(&helper.signatures) {
-            Err(serde::de::Error::custom("Vector is not strictly sorted"))
-        } else {
-            Ok(Self::new(helper.value, helper.round, helper.signatures))
+        let cert = Certificate::deserialize(deserializer);
+        match cert {
+            Ok(cert) => Ok(cert.try_into().unwrap()),
+            Err(e) => Err(e),
         }
     }
 }
