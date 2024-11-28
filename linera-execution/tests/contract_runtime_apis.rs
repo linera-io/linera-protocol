@@ -3,10 +3,7 @@
 
 #![allow(clippy::field_reassign_with_default)]
 
-use std::{
-    collections::{BTreeMap, HashSet},
-    vec,
-};
+use std::{collections::BTreeMap, vec};
 
 use anyhow::bail;
 use assert_matches::assert_matches;
@@ -550,12 +547,8 @@ async fn test_read_owner_balances_system_api(
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             assert_eq!(
-                runtime
-                    .read_owner_balances()
-                    .unwrap()
-                    .into_iter()
-                    .collect::<BTreeMap<_, _>>(),
-                accounts
+                runtime.read_owner_balances().unwrap(),
+                accounts.into_iter().collect::<Vec<_>>()
             );
             Ok(vec![])
         },
@@ -598,12 +591,8 @@ async fn test_read_balance_owners_system_api(
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             assert_eq!(
-                runtime
-                    .read_balance_owners()
-                    .unwrap()
-                    .into_iter()
-                    .collect::<HashSet<_>>(),
-                accounts.keys().copied().collect::<HashSet<_>>()
+                runtime.read_balance_owners().unwrap(),
+                accounts.keys().copied().collect::<Vec<_>>()
             );
             Ok(vec![])
         },
