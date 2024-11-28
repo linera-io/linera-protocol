@@ -30,17 +30,17 @@ use futures::future::{join_all, FutureExt as _};
 use linera_base::ensure;
 use thiserror::Error;
 
-#[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
     common::get_uleb128_size,
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
 };
+#[cfg(with_testing)]
+use crate::{journaling::JournalingKeyValueStore, store::TestKeyValueStore};
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";

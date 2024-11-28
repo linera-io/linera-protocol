@@ -25,17 +25,17 @@ use scylla::{
 };
 use thiserror::Error;
 
-#[cfg(with_testing)]
-use crate::store::TestKeyValueStore;
 use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
     },
 };
+#[cfg(with_testing)]
+use crate::{journaling::JournalingKeyValueStore, store::TestKeyValueStore};
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
