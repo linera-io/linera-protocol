@@ -13,11 +13,11 @@ use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 
-use self::state::EthereumTracker;
+use self::state::EthereumTrackerState;
 
 #[derive(Clone)]
 pub struct EthereumTrackerService {
-    state: Arc<EthereumTracker>,
+    state: Arc<EthereumTrackerState>,
 }
 
 linera_sdk::service!(EthereumTrackerService);
@@ -30,7 +30,7 @@ impl Service for EthereumTrackerService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = EthereumTracker::load(runtime.root_view_storage_context())
+        let state = EthereumTrackerState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         EthereumTrackerService {
