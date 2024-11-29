@@ -11,7 +11,6 @@ getrandom.workspace = true
 linera-sdk.workspace = true
 log.workspace = true
 rand.workspace = true
-serde.workspace = true
 sha3.workspace = true
 tokenizers.workspace = true
 

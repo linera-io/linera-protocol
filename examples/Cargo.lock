@@ -3688,7 +3688,6 @@ dependencies = [
  "linera-sdk",
  "log",
  "rand",
- "serde",
  "sha3",
  "tokenizers",
  "tokio",
