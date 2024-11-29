@@ -13,10 +13,10 @@ use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 
-use self::state::Amm;
+use self::state::AmmState;
 
 pub struct AmmService {
-    state: Arc<Amm>,
+    state: Arc<AmmState>,
 }
 
 linera_sdk::service!(AmmService);
@@ -29,7 +29,7 @@ impl Service for AmmService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = Amm::load(runtime.root_view_storage_context())
+        let state = AmmState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         AmmService {

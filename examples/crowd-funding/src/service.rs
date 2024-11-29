@@ -15,10 +15,10 @@ use linera_sdk::{
     views::View,
     Service, ServiceRuntime,
 };
-use state::CrowdFunding;
+use state::CrowdFundingState;
 
 pub struct CrowdFundingService {
-    state: Arc<CrowdFunding>,
+    state: Arc<CrowdFundingState>,
 }
 
 linera_sdk::service!(CrowdFundingService);
@@ -31,7 +31,7 @@ impl Service for CrowdFundingService {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = CrowdFunding::load(runtime.root_view_storage_context())
+        let state = CrowdFundingState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CrowdFundingService {

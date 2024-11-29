@@ -15,10 +15,10 @@ use linera_sdk::{
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
 
-use self::state::NonFungibleToken;
+use self::state::NonFungibleTokenState;
 
 pub struct NonFungibleTokenContract {
-    state: NonFungibleToken,
+    state: NonFungibleTokenState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -34,7 +34,7 @@ impl Contract for NonFungibleTokenContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = NonFungibleToken::load(runtime.root_view_storage_context())
+        let state = NonFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         NonFungibleTokenContract { state, runtime }

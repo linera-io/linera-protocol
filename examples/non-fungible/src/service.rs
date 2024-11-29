@@ -20,10 +20,10 @@ use linera_sdk::{
 };
 use non_fungible::{NftOutput, Operation, TokenId};
 
-use self::state::NonFungibleToken;
+use self::state::NonFungibleTokenState;
 
 pub struct NonFungibleTokenService {
-    state: Arc<NonFungibleToken>,
+    state: Arc<NonFungibleTokenState>,
     runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
@@ -37,7 +37,7 @@ impl Service for NonFungibleTokenService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = NonFungibleToken::load(runtime.root_view_storage_context())
+        let state = NonFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         NonFungibleTokenService {
@@ -61,7 +61,7 @@ impl Service for NonFungibleTokenService {
 }
 
 struct QueryRoot {
-    non_fungible_token: Arc<NonFungibleToken>,
+    non_fungible_token: Arc<NonFungibleTokenState>,
     runtime: Arc<Mutex<ServiceRuntime<NonFungibleTokenService>>>,
 }
 

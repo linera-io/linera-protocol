@@ -13,7 +13,7 @@ use non_fungible::{Nft, TokenId};
 /// The application state.
 #[derive(RootView, SimpleObject)]
 #[view(context = "ViewStorageContext")]
-pub struct NonFungibleToken {
+pub struct NonFungibleTokenState {
     // Map from token ID to the NFT data
     pub nfts: MapView<TokenId, Nft>,
     // Map from owners to the set of NFT token IDs they own

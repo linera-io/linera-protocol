@@ -15,10 +15,10 @@ use linera_sdk::{
 use num_bigint::BigUint;
 use num_traits::{cast::FromPrimitive, ToPrimitive};
 
-use self::state::Amm;
+use self::state::AmmState;
 
 pub struct AmmContract {
-    state: Amm,
+    state: AmmState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -34,7 +34,7 @@ impl Contract for AmmContract {
     type Parameters = Parameters;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = Amm::load(runtime.root_view_storage_context())
+        let state = AmmState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         AmmContract { state, runtime }

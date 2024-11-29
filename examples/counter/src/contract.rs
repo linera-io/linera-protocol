@@ -12,10 +12,10 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 
-use self::state::Counter;
+use self::state::CounterState;
 
 pub struct CounterContract {
-    state: Counter,
+    state: CounterState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -31,7 +31,7 @@ impl Contract for CounterContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = Counter::load(runtime.root_view_storage_context())
+        let state = CounterState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CounterContract { state, runtime }
@@ -64,7 +64,7 @@ mod tests {
     use futures::FutureExt as _;
     use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
 
-    use super::{Counter, CounterContract};
+    use super::{CounterContract, CounterState};
 
     #[test]
     fn operation() {
@@ -117,7 +117,7 @@ mod tests {
     fn create_and_instantiate_counter(initial_value: u64) -> CounterContract {
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = CounterContract {
-            state: Counter::load(runtime.root_view_storage_context())
+            state: CounterState::load(runtime.root_view_storage_context())
                 .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,

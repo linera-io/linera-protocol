@@ -60,7 +60,7 @@ pub struct LevelView {
 /// The matching engine containing the information.
 #[derive(RootView, SimpleObject)]
 #[view(context = "ViewStorageContext")]
-pub struct MatchingEngine {
+pub struct MatchingEngineState {
     ///The next_order_number contains the order_id so that
     ///the order_id gets created from 0, to infinity.
     pub next_order_number: RegisterView<OrderId>,
