@@ -16,11 +16,11 @@ use linera_sdk::{
     Service, ServiceRuntime,
 };
 
-use self::state::FungibleToken;
+use self::state::FungibleTokenState;
 
 #[derive(Clone)]
 pub struct FungibleTokenService {
-    state: Arc<FungibleToken>,
+    state: Arc<FungibleTokenState>,
     runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
@@ -34,7 +34,7 @@ impl Service for FungibleTokenService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = FungibleToken::load(runtime.root_view_storage_context())
+        let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         FungibleTokenService {

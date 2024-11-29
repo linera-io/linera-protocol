@@ -10,12 +10,12 @@ use linera_sdk::{
 /// The application state.
 #[derive(RootView)]
 #[view(context = "ViewStorageContext")]
-pub struct FungibleToken {
+pub struct FungibleTokenState {
     pub accounts: MapView<AccountOwner, Amount>,
 }
 
 #[allow(dead_code)]
-impl FungibleToken {
+impl FungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
     pub(crate) async fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
