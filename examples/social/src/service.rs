@@ -12,10 +12,10 @@ use linera_sdk::{
     base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 };
 use social::Operation;
-use state::Social;
+use state::SocialState;
 
 pub struct SocialService {
-    state: Arc<Social>,
+    state: Arc<SocialState>,
 }
 
 linera_sdk::service!(SocialService);
@@ -28,7 +28,7 @@ impl Service for SocialService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = Social::load(runtime.root_view_storage_context())
+        let state = SocialState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         SocialService {

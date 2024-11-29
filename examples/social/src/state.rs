@@ -7,7 +7,7 @@ use social::{Key, OwnPost, Post};
 /// The application state.
 #[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = "ViewStorageContext")]
-pub struct Social {
+pub struct SocialState {
     /// Our posts.
     pub own_posts: LogView<OwnPost>,
     /// Posts we received from authors we subscribed to.

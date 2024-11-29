@@ -11,13 +11,13 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 use social::{Comment, Key, Message, Operation, OwnPost, Post, SocialAbi};
-use state::Social;
+use state::SocialState;
 
 /// The channel name the application uses for cross-chain messages about new posts.
 const POSTS_CHANNEL_NAME: &[u8] = b"posts";
 
 pub struct SocialContract {
-    state: Social,
+    state: SocialState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -33,7 +33,7 @@ impl Contract for SocialContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = Social::load(runtime.root_view_storage_context())
+        let state = SocialState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         SocialContract { state, runtime }
