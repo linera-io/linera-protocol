@@ -15,10 +15,10 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 
-use self::state::GenNft;
+use self::state::GenNftState;
 
 pub struct GenNftContract {
-    state: GenNft,
+    state: GenNftState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -34,7 +34,7 @@ impl Contract for GenNftContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = GenNft::load(runtime.root_view_storage_context())
+        let state = GenNftState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         GenNftContract { state, runtime }

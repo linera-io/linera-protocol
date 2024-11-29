@@ -24,11 +24,11 @@ use linera_sdk::{
 };
 use log::info;
 
-use self::state::GenNft;
+use self::state::GenNftState;
 use crate::model::ModelContext;
 
 pub struct GenNftService {
-    state: Arc<GenNft>,
+    state: Arc<GenNftState>,
     runtime: Arc<Mutex<ServiceRuntime<Self>>>,
 }
 
@@ -42,7 +42,7 @@ impl Service for GenNftService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = GenNft::load(runtime.root_view_storage_context())
+        let state = GenNftState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         GenNftService {
@@ -67,7 +67,7 @@ impl Service for GenNftService {
 }
 
 struct QueryRoot {
-    non_fungible_token: Arc<GenNft>,
+    non_fungible_token: Arc<GenNftState>,
 }
 
 #[Object]
