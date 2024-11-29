@@ -63,7 +63,7 @@ mod tests {{
 
     use linera_sdk::{{util::BlockingWait, views::View, Contract, ContractRuntime}};
 
-    use super::{{{project_name}State, {project_name}Contract}};
+    use super::{{{project_name}Contract, {project_name}State}};
 
     #[test]
     fn operation() {{
