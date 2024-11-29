@@ -461,14 +461,6 @@ pub enum ScyllaDbStoreInternalError {
     #[error("Table name contains forbidden characters")]
     InvalidTableName,
 
-    /// Missing database
-    #[error("Missing database: {0}")]
-    MissingDatabase(String),
-
-    /// Already existing database
-    #[error("Already existing database")]
-    AlreadyExistingDatabase,
-
     /// The journal is not coherent
     #[error(transparent)]
     JournalConsistencyError(#[from] JournalConsistencyError),

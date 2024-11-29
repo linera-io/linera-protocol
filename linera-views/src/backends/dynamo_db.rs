@@ -1021,14 +1021,6 @@ pub enum DynamoDbStoreInternalError {
     #[error(transparent)]
     JournalConsistencyError(#[from] JournalConsistencyError),
 
-    /// Missing database
-    #[error("Missing database: {0}")]
-    MissingDatabase(String),
-
-    /// Already existing database
-    #[error("Already existing database")]
-    AlreadyExistingDatabase,
-
     /// The length of the value should be at most 400KB.
     #[error("The DynamoDB value should be less than 400KB")]
     ValueLengthTooLarge,

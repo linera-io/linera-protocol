@@ -260,11 +260,11 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
-    pub path_with_guard: PathWithGuard,
+    path_with_guard: PathWithGuard,
     /// The spawn_mode that is chosen
-    pub spawn_mode: RocksDbSpawnMode,
+    spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
-    pub common_config: CommonStoreInternalConfig,
+    common_config: CommonStoreInternalConfig,
 }
 
 impl RocksDbStoreInternal {
