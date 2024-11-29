@@ -6,11 +6,11 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use async_trait::async_trait;
 #[cfg(with_dynamodb)]
-use linera_views::backends::DynamoDbStore;
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
-use linera_views::backends::RocksDbStore;
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::backends::ScyllaDbStore;
+use linera_views::scylla_db::ScyllaDbStore;
 #[cfg(any(with_scylladb, with_rocksdb, with_dynamodb))]
 use linera_views::store::AdminKeyValueStore as _;
 use linera_views::{

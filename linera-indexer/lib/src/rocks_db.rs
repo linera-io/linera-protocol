@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
-    backends::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     store::{AdminKeyValueStore, CommonStoreConfig},
 };
 

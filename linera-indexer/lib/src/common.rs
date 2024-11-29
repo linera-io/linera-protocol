@@ -51,10 +51,10 @@ pub enum IndexerError {
 
     #[cfg(feature = "rocksdb")]
     #[error(transparent)]
-    RocksDbError(#[from] linera_views::backends::RocksDbStoreError),
+    RocksDbError(#[from] linera_views::rocks_db::RocksDbStoreError),
     #[cfg(feature = "scylladb")]
     #[error(transparent)]
-    ScyllaDbError(#[from] linera_views::backends::ScyllaDbStoreError),
+    ScyllaDbError(#[from] linera_views::scylla_db::ScyllaDbStoreError),
 }
 
 pub async fn graphiql(uri: Uri) -> impl IntoResponse {

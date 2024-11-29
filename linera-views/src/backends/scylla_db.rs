@@ -25,17 +25,21 @@ use scylla::{
 };
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+use crate::metering::MeteredStore;
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError},
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
+    lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
     },
+    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
-#[cfg(with_testing)]
-use crate::{journaling::JournalingKeyValueStore, store::TestKeyValueStore};
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
@@ -604,7 +608,7 @@ pub struct ScyllaDbStoreInternalConfig {
     /// The url to which the requests have to be sent
     pub uri: String,
     /// The common configuration of the key value store
-    pub common_config: CommonStoreInternalConfig,
+    common_config: CommonStoreInternalConfig,
 }
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
@@ -846,3 +850,38 @@ impl TestKeyValueStore for JournalingKeyValueStore<ScyllaDbStoreInternal> {
         Ok(ScyllaDbStoreInternalConfig { uri, common_config })
     }
 }
+
+/// The `ScyllaDbStore` composed type with metrics
+#[cfg(with_metrics)]
+pub type ScyllaDbStore = MeteredStore<
+    LruCachingStore<
+        MeteredStore<
+            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>,
+        >,
+    >,
+>;
+
+/// The `ScyllaDbStore` composed type
+#[cfg(not(with_metrics))]
+pub type ScyllaDbStore =
+    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
+
+/// The `ScyllaDbStoreConfig` input type
+pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
+
+impl ScyllaDbStoreConfig {
+    /// Creates a `ScyllaDbStoreConfig` from the inputs.
+    pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
+        let inner_config = ScyllaDbStoreInternalConfig {
+            uri,
+            common_config: common_config.reduced(),
+        };
+        ScyllaDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
+    }
+}
+
+/// The combined error type for the `ScyllaDbStore`.
+pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use linera_base::command::resolve_binary;
 use linera_views::{
-    lru_caching::LruSplittingConfig,
+    lru_caching::LruCachingConfig,
     store::{CommonStoreInternalConfig, KeyValueStoreError},
     views::MIN_VIEW_TAG,
 };
@@ -78,7 +78,7 @@ pub struct ServiceStoreInternalConfig {
 }
 
 /// The config type
-pub type ServiceStoreConfig = LruSplittingConfig<ServiceStoreInternalConfig>;
+pub type ServiceStoreConfig = LruCachingConfig<ServiceStoreInternalConfig>;
 
 impl ServiceStoreInternalConfig {
     pub fn http_address(&self) -> String {

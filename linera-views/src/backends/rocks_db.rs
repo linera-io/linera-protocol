@@ -14,15 +14,19 @@ use linera_base::ensure;
 use tempfile::TempDir;
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
+    lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
     },
+    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
 
 /// The number of streams for the test
@@ -38,7 +42,7 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 const MAX_KEY_SIZE: usize = 8388208;
 
 /// The RocksDB client that we use.
-pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
+type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The choice of the spawning mode.
 /// `SpawnBlocking` always works and is the safest.
@@ -541,17 +545,9 @@ pub enum RocksDbStoreInternalError {
     #[error("The key must have at most 8M")]
     KeyTooLong,
 
-    /// Missing database
-    #[error("Missing database: {0}")]
-    MissingDatabase(String),
-
     /// Invalid namespace
     #[error("Invalid namespace")]
     InvalidNamespace,
-
-    /// Already existing database
-    #[error("Already existing database")]
-    AlreadyExistingDatabase,
 
     /// Filesystem error
     #[error("Filesystem error: {0}")]
@@ -592,4 +588,39 @@ impl PathWithGuard {
 
 impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";
+}
+
+/// The `RocksDbStore` composed type with metrics
+#[cfg(with_metrics)]
+pub type RocksDbStore = MeteredStore<
+    LruCachingStore<MeteredStore<ValueSplittingStore<MeteredStore<RocksDbStoreInternal>>>>,
+>;
+
+/// The `RocksDbStore` composed type
+#[cfg(not(with_metrics))]
+pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal>>;
+
+/// The composed error type for the `RocksDbStore`
+pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
+
+/// The composed config type for the `RocksDbStore`
+pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
+
+impl RocksDbStoreConfig {
+    /// Creates a new `RocksDbStoreConfig` from the input.
+    pub fn new(
+        spawn_mode: RocksDbSpawnMode,
+        path_with_guard: PathWithGuard,
+        common_config: crate::store::CommonStoreConfig,
+    ) -> RocksDbStoreConfig {
+        let inner_config = RocksDbStoreInternalConfig {
+            path_with_guard,
+            spawn_mode,
+            common_config: common_config.reduced(),
+        };
+        RocksDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
+    }
 }

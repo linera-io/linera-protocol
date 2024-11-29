@@ -30,23 +30,30 @@ use futures::future::{join_all, FutureExt as _};
 use linera_base::ensure;
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+use crate::metering::MeteredStore;
+#[cfg(with_testing)]
+use crate::store::TestKeyValueStore;
 use crate::{
     batch::SimpleUnorderedBatch,
     common::get_uleb128_size,
-    journaling::{DirectWritableKeyValueStore, JournalConsistencyError},
+    journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
+    lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyIterable, KeyValueIterable,
         KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
+    value_splitting::{ValueSplittingError, ValueSplittingStore},
 };
-#[cfg(with_testing)]
-use crate::{journaling::JournalingKeyValueStore, store::TestKeyValueStore};
 
 /// Name of the environment variable with the address to a LocalStack instance.
 const LOCALSTACK_ENDPOINT: &str = "LOCALSTACK_ENDPOINT";
 
+/// The configuration to connect to DynamoDB.
+pub type Config = aws_sdk_dynamodb::Config;
+
 /// Gets the AWS configuration from the environment
-pub async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
+async fn get_base_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -62,8 +69,7 @@ fn get_endpoint_address() -> Option<String> {
 }
 
 /// Gets the localstack config
-pub async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError>
-{
+async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     let base_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest())
         .boxed()
         .await;
@@ -75,7 +81,7 @@ pub async fn get_localstack_config() -> Result<aws_sdk_dynamodb::Config, DynamoD
 }
 
 /// Getting a configuration for the system
-pub async fn get_config_internal(
+async fn get_config_internal(
     use_localstack: bool,
 ) -> Result<aws_sdk_dynamodb::Config, DynamoDbStoreInternalError> {
     if use_localstack {
@@ -321,9 +327,9 @@ pub struct DynamoDbStoreInternal {
 #[derive(Debug)]
 pub struct DynamoDbStoreInternalConfig {
     /// The AWS configuration
-    pub config: aws_sdk_dynamodb::Config,
+    config: aws_sdk_dynamodb::Config,
     /// The common configuration of the key value store
-    pub common_config: CommonStoreInternalConfig,
+    common_config: CommonStoreInternalConfig,
 }
 
 impl AdminKeyValueStore for DynamoDbStoreInternal {
@@ -1129,6 +1135,49 @@ impl TestKeyValueStore for JournalingKeyValueStore<DynamoDbStoreInternal> {
             config,
             common_config,
         })
+    }
+}
+
+/// A shared DB client for DynamoDb implementing LruCaching and metrics
+#[cfg(with_metrics)]
+pub type DynamoDbStore = MeteredStore<
+    LruCachingStore<
+        MeteredStore<
+            ValueSplittingStore<MeteredStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>,
+        >,
+    >,
+>;
+
+/// A shared DB client for DynamoDb implementing LruCaching
+#[cfg(not(with_metrics))]
+pub type DynamoDbStore =
+    LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<DynamoDbStoreInternal>>>;
+
+/// The combined error type for the `DynamoDbStore`.
+pub type DynamoDbStoreError = ValueSplittingError<DynamoDbStoreInternalError>;
+
+/// The config type for DynamoDbStore
+pub type DynamoDbStoreConfig = LruCachingConfig<DynamoDbStoreInternalConfig>;
+
+/// Getting a configuration for the system
+pub async fn get_config(use_localstack: bool) -> Result<Config, DynamoDbStoreError> {
+    Ok(get_config_internal(use_localstack).await?)
+}
+
+impl DynamoDbStoreConfig {
+    /// Creates a `DynamoDbStoreConfig` from the input.
+    pub fn new(
+        config: Config,
+        common_config: crate::store::CommonStoreConfig,
+    ) -> DynamoDbStoreConfig {
+        let inner_config = DynamoDbStoreInternalConfig {
+            config,
+            common_config: common_config.reduced(),
+        };
+        DynamoDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
     }
 }
 

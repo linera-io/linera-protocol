@@ -12,7 +12,7 @@ use linera_storage_service::{
     common::{ServiceStoreConfig, ServiceStoreInternalConfig},
 };
 #[cfg(feature = "dynamodb")]
-use linera_views::backends::{get_config, DynamoDbStore, DynamoDbStoreConfig};
+use linera_views::dynamo_db::{get_config, DynamoDbStore, DynamoDbStoreConfig};
 #[cfg(with_storage)]
 use linera_views::store::LocalAdminKeyValueStore as _;
 use linera_views::{
@@ -23,12 +23,12 @@ use linera_views::{
 use tracing::error;
 #[cfg(feature = "rocksdb")]
 use {
-    linera_views::backends::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    linera_views::rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
     std::path::PathBuf,
 };
 #[cfg(feature = "scylladb")]
 use {
-    linera_views::backends::{ScyllaDbStore, ScyllaDbStoreConfig},
+    linera_views::scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
     std::num::NonZeroU16,
     tracing::debug,
 };
@@ -53,11 +53,11 @@ util::impl_from_dynamic!(Error:Backend, linera_views::memory::MemoryStoreError);
 #[cfg(feature = "storage-service")]
 util::impl_from_dynamic!(Error:Backend, linera_storage_service::common::ServiceStoreError);
 #[cfg(feature = "rocksdb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::backends::RocksDbStoreError);
+util::impl_from_dynamic!(Error:Backend, linera_views::rocks_db::RocksDbStoreError);
 #[cfg(feature = "dynamodb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::backends::DynamoDbStoreError);
+util::impl_from_dynamic!(Error:Backend, linera_views::dynamo_db::DynamoDbStoreError);
 #[cfg(feature = "scylladb")]
-util::impl_from_dynamic!(Error:Backend, linera_views::backends::ScyllaDbStoreError);
+util::impl_from_dynamic!(Error:Backend, linera_views::scylla_db::ScyllaDbStoreError);
 
 /// The configuration of the key value store in use.
 pub enum StoreConfig {

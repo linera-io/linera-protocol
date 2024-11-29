@@ -8,11 +8,11 @@ use std::{
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 #[cfg(with_dynamodb)]
-use linera_views::backends::DynamoDbStore;
+use linera_views::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
-use linera_views::backends::RocksDbStore;
+use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use linera_views::backends::ScyllaDbStore;
+use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
     bucket_queue_view::BucketQueueView,
     context::ViewContext,

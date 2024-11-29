@@ -8,11 +8,11 @@ use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
 #[cfg(with_dynamodb)]
-use crate::backends::DynamoDbStore;
+use crate::dynamo_db::DynamoDbStore;
 #[cfg(with_rocksdb)]
-use crate::backends::RocksDbStore;
+use crate::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
-use crate::backends::ScyllaDbStore;
+use crate::scylla_db::ScyllaDbStore;
 #[cfg(any(with_scylladb, with_dynamodb, with_rocksdb))]
 use crate::store::TestKeyValueStore;
 use crate::{
