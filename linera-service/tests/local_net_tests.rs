@@ -192,7 +192,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         )
         .await?;
 
-    if let Some(node_service_2) = node_service_2 {
+    if let Some(mut node_service_2) = node_service_2 {
         node_service_2.process_inbox(&chain_2).await?;
         let query = format!(
             "query {{ chain(chainId:\"{chain_2}\") {{
@@ -214,6 +214,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         let committees = &response["chain"]["executionState"]["system"]["committees"];
         let epochs = committees.as_object().unwrap().keys().collect::<Vec<_>>();
         assert_eq!(&epochs, &["7"]);
+
+        node_service_2.ensure_is_running()?;
     } else {
         client_2.sync(chain_2).await?;
         client_2.process_inbox(chain_2).await?;
@@ -584,12 +586,14 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
         1
     );
+
+    node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
@@ -619,12 +623,14 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
         1
     );
+
+    node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
@@ -686,7 +692,7 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
-    let (_net, client) = config.instantiate().await?;
+    let (mut net, client) = config.instantiate().await?;
 
     let wallet_state = WalletState::read_from_file(client.wallet_path().as_path())?;
     let chain_id = wallet_state.default_chain().unwrap();
@@ -696,6 +702,9 @@ async fn test_storage_service_wallet_lock() -> Result<()> {
 
     drop(lock);
     assert!(client.process_inbox(chain_id).await.is_ok());
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
 
     Ok(())
 }
