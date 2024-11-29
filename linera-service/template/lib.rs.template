@@ -1,6 +1,6 @@
 use linera_sdk::{{
-  base::{{ContractAbi, ServiceAbi}},
-  graphql::GraphQLMutationRoot
+    base::{{ContractAbi, ServiceAbi}},
+    graphql::GraphQLMutationRoot
 }};
 use serde::{{Deserialize, Serialize}};
 use async_graphql::{{Request, Response}};
