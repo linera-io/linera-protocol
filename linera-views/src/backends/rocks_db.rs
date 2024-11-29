@@ -545,8 +545,8 @@ pub enum RocksDbStoreInternalError {
     #[error("The key must have at most 8M")]
     KeyTooLong,
 
-    /// Invalid namespace
-    #[error("Invalid namespace")]
+    /// Namespace contains forbidden characters
+    #[error("Namespace contains forbidden characters")]
     InvalidNamespace,
 
     /// Filesystem error

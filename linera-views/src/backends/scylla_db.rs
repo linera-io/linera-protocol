@@ -457,9 +457,9 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
 
-    /// Table name contains forbidden characters
-    #[error("Table name contains forbidden characters")]
-    InvalidTableName,
+    /// Namespace contains forbidden characters
+    #[error("Namespace contains forbidden characters")]
+    InvalidNamespace,
 
     /// The journal is not coherent
     #[error(transparent)]
@@ -819,7 +819,7 @@ impl ScyllaDbStoreInternal {
         {
             return Ok(());
         }
-        Err(ScyllaDbStoreInternalError::InvalidTableName)
+        Err(ScyllaDbStoreInternalError::InvalidNamespace)
     }
 }
 

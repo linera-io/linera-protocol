@@ -513,12 +513,12 @@ impl DynamoDbStoreInternal {
     /// Namespaces are named table names in DynamoDb [naming
     /// rules](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.NamingRules),
     /// so we need to check correctness of the namespace
-    fn check_namespace(namespace: &str) -> Result<(), InvalidTableName> {
+    fn check_namespace(namespace: &str) -> Result<(), InvalidNamespace> {
         if namespace.len() < 3 {
-            return Err(InvalidTableName::TooShort);
+            return Err(InvalidNamespace::TooShort);
         }
         if namespace.len() > 255 {
-            return Err(InvalidTableName::TooLong);
+            return Err(InvalidNamespace::TooLong);
         }
         if !namespace.chars().all(|character| {
             character.is_ascii_alphanumeric()
@@ -526,7 +526,7 @@ impl DynamoDbStoreInternal {
                 || character == '-'
                 || character == '_'
         }) {
-            return Err(InvalidTableName::InvalidCharacter);
+            return Err(InvalidNamespace::InvalidCharacter);
         }
         Ok(())
     }
@@ -950,19 +950,19 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     }
 }
 
-/// Error when validating a table name.
+/// Error when validating a namespace
 #[derive(Debug, Error)]
-pub enum InvalidTableName {
-    /// The table name should be at least 3 characters.
-    #[error("Table name must have at least 3 characters")]
+pub enum InvalidNamespace {
+    /// The namespace should be at least 3 characters.
+    #[error("Namespace must have at least 3 characters")]
     TooShort,
 
-    /// The table name should be at most 63 characters.
-    #[error("Table name must be at most 63 characters")]
+    /// The namespace should be at most 63 characters.
+    #[error("Namespace must be at most 63 characters")]
     TooLong,
 
     /// allowed characters are lowercase letters, numbers, periods and hyphens
-    #[error("Table name must only contain lowercase letters, numbers, periods and hyphens")]
+    #[error("Namespace must only contain lowercase letters, numbers, periods and hyphens")]
     InvalidCharacter,
 }
 
@@ -1045,9 +1045,9 @@ pub enum DynamoDbStoreInternalError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
-    /// A wrong table name error occurred
+    /// A wrong namespace error occurred
     #[error(transparent)]
-    InvalidTableName(#[from] InvalidTableName),
+    InvalidNamespace(#[from] InvalidNamespace),
 
     /// An error occurred while creating the table.
     #[error(transparent)]
