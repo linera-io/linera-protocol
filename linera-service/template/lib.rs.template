@@ -4,6 +4,7 @@ use linera_sdk::{{
 }};
 use serde::{{Deserialize, Serialize}};
 use async_graphql::{{Request, Response}};
+
 pub struct {project_name}Abi;
 
 impl ContractAbi for {project_name}Abi {{
@@ -22,4 +23,3 @@ pub enum Operation {{
       value: u64
   }} 
 }}
-
