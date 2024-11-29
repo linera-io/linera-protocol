@@ -110,6 +110,8 @@ pub async fn handle_net_up_kubernetes(
     num_shards: usize,
     testing_prng_seed: Option<u64>,
     binaries: &Option<Option<PathBuf>>,
+    no_build: bool,
+    docker_image_name: String,
     policy: ResourceControlPolicy,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
@@ -130,6 +132,8 @@ pub async fn handle_net_up_kubernetes(
         num_initial_validators,
         num_shards,
         binaries: binaries.clone().into(),
+        no_build,
+        docker_image_name,
         policy,
     };
     let (mut net, client1) = config.instantiate().await?;

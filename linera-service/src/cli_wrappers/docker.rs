@@ -17,7 +17,7 @@ impl DockerImage {
         &self.name
     }
 
-    pub async fn build(name: String, binaries: &BuildArg, github_root: &PathBuf) -> Result<Self> {
+    pub async fn build(name: &String, binaries: &BuildArg, github_root: &PathBuf) -> Result<Self> {
         let build_arg = match binaries {
             BuildArg::Directory(bin_path) => {
                 // Get the binaries from the specified path
@@ -73,12 +73,7 @@ impl DockerImage {
                 ),
             ]);
 
-        command
-            .arg(".")
-            .args(["-t", &name])
-            .spawn_and_wait()
-            .await?;
-
+        command.arg(".").args(["-t", name]).spawn_and_wait().await?;
         Ok(docker_image)
     }
 }
