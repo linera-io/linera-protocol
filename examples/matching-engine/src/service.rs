@@ -13,10 +13,10 @@ use linera_sdk::{
 };
 use matching_engine::{Operation, Parameters};
 
-use crate::state::MatchingEngine;
+use crate::state::MatchingEngineState;
 
 pub struct MatchingEngineService {
-    state: Arc<MatchingEngine>,
+    state: Arc<MatchingEngineState>,
 }
 
 linera_sdk::service!(MatchingEngineService);
@@ -29,7 +29,7 @@ impl Service for MatchingEngineService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = MatchingEngine::load(runtime.root_view_storage_context())
+        let state = MatchingEngineState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         MatchingEngineService {
