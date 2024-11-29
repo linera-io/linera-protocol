@@ -14,7 +14,7 @@ use linera_chain::{
         IncomingBundle, Medium, MessageAction, ProposalContent,
     },
     manager,
-    types::HashedCertificateValue,
+    types::{Hashed, ValidatedBlock},
 };
 use linera_execution::{ChannelSubscription, Query, ResourceControlPolicy, Response};
 use linera_storage::{Clock as _, Storage};
@@ -234,7 +234,7 @@ where
         ))
         .await?;
         if let Some(lite_certificate) = &validated_block_certificate {
-            let value = HashedCertificateValue::new_validated(outcome.clone().with(block.clone()));
+            let value = Hashed::new(ValidatedBlock::new(outcome.clone().with(block.clone())));
             lite_certificate
                 .clone()
                 .with_value(value)

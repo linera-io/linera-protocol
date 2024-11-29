@@ -137,30 +137,19 @@ BytecodeId:
     - service_blob_hash:
         TYPENAME: CryptoHash
 Certificate:
-  STRUCT:
-    - value:
-        TYPENAME: CertificateValue
-    - round:
-        TYPENAME: Round
-    - signatures:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ValidatorName
-            - TYPENAME: Signature
-CertificateValue:
   ENUM:
     0:
-      ValidatedBlock:
+      Validated:
         NEWTYPE:
-          TYPENAME: ValidatedBlock
+          TYPENAME: ValidatedBlockCertificate
     1:
-      ConfirmedBlock:
+      Confirmed:
         NEWTYPE:
-          TYPENAME: ConfirmedBlock
+          TYPENAME: ConfirmedBlockCertificate
     2:
       Timeout:
         NEWTYPE:
-          TYPENAME: Timeout
+          TYPENAME: TimeoutCertificate
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -571,8 +560,9 @@ NodeError:
       MissingCertificateValue: UNIT
     9:
       MissingCertificates:
-        STRUCT:
-          - missing: STR
+        NEWTYPE:
+          SEQ:
+            TYPENAME: CryptoHash
     10:
       MissingVoteInValidatorResponse: UNIT
     11:

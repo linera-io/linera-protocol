@@ -241,6 +241,21 @@ message Certificate {
 
   // Signatures on the value hash and round
   bytes signatures = 3;
+
+  // The type of the `value` field.
+  CertificateType tpe = 4;
+}
+
+// Type of the value within the certificate.
+enum CertificateType {
+  // A value for validated block.
+  ValidatedBlock = 0;
+
+  // A value for confirmed block.
+  ConfirmedBlock = 1;
+
+  // A value for a timeout message.
+  Timeout = 2;
 }
 
 message ChainId {

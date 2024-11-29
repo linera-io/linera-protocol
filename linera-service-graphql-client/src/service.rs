@@ -136,7 +136,7 @@ mod from {
             BlockExecutionOutcome, EventRecord, ExecutedBlock, IncomingBundle, MessageBundle,
             OutgoingMessage, PostedMessage,
         },
-        types::HashedCertificateValue,
+        types::{ConfirmedBlock, Hashed},
     };
 
     use super::*;
@@ -299,15 +299,12 @@ mod from {
         }
     }
 
-    impl TryFrom<block::BlockBlock> for HashedCertificateValue {
+    impl TryFrom<block::BlockBlock> for Hashed<ConfirmedBlock> {
         type Error = String;
         fn try_from(val: block::BlockBlock) -> Result<Self, Self::Error> {
             match (val.value.status.as_str(), val.value.executed_block) {
-                ("validated", executed_block) => {
-                    Ok(HashedCertificateValue::new_validated(executed_block.into()).into())
-                }
                 ("confirmed", executed_block) => {
-                    Ok(HashedCertificateValue::new_confirmed(executed_block.into()).into())
+                    Ok(Hashed::new(ConfirmedBlock::new(executed_block.into())))
                 }
                 _ => Err(val.value.status),
             }

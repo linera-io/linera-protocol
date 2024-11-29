@@ -9,13 +9,11 @@ use serde::{
     Deserialize, Deserializer,
 };
 
-use super::{
-    generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
-    HashedCertificateValue,
-};
+use super::{generic::GenericCertificate, Certificate};
 use crate::{
-    block::ValidatedBlock,
+    block::{ConversionError, ValidatedBlock},
     data_types::{ExecutedBlock, LiteValue},
+    types::Hashed,
 };
 
 impl GenericCertificate<ValidatedBlock> {
@@ -38,39 +36,30 @@ impl GenericCertificate<ValidatedBlock> {
 
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        self.inner().inner()
+        self.inner().executed_block()
     }
 }
 
-impl From<Certificate> for GenericCertificate<ValidatedBlock> {
-    fn from(cert: Certificate) -> Self {
-        let (value, round, signatures) = cert.destructure();
-        let value_hash = value.hash();
-        match value.into_inner() {
-            CertificateValue::ValidatedBlock(validated) => Self::new(
-                Hashed::unchecked_new(validated, value_hash),
-                round,
-                signatures,
-            ),
-            _ => panic!("Expected a validated block certificate"),
+impl TryFrom<Certificate> for GenericCertificate<ValidatedBlock> {
+    type Error = ConversionError;
+
+    fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
+        match cert {
+            Certificate::Validated(validated) => Ok(validated),
+            _ => Err(ConversionError::ValidatedBlock),
         }
     }
 }
 
 impl From<GenericCertificate<ValidatedBlock>> for Certificate {
     fn from(cert: GenericCertificate<ValidatedBlock>) -> Certificate {
-        let (value, round, signatures) = cert.destructure();
-        Certificate::new(
-            HashedCertificateValue::new_validated(value.into_inner().into_inner()).into(),
-            round,
-            signatures,
-        )
+        Certificate::Validated(cert)
     }
 }
 
 impl Serialize for GenericCertificate<ValidatedBlock> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 4)?;
+        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 3)?;
         state.serialize_field("value", self.inner())?;
         state.serialize_field("round", &self.round)?;
         state.serialize_field("signatures", self.signatures())?;
@@ -86,12 +75,17 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
         #[derive(Deserialize)]
         #[serde(rename = "ValidatedBlockCertificate")]
         struct Inner {
-            value: ValidatedBlock,
+            value: Hashed<ValidatedBlock>,
             round: Round,
             signatures: Vec<(ValidatorName, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
-        let validated_hashed = HashedCertificateValue::new_validated(inner.value.into_inner());
-        Ok(Self::new(validated_hashed, inner.round, inner.signatures))
+        if !crate::data_types::is_strictly_ordered(&inner.signatures) {
+            Err(serde::de::Error::custom(
+                "Signatures are not strictly ordered",
+            ))
+        } else {
+            Ok(Self::new(inner.value, inner.round, inner.signatures))
+        }
     }
 }

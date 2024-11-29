@@ -44,9 +44,8 @@ use linera_chain::{
         MessageAction,
     },
     types::{
-        Certificate, CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate,
-        GenericCertificate, Hashed, HashedCertificateValue, LiteCertificate, Timeout,
-        TimeoutCertificate, ValidatedBlockCertificate,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -1004,13 +1003,12 @@ where
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        let hashed_value =
-            HashedCertificateValue::new_confirmed(certificate.executed_block().clone());
+        let hashed_value = Hashed::new(ConfirmedBlock::from_validated(certificate.inner().clone()));
         let finalize_action = CommunicateAction::FinalizeBlock {
-            certificate: certificate.into(),
+            certificate,
             delivery: self.options.cross_chain_message_delivery,
         };
-        let certificate: ConfirmedBlockCertificate = self
+        let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
         self.receive_certificate_and_update_validators_internal(
@@ -1623,7 +1621,7 @@ where
             round,
             chain_id,
         };
-        let value: Hashed<Timeout> = HashedCertificateValue::new_timeout(chain_id, height, epoch);
+        let value: Hashed<Timeout> = Hashed::new(Timeout::new(chain_id, height, epoch));
         let certificate = self
             .communicate_chain_action(&committee, action, value)
             .await?;
@@ -2054,7 +2052,9 @@ where
         block.check_proposal_size(max_size, &blobs)?;
         self.state_mut().set_pending_block(block.clone());
 
-        Ok(HashedCertificateValue::new_confirmed(executed_block))
+        Ok(Hashed::new(ConfirmedBlock::from_validated(
+            ValidatedBlock::new(executed_block),
+        )))
     }
 
     /// Returns a suitable timestamp for the next block.
@@ -2383,11 +2383,13 @@ where
         let committee = self.local_committee().await?;
         // Send the query to validators.
         let certificate = if round.is_fast() {
-            let hashed_value = HashedCertificateValue::new_confirmed(executed_block);
+            let hashed_value = Hashed::new(ConfirmedBlock::from_validated(ValidatedBlock::new(
+                executed_block,
+            )));
             self.submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {
-            let hashed_value = HashedCertificateValue::new_validated(executed_block);
+            let hashed_value = Hashed::new(ValidatedBlock::new(executed_block));
             let certificate = self
                 .submit_block_proposal(&committee, proposal, hashed_value.clone())
                 .await?;
@@ -2815,7 +2817,7 @@ where
     pub async fn stage_new_committee(
         &self,
         committee: Committee,
-    ) -> Result<ClientOutcome<Certificate>, ChainClientError> {
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             self.prepare_chain().await?;
             let epoch = self.epoch().await?;
@@ -2829,7 +2831,7 @@ where
                 .await?
             {
                 ExecuteBlockOutcome::Executed(certificate) => {
-                    return Ok(ClientOutcome::Committed(certificate.into()))
+                    return Ok(ClientOutcome::Committed(certificate))
                 }
                 ExecuteBlockOutcome::Conflict(_) => continue,
                 ExecuteBlockOutcome::WaitForTimeout(timeout) => {

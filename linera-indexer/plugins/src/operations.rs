@@ -9,7 +9,7 @@ use std::{
 use async_graphql::{OneofObject, SimpleObject};
 use axum::Router;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, doc_scalar, identifiers::ChainId};
-use linera_chain::types::HashedCertificateValue;
+use linera_chain::types::{ConfirmedBlock, Hashed};
 use linera_execution::Operation;
 use linera_indexer::{
     common::IndexerError,
@@ -126,16 +126,20 @@ where
         Ok(Self(load(store, NAME).await?))
     }
 
-    async fn register(&self, value: &HashedCertificateValue) -> Result<(), IndexerError> {
+    async fn register(&self, value: &Hashed<ConfirmedBlock>) -> Result<(), IndexerError> {
         let mut plugin = self.0.lock().await;
-        let Some(executed_block) = value.inner().executed_block() else {
-            return Ok(());
-        };
         let chain_id = value.inner().chain_id();
-        for (index, content) in executed_block.block.operations.iter().enumerate() {
+        for (index, content) in value
+            .inner()
+            .executed_block()
+            .block
+            .operations
+            .iter()
+            .enumerate()
+        {
             let key = OperationKey {
                 chain_id,
-                height: executed_block.block.height,
+                height: value.inner().height(),
                 index,
             };
             match plugin

@@ -16,7 +16,7 @@ use linera_chain::{
         Block, ChannelFullName, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
         SignatureAggregator,
     },
-    types::{Certificate, HashedCertificateValue},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed, ValidatedBlock},
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation},
@@ -27,7 +27,7 @@ use super::TestValidator;
 use crate::ToBcsBytes;
 
 /// A helper type to build [`Block`]s using the builder pattern, and then signing them into
-/// [`Certificate`]s using a [`TestValidator`].
+/// [`ConfirmedBlockCertificate`]s using a [`TestValidator`].
 pub struct BlockBuilder {
     block: Block,
     validator: TestValidator,
@@ -48,7 +48,7 @@ impl BlockBuilder {
     pub(crate) fn new(
         chain_id: ChainId,
         owner: Owner,
-        previous_block: Option<&Certificate>,
+        previous_block: Option<&ConfirmedBlockCertificate>,
         validator: TestValidator,
     ) -> Self {
         let previous_block_hash = previous_block.map(|certificate| certificate.hash());
@@ -171,7 +171,7 @@ impl BlockBuilder {
     /// Receives all admin messages that were sent to this chain by the given certificate.
     pub fn with_system_messages_from(
         &mut self,
-        certificate: &Certificate,
+        certificate: &ConfirmedBlockCertificate,
         channel: SystemChannel,
     ) -> &mut Self {
         let medium = Medium::Channel(ChannelFullName {
@@ -182,14 +182,14 @@ impl BlockBuilder {
     }
 
     /// Receives all direct messages  that were sent to this chain by the given certificate.
-    pub fn with_messages_from(&mut self, certificate: &Certificate) -> &mut Self {
+    pub fn with_messages_from(&mut self, certificate: &ConfirmedBlockCertificate) -> &mut Self {
         self.with_messages_from_by_medium(certificate, &Medium::Direct, MessageAction::Accept)
     }
 
     /// Receives all messages that were sent to this chain by the given certificate.
     pub fn with_messages_from_by_medium(
         &mut self,
-        certificate: &Certificate,
+        certificate: &ConfirmedBlockCertificate,
         medium: &Medium,
         action: MessageAction,
     ) -> &mut Self {
@@ -209,15 +209,16 @@ impl BlockBuilder {
 
     /// Tries to sign the prepared [`Block`] with the [`TestValidator`]'s keys and return the
     /// resulting [`Certificate`]. Returns an error if block execution fails.
-    pub(crate) async fn try_sign(self) -> anyhow::Result<Certificate> {
+    pub(crate) async fn try_sign(self) -> anyhow::Result<ConfirmedBlockCertificate> {
         let (executed_block, _) = self
             .validator
             .worker()
             .stage_block_execution(self.block)
             .await?;
 
-        let value: HashedCertificateValue =
-            HashedCertificateValue::new_confirmed(executed_block).into();
+        let value = Hashed::new(ConfirmedBlock::from_validated(ValidatedBlock::new(
+            executed_block,
+        )));
         let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
         let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder

@@ -86,10 +86,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
     data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
-    types::{
-        ConfirmedBlockCertificate, Hashed, HashedCertificateValue, TimeoutCertificate,
-        ValidatedBlockCertificate,
-    },
+    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
 
@@ -337,7 +334,7 @@ impl ChainManager {
                 return false; // We already signed this timeout.
             }
         }
-        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
+        let value = Hashed::new(Timeout::new(chain_id, height, epoch));
         self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
         true
     }
@@ -359,7 +356,7 @@ impl ChainManager {
         if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
-        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
+        let value = Hashed::new(Timeout::new(chain_id, height, epoch));
         let last_regular_round = Round::SingleLeader(u32::MAX);
         self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
@@ -418,7 +415,7 @@ impl ChainManager {
                 .as_ref()
                 .map_or(true, |locked| locked.round < lite_cert.round)
             {
-                let value = HashedCertificateValue::new_validated(executed_block.clone());
+                let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.with_value(value) {
                     self.locked = Some(certificate);
                 }
@@ -433,14 +430,14 @@ impl ChainManager {
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
             if round.is_fast() {
                 self.confirmed_vote = Some(Vote::new(
-                    HashedCertificateValue::new_confirmed(executed_block),
+                    Hashed::new(ConfirmedBlock::new(executed_block)),
                     round,
                     key_pair,
                 ));
                 self.validated_vote = None
             } else {
                 self.validated_vote = Some(Vote::new(
-                    HashedCertificateValue::new_validated(executed_block),
+                    Hashed::new(ValidatedBlock::new(executed_block)),
                     round,
                     key_pair,
                 ));

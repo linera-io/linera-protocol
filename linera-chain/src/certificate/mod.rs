@@ -8,7 +8,6 @@ mod hashed;
 mod lite;
 mod timeout;
 mod validated;
-mod value;
 
 use std::collections::HashSet;
 
@@ -21,13 +20,9 @@ use linera_base::{
 };
 use linera_execution::committee::{Epoch, ValidatorName};
 pub use lite::LiteCertificate;
-use serde::{Deserialize, Deserializer, Serialize};
-pub use value::{CertificateValue, HashedCertificateValue};
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    data_types::{is_strictly_ordered, LiteValue, Medium, MessageBundle},
-    types::{ConfirmedBlock, Timeout, ValidatedBlock},
-};
+use crate::types::{ConfirmedBlock, Timeout, ValidatedBlock};
 
 /// Certificate for a [`ValidatedBlock`]` instance.
 pub type ValidatedBlockCertificate = GenericCertificate<ValidatedBlock>;
@@ -38,93 +33,49 @@ pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
 /// Certificate for a [`Timeout`] instance.
 pub type TimeoutCertificate = GenericCertificate<Timeout>;
 
-/// A certified statement from the committee.
-pub type Certificate = GenericCertificate<CertificateValue>;
-
-impl Serialize for Certificate {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        #[derive(Debug, Serialize)]
-        #[serde(rename = "Certificate")]
-        struct CertificateHelper<'a> {
-            value: &'a CertificateValue,
-            round: Round,
-            signatures: &'a Vec<(ValidatorName, Signature)>,
-        }
-
-        let helper = CertificateHelper {
-            value: self.inner(),
-            round: self.round,
-            signatures: self.signatures(),
-        };
-
-        helper.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Certificate {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Debug, Deserialize)]
-        #[serde(rename = "Certificate")]
-        struct CertificateHelper {
-            value: HashedCertificateValue,
-            round: Round,
-            signatures: Vec<(ValidatorName, Signature)>,
-        }
-
-        let helper: CertificateHelper = Deserialize::deserialize(deserializer)?;
-        if !is_strictly_ordered(&helper.signatures) {
-            Err(serde::de::Error::custom("Vector is not strictly sorted"))
-        } else {
-            Ok(Self::new(helper.value, helper.round, helper.signatures))
-        }
-    }
+/// Enum wrapping all types of certificates that can be created.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub enum Certificate {
+    /// Certificate for [`ValidatedBlock`].
+    Validated(ValidatedBlockCertificate),
+    /// Certificate for [`ConfirmedBlock`].
+    Confirmed(ConfirmedBlockCertificate),
+    /// Certificate for [`Timeout`].
+    Timeout(TimeoutCertificate),
 }
 
 impl Certificate {
-    /// Returns the `LiteValue` corresponding to the certified value.
-    pub fn lite_value(&self) -> LiteValue {
-        LiteValue {
-            value_hash: self.hash(),
-            chain_id: self.inner().chain_id(),
+    pub fn round(&self) -> Round {
+        match self {
+            Certificate::Validated(cert) => cert.round,
+            Certificate::Confirmed(cert) => cert.round,
+            Certificate::Timeout(cert) => cert.round,
         }
     }
 
-    /// Returns the bundles of messages sent via the given medium to the specified
-    /// recipient. Messages originating from different transactions of the original block
-    /// are kept in separate bundles. If the medium is a channel, does not verify that the
-    /// recipient is actually subscribed to that channel.
-    pub fn message_bundles_for<'a>(
-        &'a self,
-        medium: &'a Medium,
-        recipient: ChainId,
-    ) -> impl Iterator<Item = (Epoch, MessageBundle)> + 'a {
-        let certificate_hash = self.hash();
-        self.inner()
-            .executed_block()
-            .into_iter()
-            .flat_map(move |executed_block| {
-                executed_block.message_bundles_for(medium, recipient, certificate_hash)
-            })
+    pub fn height(&self) -> BlockHeight {
+        match self {
+            Certificate::Validated(cert) => cert.value().inner().executed_block().block.height,
+            Certificate::Confirmed(cert) => cert.value().inner().executed_block().block.height,
+            Certificate::Timeout(cert) => cert.inner().height,
+        }
     }
 
-    pub fn requires_blob(&self, blob_id: &BlobId) -> bool {
-        self.inner()
-            .executed_block()
-            .is_some_and(|executed_block| executed_block.requires_blob(blob_id))
+    pub fn chain_id(&self) -> ChainId {
+        match self {
+            Certificate::Validated(cert) => cert.value().inner().executed_block().block.chain_id,
+            Certificate::Confirmed(cert) => cert.value().inner().executed_block().block.chain_id,
+            Certificate::Timeout(cert) => cert.inner().chain_id,
+        }
     }
 
-    #[cfg(with_testing)]
-    pub fn outgoing_message_count(&self) -> usize {
-        let Some(executed_block) = self.inner().executed_block() else {
-            return 0;
-        };
-        executed_block.messages().iter().map(Vec::len).sum()
+    pub fn signatures(&self) -> &Vec<(ValidatorName, Signature)> {
+        match self {
+            Certificate::Validated(cert) => cert.signatures(),
+            Certificate::Confirmed(cert) => cert.signatures(),
+            Certificate::Timeout(cert) => cert.signatures(),
+        }
     }
 }
 
@@ -163,19 +114,19 @@ impl CertificateValueT for Timeout {
 
 impl CertificateValueT for ValidatedBlock {
     fn chain_id(&self) -> ChainId {
-        self.inner().block.chain_id
+        self.executed_block().block.chain_id
     }
 
     fn epoch(&self) -> Epoch {
-        self.inner().block.epoch
+        self.executed_block().block.epoch
     }
 
     fn height(&self) -> BlockHeight {
-        self.inner().block.height
+        self.executed_block().block.height
     }
 
     fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.inner().outcome.required_blob_ids().clone()
+        self.executed_block().outcome.required_blob_ids().clone()
     }
 
     #[cfg(with_testing)]
@@ -199,39 +150,5 @@ impl CertificateValueT for ConfirmedBlock {
 
     fn required_blob_ids(&self) -> HashSet<BlobId> {
         self.executed_block().outcome.required_blob_ids().clone()
-    }
-}
-
-impl CertificateValueT for CertificateValue {
-    fn chain_id(&self) -> ChainId {
-        match self {
-            CertificateValue::ValidatedBlock(validated) => validated.chain_id(),
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.chain_id(),
-            CertificateValue::Timeout(timeout) => timeout.chain_id(),
-        }
-    }
-
-    fn epoch(&self) -> Epoch {
-        match self {
-            CertificateValue::ValidatedBlock(validated) => validated.epoch(),
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.epoch(),
-            CertificateValue::Timeout(timeout) => timeout.epoch(),
-        }
-    }
-
-    fn height(&self) -> BlockHeight {
-        match self {
-            CertificateValue::ValidatedBlock(validated) => validated.height(),
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.height(),
-            CertificateValue::Timeout(timeout) => timeout.height(),
-        }
-    }
-
-    fn required_blob_ids(&self) -> HashSet<BlobId> {
-        match self {
-            CertificateValue::ValidatedBlock(validated) => validated.required_blob_ids(),
-            CertificateValue::ConfirmedBlock(confirmed) => confirmed.required_blob_ids(),
-            CertificateValue::Timeout(timeout) => timeout.required_blob_ids(),
-        }
     }
 }

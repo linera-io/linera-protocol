@@ -6,8 +6,8 @@ use linera_base::data_types::Amount;
 
 use super::*;
 use crate::{
+    block::ConfirmedBlock,
     test::{make_first_block, BlockTestExt},
-    types::HashedCertificateValue,
 };
 
 #[test]
@@ -25,7 +25,7 @@ fn test_signed_values() {
         events: vec![Vec::new()],
     }
     .with(block);
-    let value = HashedCertificateValue::new_confirmed(executed_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
     let v = LiteVote::new(value.lite(), Round::Fast, &key1);
     assert!(v.check().is_ok());
@@ -54,7 +54,7 @@ fn test_certificates() {
         events: vec![Vec::new()],
     }
     .with(block);
-    let value = HashedCertificateValue::new_confirmed(executed_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
     let v1 = LiteVote::new(value.lite(), Round::Fast, &key1);
     let v2 = LiteVote::new(value.lite(), Round::Fast, &key2);
