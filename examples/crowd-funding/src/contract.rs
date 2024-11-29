@@ -12,10 +12,10 @@ use linera_sdk::{
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use state::{CrowdFunding, Status};
+use state::{CrowdFundingState, Status};
 
 pub struct CrowdFundingContract {
-    state: CrowdFunding,
+    state: CrowdFundingState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -31,7 +31,7 @@ impl Contract for CrowdFundingContract {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = CrowdFunding::load(runtime.root_view_storage_context())
+        let state = CrowdFundingState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         CrowdFundingContract { state, runtime }
