@@ -9,31 +9,26 @@ use serde::{
     Deserialize, Deserializer,
 };
 
-use super::{
-    generic::GenericCertificate, hashed::Hashed, Certificate, CertificateValue,
-    HashedCertificateValue,
+use super::{generic::GenericCertificate, Certificate};
+use crate::{
+    block::{ConversionError, Timeout},
+    types::Hashed,
 };
-use crate::block::Timeout;
 
-impl From<Certificate> for GenericCertificate<Timeout> {
-    fn from(cert: Certificate) -> Self {
-        let hash = cert.hash();
-        let (value, round, signatures) = cert.destructure();
-        match value.into_inner() {
-            CertificateValue::Timeout(timeout) => {
-                Self::new(Hashed::unchecked_new(timeout, hash), round, signatures)
-            }
-            _ => panic!("Expected a timeout certificate"),
+impl TryFrom<Certificate> for GenericCertificate<Timeout> {
+    type Error = ConversionError;
+
+    fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
+        match cert {
+            Certificate::Timeout(timeout) => Ok(timeout),
+            _ => Err(ConversionError::Timeout),
         }
     }
 }
 
 impl From<GenericCertificate<Timeout>> for Certificate {
     fn from(cert: GenericCertificate<Timeout>) -> Certificate {
-        let (value, round, signatures) = cert.destructure();
-        let hash = value.hash();
-        let value = Hashed::unchecked_new(CertificateValue::Timeout(value.into_inner()), hash);
-        Certificate::new(value, round, signatures)
+        Certificate::Timeout(cert)
     }
 }
 
@@ -55,16 +50,15 @@ impl<'de> Deserialize<'de> for GenericCertificate<Timeout> {
         #[derive(Deserialize)]
         #[serde(rename = "TimeoutCertificate")]
         struct Inner {
-            value: Timeout,
+            value: Hashed<Timeout>,
             round: Round,
             signatures: Vec<(ValidatorName, Signature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
-        let timeout_hashed = HashedCertificateValue::new_timeout(
-            inner.value.chain_id,
-            inner.value.height,
-            inner.value.epoch,
-        );
-        Ok(Self::new(timeout_hashed, inner.round, inner.signatures))
+        if !crate::data_types::is_strictly_ordered(&inner.signatures) {
+            Err(serde::de::Error::custom("Vector is not strictly sorted"))
+        } else {
+            Ok(Self::new(inner.value, inner.round, inner.signatures))
+        }
     }
 }

@@ -17,7 +17,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, Bytecode, CompressedBytecode},
     identifiers::{ApplicationId, BytecodeId, ChainDescription, ChainId, MessageId},
 };
-use linera_chain::{types::Certificate, ChainError, ChainExecutionContext};
+use linera_chain::{types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext};
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{
     system::{SystemExecutionError, SystemOperation, CREATE_APPLICATION_MESSAGE_INDEX},
@@ -33,7 +33,7 @@ use crate::{ContractAbi, ServiceAbi};
 pub struct ActiveChain {
     key_pair: KeyPair,
     description: ChainDescription,
-    tip: Arc<Mutex<Option<Certificate>>>,
+    tip: Arc<Mutex<Option<ConfirmedBlockCertificate>>>,
     validator: TestValidator,
 }
 
@@ -87,7 +87,10 @@ impl ActiveChain {
     ///
     /// The `block_builder` parameter is a closure that should use the [`BlockBuilder`] parameter
     /// to provide the block's contents.
-    pub async fn add_block(&self, block_builder: impl FnOnce(&mut BlockBuilder)) -> Certificate {
+    pub async fn add_block(
+        &self,
+        block_builder: impl FnOnce(&mut BlockBuilder),
+    ) -> ConfirmedBlockCertificate {
         self.try_add_block(block_builder)
             .await
             .expect("Failed to execute block.")
@@ -101,7 +104,7 @@ impl ActiveChain {
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> Certificate {
+    ) -> ConfirmedBlockCertificate {
         self.try_add_block_with_blobs(block_builder, blobs)
             .await
             .expect("Failed to execute block.")
@@ -114,7 +117,7 @@ impl ActiveChain {
     pub async fn try_add_block(
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
-    ) -> anyhow::Result<Certificate> {
+    ) -> anyhow::Result<ConfirmedBlockCertificate> {
         self.try_add_block_with_blobs(block_builder, vec![]).await
     }
 
@@ -122,7 +125,7 @@ impl ActiveChain {
         &self,
         block_builder: impl FnOnce(&mut BlockBuilder),
         blobs: Vec<Blob>,
-    ) -> anyhow::Result<Certificate> {
+    ) -> anyhow::Result<ConfirmedBlockCertificate> {
         let mut tip = self.tip.lock().await;
         let mut block = BlockBuilder::new(
             self.description.into(),
@@ -208,10 +211,7 @@ impl ActiveChain {
             )
             .await;
 
-        let executed_block = certificate
-            .inner()
-            .executed_block()
-            .expect("Failed to obtain executed block from certificate");
+        let executed_block = certificate.inner().executed_block();
         assert_eq!(executed_block.messages().len(), 1);
         assert_eq!(executed_block.messages()[0].len(), 0);
 
@@ -320,7 +320,9 @@ impl ActiveChain {
             .as_ref()
             .expect("Block was not successfully added")
             .inner()
-            .height()
+            .executed_block()
+            .block
+            .height
     }
 
     /// Creates an application on this microchain, using the bytecode referenced by `bytecode_id`.
@@ -363,10 +365,7 @@ impl ActiveChain {
             })
             .await;
 
-        let executed_block = creation_certificate
-            .inner()
-            .executed_block()
-            .expect("Failed to obtain executed block from certificate");
+        let executed_block = creation_certificate.inner().executed_block();
         assert_eq!(executed_block.messages().len(), 1);
         let creation = MessageId {
             chain_id: executed_block.block.chain_id,

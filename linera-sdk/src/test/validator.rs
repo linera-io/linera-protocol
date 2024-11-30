@@ -200,10 +200,7 @@ impl TestValidator {
                 block.with_system_operation(SystemOperation::OpenChain(new_chain_config));
             })
             .await;
-        let executed_block = certificate
-            .inner()
-            .executed_block()
-            .expect("Failed to obtain executed block from certificate");
+        let executed_block = certificate.inner().executed_block();
 
         ChainDescription::Child(MessageId {
             chain_id: executed_block.block.chain_id,

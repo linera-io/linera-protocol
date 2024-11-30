@@ -86,10 +86,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     block::{ConfirmedBlock, Timeout, ValidatedBlock},
     data_types::{Block, BlockExecutionOutcome, BlockProposal, LiteVote, ProposalContent, Vote},
-    types::{
-        ConfirmedBlockCertificate, Hashed, HashedCertificateValue, TimeoutCertificate,
-        ValidatedBlockCertificate,
-    },
+    types::{Hashed, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
 
@@ -337,7 +334,7 @@ impl ChainManager {
                 return false; // We already signed this timeout.
             }
         }
-        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
+        let value = Hashed::new(Timeout::new(chain_id, height, epoch));
         self.timeout_vote = Some(Vote::new(value, current_round, key_pair));
         true
     }
@@ -359,7 +356,7 @@ impl ChainManager {
         if self.fallback_vote.is_some() || self.current_round >= Round::Validator(0) {
             return false; // We already signed this or are already in fallback mode.
         }
-        let value = HashedCertificateValue::new_timeout(chain_id, height, epoch);
+        let value = Hashed::new(Timeout::new(chain_id, height, epoch));
         let last_regular_round = Round::SingleLeader(u32::MAX);
         self.fallback_vote = Some(Vote::new(value, last_regular_round, key_pair));
         true
@@ -418,7 +415,7 @@ impl ChainManager {
                 .as_ref()
                 .map_or(true, |locked| locked.round < lite_cert.round)
             {
-                let value = HashedCertificateValue::new_validated(executed_block.clone());
+                let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.with_value(value) {
                     self.locked = Some(certificate);
                 }
@@ -433,14 +430,14 @@ impl ChainManager {
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
             if round.is_fast() {
                 self.confirmed_vote = Some(Vote::new(
-                    HashedCertificateValue::new_confirmed(executed_block),
+                    Hashed::new(ConfirmedBlock::new(executed_block)),
                     round,
                     key_pair,
                 ));
                 self.validated_vote = None
             } else {
                 self.validated_vote = Some(Vote::new(
-                    HashedCertificateValue::new_validated(executed_block),
+                    Hashed::new(ValidatedBlock::new(executed_block)),
                     round,
                     key_pair,
                 ));
@@ -464,12 +461,12 @@ impl ChainManager {
         if key_pair.is_some() && round < self.current_round {
             return;
         }
-        let confirmed = ConfirmedBlockCertificate::from_validated(validated.clone());
+        let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
         self.locked = Some(validated);
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.
-            let vote = Vote::new(confirmed.value().clone(), round, key_pair);
+            let vote = Vote::new(Hashed::new(confirmed_block), round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.confirmed_vote = Some(vote);
             self.validated_vote = None;

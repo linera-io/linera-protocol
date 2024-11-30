@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{Certificate, GenericCertificate},
+    types::{Certificate, GenericCertificate, ValidatedBlockCertificate},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
@@ -47,7 +47,7 @@ pub enum CommunicateAction {
         blob_ids: HashSet<BlobId>,
     },
     FinalizeBlock {
-        certificate: Certificate,
+        certificate: ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     },
     RequestTimeout {
@@ -385,10 +385,10 @@ where
                 let block = &proposal.content.block;
                 (block.height, block.chain_id)
             }
-            CommunicateAction::FinalizeBlock { certificate, .. } => {
-                let value = certificate.inner();
-                (value.height(), value.chain_id())
-            }
+            CommunicateAction::FinalizeBlock { certificate, .. } => (
+                certificate.inner().executed_block().block.height,
+                certificate.inner().executed_block().block.chain_id,
+            ),
             CommunicateAction::RequestTimeout {
                 height, chain_id, ..
             } => (*height, *chain_id),

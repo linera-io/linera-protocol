@@ -16,7 +16,7 @@ use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder}
 use linera_base::{
     crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, time::Duration,
 };
-use linera_chain::types::HashedCertificateValue;
+use linera_chain::types::{ConfirmedBlock, Hashed};
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::store::KeyValueStore;
@@ -86,7 +86,7 @@ impl Service {
         &self,
         chain_id: ChainId,
         hash: Option<CryptoHash>,
-    ) -> Result<HashedCertificateValue, IndexerError> {
+    ) -> Result<Hashed<ConfirmedBlock>, IndexerError> {
         let client = reqwest_client();
         let variables = block::Variables { hash, chain_id };
         let response = post_graphql::<Block, _>(&client, &self.http(), variables).await?;

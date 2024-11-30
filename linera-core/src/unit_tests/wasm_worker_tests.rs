@@ -23,7 +23,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockExecutionOutcome, OutgoingMessage},
     test::{make_child_block, make_first_block, BlockTestExt},
-    types::HashedCertificateValue,
+    types::{ConfirmedBlock, Hashed},
 };
 use linera_execution::{
     committee::Epoch,
@@ -138,7 +138,7 @@ where
         ..SystemExecutionState::new(Epoch::ZERO, publisher_chain, admin_id)
     };
     let publisher_state_hash = publisher_system_state.clone().into_hash().await;
-    let publish_block_proposal = HashedCertificateValue::new_confirmed(
+    let publish_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
@@ -149,7 +149,7 @@ where
             ]],
         }
         .with(publish_block),
-    );
+    ));
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
@@ -217,7 +217,7 @@ where
             service_blob,
         )
         .await?;
-    let create_block_proposal = HashedCertificateValue::new_confirmed(
+    let create_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![vec![OutgoingMessage {
                 destination: Destination::Recipient(creator_chain.into()),
@@ -235,7 +235,7 @@ where
             ]],
         }
         .with(create_block),
-    );
+    ));
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
@@ -280,7 +280,7 @@ where
         )
         .await?;
     creator_state.system.timestamp.set(Timestamp::from(3));
-    let run_block_proposal = HashedCertificateValue::new_confirmed(
+    let run_block_proposal = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
@@ -288,7 +288,7 @@ where
             oracle_responses: vec![Vec::new()],
         }
         .with(run_block),
-    );
+    ));
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
