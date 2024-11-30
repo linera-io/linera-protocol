@@ -1,9 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use alloy::providers::SignerFiller;
+//use alloy::providers::fillers::WalletFiller;
+//use alloy::network::EthereumWallet;
+use alloy::providers::fillers::BlobGasFiller;
 use alloy::{
-    network::{Ethereum, EthereumSigner},
+    network::Ethereum,
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, U256},
     providers::{
@@ -45,13 +47,7 @@ pub struct AnvilTest {
     pub wallet_info: (PrivateKeySigner, String),
     pub rpc_url: Url,
     pub provider: FillProvider<
-        JoinFill<
-            JoinFill<
-                JoinFill<JoinFill<alloy::providers::Identity, GasFiller>, NonceFiller>,
-                ChainIdFiller,
-            >,
-            SignerFiller<EthereumSigner>,
-        >,
+            JoinFill<alloy::providers::Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller,ChainIdFiller>>>>,
         RootProvider<alloy::transports::http::Http<Client>>,
         alloy::transports::http::Http<Client>,
         Ethereum,
@@ -70,8 +66,8 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let rpc_url = Url::parse(&endpoint)?;
     let provider = ProviderBuilder::new()
         .with_recommended_fillers()
-        .signer(EthereumSigner::from(wallet))
         .on_http(rpc_url.clone());
+//        .wallet(wallet)
     Ok(AnvilTest {
         anvil_instance,
         endpoint,
