@@ -271,7 +271,7 @@ where
 }
 
 /// The configuration type for the `LruCachingStore`.
-pub struct LruSplittingConfig<C> {
+pub struct LruCachingConfig<C> {
     /// The inner configuration of the `LruCachingStore`.
     pub inner_config: C,
     /// The cache size being used
@@ -282,10 +282,10 @@ impl<K> AdminKeyValueStore for LruCachingStore<K>
 where
     K: AdminKeyValueStore + Send + Sync,
 {
-    type Config = LruSplittingConfig<K::Config>;
+    type Config = LruCachingConfig<K::Config>;
 
     fn get_name() -> String {
-        format!("lru splitting {}", K::get_name())
+        format!("lru caching {}", K::get_name())
     }
 
     async fn connect(
@@ -330,10 +330,10 @@ impl<K> TestKeyValueStore for LruCachingStore<K>
 where
     K: TestKeyValueStore + Send + Sync,
 {
-    async fn new_test_config() -> Result<LruSplittingConfig<K::Config>, K::Error> {
+    async fn new_test_config() -> Result<LruCachingConfig<K::Config>, K::Error> {
         let inner_config = K::new_test_config().await?;
         let cache_size = TEST_CACHE_SIZE;
-        Ok(LruSplittingConfig {
+        Ok(LruCachingConfig {
             inner_config,
             cache_size,
         })

@@ -21,7 +21,7 @@ use crate::store::TestKeyValueStore;
 use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound,
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError, WritableKeyValueStore,
@@ -42,7 +42,7 @@ const MAX_VALUE_SIZE: usize = 3221225072;
 const MAX_KEY_SIZE: usize = 8388208;
 
 /// The RocksDB client that we use.
-pub type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
+type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
 
 /// The choice of the spawning mode.
 /// `SpawnBlocking` always works and is the safest.
@@ -260,11 +260,11 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone, Debug)]
 pub struct RocksDbStoreInternalConfig {
     /// The path to the storage containing the namespaces
-    pub path_with_guard: PathWithGuard,
+    path_with_guard: PathWithGuard,
     /// The spawn_mode that is chosen
-    pub spawn_mode: RocksDbSpawnMode,
+    spawn_mode: RocksDbSpawnMode,
     /// The common configuration of the key value store
-    pub common_config: CommonStoreInternalConfig,
+    common_config: CommonStoreInternalConfig,
 }
 
 impl RocksDbStoreInternal {
@@ -508,7 +508,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
 #[cfg(with_testing)]
 impl TestKeyValueStore for RocksDbStoreInternal {
     async fn new_test_config() -> Result<RocksDbStoreInternalConfig, RocksDbStoreInternalError> {
-        let path_with_guard = create_rocks_db_test_path();
+        let path_with_guard = PathWithGuard::new_testing();
         let common_config = CommonStoreInternalConfig {
             max_concurrent_queries: None,
             max_stream_queries: TEST_ROCKS_DB_MAX_STREAM_QUERIES,
@@ -545,17 +545,9 @@ pub enum RocksDbStoreInternalError {
     #[error("The key must have at most 8M")]
     KeyTooLong,
 
-    /// Missing database
-    #[error("Missing database: {0}")]
-    MissingDatabase(String),
-
-    /// Invalid namespace
-    #[error("Invalid namespace")]
+    /// Namespace contains forbidden characters
+    #[error("Namespace contains forbidden characters")]
     InvalidNamespace,
-
-    /// Already existing database
-    #[error("Already existing database")]
-    AlreadyExistingDatabase,
 
     /// Filesystem error
     #[error("Filesystem error: {0}")]
@@ -583,15 +575,15 @@ impl PathWithGuard {
             _dir: None,
         }
     }
-}
 
-/// Returns the test path for RocksDB without common config.
-#[cfg(with_testing)]
-fn create_rocks_db_test_path() -> PathWithGuard {
-    let dir = TempDir::new().unwrap();
-    let path_buf = dir.path().to_path_buf();
-    let _dir = Some(Arc::new(dir));
-    PathWithGuard { path_buf, _dir }
+    /// Returns the test path for RocksDB without common config.
+    #[cfg(with_testing)]
+    pub fn new_testing() -> PathWithGuard {
+        let dir = TempDir::new().unwrap();
+        let path_buf = dir.path().to_path_buf();
+        let _dir = Some(Arc::new(dir));
+        PathWithGuard { path_buf, _dir }
+    }
 }
 
 impl KeyValueStoreError for RocksDbStoreInternalError {
@@ -612,4 +604,23 @@ pub type RocksDbStore = LruCachingStore<ValueSplittingStore<RocksDbStoreInternal
 pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
 
 /// The composed config type for the `RocksDbStore`
-pub type RocksDbStoreConfig = LruSplittingConfig<RocksDbStoreInternalConfig>;
+pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
+
+impl RocksDbStoreConfig {
+    /// Creates a new `RocksDbStoreConfig` from the input.
+    pub fn new(
+        spawn_mode: RocksDbSpawnMode,
+        path_with_guard: PathWithGuard,
+        common_config: crate::store::CommonStoreConfig,
+    ) -> RocksDbStoreConfig {
+        let inner_config = RocksDbStoreInternalConfig {
+            path_with_guard,
+            spawn_mode,
+            common_config: common_config.reduced(),
+        };
+        RocksDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
+    }
+}
