@@ -128,7 +128,7 @@ criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true
 fungible.workspace = true
-linera-alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
+alloy = { workspace = true, default-features = false, features = [ "rpc-types-eth" ] }
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-client = { workspace = true, features = ["test"] }

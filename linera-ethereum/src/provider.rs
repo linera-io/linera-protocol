@@ -3,7 +3,7 @@
 
 use async_lock::Mutex;
 use async_trait::async_trait;
-use linera_alloy::{
+use alloy::{
     primitives::{Address, Bytes, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::eth::{
@@ -16,7 +16,7 @@ use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};
 
-pub type HttpProvider = RootProvider<linera_alloy::transports::http::Http<Client>>;
+pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
 
 use crate::{
     client::get_block_id,

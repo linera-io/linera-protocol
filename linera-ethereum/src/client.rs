@@ -4,7 +4,7 @@
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-use linera_alloy::{
+use alloy::{
     primitives::{Address, Bytes, U256, U64},
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
