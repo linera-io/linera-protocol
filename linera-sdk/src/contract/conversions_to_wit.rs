@@ -10,8 +10,8 @@ use linera_base::{
         Timestamp,
     },
     identifiers::{
-        Account, ApplicationId, BytecodeId, ChainId, ChannelName, Destination, MessageId, Owner,
-        StreamName,
+        Account, AccountOwner, ApplicationId, BytecodeId, ChainId, ChannelName, Destination,
+        MessageId, Owner, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -58,6 +58,17 @@ impl From<Account> for wit_system_api::Account {
         wit_system_api::Account {
             chain_id: account.chain_id.into(),
             owner: account.owner.map(|owner| owner.into()),
+        }
+    }
+}
+
+impl From<AccountOwner> for wit_system_api::AccountOwner {
+    fn from(account_owner: AccountOwner) -> Self {
+        match account_owner {
+            AccountOwner::User(owner) => wit_system_api::AccountOwner::User(owner.into()),
+            AccountOwner::Application(application_id) => {
+                wit_system_api::AccountOwner::Application(application_id.into())
+            }
         }
     }
 }

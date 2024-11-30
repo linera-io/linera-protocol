@@ -9,24 +9,27 @@ use anyhow::Context as _;
 use assert_matches::assert_matches;
 use futures::{stream, StreamExt, TryStreamExt};
 use linera_base::{
-    crypto::{CryptoHash, PublicKey},
+    crypto::PublicKey,
     data_types::{
         Amount, ApplicationPermissions, BlockHeight, Resources, SendMessageRequest, Timestamp,
     },
-    identifiers::{Account, ChainDescription, ChainId, Destination, MessageId, Owner},
+    identifiers::{
+        Account, AccountOwner, ChainDescription, ChainId, Destination, MessageId, Owner,
+    },
     ownership::ChainOwnership,
 };
 use linera_execution::{
     committee::{Committee, Epoch},
-    system::SystemMessage,
+    system::{SystemExecutionError, SystemMessage},
     test_utils::{
+        create_dummy_message_context, create_dummy_operation_context,
         create_dummy_user_application_registrations, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionOutcome, ExecutionRuntimeContext,
-    Message, MessageContext, MessageKind, Operation, OperationContext, Query, QueryContext,
-    RawExecutionOutcome, RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response,
-    SystemExecutionError, SystemOperation, TransactionTracker,
+    Message, MessageKind, Operation, OperationContext, Query, QueryContext, RawExecutionOutcome,
+    RawOutgoingMessage, ResourceControlPolicy, ResourceController, Response, SystemOperation,
+    TransactionTracker,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use test_case::test_case;
@@ -44,7 +47,7 @@ async fn test_missing_bytecode_for_user_application() -> anyhow::Result<()> {
         .add_blobs([contract_blob.clone(), service_blob.clone()])
         .await?;
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -134,7 +137,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
 
     let context = OperationContext {
         authenticated_signer: Some(owner),
-        ..make_operation_context()
+        ..create_dummy_operation_context()
     };
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
@@ -152,7 +155,7 @@ async fn test_simple_user_operation() -> anyhow::Result<()> {
     .unwrap();
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Some(owner),
+        owner: Some(AccountOwner::User(owner)),
     };
     let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(
@@ -309,7 +312,7 @@ async fn test_simulated_session() -> anyhow::Result<()> {
     }));
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_operation(
@@ -406,7 +409,7 @@ async fn test_simulated_session_leak() -> anyhow::Result<()> {
 
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -444,7 +447,7 @@ async fn test_rejecting_block_from_finalize() -> anyhow::Result<()> {
         Err(ExecutionError::UserError(error_message.to_owned()))
     }));
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -506,7 +509,7 @@ async fn test_rejecting_block_from_called_applications_finalize() -> anyhow::Res
     second_application.expect_call(ExpectedCall::default_finalize());
     first_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -614,7 +617,7 @@ async fn test_sending_message_from_finalize() -> anyhow::Result<()> {
         Ok(())
     }));
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_operation(
@@ -719,7 +722,7 @@ async fn test_cross_application_call_from_finalize() -> anyhow::Result<()> {
         }
     }));
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -774,7 +777,7 @@ async fn test_cross_application_call_from_finalize_of_called_application() -> an
     }));
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -828,7 +831,7 @@ async fn test_calling_application_again_from_finalize() -> anyhow::Result<()> {
         }
     }));
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let result = view
         .execute_operation(
@@ -880,7 +883,7 @@ async fn test_cross_application_error() -> anyhow::Result<()> {
         |_runtime, _context, _argument| Err(ExecutionError::UserError(error_message.to_owned())),
     ));
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     assert_matches!(
         view.execute_operation(
@@ -933,7 +936,7 @@ async fn test_simple_message() -> anyhow::Result<()> {
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_operation(
@@ -1033,7 +1036,7 @@ async fn test_message_from_cross_application_call() -> anyhow::Result<()> {
     target_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_operation(
@@ -1145,7 +1148,7 @@ async fn test_message_from_deeper_call() -> anyhow::Result<()> {
     middle_application.expect_call(ExpectedCall::default_finalize());
     caller_application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_operation(
@@ -1302,7 +1305,7 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     caller_application.expect_call(ExpectedCall::default_finalize());
 
     // Execute the operation, starting the test scenario
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
     view.execute_operation(
@@ -1419,7 +1422,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let context = OperationContext {
         height: BlockHeight(1),
         authenticated_signer: Some(chain_key.into()),
-        ..make_operation_context()
+        ..create_dummy_operation_context()
     };
     let first_message_index = 5;
     // We will send one additional message before calling open_chain.
@@ -1519,7 +1522,7 @@ async fn test_close_chain() -> anyhow::Result<()> {
     let (application_id, application) = view.register_mock_application().await?;
 
     // The application is not authorized to close the chain.
-    let context = make_operation_context();
+    let context = create_dummy_operation_context();
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _context, _operation| {
             assert_matches!(
@@ -1658,7 +1661,7 @@ async fn test_message_receipt_spending_chain_balance(
     ));
     application.expect_call(ExpectedCall::default_finalize());
 
-    let context = make_message_context(authenticated_signer);
+    let context = create_dummy_message_context(authenticated_signer);
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new(0, Some(Vec::new()));
 
@@ -1677,32 +1680,4 @@ async fn test_message_receipt_spending_chain_balance(
         .await;
 
     Ok(execution_result)
-}
-
-/// Creates a dummy [`OperationContext`] to use in tests.
-fn make_operation_context() -> OperationContext {
-    OperationContext {
-        chain_id: ChainId::root(0),
-        height: BlockHeight(0),
-        index: Some(0),
-        authenticated_signer: None,
-        authenticated_caller_id: None,
-    }
-}
-
-/// Creates a dummy [`MessageContext`] to use in tests.
-fn make_message_context(authenticated_signer: Option<Owner>) -> MessageContext {
-    MessageContext {
-        chain_id: ChainId::root(0),
-        is_bouncing: false,
-        authenticated_signer,
-        refund_grant_to: None,
-        height: BlockHeight(0),
-        certificate_hash: CryptoHash::test_hash("block receiving a message"),
-        message_id: MessageId {
-            chain_id: ChainId::root(0),
-            height: BlockHeight(0),
-            index: 0,
-        },
-    }
 }

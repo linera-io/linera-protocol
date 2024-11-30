@@ -3,8 +3,6 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-mod state;
-
 use linera_sdk::{base::WithContractAbi, Contract, ContractRuntime};
 
 pub struct LlmContract;

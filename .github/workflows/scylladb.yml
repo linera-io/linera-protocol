@@ -53,7 +53,7 @@ jobs:
         cargo build --locked --features scylladb
     - name: Setup local ScyllaDB instance
       run: |
-        docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla
+        docker run --name my_scylla_container -d -p 9042:9042 scylladb/scylla:6.1
     - name: Run ScyllaDB tests
       run: |
         RUST_LOG=linera=info cargo test --locked --features scylladb -- scylla --nocapture

@@ -33,7 +33,7 @@ use crate::{
     batch::UnorderedBatch,
     common::{get_uleb128_size, get_upper_bound_option},
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
-    lru_caching::{LruCachingStore, LruSplittingConfig},
+    lru_caching::{LruCachingConfig, LruCachingStore},
     store::{
         AdminKeyValueStore, CommonStoreInternalConfig, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
@@ -457,17 +457,9 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     ScyllaDbNewSessionError(#[from] scylla::transport::errors::NewSessionError),
 
-    /// Table name contains forbidden characters
-    #[error("Table name contains forbidden characters")]
-    InvalidTableName,
-
-    /// Missing database
-    #[error("Missing database: {0}")]
-    MissingDatabase(String),
-
-    /// Already existing database
-    #[error("Already existing database")]
-    AlreadyExistingDatabase,
+    /// Namespace contains forbidden characters
+    #[error("Namespace contains forbidden characters")]
+    InvalidNamespace,
 
     /// The journal is not coherent
     #[error(transparent)]
@@ -608,7 +600,7 @@ pub struct ScyllaDbStoreInternalConfig {
     /// The url to which the requests have to be sent
     pub uri: String,
     /// The common configuration of the key value store
-    pub common_config: CommonStoreInternalConfig,
+    common_config: CommonStoreInternalConfig,
 }
 
 impl AdminKeyValueStore for ScyllaDbStoreInternal {
@@ -827,7 +819,7 @@ impl ScyllaDbStoreInternal {
         {
             return Ok(());
         }
-        Err(ScyllaDbStoreInternalError::InvalidTableName)
+        Err(ScyllaDbStoreInternalError::InvalidNamespace)
     }
 }
 
@@ -867,26 +859,21 @@ pub type ScyllaDbStore =
     LruCachingStore<ValueSplittingStore<JournalingKeyValueStore<ScyllaDbStoreInternal>>>;
 
 /// The `ScyllaDbStoreConfig` input type
-pub type ScyllaDbStoreConfig = LruSplittingConfig<ScyllaDbStoreInternalConfig>;
+pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
+
+impl ScyllaDbStoreConfig {
+    /// Creates a `ScyllaDbStoreConfig` from the inputs.
+    pub fn new(uri: String, common_config: crate::store::CommonStoreConfig) -> ScyllaDbStoreConfig {
+        let inner_config = ScyllaDbStoreInternalConfig {
+            uri,
+            common_config: common_config.reduced(),
+        };
+        ScyllaDbStoreConfig {
+            inner_config,
+            cache_size: common_config.cache_size,
+        }
+    }
+}
 
 /// The combined error type for the `ScyllaDbStore`.
 pub type ScyllaDbStoreError = ValueSplittingError<ScyllaDbStoreInternalError>;
-
-#[cfg(test)]
-mod tests {
-    use bcs::serialized_size;
-
-    use crate::{
-        batch::UnorderedBatch,
-        common::get_uleb128_size,
-        scylla_db::{MAX_KEY_SIZE, RAW_MAX_VALUE_SIZE, VISIBLE_MAX_VALUE_SIZE},
-    };
-
-    #[test]
-    fn test_raw_visible_sizes() {
-        let mut vis_computed = RAW_MAX_VALUE_SIZE - MAX_KEY_SIZE;
-        vis_computed -= serialized_size(&UnorderedBatch::default()).unwrap();
-        vis_computed -= get_uleb128_size(RAW_MAX_VALUE_SIZE) + get_uleb128_size(MAX_KEY_SIZE);
-        assert_eq!(vis_computed, VISIBLE_MAX_VALUE_SIZE);
-    }
-}

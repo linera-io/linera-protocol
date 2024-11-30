@@ -134,7 +134,7 @@ impl CertificateValueT for ValidatedBlock {
     }
 
     fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.executed_block().outcome.required_blob_ids().clone()
+        self.executed_block().required_blob_ids().clone()
     }
 
     #[cfg(with_testing)]
@@ -157,6 +157,6 @@ impl CertificateValueT for ConfirmedBlock {
     }
 
     fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.executed_block().outcome.required_blob_ids().clone()
+        self.executed_block().required_blob_ids().clone()
     }
 }

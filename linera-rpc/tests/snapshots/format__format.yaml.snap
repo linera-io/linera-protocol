@@ -1,6 +1,7 @@
 ---
 source: linera-rpc/tests/format.rs
 expression: get_registry().unwrap()
+snapshot_kind: text
 ---
 Account:
   STRUCT:
@@ -8,7 +9,17 @@ Account:
         TYPENAME: ChainId
     - owner:
         OPTION:
+          TYPENAME: AccountOwner
+AccountOwner:
+  ENUM:
+    0:
+      User:
+        NEWTYPE:
           TYPENAME: Owner
+    1:
+      Application:
+        NEWTYPE:
+          TYPENAME: ApplicationId
 AdminOperation:
   ENUM:
     0:
@@ -221,7 +232,7 @@ ChainInfoQuery:
           TYPENAME: BlockHeight
     - request_owner_balance:
         OPTION:
-          TYPENAME: Owner
+          TYPENAME: AccountOwner
     - request_committees: BOOL
     - request_pending_message_bundles: BOOL
     - request_sent_certificate_hashes_in_range:
@@ -875,17 +886,17 @@ SystemMessage:
         STRUCT:
           - target:
               OPTION:
-                TYPENAME: Owner
+                TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
           - source:
               OPTION:
-                TYPENAME: Owner
+                TYPENAME: AccountOwner
     1:
       Withdraw:
         STRUCT:
           - owner:
-              TYPENAME: Owner
+              TYPENAME: AccountOwner
           - amount:
               TYPENAME: Amount
           - recipient:

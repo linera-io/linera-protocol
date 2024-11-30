@@ -2,7 +2,7 @@
 
 mod state;
 
-use self::state::{project_name};
+use self::state::{project_name}State;
 use linera_sdk::{{
     base::WithServiceAbi,
     views::{{View, ViewStorageContext}},
@@ -14,7 +14,7 @@ use {module_name}::Operation;
 use async_graphql::{{EmptySubscription, Object, Schema}};
 
 pub struct {project_name}Service {{
-    state: {project_name},
+    state: {project_name}State,
     runtime: ServiceRuntime<Self>,
 }}
 
@@ -28,7 +28,7 @@ impl Service for {project_name}Service {{
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {{
-        let state = {project_name}::load(runtime.root_view_storage_context())
+        let state = {project_name}State::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         {project_name}Service {{ state, runtime }}

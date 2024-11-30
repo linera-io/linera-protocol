@@ -26,7 +26,7 @@ scalar!(Status);
 /// The crowd-funding campaign's state.
 #[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = "ViewStorageContext")]
-pub struct CrowdFunding {
+pub struct CrowdFundingState {
     /// The status of the campaign.
     pub status: RegisterView<Status>,
     /// The map of pledges that will be collected if the campaign succeeds.

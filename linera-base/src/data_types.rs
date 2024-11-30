@@ -48,6 +48,10 @@ use crate::{
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
 )]
+#[cfg_attr(
+    all(with_testing, not(target_arch = "wasm32")),
+    derive(test_strategy::Arbitrary)
+)]
 pub struct Amount(u128);
 
 #[derive(Serialize, Deserialize)]
@@ -759,13 +763,6 @@ pub enum OracleResponse {
     Blob(BlobId),
     /// An assertion oracle that passed.
     Assert,
-}
-
-impl OracleResponse {
-    /// Wether an `OracleResponse` is permitted in fast blocks or not.
-    pub fn is_permitted_in_fast_blocks(&self) -> bool {
-        matches!(self, OracleResponse::Blob(_))
-    }
 }
 
 impl Display for OracleResponse {

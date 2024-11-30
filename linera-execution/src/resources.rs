@@ -9,7 +9,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Amount, ArithmeticError},
     ensure,
-    identifiers::Owner,
+    identifiers::{AccountOwner, Owner},
 };
 use linera_views::{context::Context, views::ViewError};
 use serde::Serialize;
@@ -415,7 +415,12 @@ impl ResourceController<Option<Owner>, ResourceTracker> {
         // Then the local account, if any. Currently, any negative fee (e.g. storage
         // refund) goes preferably to this account.
         if let Some(owner) = &self.account {
-            if let Some(balance) = view.system.balances.get_mut(owner).await? {
+            if let Some(balance) = view
+                .system
+                .balances
+                .get_mut(&AccountOwner::User(*owner))
+                .await?
+            {
                 sources.push(balance);
             }
         }

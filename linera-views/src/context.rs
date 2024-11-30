@@ -7,9 +7,9 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    backends::memory::MemoryStore,
     batch::{Batch, DeletePrefixExpander},
     common::from_bytes_option,
+    memory::MemoryStore,
     store::{KeyIterable, KeyValueIterable, KeyValueStoreError, RestrictedKeyValueStore},
     views::MIN_VIEW_TAG,
 };

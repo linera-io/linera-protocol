@@ -6,7 +6,7 @@
 use linera_base::{
     crypto::{CryptoHash, KeyPair},
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{Account, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_execution::{
@@ -55,7 +55,7 @@ async fn test_simple_system_operation() -> anyhow::Result<()> {
     assert_eq!(view.system.balance.get(), &Amount::ZERO);
     let account = Account {
         chain_id: ChainId::root(0),
-        owner: Some(owner),
+        owner: Some(AccountOwner::User(owner)),
     };
     let (outcomes, _, _) = txn_tracker.destructure().unwrap();
     assert_eq!(

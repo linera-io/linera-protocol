@@ -406,7 +406,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
     };
 
     // Setting up the validators
-    let (_net, client) = config.instantiate().await?;
+    let (mut net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     // Change the ownership so that the blocks inserted are not
@@ -433,7 +433,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         )
         .await?;
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     let app = EthereumTrackerApp(
         node_service
@@ -465,6 +465,12 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         (address1.clone(), U256::from(10)),
     ])
     .await;
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
     Ok(())
 }
 

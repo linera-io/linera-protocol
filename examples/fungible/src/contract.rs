@@ -16,10 +16,10 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 
-use self::state::FungibleToken;
+use self::state::FungibleTokenState;
 
 pub struct FungibleTokenContract {
-    state: FungibleToken,
+    state: FungibleTokenState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -35,7 +35,7 @@ impl Contract for FungibleTokenContract {
     type InstantiationArgument = InitialState;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = FungibleToken::load(runtime.root_view_storage_context())
+        let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         FungibleTokenContract { state, runtime }

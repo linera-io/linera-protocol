@@ -13,7 +13,7 @@ use linera_base::prometheus_util::{bucket_latencies, register_histogram_vec, Mea
 use linera_base::{
     data_types::{Amount, ApplicationPermissions, BlobContent, Timestamp},
     hex_debug, hex_vec_debug,
-    identifiers::{Account, BlobId, MessageId, Owner},
+    identifiers::{Account, AccountOwner, BlobId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{batch::Batch, context::Context, views::View};
@@ -120,7 +120,7 @@ where
                         Ok(())
                     })
                     .await?;
-                callback.respond(balances);
+                callback.respond(balances.into_iter().collect());
             }
 
             BalanceOwners { callback } => {
@@ -133,12 +133,19 @@ where
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             } => {
                 let mut execution_outcome = RawExecutionOutcome::default();
                 let message = self
                     .system
-                    .transfer(signer, source, Recipient::Account(destination), amount)
+                    .transfer(
+                        signer,
+                        Some(application_id),
+                        source,
+                        Recipient::Account(destination),
+                        amount,
+                    )
                     .await?;
 
                 if let Some(message) = message {
@@ -152,6 +159,7 @@ where
                 destination,
                 amount,
                 signer,
+                application_id,
                 callback,
             } => {
                 let owner = source.owner.ok_or(ExecutionError::OwnerIsNone)?;
@@ -160,6 +168,7 @@ where
                     .system
                     .claim(
                         signer,
+                        Some(application_id),
                         owner,
                         source.chain_id,
                         Recipient::Account(destination),
@@ -311,12 +320,13 @@ where
 
             ReadBlobContent { blob_id, callback } => {
                 let blob = self.system.read_blob_content(blob_id).await?;
-                callback.respond(blob);
+                let is_new = self.system.blob_used(None, blob_id).await?;
+                callback.respond((blob, is_new))
             }
 
             AssertBlobExists { blob_id, callback } => {
                 self.system.assert_blob_exists(blob_id).await?;
-                callback.respond(())
+                callback.respond(self.system.blob_used(None, blob_id).await?)
             }
         }
 
@@ -347,28 +357,29 @@ pub enum ExecutionRequest {
     },
 
     OwnerBalance {
-        owner: Owner,
+        owner: AccountOwner,
         #[debug(skip)]
         callback: Sender<Amount>,
     },
 
     OwnerBalances {
         #[debug(skip)]
-        callback: Sender<Vec<(Owner, Amount)>>,
+        callback: Sender<Vec<(AccountOwner, Amount)>>,
     },
 
     BalanceOwners {
         #[debug(skip)]
-        callback: Sender<Vec<Owner>>,
+        callback: Sender<Vec<AccountOwner>>,
     },
 
     Transfer {
         #[debug(skip_if = Option::is_none)]
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
+        application_id: UserApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
@@ -379,6 +390,7 @@ pub enum ExecutionRequest {
         amount: Amount,
         #[debug(skip_if = Option::is_none)]
         signer: Option<Owner>,
+        application_id: UserApplicationId,
         #[debug(skip)]
         callback: Sender<RawExecutionOutcome<SystemMessage, Amount>>,
     },
@@ -480,12 +492,12 @@ pub enum ExecutionRequest {
     ReadBlobContent {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<BlobContent>,
+        callback: Sender<(BlobContent, bool)>,
     },
 
     AssertBlobExists {
         blob_id: BlobId,
         #[debug(skip)]
-        callback: Sender<()>,
+        callback: Sender<bool>,
     },
 }

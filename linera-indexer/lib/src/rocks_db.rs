@@ -5,11 +5,8 @@ use std::path::PathBuf;
 
 use clap::Parser as _;
 use linera_views::{
-    rocks_db::{
-        PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig,
-        RocksDbStoreInternalConfig,
-    },
-    store::{AdminKeyValueStore, CommonStoreInternalConfig},
+    rocks_db::{PathWithGuard, RocksDbSpawnMode, RocksDbStore, RocksDbStoreConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
 use crate::{
@@ -41,24 +38,17 @@ pub type RocksDbRunner = Runner<RocksDbStore, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::parse();
-        let common_config = CommonStoreInternalConfig {
+        let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
+            cache_size: config.client.cache_size,
         };
         let path_buf = config.client.storage.as_path().to_path_buf();
         let path_with_guard = PathWithGuard::new(path_buf);
         // The tests are run in single threaded mode, therefore we need
         // to use the safe default value of SpawnBlocking.
         let spawn_mode = RocksDbSpawnMode::SpawnBlocking;
-        let inner_config = RocksDbStoreInternalConfig {
-            path_with_guard,
-            spawn_mode,
-            common_config,
-        };
-        let store_config = RocksDbStoreConfig {
-            inner_config,
-            cache_size: config.client.cache_size,
-        };
+        let store_config = RocksDbStoreConfig::new(spawn_mode, path_with_guard, common_config);
         let namespace = config.client.namespace.clone();
         let root_key = &[];
         let store =

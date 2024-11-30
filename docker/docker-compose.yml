@@ -1,6 +1,6 @@
 services:
   scylla:
-    image: scylladb/scylla:latest
+    image: scylladb/scylla:6.1
     container_name: scylla
     volumes:
       - linera-scylla-data:/var/lib/scylla

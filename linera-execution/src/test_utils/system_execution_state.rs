@@ -11,7 +11,7 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, ApplicationPermissions, Blob, Timestamp},
-    identifiers::{ApplicationId, ChainDescription, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, BlobId, ChainDescription, ChainId, Owner},
     ownership::ChainOwnership,
 };
 use linera_views::{
@@ -43,9 +43,10 @@ pub struct SystemExecutionState {
     pub ownership: ChainOwnership,
     pub balance: Amount,
     #[debug(skip_if = BTreeMap::is_empty)]
-    pub balances: BTreeMap<Owner, Amount>,
+    pub balances: BTreeMap<AccountOwner, Amount>,
     pub timestamp: Timestamp,
     pub registry: ApplicationRegistry,
+    pub used_blobs: BTreeSet<BlobId>,
     #[debug(skip_if = Not::not)]
     pub closed: bool,
     pub application_permissions: ApplicationPermissions,
@@ -108,6 +109,7 @@ impl SystemExecutionState {
             balances,
             timestamp,
             registry,
+            used_blobs,
             closed,
             application_permissions,
             extra_blobs,
@@ -149,10 +151,10 @@ impl SystemExecutionState {
         view.system.committees.set(committees);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
-        for (owner, balance) in balances {
+        for (account_owner, balance) in balances {
             view.system
                 .balances
-                .insert(&owner, balance)
+                .insert(&account_owner, balance)
                 .expect("insertion of balances should not fail");
         }
         view.system.timestamp.set(timestamp);
@@ -160,6 +162,12 @@ impl SystemExecutionState {
             .registry
             .import(registry)
             .expect("serialization of registry components should not fail");
+        for blob_id in used_blobs {
+            view.system
+                .used_blobs
+                .insert(&blob_id)
+                .expect("inserting blob IDs should not fail");
+        }
         view.system.closed.set(closed);
         view.system
             .application_permissions

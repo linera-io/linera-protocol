@@ -30,7 +30,8 @@ use crate::{
 pub struct Owner(pub CryptoHash);
 
 /// An account owner.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, WitLoad, WitStore, WitType)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
 pub enum AccountOwner {
     /// An account owned by a user.
     User(Owner),
@@ -47,11 +48,11 @@ pub struct Account {
     pub chain_id: ChainId,
     /// The owner of the account, or `None` for the chain balance.
     #[debug(skip_if = Option::is_none)]
-    pub owner: Option<Owner>,
+    pub owner: Option<AccountOwner>,
 }
 
 impl Account {
-    /// Creates an Account with a ChainId
+    /// Creates an [`Account`] representing the balance shared by a chain's owners.
     pub fn chain(chain_id: ChainId) -> Self {
         Account {
             chain_id,
@@ -59,11 +60,11 @@ impl Account {
         }
     }
 
-    /// Creates an Account with a ChainId and an Owner
-    pub fn owner(chain_id: ChainId, owner: Owner) -> Self {
+    /// Creates an [`Account`] for a specific [`Owner`] on a chain.
+    pub fn owner(chain_id: ChainId, owner: impl Into<AccountOwner>) -> Self {
         Account {
             chain_id,
-            owner: Some(owner),
+            owner: Some(owner.into()),
         }
     }
 }
@@ -80,18 +81,21 @@ impl Display for Account {
 impl FromStr for Account {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts = s.split(':').collect::<Vec<_>>();
-        anyhow::ensure!(
-            parts.len() <= 2,
-            "Expecting format `chain-id:address` or `chain-id`"
-        );
-        if parts.len() == 1 {
-            Ok(Account::chain(s.parse()?))
-        } else {
-            let chain_id = parts[0].parse()?;
-            let owner = parts[1].parse()?;
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        let mut parts = string.splitn(2, ':');
+
+        let chain_id = parts
+            .next()
+            .context(
+                "Expecting an account formatted as `chain-id` or `chain-id:owner-type:address`",
+            )?
+            .parse()?;
+
+        if let Some(owner_string) = parts.next() {
+            let owner = owner_string.parse::<AccountOwner>()?;
             Ok(Account::owner(chain_id, owner))
+        } else {
+            Ok(Account::chain(chain_id))
         }
     }
 }
@@ -292,7 +296,7 @@ impl<'a> Deserialize<'a> for BlobId {
     WitStore,
     WitType,
 )]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct MessageId {
     /// The chain ID that created the message.
     pub chain_id: ChainId,
@@ -304,7 +308,7 @@ pub struct MessageId {
 
 /// A unique identifier for a user application.
 #[derive(Debug, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct ApplicationId<A = ()> {
     /// The bytecode to use for the application.
     pub bytecode_id: BytecodeId<A>,
@@ -358,7 +362,7 @@ impl From<ApplicationId> for GenericApplicationId {
 
 /// A unique identifier for an application bytecode.
 #[derive(Debug, WitLoad, WitStore, WitType)]
-#[cfg_attr(with_testing, derive(Default))]
+#[cfg_attr(with_testing, derive(Default, test_strategy::Arbitrary))]
 pub struct BytecodeId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     /// The hash of the blob containing the contract bytecode.
     pub contract_blob_hash: CryptoHash,

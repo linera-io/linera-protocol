@@ -33,8 +33,8 @@ use linera_base::{
     },
     ensure,
     identifiers::{
-        Account, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId, Owner,
-        UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, BytecodeId, ChainId, MessageId,
+        Owner, UserApplicationId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
 };
@@ -948,7 +948,7 @@ where
     /// Prepares the chain for the next operation, i.e. makes sure we have synchronized it up to
     /// its current height and are not missing any received messages from the inbox.
     #[instrument(level = "trace")]
-    async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
+    pub async fn prepare_chain(&self) -> Result<Box<ChainInfo>, ChainClientError> {
         #[cfg(with_metrics)]
         let _latency = metrics::PREPARE_CHAIN_LATENCY.measure_latency();
 
@@ -1920,16 +1920,6 @@ where
         &self,
         operations: Vec<Operation>,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
-        self.prepare_chain().await?;
-        self.execute_without_prepare(operations).await
-    }
-
-    /// Executes a list of operations, without calling `prepare_chain`.
-    #[instrument(level = "trace", skip(operations))]
-    pub async fn execute_without_prepare(
-        &self,
-        operations: Vec<Operation>,
-    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone())).await? {
@@ -2139,14 +2129,17 @@ where
         Ok(balance)
     }
 
-    /// Obtains the local balance of a user account after staging the execution of
-    /// incoming messages in a new block.
+    /// Obtains the local balance of an account after staging the execution of incoming messages in
+    /// a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
     /// block.
     #[instrument(level = "trace", skip(owner))]
-    pub async fn query_owner_balance(&self, owner: Owner) -> Result<Amount, ChainClientError> {
+    pub async fn query_owner_balance(
+        &self,
+        owner: AccountOwner,
+    ) -> Result<Amount, ChainClientError> {
         Ok(self
             .query_balances_with_owner(Some(owner))
             .await?
@@ -2154,8 +2147,8 @@ where
             .unwrap_or(Amount::ZERO))
     }
 
-    /// Obtains the local balance of the chain account and optionally another user after
-    /// staging the execution of incoming messages in a new block.
+    /// Obtains the local balance of an account and optionally another user after staging the
+    /// execution of incoming messages in a new block.
     ///
     /// Does not attempt to synchronize with validators. The result will reflect up to
     /// `max_pending_message_bundles` incoming message bundles and the execution fees for a single
@@ -2163,7 +2156,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn query_balances_with_owner(
         &self,
-        owner: Option<Owner>,
+        owner: Option<AccountOwner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let incoming_bundles = self.pending_message_bundles().await?;
         let (previous_block_hash, height, timestamp) = {
@@ -2181,7 +2174,10 @@ where
             operations: Vec::new(),
             previous_block_hash,
             height,
-            authenticated_signer: owner,
+            authenticated_signer: owner.and_then(|owner| match owner {
+                AccountOwner::User(user) => Some(user),
+                AccountOwner::Application(_) => None,
+            }),
             timestamp,
         };
         match self
@@ -2224,7 +2220,10 @@ where
     ///
     /// Does not process the inbox or attempt to synchronize with validators.
     #[instrument(level = "trace", skip(owner))]
-    pub async fn local_owner_balance(&self, owner: Owner) -> Result<Amount, ChainClientError> {
+    pub async fn local_owner_balance(
+        &self,
+        owner: AccountOwner,
+    ) -> Result<Amount, ChainClientError> {
         Ok(self
             .local_balances_with_owner(Some(owner))
             .await?
@@ -2238,7 +2237,7 @@ where
     #[instrument(level = "trace", skip(owner))]
     async fn local_balances_with_owner(
         &self,
-        owner: Option<Owner>,
+        owner: Option<AccountOwner>,
     ) -> Result<(Amount, Option<Amount>), ChainClientError> {
         let next_block_height = self.next_block_height();
         ensure!(
@@ -2356,7 +2355,7 @@ where
         };
 
         let identity = self.identity().await?;
-        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block.block)? {
+        let round = match Self::round_for_new_proposal(&info, &identity, &executed_block)? {
             Either::Left(round) => round,
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
@@ -2446,20 +2445,23 @@ where
     fn round_for_new_proposal(
         info: &ChainInfo,
         identity: &Owner,
-        block: &Block,
+        executed_block: &ExecutedBlock,
     ) -> Result<Either<Round, RoundTimeout>, ChainClientError> {
+        let manager = &info.manager;
+        let block = &executed_block.block;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        let manager = &info.manager;
-        let conflicting_proposal = manager.requested_proposed.as_ref().is_some_and(|proposal| {
+        // Similarly, we cannot propose a block that uses oracles in the fast round.
+        let conflict = manager.requested_proposed.as_ref().is_some_and(|proposal| {
             proposal.content.round == manager.current_round && proposal.content.block != *block
-        });
-        let round = if !conflicting_proposal {
+        }) || (manager.current_round.is_fast()
+            && executed_block.outcome.has_oracle_responses());
+        let round = if !conflict {
             manager.current_round
         } else if let Some(round) = manager
             .ownership
             .next_round(manager.current_round)
-            .filter(|_| manager.current_round.is_multi_leader())
+            .filter(|_| manager.current_round.is_multi_leader() || manager.current_round.is_fast())
         {
             round
         } else if let Some(timeout) = info.round_timeout() {
@@ -2621,7 +2623,6 @@ where
         application_permissions: ApplicationPermissions,
         balance: Amount,
     ) -> Result<ClientOutcome<(MessageId, ConfirmedBlockCertificate)>, ChainClientError> {
-        self.prepare_chain().await?;
         loop {
             let (epoch, committees) = self.epoch_and_committees(self.chain_id).await?;
             let epoch = epoch.ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
@@ -2817,7 +2818,6 @@ where
         committee: Committee,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, ChainClientError> {
         loop {
-            self.prepare_chain().await?;
             let epoch = self.epoch().await?;
             match self
                 .execute_block(vec![Operation::System(SystemOperation::Admin(
@@ -2930,7 +2930,7 @@ where
                 }
             })
             .collect();
-        self.execute_without_prepare(operations).await
+        self.execute_operations(operations).await
     }
 
     /// Sends money to a chain.

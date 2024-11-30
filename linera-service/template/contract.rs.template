@@ -10,10 +10,10 @@ use linera_sdk::{{
 
 use {module_name}::Operation;
 
-use self::state::{project_name};
+use self::state::{project_name}State;
 
 pub struct {project_name}Contract {{
-    state: {project_name},
+    state: {project_name}State,
     runtime: ContractRuntime<Self>,
 }}
 
@@ -29,7 +29,7 @@ impl Contract for {project_name}Contract {{
     type InstantiationArgument = u64;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {{
-        let state = {project_name}::load(runtime.root_view_storage_context())
+        let state = {project_name}State::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         {project_name}Contract {{ state, runtime }}
@@ -63,7 +63,7 @@ mod tests {{
 
     use linera_sdk::{{util::BlockingWait, views::View, Contract, ContractRuntime}};
 
-    use super::{{{project_name}, {project_name}Contract}};
+    use super::{{{project_name}State, {project_name}Contract}};
 
     #[test]
     fn operation() {{
@@ -83,7 +83,7 @@ mod tests {{
     fn create_and_instantiate_app(initial_value: u64) -> {project_name}Contract {{
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = {project_name}Contract {{
-            state: {project_name}::load(runtime.root_view_storage_context())
+            state: {project_name}State::load(runtime.root_view_storage_context())
                 .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,

@@ -10,7 +10,9 @@ use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{Account, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{
+        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner,
+    },
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -147,7 +149,8 @@ where
     let sender = builder
         .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
         .await?;
-    let owner = sender.identity().await?;
+    let owner_identity = sender.identity().await?;
+    let owner = AccountOwner::User(owner_identity);
     let receiver = builder
         .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
         .await?;
@@ -180,7 +183,10 @@ where
     assert_eq!(receiver.process_inbox().await?.0.len(), 1);
     // The friend paid to receive the message.
     assert_eq!(
-        receiver.local_owner_balance(friend).await.unwrap(),
+        receiver
+            .local_owner_balance(AccountOwner::User(friend))
+            .await
+            .unwrap(),
         Amount::from_millis(99)
     );
     // The received amount is not in the unprotected balance.
@@ -212,7 +218,7 @@ where
     // First attempt that should be rejected.
     sender
         .claim(
-            owner,
+            owner_identity,
             ChainId::root(2),
             Recipient::root(1),
             Amount::from_tokens(5),
@@ -222,7 +228,7 @@ where
     // Second attempt with a correct amount.
     let cert = sender
         .claim(
-            owner,
+            owner_identity,
             ChainId::root(2),
             Recipient::root(1),
             Amount::from_tokens(2),
@@ -1435,7 +1441,8 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids))) if not_found_blob_ids == [blob0_id]
+        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
+            if not_found_blob_ids == [blob0_id]
     );
 
     // Take one validator down
@@ -1456,15 +1463,17 @@ where
     // But another one goes down
     builder.set_fault_type([3], FaultType::Offline).await;
 
-    // Try to read the blob. This is a different client but on the same chain, so when we synchronize this with the validators
-    // before executing the block, we'll actually download and cache locally the blobs that were published by `client_a`.
-    // So this will succeed.
+    // Try to read the blob. This is a different client but on the same chain, so when we
+    // synchronize this with the validators before executing the block, we'll actually download
+    // and cache locally the blobs that were published by `client_a`. So this will succeed.
+    client1_b.prepare_chain().await?;
     let certificate = client1_b
         .execute_operation(SystemOperation::ReadBlob { blob_id: blob0_id }.into())
         .await?
         .unwrap();
     assert_eq!(certificate.round, Round::MultiLeader(0));
-    assert!(certificate.executed_block().requires_blob(&blob0_id));
+    // The blob is not new on this chain, so it is not required.
+    assert!(!certificate.executed_block().requires_blob(&blob0_id));
 
     builder
         .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)
@@ -1651,6 +1660,7 @@ where
     builder.set_fault_type([2], FaultType::Offline).await;
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
+    client2_b.prepare_chain().await.unwrap();
     let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1))
         .await
@@ -2178,6 +2188,7 @@ where
     assert!(client0.pending_block().is_none());
 
     // Burn another token so Client 1 sees that the blob is already published
+    client1.prepare_chain().await.unwrap();
     client1.burn(None, Amount::from_tokens(1)).await.unwrap();
     client1.synchronize_from_validators().await.unwrap();
     client1.process_inbox().await.unwrap();
@@ -2427,6 +2438,18 @@ where
     let client2 = builder.add_initial_chain(description2, Amount::ONE).await?;
     let client3 = builder.add_initial_chain(description3, Amount::ONE).await?;
 
+    // Configure the clients as super owners, so they make fast blocks by default.
+    for client in [&client1, &client2, &client3] {
+        let pub_key = client.public_key().await?;
+        let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
+            super_owners: vec![pub_key],
+            owners: vec![],
+            multi_leader_rounds: 10,
+            timeout_config: TimeoutConfig::default(),
+        });
+        client.execute_operation(owner_change_op.clone()).await?;
+    }
+
     // Take one validator down
     builder.set_fault_type([3], FaultType::Offline).await;
 
@@ -2435,19 +2458,21 @@ where
         CryptoHash::new(&BlobBytes(blob_bytes.clone())),
         BlobType::Data,
     );
-    client1
+    let certificate = client1
         .publish_data_blob(blob_bytes)
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(certificate.round, Round::Fast);
 
     // Send a message from chain 2 to chain 3.
-    client2
+    let certificate = client2
         .transfer(None, Amount::from_millis(1), Recipient::chain(chain_id3))
         .await
         .unwrap()
         .unwrap();
     client3.synchronize_from_validators().await.unwrap();
+    assert_eq!(certificate.round, Round::Fast);
 
     builder.set_fault_type([2], FaultType::Offline).await;
     builder.set_fault_type([3], FaultType::Honest).await;
@@ -2458,6 +2483,8 @@ where
         .await
         .unwrap()
         .unwrap();
+    // This read a new blob, so it cannot be a fast block.
+    assert_eq!(certificate.round, Round::MultiLeader(0));
     let executed_block = certificate.executed_block();
     assert_eq!(executed_block.block.incoming_bundles.len(), 1);
     assert_eq!(executed_block.required_blob_ids().len(), 1);

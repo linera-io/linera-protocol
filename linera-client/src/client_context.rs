@@ -417,6 +417,7 @@ where
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
+        client.prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
         let result = f(client).await;
         self.update_and_save_wallet(client).await?;
@@ -635,7 +636,7 @@ where
                 .take(num_new_chains)
                 .collect();
             let certificate = chain_client
-                .execute_without_prepare(operations)
+                .execute_operations(operations)
                 .await?
                 .expect("should execute block with OpenChain operations");
             let executed_block = certificate.executed_block();
@@ -704,7 +705,7 @@ where
         // Put at most 1000 fungible token operations in each block.
         for operations in operations.chunks(1000) {
             chain_client
-                .execute_without_prepare(operations.to_vec())
+                .execute_operations(operations.to_vec())
                 .await?
                 .expect("should execute block with OpenChain operations");
         }

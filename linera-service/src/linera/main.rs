@@ -18,7 +18,7 @@ use futures::{lock::Mutex, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, CryptoRng, PublicKey},
     data_types::{ApplicationPermissions, Timestamp},
-    identifiers::{ChainDescription, ChainId, MessageId, Owner},
+    identifiers::{AccountOwner, ChainDescription, ChainId, MessageId, Owner},
     ownership::ChainOwnership,
 };
 use linera_client::{
@@ -121,6 +121,13 @@ impl Runnable for Job {
                 amount,
             } => {
                 let chain_client = context.make_chain_client(sender.chain_id)?;
+                let owner = match sender.owner {
+                    Some(AccountOwner::User(owner)) => Some(owner),
+                    Some(AccountOwner::Application(_)) => {
+                        bail!("Can't transfer from an application account")
+                    }
+                    None => None,
+                };
                 info!(
                     "Starting transfer of {} native tokens from {} to {}",
                     amount, sender, recipient
@@ -131,7 +138,7 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
-                                .transfer_to_account(sender.owner, amount, recipient)
+                                .transfer_to_account(owner, amount, recipient)
                                 .await
                         }
                     })

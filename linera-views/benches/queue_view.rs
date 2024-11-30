@@ -14,9 +14,9 @@ use linera_views::rocks_db::RocksDbStore;
 #[cfg(with_scylladb)]
 use linera_views::scylla_db::ScyllaDbStore;
 use linera_views::{
-    backends::memory::MemoryStore,
     bucket_queue_view::BucketQueueView,
     context::ViewContext,
+    memory::MemoryStore,
     queue_view::QueueView,
     random::{make_deterministic_rng, DeterministicRng},
     store::{KeyValueStore, TestKeyValueStore as _},

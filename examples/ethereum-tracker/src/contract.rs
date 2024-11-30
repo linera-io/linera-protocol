@@ -13,10 +13,10 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 
-use self::state::EthereumTracker;
+use self::state::EthereumTrackerState;
 
 pub struct EthereumTrackerContract {
-    state: EthereumTracker,
+    state: EthereumTrackerState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -32,7 +32,7 @@ impl Contract for EthereumTrackerContract {
     type Parameters = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = EthereumTracker::load(runtime.root_view_storage_context())
+        let state = EthereumTrackerState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         EthereumTrackerContract { state, runtime }

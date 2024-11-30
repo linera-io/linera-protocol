@@ -41,8 +41,8 @@ use linera_base::{
     },
     doc_scalar, hex_debug,
     identifiers::{
-        Account, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName, Destination,
-        GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
+        Account, AccountOwner, ApplicationId, BlobId, BytecodeId, ChainId, ChannelName,
+        Destination, GenericApplicationId, MessageId, Owner, StreamName, UserApplicationId,
     },
     ownership::ChainOwnership,
     task,
@@ -476,13 +476,13 @@ pub trait BaseRuntime {
     fn read_chain_balance(&mut self) -> Result<Amount, ExecutionError>;
 
     /// Reads the owner balance.
-    fn read_owner_balance(&mut self, owner: Owner) -> Result<Amount, ExecutionError>;
+    fn read_owner_balance(&mut self, owner: AccountOwner) -> Result<Amount, ExecutionError>;
 
     /// Reads the balances from all owners.
-    fn read_owner_balances(&mut self) -> Result<Vec<(Owner, Amount)>, ExecutionError>;
+    fn read_owner_balances(&mut self) -> Result<Vec<(AccountOwner, Amount)>, ExecutionError>;
 
     /// Reads balance owners.
-    fn read_balance_owners(&mut self) -> Result<Vec<Owner>, ExecutionError>;
+    fn read_balance_owners(&mut self) -> Result<Vec<AccountOwner>, ExecutionError>;
 
     /// Reads the current ownership configuration for this chain.
     fn chain_ownership(&mut self) -> Result<ChainOwnership, ExecutionError>;
@@ -670,7 +670,7 @@ pub trait ContractRuntime: BaseRuntime {
     /// Transfers amount from source to destination.
     fn transfer(
         &mut self,
-        source: Option<Owner>,
+        source: Option<AccountOwner>,
         destination: Account,
         amount: Amount,
     ) -> Result<(), ExecutionError>;
@@ -968,7 +968,7 @@ impl OperationContext {
     fn refund_grant_to(&self) -> Option<Account> {
         Some(Account {
             chain_id: self.chain_id,
-            owner: self.authenticated_signer,
+            owner: self.authenticated_signer.map(AccountOwner::User),
         })
     }
 

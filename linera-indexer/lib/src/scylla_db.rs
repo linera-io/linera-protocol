@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_views::{
-    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
-    store::{AdminKeyValueStore, CommonStoreInternalConfig},
+    scylla_db::{ScyllaDbStore, ScyllaDbStoreConfig},
+    store::{AdminKeyValueStore, CommonStoreConfig},
 };
 
 use crate::{
@@ -35,20 +35,14 @@ pub type ScyllaDbRunner = Runner<ScyllaDbStore, ScyllaDbConfig>;
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = <IndexerConfig<ScyllaDbConfig> as clap::Parser>::parse();
-        let common_config = CommonStoreInternalConfig {
+        let common_config = CommonStoreConfig {
             max_concurrent_queries: config.client.max_concurrent_queries,
             max_stream_queries: config.client.max_stream_queries,
+            cache_size: config.client.cache_size,
         };
         let namespace = config.client.table.clone();
         let root_key = &[];
-        let inner_config = ScyllaDbStoreInternalConfig {
-            uri: config.client.uri.clone(),
-            common_config,
-        };
-        let store_config = ScyllaDbStoreConfig {
-            inner_config,
-            cache_size: config.client.cache_size,
-        };
+        let store_config = ScyllaDbStoreConfig::new(config.client.uri.clone(), common_config);
         let store = ScyllaDbStore::connect(&store_config, &namespace, root_key).await?;
         Self::new(config, store).await
     }

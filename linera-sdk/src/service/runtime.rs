@@ -8,7 +8,7 @@ use std::cell::Cell;
 use linera_base::{
     abi::ServiceAbi,
     data_types::{Amount, BlockHeight, Timestamp},
-    identifiers::{ApplicationId, ChainId, Owner},
+    identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 
 use super::wit::service_system_api as wit;
@@ -25,8 +25,8 @@ where
     next_block_height: Cell<Option<BlockHeight>>,
     timestamp: Cell<Option<Timestamp>>,
     chain_balance: Cell<Option<Amount>>,
-    owner_balances: Cell<Option<Vec<(Owner, Amount)>>>,
-    balance_owners: Cell<Option<Vec<Owner>>>,
+    owner_balances: Cell<Option<Vec<(AccountOwner, Amount)>>>,
+    balance_owners: Cell<Option<Vec<AccountOwner>>>,
 }
 
 impl<Application> ServiceRuntime<Application>
@@ -95,12 +95,12 @@ where
     }
 
     /// Returns the balance of one of the accounts on this chain.
-    pub fn owner_balance(&self, owner: Owner) -> Amount {
+    pub fn owner_balance(&self, owner: AccountOwner) -> Amount {
         wit::read_owner_balance(owner.into()).into()
     }
 
     /// Returns the balances of all accounts on the chain.
-    pub fn owner_balances(&self) -> Vec<(Owner, Amount)> {
+    pub fn owner_balances(&self) -> Vec<(AccountOwner, Amount)> {
         Self::fetch_value_through_cache(&self.owner_balances, || {
             wit::read_owner_balances()
                 .into_iter()
@@ -110,11 +110,11 @@ where
     }
 
     /// Returns the owners of accounts on this chain.
-    pub fn balance_owners(&self) -> Vec<Owner> {
+    pub fn balance_owners(&self) -> Vec<AccountOwner> {
         Self::fetch_value_through_cache(&self.balance_owners, || {
             wit::read_balance_owners()
                 .into_iter()
-                .map(Owner::from)
+                .map(AccountOwner::from)
                 .collect()
         })
     }

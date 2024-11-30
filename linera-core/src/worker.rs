@@ -199,8 +199,6 @@ pub enum WorkerError {
     MissingCertificateValue,
     #[error("The hash certificate doesn't match its value.")]
     InvalidLiteCertificate,
-    #[error("An additional value was provided that is not required: {value_hash}.")]
-    UnneededValue { value_hash: CryptoHash },
     #[error("An additional blob was provided that is not required: {blob_id}.")]
     UnneededBlob { blob_id: BlobId },
     #[error("The blobs provided in the proposal were not the published ones, in order.")]
