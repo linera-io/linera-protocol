@@ -40,7 +40,7 @@ pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
 pub type TimeoutCertificate = GenericCertificate<Timeout>;
 
 /// Enum wrapping all types of certificates that can be created.
-/// It is a certified statement from the committee.
+/// A certified statement from the committee.
 /// Every certificate is a statement signed by the quorum of the committee.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
