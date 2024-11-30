@@ -25,15 +25,23 @@ use serde::{Deserialize, Serialize};
 use crate::types::{ConfirmedBlock, Timeout, ValidatedBlock};
 
 /// Certificate for a [`ValidatedBlock`]` instance.
+/// A validated block certificate means the block is valid (but not necessarily finalized yet).
+/// Since only one block per round is validated,
+/// there can be at most one such certificate in every round.
 pub type ValidatedBlockCertificate = GenericCertificate<ValidatedBlock>;
 
 /// Certificate for a [`ConfirmedBlock`] instance.
+/// A confirmed block certificate means that the block is finalized:
+/// It is the agreed block at that height on that chain.
 pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
 
 /// Certificate for a [`Timeout`] instance.
+/// A timeout certificate means that the next consensus round has begun.
 pub type TimeoutCertificate = GenericCertificate<Timeout>;
 
 /// Enum wrapping all types of certificates that can be created.
+/// It is a certified statement from the committee.
+/// Every certificate is a statement signed by the quorum of the committee.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum Certificate {

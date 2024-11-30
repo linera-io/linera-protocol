@@ -12,19 +12,11 @@ use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 
 use super::{generic::GenericCertificate, hashed::Hashed, Certificate};
 use crate::{
-    block::{ConfirmedBlock, ConversionError, ValidatedBlock},
+    block::{ConfirmedBlock, ConversionError},
     data_types::{ExecutedBlock, Medium, MessageBundle},
 };
 
 impl GenericCertificate<ConfirmedBlock> {
-    /// Creates a new `ConfirmedBlockCertificate` from a `ValidatedBlockCertificate`.
-    pub fn from_validated(validated: GenericCertificate<ValidatedBlock>) -> Self {
-        let round = validated.round;
-        let validated_block = validated.into_inner();
-        let hashed = Hashed::new(ConfirmedBlock::from_validated(validated_block));
-        Self::new(hashed, round, vec![])
-    }
-
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
     pub fn executed_block(&self) -> &ExecutedBlock {
         self.inner().executed_block()

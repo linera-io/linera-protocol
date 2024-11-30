@@ -1003,7 +1003,9 @@ where
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, ChainClientError> {
-        let hashed_value = Hashed::new(ConfirmedBlock::from_validated(certificate.inner().clone()));
+        let hashed_value = Hashed::new(ConfirmedBlock::new(
+            certificate.inner().executed_block().clone(),
+        ));
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate,
             delivery: self.options.cross_chain_message_delivery,
@@ -2052,9 +2054,7 @@ where
         block.check_proposal_size(max_size, &blobs)?;
         self.state_mut().set_pending_block(block.clone());
 
-        Ok(Hashed::new(ConfirmedBlock::from_validated(
-            ValidatedBlock::new(executed_block),
-        )))
+        Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
 
     /// Returns a suitable timestamp for the next block.
@@ -2383,9 +2383,7 @@ where
         let committee = self.local_committee().await?;
         // Send the query to validators.
         let certificate = if round.is_fast() {
-            let hashed_value = Hashed::new(ConfirmedBlock::from_validated(ValidatedBlock::new(
-                executed_block,
-            )));
+            let hashed_value = Hashed::new(ConfirmedBlock::new(executed_block));
             self.submit_block_proposal(&committee, proposal, hashed_value)
                 .await?
         } else {

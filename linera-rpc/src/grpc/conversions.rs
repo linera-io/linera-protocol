@@ -363,7 +363,7 @@ impl TryFrom<api::Certificate> for Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
-        let cert_type = certificate.tpe;
+        let cert_type = certificate.kind;
 
         let round = bincode::deserialize(&certificate.round)?;
         let signatures = bincode::deserialize(&certificate.signatures)?;
@@ -396,7 +396,7 @@ impl TryFrom<Certificate> for api::Certificate {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
 
-        let (tpe, value) = match certificate {
+        let (kind, value) = match certificate {
             Certificate::Confirmed(confirmed) => (
                 api::CertificateType::ConfirmedBlock,
                 bincode::serialize(confirmed.value())?,
@@ -412,7 +412,7 @@ impl TryFrom<Certificate> for api::Certificate {
         };
 
         Ok(Self {
-            tpe: tpe as i32,
+            kind: kind as i32,
             value,
             round,
             signatures,

@@ -830,6 +830,11 @@ where
     }
 
     /// Processes a certificate.
+    #[instrument(skip_all, fields(
+        nick = self.nickname,
+        chain_id = format!("{:.8}", certificate.chain_id()),
+        height = %certificate.height(),
+    ))]
     pub async fn handle_certificate(
         &self,
         certificate: Certificate,

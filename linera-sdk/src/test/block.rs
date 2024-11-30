@@ -16,7 +16,7 @@ use linera_chain::{
         Block, ChannelFullName, IncomingBundle, LiteVote, Medium, MessageAction, Origin,
         SignatureAggregator,
     },
-    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed, ValidatedBlock},
+    types::{ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
 };
 use linera_execution::{
     system::{Recipient, SystemChannel, SystemOperation},
@@ -216,9 +216,7 @@ impl BlockBuilder {
             .stage_block_execution(self.block)
             .await?;
 
-        let value = Hashed::new(ConfirmedBlock::from_validated(ValidatedBlock::new(
-            executed_block,
-        )));
+        let value = Hashed::new(ConfirmedBlock::new(executed_block));
         let vote = LiteVote::new(value.lite(), Round::Fast, self.validator.key_pair());
         let mut builder = SignatureAggregator::new(value, Round::Fast, self.validator.committee());
         let certificate = builder
