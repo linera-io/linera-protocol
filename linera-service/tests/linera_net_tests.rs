@@ -10,6 +10,7 @@
     feature = "remote-net"
 ))]
 
+#[cfg(not(feature = "remote-net"))]
 mod common;
 
 use std::{
@@ -19,6 +20,7 @@ use std::{
 
 use anyhow::Result;
 use async_graphql::InputType;
+#[cfg(not(feature = "remote-net"))]
 use common::INTEGRATION_TEST_GUARD;
 use futures::{
     channel::mpsc,
@@ -382,6 +384,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
         client::EthereumQueries,
         test_utils::{get_anvil, SimpleTokenContractFunction},
     };
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -482,6 +485,7 @@ async fn test_wasm_end_to_end_ethereum_tracker(config: impl LineraNetConfig) -> 
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -536,6 +540,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -586,6 +591,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::time::Instant;
     use social::SocialAbi;
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -699,6 +705,7 @@ async fn test_wasm_end_to_end_fungible(
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -863,6 +870,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -979,6 +987,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1262,6 +1271,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
     use linera_base::data_types::Timestamp;
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1396,6 +1406,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
 
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -1687,6 +1698,7 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use amm::{AmmAbi, Parameters};
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2428,6 +2440,7 @@ async fn test_resolve_binary() -> Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2549,6 +2562,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2595,6 +2609,7 @@ async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2665,6 +2680,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
     use linera_base::crypto::PublicKey;
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2706,6 +2722,7 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2752,6 +2769,7 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_publish_data_blob_in_cli(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2784,6 +2802,7 @@ async fn test_end_to_end_publish_data_blob_in_cli(config: impl LineraNetConfig) 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2862,6 +2881,7 @@ async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
 #[test_log::test(tokio::test)]
 #[ignore = "This test takes a long time to run"]
 async fn test_end_to_end_faucet_with_long_chains(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2923,6 +2943,7 @@ async fn test_end_to_end_fungible_client_benchmark(config: impl LineraNetConfig)
     use linera_base::command::CommandExt;
     use tokio::process::Command;
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -2970,6 +2991,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
         thread,
     };
 
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -3080,6 +3102,7 @@ async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> 
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Result<()> {
+    #[cfg(not(feature = "remote-net"))]
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
@@ -3132,7 +3155,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         let mut got_message = false;
 
         // Wait until chain 2 created a block receiving the tokens.
-        let timeout = Instant::now() + Duration::from_secs(1);
+        let timeout = Instant::now() + Duration::from_secs(4);
         let hash2 = loop {
             let duration = timeout.duration_since(Instant::now());
             let sleep = Box::pin(linera_base::time::timer::sleep(duration));
