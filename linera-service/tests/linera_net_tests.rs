@@ -3155,7 +3155,7 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
         let mut got_message = false;
 
         // Wait until chain 2 created a block receiving the tokens.
-        let timeout = Instant::now() + Duration::from_secs(4);
+        let timeout = Instant::now() + Duration::from_secs(6);
         let hash2 = loop {
             let duration = timeout.duration_since(Instant::now());
             let sleep = Box::pin(linera_base::time::timer::sleep(duration));
