@@ -1823,11 +1823,7 @@ where
     let validated_block_certificate = *manager.requested_locked.unwrap();
     let resubmission_result = builder
         .node(2)
-        .handle_certificate(
-            validated_block_certificate,
-            Vec::new(),
-            CrossChainMessageDelivery::Blocking,
-        )
+        .handle_validated_certificate(validated_block_certificate, Vec::new())
         .await;
     assert!(resubmission_result.is_err());
 
@@ -1895,11 +1891,7 @@ where
     let validated_block_certificate = *manager.requested_locked.unwrap();
     let resubmission_result = builder
         .node(3)
-        .handle_certificate(
-            validated_block_certificate,
-            Vec::new(),
-            CrossChainMessageDelivery::Blocking,
-        )
+        .handle_validated_certificate(validated_block_certificate, Vec::new())
         .await;
     assert!(resubmission_result.is_err());
 
@@ -2299,11 +2291,7 @@ where
     let validated_block_certificate = *manager.requested_locked.unwrap();
     builder
         .node(0)
-        .handle_certificate(
-            validated_block_certificate,
-            Vec::new(),
-            CrossChainMessageDelivery::Blocking,
-        )
+        .handle_validated_certificate(validated_block_certificate, Vec::new())
         .await
         .unwrap();
 

@@ -49,7 +49,8 @@ use super::{
 };
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    HandleCertificateRequest, HandleLiteCertRequest,
+    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
+    HandleValidatedCertificateRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
@@ -505,12 +506,12 @@ where
     }
 
     #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
-    async fn handle_certificate(
+    async fn handle_confirmed_certificate(
         &self,
-        request: Request<api::HandleCertificateRequest>,
+        request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let start = Instant::now();
-        let HandleCertificateRequest {
+        let HandleConfirmedCertificateRequest {
             certificate,
             blobs,
             wait_for_outgoing_messages,
@@ -520,11 +521,11 @@ where
         match self
             .state
             .clone()
-            .handle_certificate(certificate, blobs, sender)
+            .handle_confirmed_certificate(certificate, blobs, sender)
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_success_and_latency(start, "handle_certificate");
+                Self::log_request_success_and_latency(start, "handle_confirmed_certificate");
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -540,7 +541,71 @@ where
                         .with_label_values(&["handle_certificate"])
                         .inc();
                 }
-                error!(nickname = self.state.nickname(), %error, "Failed to handle certificate");
+                error!(nickname = self.state.nickname(), %error, "Failed to handle confirmed certificate");
+                Ok(Response::new(NodeError::from(error).try_into()?))
+            }
+        }
+    }
+
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    async fn handle_validated_certificate(
+        &self,
+        request: Request<api::HandleValidatedCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
+        let HandleValidatedCertificateRequest { certificate, blobs } =
+            request.into_inner().try_into()?;
+        trace!(?certificate, "Handling certificate");
+        match self
+            .state
+            .clone()
+            .handle_validated_certificate(certificate, blobs)
+            .await
+        {
+            Ok((info, actions)) => {
+                Self::log_request_success_and_latency(start, "handle_certificate");
+                self.handle_network_actions(actions);
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                #[cfg(with_metrics)]
+                {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_validated_certificate"])
+                        .inc();
+                }
+                error!(nickname = self.state.nickname(), %error, "Failed to handle validated certificate");
+                Ok(Response::new(NodeError::from(error).try_into()?))
+            }
+        }
+    }
+
+    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    async fn handle_timeout_certificate(
+        &self,
+        request: Request<api::HandleTimeoutCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let start = Instant::now();
+        let HandleTimeoutCertificateRequest { certificate } = request.into_inner().try_into()?;
+        trace!(?certificate, "Handling Timeout certificate");
+        match self
+            .state
+            .clone()
+            .handle_timeout_certificate(certificate)
+            .await
+        {
+            Ok((info, _actions)) => {
+                Self::log_request_success_and_latency(start, "handle_timeout_certificate");
+                Ok(Response::new(info.try_into()?))
+            }
+            Err(error) => {
+                #[cfg(with_metrics)]
+                {
+                    SERVER_REQUEST_ERROR
+                        .with_label_values(&["handle_timeout_certificate"])
+                        .inc();
+                }
+                error!(nickname = self.state.nickname(), %error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
         }
@@ -618,7 +683,19 @@ impl GrpcProxyable for LiteCertificate {
     }
 }
 
-impl GrpcProxyable for api::HandleCertificateRequest {
+impl GrpcProxyable for api::HandleConfirmedCertificateRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for api::HandleTimeoutCertificateRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for api::HandleValidatedCertificateRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

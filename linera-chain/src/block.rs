@@ -40,6 +40,18 @@ impl ValidatedBlock {
     pub fn to_log_str(&self) -> &'static str {
         "validated_block"
     }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.executed_block.block.chain_id
+    }
+
+    pub fn height(&self) -> BlockHeight {
+        self.executed_block.block.height
+    }
+
+    pub fn epoch(&self) -> Epoch {
+        self.executed_block.block.epoch
+    }
 }
 
 impl BcsHashable for ValidatedBlock {}
@@ -156,6 +168,18 @@ impl Timeout {
 
     pub fn to_log_str(&self) -> &'static str {
         "timeout"
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+
+    pub fn height(&self) -> BlockHeight {
+        self.height
+    }
+
+    pub fn epoch(&self) -> Epoch {
+        self.epoch
     }
 }
 

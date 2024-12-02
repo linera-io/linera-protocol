@@ -1,7 +1,6 @@
 ---
 source: linera-rpc/tests/format.rs
 expression: get_registry().unwrap()
-snapshot_kind: text
 ---
 Account:
   STRUCT:
@@ -424,10 +423,10 @@ GenericApplicationId:
       User:
         NEWTYPE:
           TYPENAME: ApplicationId
-HandleCertificateRequest:
+HandleConfirmedCertificateRequest:
   STRUCT:
     - certificate:
-        TYPENAME: Certificate
+        TYPENAME: ConfirmedBlockCertificate
     - wait_for_outgoing_messages: BOOL
     - blobs:
         SEQ:
@@ -437,6 +436,17 @@ HandleLiteCertRequest:
     - certificate:
         TYPENAME: LiteCertificate
     - wait_for_outgoing_messages: BOOL
+HandleTimeoutCertificateRequest:
+  STRUCT:
+    - certificate:
+        TYPENAME: TimeoutCertificate
+HandleValidatedCertificateRequest:
+  STRUCT:
+    - certificate:
+        TYPENAME: ValidatedBlockCertificate
+    - blobs:
+        SEQ:
+          TYPENAME: BlobContent
 IncomingBundle:
   STRUCT:
     - origin:
@@ -779,86 +789,94 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: BlockProposal
     1:
-      Certificate:
+      TimeoutCertificate:
         NEWTYPE:
-          TYPENAME: HandleCertificateRequest
+          TYPENAME: HandleTimeoutCertificateRequest
     2:
+      ValidatedCertificate:
+        NEWTYPE:
+          TYPENAME: HandleValidatedCertificateRequest
+    3:
+      ConfirmedCertificate:
+        NEWTYPE:
+          TYPENAME: HandleConfirmedCertificateRequest
+    4:
       LiteCertificate:
         NEWTYPE:
           TYPENAME: HandleLiteCertRequest
-    3:
+    5:
       ChainInfoQuery:
         NEWTYPE:
           TYPENAME: ChainInfoQuery
-    4:
+    6:
       DownloadBlobContent:
         NEWTYPE:
           TYPENAME: BlobId
-    5:
+    7:
       DownloadConfirmedBlock:
         NEWTYPE:
           TYPENAME: CryptoHash
-    6:
+    8:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    7:
+    9:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    8:
+    10:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    9:
-      VersionInfoQuery: UNIT
-    10:
-      GenesisConfigHashQuery: UNIT
     11:
+      VersionInfoQuery: UNIT
+    12:
+      GenesisConfigHashQuery: UNIT
+    13:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    12:
+    14:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    13:
+    15:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    14:
+    16:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    15:
+    17:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    16:
+    18:
       DownloadBlobContentResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    17:
+    19:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlock
-    18:
+    20:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: ConfirmedBlockCertificate
-    19:
+    21:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    20:
+    22:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    21:
+    23:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

@@ -14,8 +14,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        Certificate, CertificateValueT, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate,
+        CertificateValueT, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
+        TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
 use linera_execution::committee::ValidatorName;
@@ -25,7 +25,6 @@ use tracing::{instrument, warn};
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
-    worker::ProcessableCertificate,
 };
 
 /// A validator node together with the validator's name.
@@ -57,19 +56,38 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_certificate<T: ProcessableCertificate>(
+    pub(crate) async fn handle_timeout_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: TimeoutCertificate,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificate.inner().chain_id();
+        let response = self.node.handle_timeout_certificate(certificate).await?;
+        self.check_and_return_info(response, chain_id)
+    }
+
+    pub(crate) async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
         let response = self
             .node
-            .handle_certificate(certificate, blobs, delivery)
+            .handle_confirmed_certificate(certificate, blobs, delivery)
+            .await?;
+        self.check_and_return_info(response, chain_id)
+    }
+
+    pub(crate) async fn handle_validated_certificate(
+        &self,
+        certificate: ValidatedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificate.inner().chain_id();
+        let response = self
+            .node
+            .handle_validated_certificate(certificate, blobs)
             .await?;
         self.check_and_return_info(response, chain_id)
     }
@@ -88,14 +106,11 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_certificate<T: ProcessableCertificate>(
+    pub(crate) async fn handle_optimized_timeout_certificate(
         &mut self,
-        certificate: &GenericCertificate<T>,
+        certificate: &TimeoutCertificate,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<Box<ChainInfo>, NodeError> {
         if certificate.is_signed_by(&self.name) {
             let result = self
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
@@ -110,7 +125,52 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 _ => return result,
             }
         }
-        self.handle_certificate(certificate.clone(), vec![], delivery)
+        self.handle_timeout_certificate(certificate.clone()).await
+    }
+
+    pub(crate) async fn handle_optimized_validated_certificate(
+        &mut self,
+        certificate: &ValidatedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        if certificate.is_signed_by(&self.name) {
+            let result = self
+                .handle_lite_certificate(certificate.lite_certificate(), delivery)
+                .await;
+            match result {
+                Err(NodeError::MissingCertificateValue) => {
+                    warn!(
+                        "Validator {} forgot a certificate value that they signed before",
+                        self.name
+                    );
+                }
+                _ => return result,
+            }
+        }
+        self.handle_validated_certificate(certificate.clone(), vec![])
+            .await
+    }
+
+    pub(crate) async fn handle_optimized_confirmed_certificate(
+        &mut self,
+        certificate: &ConfirmedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        if certificate.is_signed_by(&self.name) {
+            let result = self
+                .handle_lite_certificate(certificate.lite_certificate(), delivery)
+                .await;
+            match result {
+                Err(NodeError::MissingCertificateValue) => {
+                    warn!(
+                        "Validator {} forgot a certificate value that they signed before",
+                        self.name
+                    );
+                }
+                _ => return result,
+            }
+        }
+        self.handle_confirmed_certificate(certificate.clone(), vec![], delivery)
             .await
     }
 

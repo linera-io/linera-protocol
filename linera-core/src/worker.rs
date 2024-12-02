@@ -26,9 +26,8 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        Certificate, CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate,
-        GenericCertificate, Hashed, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
-        ValidatedBlockCertificate,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
@@ -629,7 +628,7 @@ where
         .await
     }
 
-    /// Returns a stored [`Certificate`] for a chain's block.
+    /// Returns a stored [`ConfirmedBlockCertificate`] for a chain's block.
     #[instrument(level = "trace", skip(self, chain_id, height))]
     #[cfg(with_testing)]
     pub async fn read_certificate(
@@ -824,34 +823,6 @@ where
                 .await
             }
             Either::Right(validated) => self.handle_validated_certificate(validated, vec![]).await,
-        }
-    }
-
-    /// Processes a certificate.
-    #[instrument(skip_all, fields(
-        nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.chain_id()),
-        height = %certificate.height(),
-    ))]
-    pub async fn handle_certificate(
-        &self,
-        certificate: Certificate,
-        blobs: Vec<Blob>,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        match certificate {
-            Certificate::Confirmed(confirmed) => {
-                self.handle_confirmed_certificate(
-                    confirmed,
-                    blobs,
-                    notify_when_messages_are_delivered,
-                )
-                .await
-            }
-            Certificate::Validated(validated) => {
-                self.handle_validated_certificate(validated, blobs).await
-            }
-            Certificate::Timeout(timeout) => self.handle_timeout_certificate(timeout).await,
         }
     }
 

@@ -13,7 +13,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{self},
-    types::{self, Certificate, ConfirmedBlockCertificate, GenericCertificate},
+    types::{
+        self, Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
+        ValidatedBlock,
+    },
 };
 use linera_core::{
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
@@ -35,7 +38,10 @@ use super::{
     },
     transport, GRPC_MAX_MESSAGE_SIZE,
 };
-use crate::{HandleCertificateRequest, HandleLiteCertRequest, NodeOptions};
+use crate::{
+    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
+    HandleValidatedCertificateRequest, NodeOptions,
+};
 
 #[derive(Clone)]
 pub struct GrpcClient {
@@ -200,22 +206,50 @@ impl ValidatorNode for GrpcClient {
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
-    async fn handle_certificate<T>(
+    async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: GenericCertificate<ConfirmedBlock>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
-        let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
-        let request = HandleCertificateRequest {
-            certificate: certificate.into(),
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
+        let request = HandleConfirmedCertificateRequest {
+            certificate,
             blobs,
             wait_for_outgoing_messages,
         };
-        GrpcClient::try_into_chain_info(client_delegate!(self, handle_certificate, request)?)
+        GrpcClient::try_into_chain_info(client_delegate!(
+            self,
+            handle_confirmed_certificate,
+            request
+        )?)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn handle_validated_certificate(
+        &self,
+        certificate: GenericCertificate<ValidatedBlock>,
+        blobs: Vec<Blob>,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let request = HandleValidatedCertificateRequest { certificate, blobs };
+        GrpcClient::try_into_chain_info(client_delegate!(
+            self,
+            handle_validated_certificate,
+            request
+        )?)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
+    async fn handle_timeout_certificate(
+        &self,
+        certificate: GenericCertificate<Timeout>,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        let request = HandleTimeoutCertificateRequest { certificate };
+        GrpcClient::try_into_chain_info(client_delegate!(
+            self,
+            handle_timeout_certificate,
+            request
+        )?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err, fields(address = self.address))]
@@ -404,9 +438,17 @@ impl mass_client::MassClient for GrpcClient {
                             let request = Request::new((*proposal).try_into()?);
                             client.handle_block_proposal(request).await?
                         }
-                        RpcMessage::Certificate(request) => {
+                        RpcMessage::TimeoutCertificate(request) => {
                             let request = Request::new((*request).try_into()?);
-                            client.handle_certificate(request).await?
+                            client.handle_timeout_certificate(request).await?
+                        }
+                        RpcMessage::ValidatedCertificate(request) => {
+                            let request = Request::new((*request).try_into()?);
+                            client.handle_validated_certificate(request).await?
+                        }
+                        RpcMessage::ConfirmedCertificate(request) => {
+                            let request = Request::new((*request).try_into()?);
+                            client.handle_confirmed_certificate(request).await?
                         }
                         msg => panic!("attempted to send msg: {:?}", msg),
                     };

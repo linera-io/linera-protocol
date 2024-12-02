@@ -14,7 +14,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, Origin},
-    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{
+        ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
+        ValidatedBlock,
+    },
     ChainError,
 };
 use linera_execution::{
@@ -28,7 +31,7 @@ use thiserror::Error;
 
 use crate::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    worker::{Notification, ProcessableCertificate, WorkerError},
+    worker::{Notification, WorkerError},
 };
 
 /// A pinned [`Stream`] of Notifications.
@@ -65,14 +68,25 @@ pub trait ValidatorNode {
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a certificate.
-    async fn handle_certificate<T: ProcessableCertificate>(
+    async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: GenericCertificate<ConfirmedBlock>,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>;
+    ) -> Result<ChainInfoResponse, NodeError>;
+
+    /// Processes a certificate.
+    async fn handle_validated_certificate(
+        &self,
+        certificate: GenericCertificate<ValidatedBlock>,
+        blobs: Vec<Blob>,
+    ) -> Result<ChainInfoResponse, NodeError>;
+
+    /// Processes a certificate.
+    async fn handle_timeout_certificate(
+        &self,
+        certificate: GenericCertificate<Timeout>,
+    ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Handles information queries for this chain.
     async fn handle_chain_info_query(

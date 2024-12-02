@@ -18,14 +18,19 @@ use linera_core::{
 use linera_version::VersionInfo;
 use serde::{Deserialize, Serialize};
 
-use crate::{HandleCertificateRequest, HandleLiteCertRequest};
+use crate::{
+    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
+    HandleValidatedCertificateRequest,
+};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
-    Certificate(Box<HandleCertificateRequest>),
+    TimeoutCertificate(Box<HandleTimeoutCertificateRequest>),
+    ValidatedCertificate(Box<HandleValidatedCertificateRequest>),
+    ConfirmedCertificate(Box<HandleConfirmedCertificateRequest>),
     LiteCertificate(Box<HandleLiteCertRequest<'static>>),
     ChainInfoQuery(Box<ChainInfoQuery>),
     DownloadBlobContent(Box<BlobId>),
@@ -62,7 +67,9 @@ impl RpcMessage {
         let chain_id = match self {
             BlockProposal(proposal) => proposal.content.block.chain_id,
             LiteCertificate(request) => request.certificate.value.chain_id,
-            Certificate(request) => request.certificate.chain_id(),
+            TimeoutCertificate(request) => request.certificate.inner().chain_id(),
+            ValidatedCertificate(request) => request.certificate.inner().chain_id(),
+            ConfirmedCertificate(request) => request.certificate.inner().chain_id(),
             ChainInfoQuery(query) => query.chain_id,
             CrossChainRequest(request) => request.target_chain_id(),
             Vote(_)
@@ -104,7 +111,9 @@ impl RpcMessage {
             | DownloadCertificates(_) => true,
             BlockProposal(_)
             | LiteCertificate(_)
-            | Certificate(_)
+            | TimeoutCertificate(_)
+            | ValidatedCertificate(_)
+            | ConfirmedCertificate(_)
             | ChainInfoQuery(_)
             | CrossChainRequest(_)
             | Vote(_)
@@ -211,9 +220,21 @@ impl From<HandleLiteCertRequest<'static>> for RpcMessage {
     }
 }
 
-impl From<HandleCertificateRequest> for RpcMessage {
-    fn from(request: HandleCertificateRequest) -> Self {
-        RpcMessage::Certificate(Box::new(request))
+impl From<HandleTimeoutCertificateRequest> for RpcMessage {
+    fn from(request: HandleTimeoutCertificateRequest) -> Self {
+        RpcMessage::TimeoutCertificate(Box::new(request))
+    }
+}
+
+impl From<HandleValidatedCertificateRequest> for RpcMessage {
+    fn from(request: HandleValidatedCertificateRequest) -> Self {
+        RpcMessage::ValidatedCertificate(Box::new(request))
+    }
+}
+
+impl From<HandleConfirmedCertificateRequest> for RpcMessage {
+    fn from(request: HandleConfirmedCertificateRequest) -> Self {
+        RpcMessage::ConfirmedCertificate(Box::new(request))
     }
 }
 

@@ -17,12 +17,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{Certificate, GenericCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{
     client::ChainClientError,
@@ -30,7 +30,6 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
-    worker::ProcessableCertificate,
 };
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
@@ -210,17 +209,14 @@ where
     A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate<T: 'static + ProcessableCertificate>(
+    async fn send_confirmed_certificate(
         &mut self,
-        certificate: GenericCertificate<T>,
+        certificate: ConfirmedBlockCertificate,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
             .remote_node
-            .handle_optimized_certificate(&certificate, delivery)
+            .handle_optimized_confirmed_certificate(&certificate, delivery)
             .await;
 
         Ok(match &result {
@@ -234,7 +230,57 @@ where
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node
-                    .handle_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .await
+            }
+            _ => result,
+        }?)
+    }
+
+    async fn send_timeout_certificate(
+        &mut self,
+        certificate: TimeoutCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        let result = self
+            .remote_node
+            .handle_optimized_timeout_certificate(&certificate, delivery)
+            .await;
+
+        match &result {
+            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
+                warn!(
+                    "BlobsNotFound error while handling a timeout certificate: {:?}",
+                    blob_ids
+                );
+                Err(ChainClientError::RemoteNodeError(original_err.clone()))
+            }
+            _ => Ok(result?),
+        }
+    }
+
+    async fn send_validated_certificate(
+        &mut self,
+        certificate: ValidatedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, ChainClientError> {
+        let result = self
+            .remote_node
+            .handle_optimized_validated_certificate(&certificate, delivery)
+            .await;
+
+        Ok(match &result {
+            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
+                self.remote_node
+                    .check_blobs_not_found(&certificate, blob_ids)?;
+
+                let blobs = self
+                    .local_node
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
+                    .await?
+                    .ok_or_else(|| original_err.clone())?;
+                self.remote_node
+                    .handle_validated_certificate(certificate, blobs)
                     .await
             }
             _ => result,
@@ -323,12 +369,12 @@ where
             let storage = self.local_node.storage_client();
             let certs = storage.read_certificates(keys.into_iter()).await?;
             for cert in certs {
-                self.send_certificate(cert, delivery).await?;
+                self.send_confirmed_certificate(cert, delivery).await?;
             }
         }
         if let Some(cert) = manager.timeout {
             if cert.inner().chain_id == chain_id {
-                self.send_certificate(cert, CrossChainMessageDelivery::NonBlocking)
+                self.send_timeout_certificate(cert, CrossChainMessageDelivery::NonBlocking)
                     .await?;
             }
         }
@@ -407,7 +453,9 @@ where
                 certificate,
                 delivery,
             } => {
-                let info = self.send_certificate(certificate, delivery).await?;
+                let info = self
+                    .send_validated_certificate(certificate, delivery)
+                    .await?;
                 info.manager.pending
             }
             CommunicateAction::RequestTimeout { .. } => {

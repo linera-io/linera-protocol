@@ -22,8 +22,11 @@ service ValidatorWorker {
   // Process a certificate without value.
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
-  // Process a certificate.
-  rpc HandleCertificate(HandleCertificateRequest) returns (ChainInfoResult);
+  rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleTimeoutCertificate(HandleTimeoutCertificateRequest) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -40,8 +43,11 @@ service ValidatorNode {
   // Process a certificate without value.
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
-  // Process a certificate.
-  rpc HandleCertificate(HandleCertificateRequest) returns (ChainInfoResult);
+  rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleTimeoutCertificate(HandleTimeoutCertificateRequest) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -216,7 +222,30 @@ message LiteCertificate {
 
 // A certified statement from the committee, together with other certificates
 // required for execution.
-message HandleCertificateRequest {
+message HandleTimeoutCertificateRequest {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 1;
+
+  // A certified statement from the committee.
+  Certificate certificate = 4;
+}
+
+// A certified statement from the committee, together with other certificates
+// required for execution.
+message HandleValidatedCertificateRequest {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 1;
+
+  // Blobs required by this certificate
+  bytes blobs = 3;
+
+  // A certified statement from the committee.
+  Certificate certificate = 4;
+}
+
+// A certified statement from the committee, together with other certificates
+// required for execution.
+message HandleConfirmedCertificateRequest {
   // The ID of the chain (used for routing).
   ChainId chain_id = 1;
 
@@ -242,20 +271,13 @@ message Certificate {
   // Signatures on the value hash and round
   bytes signatures = 3;
 
-  // The type of the `value` field.
-  CertificateType kind = 4;
+  CertificateKind kind = 4;
 }
 
-// Type of the value within the certificate.
-enum CertificateType {
-  // A value for validated block.
-  ValidatedBlock = 0;
-
-  // A value for confirmed block.
-  ConfirmedBlock = 1;
-
-  // A value for a timeout message.
-  Timeout = 2;
+enum CertificateKind {
+  Timeout = 0;
+  Validated = 1;
+  Confirmed = 2;
 }
 
 message ChainId {

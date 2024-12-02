@@ -239,7 +239,45 @@ where
                     }
                 }
             }
-            RpcMessage::Certificate(request) => {
+            RpcMessage::TimeoutCertificate(request) => {
+                match self
+                    .server
+                    .state
+                    .handle_timeout_certificate(request.certificate)
+                    .await
+                {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions);
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
+                        Err(error.into())
+                    }
+                }
+            }
+            RpcMessage::ValidatedCertificate(request) => {
+                match self
+                    .server
+                    .state
+                    .handle_validated_certificate(request.certificate, request.blobs)
+                    .await
+                {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions);
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
+                        Err(error.into())
+                    }
+                }
+            }
+            RpcMessage::ConfirmedCertificate(request) => {
                 let (sender, receiver) = request
                     .wait_for_outgoing_messages
                     .then(oneshot::channel)
@@ -247,7 +285,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_certificate(request.certificate, request.blobs, sender)
+                    .handle_confirmed_certificate(request.certificate, request.blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {
