@@ -364,9 +364,10 @@ impl ValidatorNode for GrpcClient {
             missing_hashes = missing_hashes[received.len()..].to_vec();
             certs_collected.append(&mut received);
         }
-        if !missing_hashes.is_empty() {
-            return Err(NodeError::MissingCertificates(missing_hashes));
-        }
+        ensure!(
+            missing_hashes.is_empty(),
+            Err(NodeError::MissingCertificates(missing_hashes))
+        );
         Ok(certs_collected)
     }
 
