@@ -149,24 +149,33 @@ impl ValidatorNode for SimpleClient {
         &self,
         hash: CryptoHash,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        self.query::<Certificate>(RpcMessage::DownloadCertificate(Box::new(hash)))
+        Ok(self
+            .download_certificates(vec![hash])
             .await?
-            .try_into()
-            .map_err(|_| NodeError::UnexpectedCertificateValue)
+            .into_iter()
+            .next()
+            .unwrap()) // UNWRAP: We know there is exactly one certificate, otherwise we would have an error.
     }
 
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
-        self.query::<Vec<Certificate>>(RpcMessage::DownloadCertificates(Box::new(hashes)))
-            .await?
-            .into_iter()
-            .map(|cert| {
-                cert.try_into()
-                    .map_err(|_| NodeError::UnexpectedCertificateValue)
-            })
-            .collect()
+        let certificates = self
+            .query::<Vec<ConfirmedBlockCertificate>>(RpcMessage::DownloadCertificates(
+                hashes.clone(),
+            ))
+            .await?;
+
+        if certificates.len() != hashes.len() {
+            let missing_hashes: Vec<CryptoHash> = hashes
+                .into_iter()
+                .filter(|hash| !certificates.iter().any(|cert| cert.hash() == *hash))
+                .collect();
+            Err(NodeError::MissingCertificates(missing_hashes))
+        } else {
+            Ok(certificates)
+        }
     }
 
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {

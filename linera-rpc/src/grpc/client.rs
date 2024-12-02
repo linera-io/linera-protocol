@@ -7,6 +7,7 @@ use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlobContent},
+    ensure,
     identifiers::{BlobId, ChainId},
     time::Duration,
 };
@@ -364,6 +365,10 @@ impl ValidatorNode for GrpcClient {
             missing_hashes = missing_hashes[received.len()..].to_vec();
             certs_collected.append(&mut received);
         }
+        ensure!(
+            missing_hashes.is_empty(),
+            NodeError::MissingCertificates(missing_hashes)
+        );
         Ok(certs_collected)
     }
 

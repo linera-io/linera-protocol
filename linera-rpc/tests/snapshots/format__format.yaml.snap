@@ -148,30 +148,19 @@ BytecodeId:
     - service_blob_hash:
         TYPENAME: CryptoHash
 Certificate:
-  STRUCT:
-    - value:
-        TYPENAME: CertificateValue
-    - round:
-        TYPENAME: Round
-    - signatures:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ValidatorName
-            - TYPENAME: Signature
-CertificateValue:
   ENUM:
     0:
-      ValidatedBlock:
+      Validated:
         NEWTYPE:
-          TYPENAME: ValidatedBlock
+          TYPENAME: ValidatedBlockCertificate
     1:
-      ConfirmedBlock:
+      Confirmed:
         NEWTYPE:
-          TYPENAME: ConfirmedBlock
+          TYPENAME: ConfirmedBlockCertificate
     2:
       Timeout:
         NEWTYPE:
-          TYPENAME: Timeout
+          TYPENAME: TimeoutCertificate
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -353,6 +342,17 @@ ConfirmedBlock:
   STRUCT:
     - executed_block:
         TYPENAME: ExecutedBlock
+ConfirmedBlockCertificate:
+  STRUCT:
+    - value:
+        TYPENAME: ConfirmedBlock
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ValidatorName
+            - TYPENAME: Signature
 CrateVersion:
   STRUCT:
     - major: U32
@@ -570,48 +570,53 @@ NodeError:
     8:
       MissingCertificateValue: UNIT
     9:
-      MissingVoteInValidatorResponse: UNIT
+      MissingCertificates:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: CryptoHash
     10:
+      MissingVoteInValidatorResponse: UNIT
+    11:
       InactiveLocalChain:
         NEWTYPE:
           TYPENAME: ChainId
-    11:
-      InvalidChainInfoResponse: UNIT
     12:
-      UnexpectedCertificateValue: UNIT
+      InvalidChainInfoResponse: UNIT
     13:
-      InvalidDecoding: UNIT
+      UnexpectedCertificateValue: UNIT
     14:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     15:
+      UnexpectedMessage: UNIT
+    16:
       GrpcError:
         STRUCT:
           - error: STR
-    16:
+    17:
       ClientIoError:
         STRUCT:
           - error: STR
-    17:
+    18:
       CannotResolveValidatorAddress:
         STRUCT:
           - address: STR
-    18:
+    19:
       SubscriptionError:
         STRUCT:
           - transport: STR
-    19:
+    20:
       SubscriptionFailed:
         STRUCT:
           - status: STR
-    20:
+    21:
       InvalidCertificateForBlob:
         NEWTYPE:
           TYPENAME: BlobId
-    21:
-      DuplicatesInBlobsNotFound: UNIT
     22:
-      UnexpectedEntriesInBlobsNotFound: UNIT
+      DuplicatesInBlobsNotFound: UNIT
     23:
+      UnexpectedEntriesInBlobsNotFound: UNIT
+    24:
       ResponseHandlingError:
         STRUCT:
           - error: STR
@@ -794,74 +799,66 @@ RpcMessage:
         NEWTYPE:
           TYPENAME: CryptoHash
     6:
-      DownloadCertificate:
-        NEWTYPE:
-          TYPENAME: CryptoHash
-    7:
       DownloadCertificates:
         NEWTYPE:
           SEQ:
             TYPENAME: CryptoHash
-    8:
+    7:
       BlobLastUsedBy:
         NEWTYPE:
           TYPENAME: BlobId
-    9:
+    8:
       MissingBlobIds:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    10:
+    9:
       VersionInfoQuery: UNIT
-    11:
+    10:
       GenesisConfigHashQuery: UNIT
-    12:
+    11:
       Vote:
         NEWTYPE:
           TYPENAME: LiteVote
-    13:
+    12:
       ChainInfoResponse:
         NEWTYPE:
           TYPENAME: ChainInfoResponse
-    14:
+    13:
       Error:
         NEWTYPE:
           TYPENAME: NodeError
-    15:
+    14:
       VersionInfoResponse:
         NEWTYPE:
           TYPENAME: VersionInfo
-    16:
+    15:
       GenesisConfigHashResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    17:
+    16:
       DownloadBlobContentResponse:
         NEWTYPE:
           TYPENAME: BlobContent
-    18:
+    17:
       DownloadConfirmedBlockResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlock
-    19:
-      DownloadCertificateResponse:
-        NEWTYPE:
-          TYPENAME: Certificate
-    20:
+    18:
       DownloadCertificatesResponse:
         NEWTYPE:
           SEQ:
-            TYPENAME: Certificate
-    21:
+            TYPENAME: ConfirmedBlockCertificate
+    19:
       BlobLastUsedByResponse:
         NEWTYPE:
           TYPENAME: CryptoHash
-    22:
+    20:
       MissingBlobIdsResponse:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
-    23:
+    21:
       CrossChainRequest:
         NEWTYPE:
           TYPENAME: CrossChainRequest

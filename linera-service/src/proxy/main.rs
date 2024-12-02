@@ -312,11 +312,8 @@ where
                         .into_inner(),
                 ))))
             }
-            DownloadCertificate(hash) => {
-                Ok(Some(self.storage.read_certificate(*hash).await?.into()))
-            }
             DownloadCertificates(hashes) => {
-                Ok(Some(self.storage.read_certificates(*hashes).await?.into()))
+                Ok(Some(self.storage.read_certificates(hashes).await?.into()))
             }
             BlobLastUsedBy(blob_id) => Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                 self.storage.read_blob_state(*blob_id).await?.last_used_by,
@@ -338,7 +335,6 @@ where
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadConfirmedBlockResponse(_)
-            | DownloadCertificateResponse(_)
             | DownloadCertificatesResponse(_) => {
                 Err(anyhow::Error::from(NodeError::UnexpectedMessage))
             }

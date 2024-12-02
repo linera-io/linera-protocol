@@ -13,11 +13,7 @@ use linera_execution::committee::Epoch;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    data_types::ExecutedBlock,
-    types::{CertificateValue, Hashed, HashedCertificateValue},
-    ChainError,
-};
+use crate::{data_types::ExecutedBlock, types::Hashed, ChainError};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
@@ -32,7 +28,7 @@ impl ValidatedBlock {
     }
 
     /// Returns a reference to the `ExecutedBlock` contained in this `ValidatedBlock`.
-    pub fn inner(&self) -> &ExecutedBlock {
+    pub fn executed_block(&self) -> &ExecutedBlock {
         &self.executed_block
     }
 
@@ -47,20 +43,6 @@ impl ValidatedBlock {
 }
 
 impl BcsHashable for ValidatedBlock {}
-
-impl TryFrom<HashedCertificateValue> for Hashed<ValidatedBlock> {
-    type Error = ConversionError;
-
-    fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
-        let hash = value.hash();
-        match value.into_inner() {
-            CertificateValue::ValidatedBlock(validated) => {
-                Ok(Hashed::unchecked_new(validated, hash))
-            }
-            _ => Err(ConversionError::ValidatedBlock),
-        }
-    }
-}
 
 /// Wrapper around an `ExecutedBlock` that has been confirmed.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
@@ -94,29 +76,9 @@ impl Hashed<ConfirmedBlock> {
     }
 }
 
-impl TryFrom<HashedCertificateValue> for Hashed<ConfirmedBlock> {
-    type Error = ConversionError;
-
-    fn try_from(value: HashedCertificateValue) -> Result<Self, Self::Error> {
-        let hash = value.hash();
-        match value.into_inner() {
-            CertificateValue::ConfirmedBlock(confirmed) => {
-                Ok(Hashed::unchecked_new(confirmed, hash))
-            }
-            _ => Err(ConversionError::ConfirmedBlock),
-        }
-    }
-}
-
 impl BcsHashable for ConfirmedBlock {}
 
 impl ConfirmedBlock {
-    #[cfg(not(feature = "benchmark"))]
-    pub(super) fn new(executed_block: ExecutedBlock) -> Self {
-        Self { executed_block }
-    }
-
-    #[cfg(feature = "benchmark")]
     pub fn new(executed_block: ExecutedBlock) -> Self {
         Self { executed_block }
     }
@@ -138,6 +100,14 @@ impl ConfirmedBlock {
     /// Consumes this `ConfirmedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
         self.executed_block
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.executed_block.block.chain_id
+    }
+
+    pub fn height(&self) -> BlockHeight {
+        self.executed_block.block.height
     }
 
     pub fn to_log_str(&self) -> &'static str {
@@ -189,27 +159,20 @@ impl Timeout {
     }
 }
 
-impl TryFrom<HashedCertificateValue> for Hashed<Timeout> {
-    type Error = &'static str;
-    fn try_from(value: HashedCertificateValue) -> Result<Hashed<Timeout>, Self::Error> {
-        let hash = value.hash();
-        match value.into_inner() {
-            CertificateValue::Timeout(timeout) => Ok(Hashed::unchecked_new(timeout, hash)),
-            _ => Err("Expected a Timeout value"),
-        }
-    }
-}
-
 impl BcsHashable for Timeout {}
 
-/// Failure to convert a [`HashedCertificateValue`] into one of the block types.
+/// Failure to convert a `Certificate` into one of the expected certificate types.
 #[derive(Clone, Copy, Debug, Error)]
 pub enum ConversionError {
-    /// Failure to convert to [`ConfirmedBlock`].
-    #[error("Expected a `ConfirmedBlock` value")]
+    /// Failure to convert to [`ConfirmedBlock`] certificate.
+    #[error("Expected a `ConfirmedBlockCertificate` value")]
     ConfirmedBlock,
 
-    /// Failure to convert to [`ValidatedBlock`].
-    #[error("Expected a `ValidatedBlock` value")]
+    /// Failure to convert to [`ValidatedBlock`] certificate.
+    #[error("Expected a `ValidatedBlockCertificate` value")]
     ValidatedBlock,
+
+    /// Failure to convert to [`Timeout`] certificate.
+    #[error("Expected a `TimeoutCertificate` value")]
+    Timeout,
 }

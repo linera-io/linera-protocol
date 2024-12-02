@@ -33,8 +33,8 @@ use linera_chain::{
     },
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateValueT, ConfirmedBlockCertificate, GenericCertificate, Hashed,
-        HashedCertificateValue,
+        CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Hashed,
+        Timeout, ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
 };
@@ -326,7 +326,7 @@ where
     let oracle_responses = iter::repeat_with(Vec::new).take(tx_count).collect();
     let events = iter::repeat_with(Vec::new).take(tx_count).collect();
     let state_hash = system_state.into_hash().await;
-    let value = HashedCertificateValue::new_confirmed(
+    let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages,
             events,
@@ -334,7 +334,7 @@ where
             oracle_responses,
         }
         .with(block),
-    );
+    ));
     make_certificate(committee, worker, value)
 }
 
@@ -552,13 +552,13 @@ where
             ..SystemExecutionState::new(epoch, ChainDescription::Root(1), ChainId::root(0))
         };
         let state_hash = system_state.into_hash().await;
-        let value = HashedCertificateValue::new_confirmed(
+        let value = Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 state_hash,
                 ..BlockExecutionOutcome::default()
             }
             .with(block),
-        );
+        ));
         make_certificate(&committee, &worker, value)
     };
     worker
@@ -688,7 +688,7 @@ where
             .unwrap()
             .value()
             .inner()
-            .inner()
+            .executed_block()
             .block,
         &block_proposal0.content.block
     ); // Multi-leader round - it's not confirmed yet.
@@ -702,13 +702,12 @@ where
             .validated_vote()
             .unwrap()
             .value()
-            .clone()
-            .into(),
+            .clone(),
     );
     drop(chain);
 
     worker
-        .handle_certificate(block_certificate0, vec![], None)
+        .handle_validated_certificate(block_certificate0, vec![])
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -747,7 +746,7 @@ where
             .unwrap()
             .value()
             .inner()
-            .inner()
+            .executed_block()
             .block,
         &block_proposal1.content.block
     );
@@ -800,7 +799,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![
                     vec![direct_credit_message(ChainId::root(2), Amount::ONE)],
@@ -826,13 +825,13 @@ where
                     .with_simple_transfer(ChainId::root(2), Amount::from_tokens(2))
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
-        ),
+        )),
     );
 
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(
                     ChainId::root(2),
@@ -853,7 +852,7 @@ where
                     .with_simple_transfer(ChainId::root(2), Amount::from_tokens(3))
                     .with_authenticated_signer(Some(sender_key_pair.public().into())),
             ),
-        ),
+        )),
     );
     // Missing earlier blocks
     assert_matches!(
@@ -1068,7 +1067,7 @@ where
         let certificate: ConfirmedBlockCertificate = make_certificate(
             &committee,
             &worker,
-            HashedCertificateValue::new_confirmed(
+            Hashed::new(ConfirmedBlock::new(
                 BlockExecutionOutcome {
                     messages: vec![
                         Vec::new(),
@@ -1085,7 +1084,7 @@ where
                     oracle_responses: vec![Vec::new(); 2],
                 }
                 .with(block_proposal.content.block),
-            ),
+            )),
         );
         worker
             .handle_confirmed_certificate(certificate.clone(), vec![], None)
@@ -1371,7 +1370,7 @@ where
         },
         action: MessageAction::Accept,
     };
-    let value = HashedCertificateValue::new_confirmed(
+    let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
             events: vec![Vec::new()],
@@ -1379,7 +1378,7 @@ where
             oracle_responses: vec![Vec::new()],
         }
         .with(make_first_block(chain_id).with_incoming_bundle(open_chain_message)),
-    );
+    ));
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
         .fully_handle_certificate(certificate, vec![])
@@ -2374,7 +2373,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![
                     direct_outgoing_message(
@@ -2421,7 +2420,7 @@ where
                     }))
                     .with_authenticated_signer(Some(key_pair.public().into())),
             ),
-        ),
+        )),
     );
     worker
         .fully_handle_certificate(certificate0.clone(), vec![])
@@ -2455,7 +2454,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![
                     vec![channel_admin_message(SystemMessage::CreateCommittee {
@@ -2483,7 +2482,7 @@ where
                     }))
                     .with_simple_transfer(user_id, Amount::from_tokens(2)),
             ),
-        ),
+        )),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2563,7 +2562,7 @@ where
     let certificate3 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![Vec::new(); 3],
                 events: vec![Vec::new(); 3],
@@ -2635,7 +2634,7 @@ where
                         action: MessageAction::Accept,
                     }),
             ),
-        ),
+        )),
     );
     worker
         .fully_handle_certificate(certificate3, vec![])
@@ -2719,7 +2718,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
                 events: vec![Vec::new()],
@@ -2738,7 +2737,7 @@ where
                     .with_simple_transfer(admin_id, Amount::ONE)
                     .with_authenticated_signer(Some(key_pair1.public().into())),
             ),
-        ),
+        )),
     );
     // Have the admin chain create a new epoch without retiring the old one.
     let committees2 = BTreeMap::from_iter([
@@ -2748,7 +2747,7 @@ where
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![channel_admin_message(
                     SystemMessage::CreateCommittee {
@@ -2774,7 +2773,7 @@ where
                     },
                 )),
             ),
-        ),
+        )),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2854,7 +2853,7 @@ where
     let certificate0 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![vec![direct_credit_message(admin_id, Amount::ONE)]],
                 events: vec![Vec::new()],
@@ -2873,14 +2872,14 @@ where
                     .with_simple_transfer(admin_id, Amount::ONE)
                     .with_authenticated_signer(Some(key_pair1.public().into())),
             ),
-        ),
+        )),
     );
     // Have the admin chain create a new epoch and retire the old one immediately.
     let committees3 = BTreeMap::from_iter([(Epoch::from(1), committee.clone())]);
     let certificate1 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![
                     vec![channel_admin_message(SystemMessage::CreateCommittee {
@@ -2911,7 +2910,7 @@ where
                         epoch: Epoch::ZERO,
                     })),
             ),
-        ),
+        )),
     );
     worker
         .fully_handle_certificate(certificate1.clone(), vec![])
@@ -2949,7 +2948,7 @@ where
     let certificate2 = make_certificate(
         &committee,
         &worker,
-        HashedCertificateValue::new_confirmed(
+        Hashed::new(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![Vec::new()],
                 events: vec![Vec::new()],
@@ -2979,7 +2978,7 @@ where
                         action: MessageAction::Accept,
                     }),
             ),
-        ),
+        )),
     );
     worker
         .fully_handle_certificate(certificate2.clone(), vec![])
@@ -3259,7 +3258,7 @@ where
         })
         .with_authenticated_signer(Some(pub_key0.into()));
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0 = HashedCertificateValue::new_confirmed(executed_block0);
+    let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3292,8 +3291,7 @@ where
     let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
-    let value_timeout =
-        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let value_timeout = Hashed::new(Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0)));
 
     // Once we provide the validator with a timeout certificate, the next round starts, where owner
     // 0 happens to be the leader.
@@ -3319,7 +3317,7 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::SingleLeader(1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
-    let value1 = HashedCertificateValue::new_validated(executed_block1.clone());
+    let value1 = Hashed::new(ValidatedBlock::new(executed_block1.clone()));
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
@@ -3328,7 +3326,7 @@ where
         .handle_validated_certificate(certificate1.clone(), vec![])
         .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
-    let value = HashedCertificateValue::new_confirmed(executed_block1.clone());
+    let value = Hashed::new(ConfirmedBlock::new(executed_block1.clone()));
     assert_eq!(vote.value, value.lite());
 
     // Instead of submitting the confirmed block certificate, let rounds 2 to 4 time out, too.
@@ -3351,7 +3349,7 @@ where
 
     // Since round 3 is already over, a validated block from round 3 won't update the validator's
     // locked block; certificate1 (with block1) remains locked.
-    let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
+    let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::SingleLeader(2));
     worker
@@ -3466,7 +3464,7 @@ where
         },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0 = HashedCertificateValue::new_confirmed(executed_block0);
+    let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3500,8 +3498,7 @@ where
     let query = ChainInfoQuery::new(chain_id).with_timeout();
     let (response, _) = worker.handle_chain_info_query(query).await?;
     let vote = response.info.manager.timeout_vote.clone().unwrap();
-    let value_timeout =
-        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let value_timeout = Hashed::new(Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0)));
 
     // Once we provide the validator with a timeout certificate, the next round starts.
     let certificate_timeout = vote
@@ -3555,7 +3552,7 @@ where
         },
     });
     let (executed_block0, _) = worker.stage_block_execution(block0).await?;
-    let value0 = HashedCertificateValue::new_confirmed(executed_block0);
+    let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
         .fully_handle_certificate(certificate0, vec![])
@@ -3571,7 +3568,7 @@ where
         .clone()
         .into_proposal_with_round(&key_pairs[0], Round::Fast);
     let (executed_block1, _) = worker.stage_block_execution(block1.clone()).await?;
-    let value1 = HashedCertificateValue::new_confirmed(executed_block1);
+    let value1 = Hashed::new(ConfirmedBlock::new(executed_block1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3580,8 +3577,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Once we provide the validator with a timeout certificate, the next round starts.
-    let value_timeout =
-        HashedCertificateValue::new_timeout(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let value_timeout = Hashed::new(Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0)));
     let certificate_timeout =
         make_certificate_with_round(&committee, &worker, value_timeout.clone(), Round::Fast);
     let (response, _) = worker
@@ -3608,7 +3604,7 @@ where
 
     // A validated block certificate from a later round can override the locked fast block.
     let (executed_block2, _) = worker.stage_block_execution(block2.clone()).await?;
-    let value2 = HashedCertificateValue::new_validated(executed_block2.clone());
+    let value2 = Hashed::new(ValidatedBlock::new(executed_block2.clone()));
     let certificate2 =
         make_certificate_with_round(&committee, &worker, value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry(
@@ -3667,7 +3663,7 @@ where
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_authenticated_signer(Some(key_pair.public().into()));
     let (executed_block, _) = worker.stage_block_execution(block).await?;
-    let value = HashedCertificateValue::new_confirmed(executed_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
     let certificate = make_certificate(&committee, &worker, value);
     worker.fully_handle_certificate(certificate, vec![]).await?;
 
@@ -3679,7 +3675,7 @@ where
     clock.add(fallback_duration);
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
     let vote = response.info.manager.fallback_vote.unwrap();
-    let value = HashedCertificateValue::new_timeout(chain_id, BlockHeight(1), Epoch::ZERO);
+    let value = Hashed::new(Timeout::new(chain_id, BlockHeight(1), Epoch::ZERO));
     let round = Round::SingleLeader(u32::MAX);
     assert_eq!(vote.value.value_hash, value.hash());
     assert_eq!(vote.round, round);
@@ -3908,7 +3904,7 @@ where
     .await;
     let _ = state.register_mock_application().await?;
 
-    let value = HashedCertificateValue::new_confirmed(
+    let value = Hashed::new(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![],
             events: vec![],
@@ -3916,7 +3912,7 @@ where
             oracle_responses: vec![],
         }
         .with(block),
-    );
+    ));
     let certificate = make_certificate(&committee, &worker, value);
     worker
         .handle_confirmed_certificate(certificate, vec![], None)

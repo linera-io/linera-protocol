@@ -584,7 +584,7 @@ mod proto_message_cap {
     use linera_base::crypto::{KeyPair, Signature};
     use linera_chain::{
         data_types::{BlockExecutionOutcome, ExecutedBlock},
-        types::{Certificate, HashedCertificateValue},
+        types::{Certificate, ConfirmedBlock, ConfirmedBlockCertificate, Hashed},
     };
     use linera_execution::committee::ValidatorName;
     use linera_sdk::base::{ChainId, TestString};
@@ -600,11 +600,11 @@ mod proto_message_cap {
             outcome: BlockExecutionOutcome::default(),
         };
         let signatures = vec![(validator, signature)];
-        Certificate::new(
-            HashedCertificateValue::new_confirmed(executed_block).into(),
+        Certificate::Confirmed(ConfirmedBlockCertificate::new(
+            Hashed::new(ConfirmedBlock::new(executed_block)),
             Default::default(),
             signatures,
-        )
+        ))
     }
 
     #[test]

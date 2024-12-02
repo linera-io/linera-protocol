@@ -6,8 +6,8 @@ use linera_base::data_types::Amount;
 
 use super::*;
 use crate::{
+    block::{ConfirmedBlock, ValidatedBlock},
     test::{make_first_block, BlockTestExt},
-    types::HashedCertificateValue,
 };
 
 #[test]
@@ -25,7 +25,7 @@ fn test_signed_values() {
         events: vec![Vec::new()],
     }
     .with(block);
-    let value = HashedCertificateValue::new_confirmed(executed_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
     let v = LiteVote::new(value.lite(), Round::Fast, &key1);
     assert!(v.check().is_ok());
@@ -33,6 +33,25 @@ fn test_signed_values() {
     let mut v = LiteVote::new(value.lite(), Round::Fast, &key2);
     v.validator = name1;
     assert!(v.check().is_err());
+}
+
+#[test]
+fn test_hashes() {
+    // Test that hash of confirmed and validated blocks are different,
+    // even if the blocks are the same.
+    let block =
+        make_first_block(ChainId::root(1)).with_simple_transfer(ChainId::root(2), Amount::ONE);
+    let executed_block = BlockExecutionOutcome {
+        messages: vec![Vec::new()],
+        state_hash: CryptoHash::test_hash("state"),
+        oracle_responses: vec![Vec::new()],
+        events: vec![Vec::new()],
+    }
+    .with(block.clone());
+    let confirmed_hashed = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
+    let validated_hashed = Hashed::new(ValidatedBlock::new(executed_block));
+
+    assert_ne!(confirmed_hashed.hash(), validated_hashed.hash());
 }
 
 #[test]
@@ -54,7 +73,7 @@ fn test_certificates() {
         events: vec![Vec::new()],
     }
     .with(block);
-    let value = HashedCertificateValue::new_confirmed(executed_block);
+    let value = Hashed::new(ConfirmedBlock::new(executed_block));
 
     let v1 = LiteVote::new(value.lite(), Round::Fast, &key1);
     let v2 = LiteVote::new(value.lite(), Round::Fast, &key2);

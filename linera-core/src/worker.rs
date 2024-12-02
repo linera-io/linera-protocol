@@ -26,9 +26,9 @@ use linera_chain::{
         Block, BlockExecutionOutcome, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target,
     },
     types::{
-        Certificate, CertificateValue, CertificateValueT, ConfirmedBlock,
-        ConfirmedBlockCertificate, GenericCertificate, Hashed, LiteCertificate, Timeout,
-        TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateValueT, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, Hashed, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainStateView,
 };
@@ -423,16 +423,6 @@ pub trait ProcessableCertificate: CertificateValueT + Sized + 'static {
         certificate: GenericCertificate<Self>,
         blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
-}
-
-impl ProcessableCertificate for CertificateValue {
-    async fn process_certificate<S: Storage + Clone + Send + Sync + 'static>(
-        worker: &WorkerState<S>,
-        certificate: GenericCertificate<CertificateValue>,
-        blobs: Vec<Blob>,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        worker.handle_certificate(certificate, blobs, None).await
-    }
 }
 
 impl ProcessableCertificate for ConfirmedBlock {
@@ -840,8 +830,8 @@ where
     /// Processes a certificate.
     #[instrument(skip_all, fields(
         nick = self.nickname,
-        chain_id = format!("{:.8}", certificate.inner().chain_id()),
-        height = %certificate.inner().height(),
+        chain_id = format!("{:.8}", certificate.chain_id()),
+        height = %certificate.height(),
     ))]
     pub async fn handle_certificate(
         &self,
@@ -849,24 +839,19 @@ where
         blobs: Vec<Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        match certificate.inner() {
-            CertificateValue::ConfirmedBlock(_) => {
-                let certificate = ConfirmedBlockCertificate::try_from(certificate).unwrap();
+        match certificate {
+            Certificate::Confirmed(confirmed) => {
                 self.handle_confirmed_certificate(
-                    certificate,
+                    confirmed,
                     blobs,
                     notify_when_messages_are_delivered,
                 )
                 .await
             }
-            CertificateValue::ValidatedBlock(_) => {
-                let certificate = ValidatedBlockCertificate::from(certificate);
-                self.handle_validated_certificate(certificate, blobs).await
+            Certificate::Validated(validated) => {
+                self.handle_validated_certificate(validated, blobs).await
             }
-            CertificateValue::Timeout(_) => {
-                let certificate = TimeoutCertificate::from(certificate);
-                self.handle_timeout_certificate(certificate).await
-            }
+            Certificate::Timeout(timeout) => self.handle_timeout_certificate(timeout).await,
         }
     }
 
