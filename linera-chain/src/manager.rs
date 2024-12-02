@@ -71,6 +71,7 @@
 use std::collections::BTreeMap;
 
 use custom_debug_derive::Debug;
+use futures::future::Either;
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight, Round, Timestamp},
@@ -401,7 +402,7 @@ impl ChainManager {
         outcome: BlockExecutionOutcome,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
-    ) -> (&Option<Vote<ValidatedBlock>>, &Option<Vote<ConfirmedBlock>>) {
+    ) -> Option<Either<&Vote<ValidatedBlock>, &Vote<ConfirmedBlock>>> {
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
         self.update_current_round(local_time);
@@ -429,23 +430,23 @@ impl ChainManager {
         if let Some(key_pair) = key_pair {
             // If this is a fast block, vote to confirm. Otherwise vote to validate.
             if round.is_fast() {
-                self.confirmed_vote = Some(Vote::new(
+                self.validated_vote = None;
+                Some(Either::Right(self.confirmed_vote.insert(Vote::new(
                     Hashed::new(ConfirmedBlock::new(executed_block)),
                     round,
                     key_pair,
-                ));
-                self.validated_vote = None
+                ))))
             } else {
-                self.validated_vote = Some(Vote::new(
+                self.confirmed_vote = None;
+                Some(Either::Left(&*self.validated_vote.insert(Vote::new(
                     Hashed::new(ValidatedBlock::new(executed_block)),
                     round,
                     key_pair,
-                ));
-                self.confirmed_vote = None;
-            };
+                ))))
+            }
+        } else {
+            None
         }
-
-        (&self.validated_vote, &self.confirmed_vote)
     }
 
     /// Signs a vote to confirm the validated block.
