@@ -7,6 +7,7 @@ use futures::{future, stream, StreamExt};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlobContent},
+    ensure,
     identifiers::{BlobId, ChainId},
     time::Duration,
 };
