@@ -88,6 +88,8 @@ impl Certificate {
 }
 
 pub trait CertificateValueT: Clone {
+    const IS_VALIDATED: bool;
+
     fn chain_id(&self) -> ChainId;
 
     fn epoch(&self) -> Epoch;
@@ -95,14 +97,11 @@ pub trait CertificateValueT: Clone {
     fn height(&self) -> BlockHeight;
 
     fn required_blob_ids(&self) -> HashSet<BlobId>;
-
-    #[cfg(with_testing)]
-    fn is_validated(&self) -> bool {
-        false
-    }
 }
 
 impl CertificateValueT for Timeout {
+    const IS_VALIDATED: bool = false;
+
     fn chain_id(&self) -> ChainId {
         self.chain_id
     }
@@ -121,6 +120,8 @@ impl CertificateValueT for Timeout {
 }
 
 impl CertificateValueT for ValidatedBlock {
+    const IS_VALIDATED: bool = true;
+
     fn chain_id(&self) -> ChainId {
         self.executed_block().block.chain_id
     }
@@ -136,14 +137,11 @@ impl CertificateValueT for ValidatedBlock {
     fn required_blob_ids(&self) -> HashSet<BlobId> {
         self.executed_block().required_blob_ids().clone()
     }
-
-    #[cfg(with_testing)]
-    fn is_validated(&self) -> bool {
-        true
-    }
 }
 
 impl CertificateValueT for ConfirmedBlock {
+    const IS_VALIDATED: bool = false;
+
     fn chain_id(&self) -> ChainId {
         self.executed_block().block.chain_id
     }
