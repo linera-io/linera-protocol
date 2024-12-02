@@ -1,7 +1,6 @@
 ---
 source: linera-rpc/tests/format.rs
 expression: get_registry().unwrap()
-snapshot_kind: text
 ---
 Account:
   STRUCT:
@@ -161,6 +160,14 @@ Certificate:
       Timeout:
         NEWTYPE:
           TYPENAME: TimeoutCertificate
+CertificateKind:
+  ENUM:
+    0:
+      Validated: UNIT
+    1:
+      Confirmed: UNIT
+    2:
+      Timeout: UNIT
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -462,6 +469,8 @@ LiteValue:
         TYPENAME: CryptoHash
     - chain_id:
         TYPENAME: ChainId
+    - kind:
+        TYPENAME: CertificateKind
 LiteVote:
   STRUCT:
     - value:

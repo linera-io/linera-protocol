@@ -31,6 +31,7 @@ impl GenericCertificate<ValidatedBlock> {
         LiteValue {
             value_hash: self.hash(),
             chain_id: self.executed_block().block.chain_id,
+            kind: super::CertificateKind::Validated,
         }
     }
 

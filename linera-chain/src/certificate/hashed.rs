@@ -60,6 +60,7 @@ impl<T> Hashed<T> {
         LiteValue {
             value_hash: self.hash,
             chain_id: self.value.chain_id(),
+            kind: T::kind(&self.value),
         }
     }
 }

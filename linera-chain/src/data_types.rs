@@ -28,7 +28,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     types::{
-        CertificateValueT, GenericCertificate, Hashed, LiteCertificate, ValidatedBlockCertificate,
+        CertificateKind, CertificateValueT, GenericCertificate, Hashed, LiteCertificate,
+        ValidatedBlockCertificate,
     },
     ChainError,
 };
@@ -433,6 +434,7 @@ pub struct EventRecord {
 pub struct LiteValue {
     pub value_hash: CryptoHash,
     pub chain_id: ChainId,
+    pub kind: CertificateKind,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -503,6 +505,10 @@ impl LiteVote {
             validator: self.validator,
             signature: self.signature,
         })
+    }
+
+    pub fn kind(&self) -> CertificateKind {
+        self.value.kind
     }
 }
 
