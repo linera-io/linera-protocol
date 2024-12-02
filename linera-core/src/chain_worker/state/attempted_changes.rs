@@ -5,6 +5,7 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
+use futures::future::Either;
 use linera_base::{
     data_types::{Blob, BlockHeight, Timestamp},
     ensure,
@@ -133,20 +134,19 @@ where
         let manager = self.state.chain.manager.get_mut();
         match manager.create_vote(proposal, outcome, self.state.config.key_pair(), local_time) {
             // Cache the value we voted on, so the client doesn't have to send it again.
-            (Some(vote), None) => {
+            Some(Either::Left(vote)) => {
                 self.state
                     .recent_hashed_validated_values
                     .insert(Cow::Borrowed(&vote.value))
                     .await;
             }
-            (None, Some(vote)) => {
+            Some(Either::Right(vote)) => {
                 self.state
                     .recent_hashed_confirmed_values
                     .insert(Cow::Borrowed(&vote.value))
                     .await;
             }
-            (Some(_), Some(_)) => panic!("vote is either validated or confirmed"),
-            (None, None) => (),
+            None => (),
         }
         self.save().await?;
         Ok(())
