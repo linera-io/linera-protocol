@@ -113,6 +113,7 @@ pub async fn handle_net_up_kubernetes(
     no_build: bool,
     docker_image_name: String,
     policy: ResourceControlPolicy,
+    path: &Option<String>,
 ) -> anyhow::Result<()> {
     if num_initial_validators < 1 {
         panic!("The local test network must have at least one validator.");
@@ -124,6 +125,7 @@ pub async fn handle_net_up_kubernetes(
     let shutdown_notifier = CancellationToken::new();
     tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+    let path_provider = PathProvider::new(path)?;
     let config = LocalKubernetesNetConfig {
         network: Network::Grpc,
         testing_prng_seed,
@@ -135,6 +137,7 @@ pub async fn handle_net_up_kubernetes(
         no_build,
         docker_image_name,
         policy,
+        path_provider,
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;

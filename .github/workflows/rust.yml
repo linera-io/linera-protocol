@@ -69,6 +69,34 @@ jobs:
       run: |
         cargo test -p linera-service existing_net_grpc --features existing-net
 
+  existing-kubernetes-net-test:
+    runs-on: ubuntu-latest-16-cores
+    timeout-minutes: 40
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run the validators
+      run: |
+        cargo build --release --bin linera --bin linera-proxy --bin linera-server --features kubernetes,scylladb,metrics
+        strip target/release/linera
+        strip target/release/linera-proxy
+        strip target/release/linera-server
+        mkdir /tmp/local-linera-net
+        cargo run --features kubernetes --release --bin linera -- net up --kubernetes --binaries --policy-config devnet --path /tmp/local-linera-net --validators 4 --shards 4 &
+    - name: Create two epochs and run the faucet
+      run: |
+        cargo run --release --bin linera -- resource-control-policy --block 0.0000001
+        cargo run --release --bin linera -- resource-control-policy --block 0.000000
+        cargo run --release --bin linera -- faucet --amount 1000 --port 8079 69705f85ac4c9fef6c02b4d83426aaaf05154c645ec1c61665f8e450f0468bc0 &
+    - name: Run the existing-net tests
+      run: |
+        cargo test -p linera-service existing_net_grpc --features existing-net
+
   execution-wasmtime-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

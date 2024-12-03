@@ -1594,7 +1594,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 binaries,
                 no_build,
                 docker_image_name,
-                path: _,
+                path,
                 storage: _,
                 external_protocol: _,
             } => {
@@ -1609,6 +1609,7 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *no_build,
                     docker_image_name.clone(),
                     policy_config.into_policy(),
+                    path,
                 )
                 .boxed()
                 .await?;
