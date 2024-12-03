@@ -4,10 +4,7 @@ mod state;
 
 use async_graphql::{{EmptySubscription, Object, Schema}};
 use linera_sdk::{{
-    base::WithServiceAbi,
-    graphql::GraphQLMutationRoot,
-    views::{{View, ViewStorageContext}},
-    Service, ServiceRuntime,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 }};
 
 use {module_name}::Operation;
