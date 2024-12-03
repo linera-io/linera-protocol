@@ -106,28 +106,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_timeout_certificate(
-        &mut self,
-        certificate: &TimeoutCertificate,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError> {
-        if certificate.is_signed_by(&self.name) {
-            let result = self
-                .handle_lite_certificate(certificate.lite_certificate(), delivery)
-                .await;
-            match result {
-                Err(NodeError::MissingCertificateValue) => {
-                    warn!(
-                        "Validator {} forgot a certificate value that they signed before",
-                        self.name
-                    );
-                }
-                _ => return result,
-            }
-        }
-        self.handle_timeout_certificate(certificate.clone()).await
-    }
-
     pub(crate) async fn handle_optimized_validated_certificate(
         &mut self,
         certificate: &ValidatedBlockCertificate,

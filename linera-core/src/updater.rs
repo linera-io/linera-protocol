@@ -22,7 +22,7 @@ use linera_chain::{
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::{
     client::ChainClientError,
@@ -240,11 +240,10 @@ where
     async fn send_timeout_certificate(
         &mut self,
         certificate: TimeoutCertificate,
-        delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
             .remote_node
-            .handle_optimized_timeout_certificate(&certificate, delivery)
+            .handle_timeout_certificate(certificate)
             .await;
 
         match &result {
@@ -374,8 +373,7 @@ where
         }
         if let Some(cert) = manager.timeout {
             if cert.inner().chain_id == chain_id {
-                self.send_timeout_certificate(cert, CrossChainMessageDelivery::NonBlocking)
-                    .await?;
+                self.send_timeout_certificate(cert).await?;
             }
         }
         Ok(())
