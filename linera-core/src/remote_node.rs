@@ -107,7 +107,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     pub(crate) async fn handle_optimized_validated_certificate(
-        &mut self,
+        &self,
         certificate: &ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
@@ -130,7 +130,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
     }
 
     pub(crate) async fn handle_optimized_confirmed_certificate(
-        &mut self,
+        &self,
         certificate: &ConfirmedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
