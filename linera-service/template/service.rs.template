@@ -2,16 +2,17 @@
 
 mod state;
 
-use self::state::{project_name}State;
+use async_graphql::{{EmptySubscription, Object, Schema}};
 use linera_sdk::{{
     base::WithServiceAbi,
+    graphql::GraphQLMutationRoot,
     views::{{View, ViewStorageContext}},
     Service, ServiceRuntime,
-    graphql::GraphQLMutationRoot,
 }};
+
 use {module_name}::Operation;
 
-use async_graphql::{{EmptySubscription, Object, Schema}};
+use self::state::{project_name}State;
 
 pub struct {project_name}Service {{
     state: {project_name}State,

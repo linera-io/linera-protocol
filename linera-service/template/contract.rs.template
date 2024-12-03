@@ -58,10 +58,10 @@ impl Contract for {project_name}Contract {{
 
 #[cfg(test)]
 mod tests {{
-    use {module_name}::Operation;
     use futures::FutureExt as _;
-
     use linera_sdk::{{util::BlockingWait, views::View, Contract, ContractRuntime}};
+
+    use {module_name}::Operation;
 
     use super::{{{project_name}Contract, {project_name}State}};
 
