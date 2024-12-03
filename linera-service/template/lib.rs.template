@@ -19,7 +19,5 @@ impl ServiceAbi for {project_name}Abi {{
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {{
-  Increment {{
-      value: u64
-  }} 
+    Increment {{ value: u64 }},
 }}

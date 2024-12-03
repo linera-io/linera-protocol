@@ -97,5 +97,5 @@ mod tests {{
         assert_eq!(*contract.state.value.get(), initial_value);
 
         contract
-    }} 
+    }}
 }}
