@@ -1,9 +1,10 @@
+use async_graphql::{{Request, Response}};
 use linera_sdk::{{
-  base::{{ContractAbi, ServiceAbi}},
-  graphql::GraphQLMutationRoot
+    base::{{ContractAbi, ServiceAbi}},
+    graphql::GraphQLMutationRoot,
 }};
 use serde::{{Deserialize, Serialize}};
-use async_graphql::{{Request, Response}};
+
 pub struct {project_name}Abi;
 
 impl ContractAbi for {project_name}Abi {{
@@ -18,8 +19,5 @@ impl ServiceAbi for {project_name}Abi {{
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {{
-  Increment {{
-      value: u64
-  }} 
+    Increment {{ value: u64 }},
 }}
-

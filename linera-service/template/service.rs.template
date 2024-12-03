@@ -2,16 +2,14 @@
 
 mod state;
 
-use self::state::{project_name}State;
+use async_graphql::{{EmptySubscription, Object, Schema}};
 use linera_sdk::{{
-    base::WithServiceAbi,
-    views::{{View, ViewStorageContext}},
-    Service, ServiceRuntime,
-    graphql::GraphQLMutationRoot,
+    base::WithServiceAbi, graphql::GraphQLMutationRoot, views::View, Service, ServiceRuntime,
 }};
+
 use {module_name}::Operation;
 
-use async_graphql::{{EmptySubscription, Object, Schema}};
+use self::state::{project_name}State;
 
 pub struct {project_name}Service {{
     state: {project_name}State,
@@ -35,21 +33,22 @@ impl Service for {project_name}Service {{
     }}
 
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {{
-       let schema = Schema::build(
-          QueryRoot {{
-            value: *self.state.value.get(),
-          }},
-          Operation::mutation_root(),
-          EmptySubscription,
-       ).finish(); 
-       schema.execute(query).await
+        Schema::build(
+            QueryRoot {{
+                value: *self.state.value.get(),
+            }},
+            Operation::mutation_root(),
+            EmptySubscription,
+        )
+        .finish()
+        .execute(query)
+        .await
     }}
 }}
 
 struct QueryRoot {{
-  value: u64,
+    value: u64,
 }}
-
 
 #[Object]
 impl QueryRoot {{
@@ -83,14 +82,9 @@ mod tests {{
             .handle_query(request)
             .now_or_never()
             .expect("Query should not await anything");
-  
+
         let expected = Response::new(Value::from_json(json!({{"value": 60}})).unwrap());
 
         assert_eq!(response, expected)
     }}
 }}
-
-
-
-
-

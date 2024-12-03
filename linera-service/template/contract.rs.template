@@ -4,7 +4,7 @@ mod state;
 
 use linera_sdk::{{
     base::WithContractAbi,
-    views::{{RootView, View, ViewStorageContext}},
+    views::{{RootView, View}},
     Contract, ContractRuntime,
 }};
 
@@ -58,12 +58,12 @@ impl Contract for {project_name}Contract {{
 
 #[cfg(test)]
 mod tests {{
-    use {module_name}::Operation;
     use futures::FutureExt as _;
-
     use linera_sdk::{{util::BlockingWait, views::View, Contract, ContractRuntime}};
 
-    use super::{{{project_name}State, {project_name}Contract}};
+    use {module_name}::Operation;
+
+    use super::{{{project_name}Contract, {project_name}State}};
 
     #[test]
     fn operation() {{
@@ -97,5 +97,5 @@ mod tests {{
         assert_eq!(*contract.state.value.get(), initial_value);
 
         contract
-    }} 
+    }}
 }}
