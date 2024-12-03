@@ -36,14 +36,16 @@ impl Service for {project_name}Service {{
     }}
 
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {{
-        let schema = Schema::build(
+        Schema::build(
             QueryRoot {{
                 value: *self.state.value.get(),
             }},
             Operation::mutation_root(),
             EmptySubscription,
-        ).finish(); 
-        schema.execute(query).await
+        )
+        .finish()
+        .execute(query)
+        .await
     }}
 }}
 
