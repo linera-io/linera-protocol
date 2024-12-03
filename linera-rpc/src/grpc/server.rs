@@ -431,7 +431,15 @@ impl<S> ValidatorWorkerRpc for GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_block_proposal(
         &self,
         request: Request<BlockProposal>,
@@ -460,7 +468,15 @@ where
         ))
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_lite_certificate(
         &self,
         request: Request<LiteCertificate>,
@@ -505,7 +521,15 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_confirmed_certificate(
         &self,
         request: Request<api::HandleConfirmedCertificateRequest>,
@@ -547,7 +571,15 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_validated_certificate(
         &self,
         request: Request<api::HandleValidatedCertificateRequest>,
@@ -580,7 +612,15 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_timeout_certificate(
         &self,
         request: Request<api::HandleTimeoutCertificateRequest>,
@@ -611,7 +651,15 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id = ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_chain_info_query(
         &self,
         request: Request<ChainInfoQuery>,
@@ -638,7 +686,15 @@ where
         }
     }
 
-    #[instrument(target = "grpc_server", skip_all, err, fields(nickname = self.state.nickname(), chain_id= ?request.get_ref().chain_id()))]
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_cross_chain_request(
         &self,
         request: Request<CrossChainRequest>,
