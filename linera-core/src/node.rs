@@ -67,7 +67,7 @@ pub trait ValidatorNode {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Processes a certificate.
+    /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
         certificate: GenericCertificate<ConfirmedBlock>,
@@ -75,14 +75,14 @@ pub trait ValidatorNode {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Processes a certificate.
+    /// Processes a validated certificate.
     async fn handle_validated_certificate(
         &self,
         certificate: GenericCertificate<ValidatedBlock>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError>;
 
-    /// Processes a certificate.
+    /// Processes a timeout certificate.
     async fn handle_timeout_certificate(
         &self,
         certificate: GenericCertificate<Timeout>,

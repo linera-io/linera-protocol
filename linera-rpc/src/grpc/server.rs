@@ -538,7 +538,7 @@ where
                 #[cfg(with_metrics)]
                 {
                     SERVER_REQUEST_ERROR
-                        .with_label_values(&["handle_certificate"])
+                        .with_label_values(&["handle_confirmed_certificate"])
                         .inc();
                 }
                 error!(nickname = self.state.nickname(), %error, "Failed to handle confirmed certificate");
@@ -563,7 +563,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_success_and_latency(start, "handle_certificate");
+                Self::log_request_success_and_latency(start, "handle_validated_certificate");
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }

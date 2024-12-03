@@ -253,7 +253,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle timeout certificate");
                         Err(error.into())
                     }
                 }
@@ -272,7 +272,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle validated certificate");
                         Err(error.into())
                     }
                 }
@@ -300,7 +300,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle confirmed certificate");
                         Err(error.into())
                     }
                 }

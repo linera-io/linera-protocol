@@ -100,7 +100,7 @@ impl ValidatorNode for SimpleClient {
         self.query(request.into()).await
     }
 
-    /// Processes a certificate.
+    /// Processes a validated certificate.
     async fn handle_validated_certificate(
         &self,
         certificate: ValidatedBlockCertificate,
@@ -110,7 +110,7 @@ impl ValidatorNode for SimpleClient {
         self.query(request.into()).await
     }
 
-    /// Processes a certificate.
+    /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
@@ -126,7 +126,7 @@ impl ValidatorNode for SimpleClient {
         self.query(request.into()).await
     }
 
-    /// Processes a certificate.
+    /// Processes a timeout certificate.
     async fn handle_timeout_certificate(
         &self,
         certificate: TimeoutCertificate,
