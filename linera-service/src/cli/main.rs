@@ -1893,6 +1893,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                 no_build,
                 docker_image_name,
                 build_mode,
+                path,
                 with_faucet,
                 faucet_chain,
                 faucet_port,
@@ -1916,6 +1917,7 @@ async fn run(options: &ClientOptions) -> Result<i32, Error> {
                     *faucet_port,
                     *faucet_amount,
                     *dual_store,
+                    path,
                 )
                 .boxed()
                 .await?;
