@@ -1004,6 +1004,16 @@ pub enum NetCommand {
         #[arg(long, num_args=0..=1)]
         binaries: Option<Option<PathBuf>>,
 
+        /// Don't build docker image. This assumes that the image is already built.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "false")]
+        no_build: bool,
+
+        /// The name of the docker image to use.
+        #[cfg(feature = "kubernetes")]
+        #[arg(long, default_value = "linera:latest")]
+        docker_image_name: String,
+
         /// Run with a specific path where the wallet and validator input files are.
         /// If none, then a temporary directory is created.
         #[arg(long)]
