@@ -1592,7 +1592,9 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                 policy_config,
                 kubernetes: true,
                 binaries,
-                path: _,
+                no_build,
+                docker_image_name,
+                path,
                 storage: _,
                 external_protocol: _,
             } => {
@@ -1604,7 +1606,10 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
                     *shards,
                     *testing_prng_seed,
                     binaries,
+                    *no_build,
+                    docker_image_name.clone(),
                     policy_config.into_policy(),
+                    path,
                 )
                 .boxed()
                 .await?;
