@@ -1896,7 +1896,7 @@ where
                 chain_state_view
                     .manager
                     .get()
-                    .pending_blobs
+                    .locked_blobs
                     .get(&blob_id)
                     .cloned()
             };

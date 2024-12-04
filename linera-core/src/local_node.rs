@@ -204,7 +204,7 @@ where
             .await?
             .manager
             .get()
-            .pending_blobs
+            .locked_blobs
             .clone();
         let mut found_blobs = Vec::new();
         missing_blob_ids.retain(|blob_id| {

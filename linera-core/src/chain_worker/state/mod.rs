@@ -333,7 +333,7 @@ where
         &self,
         blob_ids: &HashSet<BlobId>,
     ) -> Result<Vec<Blob>, WorkerError> {
-        let pending_blobs = &self.chain.manager.get().pending_blobs;
+        let pending_blobs = &self.chain.manager.get().locked_blobs;
 
         let mut found_blobs = Vec::new();
         let mut missing_blob_ids = Vec::new();

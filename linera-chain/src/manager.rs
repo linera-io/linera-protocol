@@ -119,6 +119,9 @@ pub struct ChainManager {
     /// validator).
     #[debug(skip_if = Option::is_none)]
     pub locked: Option<ValidatedBlockCertificate>,
+    /// These are blobs published or read by the locked block.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub locked_blobs: BTreeMap<BlobId, Blob>,
     /// Latest leader timeout certificate we have received.
     #[debug(skip_if = Option::is_none)]
     pub timeout: Option<TimeoutCertificate>,
@@ -147,9 +150,6 @@ pub struct ChainManager {
     /// The owners that take over in fallback mode.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub fallback_owners: BTreeMap<Owner, (PublicKey, u64)>,
-    /// These are blobs belonging to proposed or validated blocks that have not been confirmed yet.
-    #[debug(skip_if = BTreeMap::is_empty)]
-    pub pending_blobs: BTreeMap<BlobId, Blob>,
 }
 
 doc_scalar!(
@@ -219,7 +219,7 @@ impl ChainManager {
             round_timeout,
             current_round,
             fallback_owners,
-            pending_blobs: BTreeMap::new(),
+            locked_blobs: BTreeMap::new(),
         })
     }
 
@@ -420,9 +420,9 @@ impl ChainManager {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.with_value(value) {
                     self.locked = Some(certificate);
-                    self.pending_blobs.clear();
+                    self.locked_blobs.clear();
                     for blob in proposal.blobs.into_iter().chain(blobs) {
-                        self.pending_blobs.insert(blob.id(), blob);
+                        self.locked_blobs.insert(blob.id(), blob);
                     }
                 }
             }
@@ -466,9 +466,9 @@ impl ChainManager {
         }
         let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
         self.locked = Some(validated);
-        self.pending_blobs.clear();
+        self.locked_blobs.clear();
         for blob in blobs {
-            self.pending_blobs.insert(blob.id(), blob);
+            self.locked_blobs.insert(blob.id(), blob);
         }
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
@@ -673,7 +673,7 @@ impl ChainManagerInfo {
             .validated_vote
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
-        self.pending_blobs = manager.pending_blobs.clone();
+        self.pending_blobs = manager.locked_blobs.clone();
     }
 
     /// Returns whether the `identity` is allowed to propose a block in `round`.
