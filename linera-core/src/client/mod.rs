@@ -1895,6 +1895,11 @@ where
                 continue;
             }
 
+            if let Some(blob) = self.client.local_node.read_blobs(&[blob_id]).await? {
+                blobs.extend(blob);
+                continue;
+            }
+
             return Err(LocalNodeError::CannotReadLocalBlob {
                 chain_id: self.chain_id,
                 blob_id,
@@ -2026,13 +2031,14 @@ where
         let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
+        let blobs = self
+            .read_local_blobs(executed_block.required_blob_ids())
+            .await?;
         let block = &executed_block.block;
-        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size, &blobs)?;
         self.state_mut().set_pending_block(block.clone());
-
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
 
