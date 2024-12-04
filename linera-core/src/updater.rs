@@ -223,6 +223,7 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
+                // The certificate is confirmed, so the blobs must be in storage.
                 let maybe_blobs = self.local_node.read_blobs(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
                 self.remote_node
@@ -248,6 +249,8 @@ where
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
                 let chain_id = certificate.inner().executed_block().block.chain_id;
+                // The certificate is for a validated block, i.e. for our locked block.
+                // Take the missing blobs from our local chain manager.
                 let blobs = self
                     .local_node
                     .find_locked_blobs(blob_ids, chain_id)
@@ -348,8 +351,10 @@ where
         }
         if let Some(cert) = manager.timeout {
             if cert.inner().chain_id == chain_id {
+                // Timeouts are small and don't have blobs, so we can call `handle_certificate`
+                // directly.
                 self.remote_node
-                    .handle_optimized_certificate(&cert, delivery)
+                    .handle_certificate(cert, Vec::new(), delivery)
                     .await?;
             }
         }

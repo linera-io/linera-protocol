@@ -407,14 +407,14 @@ impl ChainManager {
         let round = proposal.content.round;
 
         // If the validated block certificate is more recent, update our locked block.
-        if let Some(lite_cert) = proposal.validated_block_certificate.clone() {
+        if let Some(lite_cert) = &proposal.validated_block_certificate {
             if self
                 .locked
                 .as_ref()
                 .map_or(true, |locked| locked.round < lite_cert.round)
             {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
-                if let Some(certificate) = lite_cert.with_value(value) {
+                if let Some(certificate) = lite_cert.clone().with_value(value) {
                     self.locked = Some(certificate);
                     self.locked_blobs = blobs;
                 }
