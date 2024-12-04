@@ -1727,23 +1727,12 @@ where
         }
         if let Some(cert) = info.manager.requested_locked {
             let hash = cert.hash();
-            let mut blobs = vec![];
-            while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
-            {
-                if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
-                    if let Some(new_blobs) = remote_node
-                        .find_missing_blobs(blob_ids.clone(), chain_id)
-                        .await?
-                    {
-                        blobs = new_blobs;
-                        continue;
-                    }
-                }
+            let blobs = info.manager.locked_blobs.clone();
+            if let Err(err) = self.client.handle_certificate(*cert.clone(), blobs).await {
                 warn!(
-                    "Skipping certificate {} from validator {}: {}",
-                    hash, remote_node.name, original_err
+                    "Skipping certificate {hash} from validator {}: {err}",
+                    remote_node.name
                 );
-                break;
             }
         }
         Ok(())

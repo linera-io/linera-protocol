@@ -327,30 +327,51 @@ where
         Ok(())
     }
 
-    /// Returns the blobs requested by their `blob_ids` that are in the chain manager's pending blobs
-    /// and checks that they are otherwise in storage.
-    async fn get_blobs_and_checks_storage(
+    /// Returns the blobs required by the given executed block. The ones that are not passed in
+    /// are read from the chain manager or from storage.
+    async fn get_required_blobs(
         &self,
-        blob_ids: &HashSet<BlobId>,
-    ) -> Result<Vec<Blob>, WorkerError> {
-        let pending_blobs = &self.chain.manager.get().locked_blobs;
+        executed_block: &ExecutedBlock,
+        blobs: &[Blob],
+    ) -> Result<BTreeMap<BlobId, Blob>, WorkerError> {
+        let mut blob_ids = executed_block.required_blob_ids();
+        let manager = self.chain.manager.get();
 
-        let mut found_blobs = Vec::new();
-        let mut missing_blob_ids = Vec::new();
-        for blob_id in blob_ids {
-            if let Some(blob) = pending_blobs.get(blob_id) {
-                found_blobs.push(blob.clone());
-            } else {
-                missing_blob_ids.push(*blob_id);
+        let mut found_blobs = BTreeMap::new();
+
+        for blob in manager
+            .proposed
+            .iter()
+            .flat_map(|proposal| &proposal.blobs)
+            .chain(blobs)
+        {
+            if blob_ids.remove(&blob.id()) {
+                found_blobs.insert(blob.id(), blob.clone());
             }
         }
-        let not_found_blob_ids = self.storage.missing_blobs(&missing_blob_ids).await?;
-
-        if not_found_blob_ids.is_empty() {
-            Ok(found_blobs)
-        } else {
-            Err(WorkerError::BlobsNotFound(not_found_blob_ids))
+        blob_ids.retain(|blob_id| {
+            if let Some(blob) = manager.locked_blobs.get(blob_id) {
+                found_blobs.insert(*blob_id, blob.clone());
+                false
+            } else {
+                true
+            }
+        });
+        let missing_blob_ids = blob_ids.into_iter().collect::<Vec<_>>();
+        let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
+        let mut not_found_blob_ids = Vec::new();
+        for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
+            if let Some(blob) = maybe_blob {
+                found_blobs.insert(blob_id, blob);
+            } else {
+                not_found_blob_ids.push(blob_id);
+            }
         }
+        ensure!(
+            not_found_blob_ids.is_empty(),
+            WorkerError::BlobsNotFound(not_found_blob_ids)
+        );
+        Ok(found_blobs)
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is

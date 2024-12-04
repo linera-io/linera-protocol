@@ -1,7 +1,6 @@
 ---
 source: linera-rpc/tests/format.rs
 expression: get_registry().unwrap()
-snapshot_kind: text
 ---
 Account:
   STRUCT:
@@ -286,12 +285,9 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
-    - pending_blobs:
-        MAP:
-          KEY:
-            TYPENAME: BlobId
-          VALUE:
-            TYPENAME: BlobContent
+    - locked_blobs:
+        SEQ:
+          TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:

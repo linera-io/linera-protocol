@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use custom_debug_derive::Debug;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -212,44 +212,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 );
                 None
             }
-        }
-    }
-
-    /// Downloads the blobs from the specified validator and returns them, including blobs that
-    /// are still pending in the validator's chain manager. Returns `None` if not all of them
-    /// could be found.
-    pub(crate) async fn find_missing_blobs(
-        &self,
-        blob_ids: Vec<BlobId>,
-        chain_id: ChainId,
-    ) -> Result<Option<Vec<Blob>>, NodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let info = match self.handle_chain_info_query(query).await {
-            Ok(info) => Some(info),
-            Err(err) => {
-                warn!("Got error from validator {}: {}", self.name, err);
-                return Ok(None);
-            }
-        };
-
-        let mut missing_blobs = blob_ids;
-        let mut found_blobs = if let Some(info) = info {
-            let new_found_blobs = missing_blobs
-                .iter()
-                .filter_map(|blob_id| info.manager.pending_blobs.get(blob_id))
-                .map(|blob| (blob.id(), blob.clone()))
-                .collect::<HashMap<_, _>>();
-            missing_blobs.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
-            new_found_blobs.into_values().collect()
-        } else {
-            Vec::new()
-        };
-
-        if let Some(blobs) = self.try_download_blobs(&missing_blobs).await {
-            found_blobs.extend(blobs);
-            Ok(Some(found_blobs))
-        } else {
-            Ok(None)
         }
     }
 

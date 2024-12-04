@@ -131,18 +131,17 @@ where
         local_time: Timestamp,
     ) -> Result<(), WorkerError> {
         // Create the vote and store it in the chain state.
-        let remaining_required_blob_ids = outcome
-            .oracle_blob_ids()
-            .difference(&proposal.blobs.iter().map(|blob| blob.id()).collect())
-            .cloned()
-            .collect();
-        let blobs = self
-            .state
-            .get_blobs_and_checks_storage(&remaining_required_blob_ids)
-            .await?;
+        let executed_block = outcome.with(proposal.content.block.clone());
+        let blobs = if proposal.validated_block_certificate.is_some() {
+            self.state
+                .get_required_blobs(&executed_block, &proposal.blobs)
+                .await?
+        } else {
+            BTreeMap::new()
+        };
         let key_pair = self.state.config.key_pair();
         let manager = self.state.chain.manager.get_mut();
-        match manager.create_vote(proposal, outcome, key_pair, local_time, blobs) {
+        match manager.create_vote(proposal, executed_block, key_pair, local_time, blobs) {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.state
@@ -216,17 +215,7 @@ where
         // Verify that no unrelated blobs were provided.
         self.state
             .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
-        let remaining_required_blob_ids = required_blob_ids
-            .difference(&blobs.iter().map(|blob| blob.id()).collect())
-            .cloned()
-            .collect();
-        let blobs = self
-            .state
-            .get_blobs_and_checks_storage(&remaining_required_blob_ids)
-            .await?
-            .into_iter()
-            .chain(blobs.iter().cloned())
-            .collect();
+        let blobs = self.state.get_required_blobs(executed_block, blobs).await?;
         let old_round = self.state.chain.manager.get().current_round;
         self.state.chain.manager.get_mut().create_final_vote(
             certificate,
@@ -312,21 +301,14 @@ where
         // Verify that no unrelated blobs were provided.
         self.state
             .check_for_unneeded_blobs(&required_blob_ids, blobs)?;
-        let remaining_required_blob_ids = required_blob_ids
-            .difference(&blobs.iter().map(|blob| blob.id()).collect())
-            .cloned()
-            .collect();
-        let mut blobs_in_block = self
-            .state
-            .get_blobs_and_checks_storage(&remaining_required_blob_ids)
-            .await?;
-        blobs_in_block.extend_from_slice(blobs);
+        let blobs = self.state.get_required_blobs(executed_block, blobs).await?;
+        let blobs = blobs.into_values().collect::<Vec<_>>();
 
         let certificate_hash = certificate.hash();
 
         self.state
             .storage
-            .write_blobs_and_certificate(&blobs_in_block, &certificate)
+            .write_blobs_and_certificate(&blobs, &certificate)
             .await?;
 
         // Update the blob state with last used certificate hash.
