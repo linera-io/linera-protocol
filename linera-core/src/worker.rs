@@ -264,8 +264,7 @@ where
     storage: StorageClient,
     /// Configuration options for the [`ChainWorker`]s.
     chain_worker_config: ChainWorkerConfig,
-    recent_confirmed_value_cache: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
-    recent_validated_value_cache: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
+    recent_executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
     /// Chain IDs that should be tracked by a worker.
     tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -298,8 +297,7 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default().with_key_pair(key_pair),
-            recent_confirmed_value_cache: Arc::new(ValueCache::default()),
-            recent_validated_value_cache: Arc::new(ValueCache::default()),
+            recent_executed_block_cache: Arc::new(ValueCache::default()),
             tracked_chains: None,
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -318,8 +316,7 @@ where
             nickname,
             storage,
             chain_worker_config: ChainWorkerConfig::default(),
-            recent_confirmed_value_cache: Arc::new(ValueCache::default()),
-            recent_validated_value_cache: Arc::new(ValueCache::default()),
+            recent_executed_block_cache: Arc::new(ValueCache::default()),
             tracked_chains: Some(tracked_chains),
             delivery_notifiers: Arc::default(),
             chain_worker_tasks: Arc::default(),
@@ -399,18 +396,32 @@ where
         &self,
         certificate: LiteCertificate<'_>,
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
-        match self
-            .recent_confirmed_value_cache
-            .full_certificate(certificate.clone())
+        if let Some(executed_block) = self
+            .recent_executed_block_cache
+            .get(&certificate.value.executed_block_hash)
             .await
         {
-            Ok(certificate) => Ok(Either::Left(certificate)),
-            Err(WorkerError::MissingCertificateValue) => Ok(self
-                .recent_validated_value_cache
-                .full_certificate(certificate)
-                .await
-                .map(Either::Right)?),
-            Err(other) => Err(other),
+            match certificate.value.kind {
+                linera_chain::types::CertificateKind::Confirmed => {
+                    let value = ConfirmedBlock::from_hashed(executed_block);
+                    Ok(Either::Left(
+                        certificate
+                            .with_value(Hashed::new(value))
+                            .ok_or(WorkerError::InvalidLiteCertificate)?,
+                    ))
+                }
+                linera_chain::types::CertificateKind::Validated => {
+                    let value = ValidatedBlock::from_hashed(executed_block);
+                    Ok(Either::Right(
+                        certificate
+                            .with_value(Hashed::new(value))
+                            .ok_or(WorkerError::InvalidLiteCertificate)?,
+                    ))
+                }
+                _ => return Err(WorkerError::InvalidLiteCertificate), // TODO: different error?
+            }
+        } else {
+            Err(WorkerError::MissingCertificateValue)
         }
     }
 }
@@ -711,8 +722,7 @@ where
             let actor = ChainWorkerActor::load(
                 self.chain_worker_config.clone(),
                 self.storage.clone(),
-                self.recent_confirmed_value_cache.clone(),
-                self.recent_validated_value_cache.clone(),
+                self.recent_executed_block_cache.clone(),
                 self.tracked_chains.clone(),
                 delivery_notifier,
                 chain_id,
@@ -808,7 +818,7 @@ where
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in handle_certificate's span.
-    #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
+    #[instrument(skip_all, fields(hash = %certificate.value.executed_block_hash))]
     pub async fn handle_lite_certificate<'a>(
         &self,
         certificate: LiteCertificate<'a>,

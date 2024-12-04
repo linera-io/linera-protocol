@@ -16,25 +16,35 @@ use thiserror::Error;
 use crate::{data_types::ExecutedBlock, types::Hashed, ChainError};
 
 /// Wrapper around an `ExecutedBlock` that has been validated.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub struct ValidatedBlock {
-    executed_block: ExecutedBlock,
+    executed_block: Hashed<ExecutedBlock>,
 }
 
 impl ValidatedBlock {
     /// Creates a new `ValidatedBlock` from an `ExecutedBlock`.
     pub fn new(executed_block: ExecutedBlock) -> Self {
+        Self {
+            executed_block: Hashed::new(executed_block),
+        }
+    }
+
+    pub fn from_hashed(executed_block: Hashed<ExecutedBlock>) -> Self {
         Self { executed_block }
+    }
+
+    pub fn inner(&self) -> &Hashed<ExecutedBlock> {
+        &self.executed_block
     }
 
     /// Returns a reference to the `ExecutedBlock` contained in this `ValidatedBlock`.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        &self.executed_block
+        self.executed_block.inner()
     }
 
     /// Consumes this `ValidatedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
-        self.executed_block
+        self.executed_block.into_inner()
     }
 
     pub fn to_log_str(&self) -> &'static str {
@@ -45,17 +55,17 @@ impl ValidatedBlock {
 impl BcsHashable for ValidatedBlock {}
 
 /// Wrapper around an `ExecutedBlock` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub struct ConfirmedBlock {
     // The executed block contained in this `ConfirmedBlock`.
-    executed_block: ExecutedBlock,
+    executed_block: Hashed<ExecutedBlock>,
 }
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl ConfirmedBlock {
     #[graphql(derived(name = "executed_block"))]
     async fn _executed_block(&self) -> ExecutedBlock {
-        self.executed_block.clone()
+        self.executed_block.inner().clone()
     }
 
     async fn status(&self) -> String {
@@ -80,6 +90,12 @@ impl BcsHashable for ConfirmedBlock {}
 
 impl ConfirmedBlock {
     pub fn new(executed_block: ExecutedBlock) -> Self {
+        Self {
+            executed_block: Hashed::new(executed_block),
+        }
+    }
+
+    pub fn from_hashed(executed_block: Hashed<ExecutedBlock>) -> Self {
         Self { executed_block }
     }
 
@@ -92,22 +108,26 @@ impl ConfirmedBlock {
         }
     }
 
+    pub fn inner(&self) -> &Hashed<ExecutedBlock> {
+        &self.executed_block
+    }
+
     /// Returns a reference to the `ExecutedBlock` contained in this `ConfirmedBlock`.
     pub fn executed_block(&self) -> &ExecutedBlock {
-        &self.executed_block
+        self.executed_block.inner()
     }
 
     /// Consumes this `ConfirmedBlock`, returning the `ExecutedBlock` it contains.
     pub fn into_inner(self) -> ExecutedBlock {
-        self.executed_block
+        self.executed_block.into_inner()
     }
 
     pub fn chain_id(&self) -> ChainId {
-        self.executed_block.block.chain_id
+        self.executed_block.inner().block.chain_id
     }
 
     pub fn height(&self) -> BlockHeight {
-        self.executed_block.block.height
+        self.executed_block.inner().block.height
     }
 
     pub fn to_log_str(&self) -> &'static str {

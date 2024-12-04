@@ -54,7 +54,7 @@ impl<'a> LiteCertificate<'a> {
         } = votes.next()?;
         let mut signatures = vec![(validator, signature)];
         for vote in votes {
-            if vote.value.value_hash != value.value_hash || vote.round != round {
+            if vote.value.executed_block_hash != value.executed_block_hash || vote.round != round {
                 return None;
             }
             signatures.push((vote.validator, vote.signature));
@@ -65,7 +65,7 @@ impl<'a> LiteCertificate<'a> {
     /// Verifies the certificate.
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(
-            self.value.value_hash,
+            self.value.executed_block_hash,
             self.round,
             &self.signatures,
             committee,
@@ -79,7 +79,9 @@ impl<'a> LiteCertificate<'a> {
         value: Hashed<T>,
     ) -> Option<GenericCertificate<T>> {
         debug_assert_eq!(value.inner().kind(), self.value.kind);
-        if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
+        if self.value.chain_id != value.inner().chain_id()
+            || value.inner().kind() != self.value.kind
+            || self.value.executed_block_hash != value.hash()
         {
             return None;
         }

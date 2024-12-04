@@ -751,15 +751,15 @@ impl Runnable for Job {
                     fungible_application_id,
                 );
                 let num_proposal = proposals.len();
-                let mut values = HashMap::new();
+                let mut executed_blocks = HashMap::new();
 
                 for rpc_msg in &proposals {
                     if let RpcMessage::BlockProposal(proposal) = rpc_msg {
                         let executed_block = context
                             .stage_block_execution(proposal.content.block.clone())
                             .await?;
-                        let value = Hashed::new(ConfirmedBlock::new(executed_block));
-                        values.insert(value.hash(), value);
+                        let value = Hashed::new(executed_block);
+                        executed_blocks.insert(value.hash(), value);
                     }
                 }
 
@@ -771,7 +771,10 @@ impl Runnable for Job {
                     .filter_map(|message| {
                         let response = deserialize_response(message)?;
                         let vote = response.info.manager.pending?;
-                        let value = values.get(&vote.value.value_hash)?.clone();
+                        let block = executed_blocks
+                            .get(&vote.value.executed_block_hash)?
+                            .clone();
+                        let value = Hashed::new(ConfirmedBlock::from_hashed(block));
                         vote.clone().with_value(value)
                     })
                     .collect::<Vec<_>>();

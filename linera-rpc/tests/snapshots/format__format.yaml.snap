@@ -465,7 +465,7 @@ LiteCertificate:
             - TYPENAME: Signature
 LiteValue:
   STRUCT:
-    - value_hash:
+    - executed_block_hash:
         TYPENAME: CryptoHash
     - chain_id:
         TYPENAME: ChainId

@@ -58,7 +58,7 @@ impl<T> Hashed<T> {
         T: CertificateValueT,
     {
         LiteValue {
-            value_hash: self.hash,
+            executed_block_hash: self.hash,
             chain_id: self.value.chain_id(),
             kind: T::kind(&self.value),
         }

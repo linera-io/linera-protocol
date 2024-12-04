@@ -3571,7 +3571,7 @@ where
     let value1 = Hashed::new(ConfirmedBlock::new(executed_block1));
     let (response, _) = worker.handle_block_proposal(proposal1).await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
-    assert_eq!(vote.value.value_hash, value1.hash());
+    assert_eq!(vote.value.executed_block_hash, value1.hash());
 
     // Set the clock to the end of the round.
     clock.set(response.info.manager.round_timeout.unwrap());
@@ -3677,7 +3677,7 @@ where
     let vote = response.info.manager.fallback_vote.unwrap();
     let value = Hashed::new(Timeout::new(chain_id, BlockHeight(1), Epoch::ZERO));
     let round = Round::SingleLeader(u32::MAX);
-    assert_eq!(vote.value.value_hash, value.hash());
+    assert_eq!(vote.value.executed_block_hash, value.hash());
     assert_eq!(vote.round, round);
     let certificate = make_certificate_with_round(&committee, &worker, value, round);
     worker.fully_handle_certificate(certificate, vec![]).await?;

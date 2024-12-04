@@ -1135,7 +1135,7 @@ where
         let ((votes_hash, votes_round), votes) = communicate_with_quorum(
             &nodes,
             committee,
-            |vote: &LiteVote| (vote.value.value_hash, vote.round),
+            |vote: &LiteVote| (vote.value.executed_block_hash, vote.round),
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     chain_worker_count,

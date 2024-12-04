@@ -135,14 +135,14 @@ where
             // Cache the value we voted on, so the client doesn't have to send it again.
             (Some(vote), None) => {
                 self.state
-                    .recent_hashed_validated_values
-                    .insert(Cow::Borrowed(&vote.value))
+                    .recent_executed_block_values
+                    .insert(Cow::Borrowed(vote.value.inner().inner()))
                     .await;
             }
             (None, Some(vote)) => {
                 self.state
-                    .recent_hashed_confirmed_values
-                    .insert(Cow::Borrowed(&vote.value))
+                    .recent_executed_block_values
+                    .insert(Cow::Borrowed(vote.value.inner().inner()))
                     .await;
             }
             (Some(_), Some(_)) => panic!("vote is either validated or confirmed"),
@@ -199,8 +199,8 @@ where
         }
 
         self.state
-            .recent_hashed_validated_values
-            .insert(Cow::Borrowed(certificate.value()))
+            .recent_executed_block_values
+            .insert(Cow::Borrowed(certificate.inner().inner()))
             .await;
         let required_blob_ids = executed_block.required_blob_ids();
         // Verify that no unrelated blobs were provided.
@@ -373,8 +373,8 @@ where
         self.save().await?;
 
         self.state
-            .recent_hashed_confirmed_values
-            .insert(Cow::Owned(certificate.into_value()))
+            .recent_executed_block_values
+            .insert(Cow::Owned(certificate.into_inner().inner().clone())) // TODO: Remove clone
             .await;
 
         self.register_delivery_notifier(block_height, &actions, notify_when_messages_are_delivered)

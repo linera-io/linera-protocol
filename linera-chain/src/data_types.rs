@@ -400,6 +400,8 @@ pub struct ExecutedBlock {
     pub outcome: BlockExecutionOutcome,
 }
 
+impl BcsHashable for ExecutedBlock {}
+
 /// The messages and the state hash resulting from a [`Block`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
@@ -432,7 +434,7 @@ pub struct EventRecord {
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct LiteValue {
-    pub value_hash: CryptoHash,
+    pub executed_block_hash: CryptoHash,
     pub chain_id: ChainId,
     pub kind: CertificateKind,
 }
@@ -452,7 +454,10 @@ pub struct Vote<T> {
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self {
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self
+    where
+        T: CertificateValueT,
+    {
         let hash_and_round = ValueHashAndRound(value.hash(), round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
@@ -496,7 +501,7 @@ impl LiteVote {
     /// Returns the full vote, with the value, if it matches.
     #[cfg(any(feature = "benchmark", with_testing))]
     pub fn with_value<T>(self, value: Hashed<T>) -> Option<Vote<T>> {
-        if self.value.value_hash != value.hash() {
+        if self.value.executed_block_hash != value.hash() {
             return None;
         }
         Some(Vote {
@@ -803,7 +808,7 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
-        let hash_and_round = ValueHashAndRound(value.value_hash, round);
+        let hash_and_round = ValueHashAndRound(value.executed_block_hash, round);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -815,7 +820,7 @@ impl LiteVote {
 
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
-        let hash_and_round = ValueHashAndRound(self.value.value_hash, self.round);
+        let hash_and_round = ValueHashAndRound(self.value.executed_block_hash, self.round);
         Ok(self.signature.check(&hash_and_round, self.validator.0)?)
     }
 }

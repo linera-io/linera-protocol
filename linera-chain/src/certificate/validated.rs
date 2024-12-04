@@ -12,7 +12,7 @@ use serde::{
 use super::{generic::GenericCertificate, Certificate};
 use crate::{
     block::{ConversionError, ValidatedBlock},
-    data_types::{ExecutedBlock, LiteValue},
+    data_types::ExecutedBlock,
     types::Hashed,
 };
 
@@ -24,15 +24,6 @@ impl GenericCertificate<ValidatedBlock> {
     #[cfg(with_testing)]
     pub fn outgoing_message_count(&self) -> usize {
         self.executed_block().messages().iter().map(Vec::len).sum()
-    }
-
-    /// Returns the `LiteValue` corresponding to the certified value.
-    pub fn lite_value(&self) -> LiteValue {
-        LiteValue {
-            value_hash: self.hash(),
-            chain_id: self.executed_block().block.chain_id,
-            kind: super::CertificateKind::Validated,
-        }
     }
 
     /// Returns reference to the `ExecutedBlock` contained in this certificate.
