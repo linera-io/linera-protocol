@@ -309,31 +309,6 @@ where
         Ok(())
     }
 
-    /// Returns an error if the block requires a blob we don't have.
-    /// Looks for the blob in: chain manager's pending blobs and storage.
-    async fn check_no_missing_blobs(
-        &self,
-        required_blob_ids: &HashSet<BlobId>,
-    ) -> Result<(), WorkerError> {
-        let pending_blobs = &self.chain.manager.get().pending_blobs;
-        let missing_blob_ids = required_blob_ids
-            .iter()
-            .filter(|blob_id| !pending_blobs.contains_key(blob_id))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        let missing_blob_ids = self
-            .storage
-            .missing_blobs(missing_blob_ids.as_slice())
-            .await?;
-
-        if missing_blob_ids.is_empty() {
-            return Ok(());
-        }
-
-        Err(WorkerError::BlobsNotFound(missing_blob_ids))
-    }
-
     /// Returns an error if unrelated blobs were provided.
     fn check_for_unneeded_blobs(
         &self,

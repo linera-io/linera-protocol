@@ -402,6 +402,7 @@ impl ChainManager {
         outcome: BlockExecutionOutcome,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
+        blobs: Vec<Blob>,
     ) -> Option<Either<&Vote<ValidatedBlock>, &Vote<ConfirmedBlock>>> {
         // Record the proposed block, so it can be supplied to clients that request it.
         self.proposed = Some(proposal.clone());
@@ -419,12 +420,12 @@ impl ChainManager {
                 let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
                 if let Some(certificate) = lite_cert.with_value(value) {
                     self.locked = Some(certificate);
+                    self.pending_blobs.clear();
+                    for blob in proposal.blobs.into_iter().chain(blobs) {
+                        self.pending_blobs.insert(blob.id(), blob);
+                    }
                 }
             }
-        }
-
-        for blob in proposal.blobs {
-            self.pending_blobs.insert(blob.id(), blob);
         }
 
         if let Some(key_pair) = key_pair {
@@ -455,6 +456,7 @@ impl ChainManager {
         validated: ValidatedBlockCertificate,
         key_pair: Option<&KeyPair>,
         local_time: Timestamp,
+        blobs: Vec<Blob>,
     ) {
         let round = validated.round;
         // Validators only change their locked block if the new one is included in a proposal in the
@@ -464,6 +466,10 @@ impl ChainManager {
         }
         let confirmed_block = ConfirmedBlock::new(validated.inner().executed_block().clone());
         self.locked = Some(validated);
+        self.pending_blobs.clear();
+        for blob in blobs {
+            self.pending_blobs.insert(blob.id(), blob);
+        }
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             // Vote to confirm.

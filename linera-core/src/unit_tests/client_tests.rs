@@ -1808,7 +1808,7 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client3_a.add_pending_blobs([blob1]).await;
+    client3_a.add_pending_blobs([blob1.clone()]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1835,7 +1835,7 @@ where
         .node(2)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
+            vec![blob1],
             CrossChainMessageDelivery::Blocking,
         )
         .await;
@@ -1882,7 +1882,7 @@ where
     let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
-    client3_b.add_pending_blobs([blob3]).await;
+    client3_b.add_pending_blobs([blob3.clone()]).await;
     let blob_2_3_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1907,7 +1907,7 @@ where
         .node(3)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
+            vec![blob3],
             CrossChainMessageDelivery::Blocking,
         )
         .await;
