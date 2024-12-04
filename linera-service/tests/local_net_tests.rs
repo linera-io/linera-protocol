@@ -666,6 +666,12 @@ async fn test_project_new() -> Result<()> {
         .spawn()?;
     assert!(child.wait()?.success());
 
+    let mut child = Command::new("cargo")
+        .arg("test")
+        .current_dir(project_dir.as_path())
+        .spawn()?;
+    assert!(child.wait()?.success());
+
     Ok(())
 }
 

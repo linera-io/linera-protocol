@@ -64,13 +64,13 @@ mod tests {{
     use linera_sdk::{{util::BlockingWait, views::View, Service, ServiceRuntime}};
     use serde_json::json;
 
-    use super::{{{project_name}, {project_name}Service}};
+    use super::{{{project_name}Service, {project_name}State}};
 
     #[test]
     fn query() {{
         let value = 60u64;
         let runtime = ServiceRuntime::<{project_name}Service>::new();
-        let mut state = {project_name}::load(runtime.root_view_storage_context())
+        let mut state = {project_name}State::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");
         state.value.set(value);
