@@ -21,7 +21,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{CertificateKind, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -309,7 +309,9 @@ where
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if certificate.inner().is_validated() => None,
+            FaultType::DontProcessValidated if matches!(T::KIND, CertificateKind::Validated) => {
+                None
+            }
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -358,7 +360,6 @@ where
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let is_validated = certificate.inner().is_validated();
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
@@ -367,7 +368,7 @@ where
             }
             _ => match validator.fault_type {
                 FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
-                    if is_validated =>
+                    if matches!(T::KIND, CertificateKind::Validated) =>
                 {
                     Err(NodeError::ClientIoError {
                         error: "refusing to confirm".to_string(),

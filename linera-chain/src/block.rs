@@ -99,15 +99,6 @@ impl ConfirmedBlock {
         Self { executed_block }
     }
 
-    /// Creates a new `ConfirmedBlock` from a `ValidatedBlock`.
-    /// Note: There's no `new` method for `ConfirmedBlock` because it's
-    /// only created from a `ValidatedBlock`.
-    pub fn from_validated(validated: ValidatedBlock) -> Self {
-        Self {
-            executed_block: validated.executed_block,
-        }
-    }
-
     pub fn inner(&self) -> &Hashed<ExecutedBlock> {
         &self.executed_block
     }

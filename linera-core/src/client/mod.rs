@@ -1032,7 +1032,7 @@ where
         // Remember what we are trying to do before sending the proposal to the validators.
         self.state_mut()
             .set_pending_block(proposal.content.block.clone());
-        let required_blob_ids: HashSet<BlobId> = value.inner().required_blob_ids();
+        let required_blob_ids = value.inner().required_blob_ids();
         let proposed_blobs = proposal.blobs.clone();
         let submit_action = CommunicateAction::SubmitBlock {
             proposal,

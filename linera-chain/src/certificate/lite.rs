@@ -78,9 +78,8 @@ impl<'a> LiteCertificate<'a> {
         self,
         value: Hashed<T>,
     ) -> Option<GenericCertificate<T>> {
-        debug_assert_eq!(value.inner().kind(), self.value.kind);
         if self.value.chain_id != value.inner().chain_id()
-            || value.inner().kind() != self.value.kind
+            || T::KIND != self.value.kind
             || self.value.executed_block_hash != value.hash()
         {
             return None;

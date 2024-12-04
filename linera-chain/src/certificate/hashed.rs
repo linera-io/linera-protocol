@@ -60,7 +60,7 @@ impl<T> Hashed<T> {
         LiteValue {
             executed_block_hash: self.hash,
             chain_id: self.value.chain_id(),
-            kind: T::kind(&self.value),
+            kind: T::KIND,
         }
     }
 }
