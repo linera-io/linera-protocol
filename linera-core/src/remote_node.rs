@@ -289,23 +289,18 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: &GenericCertificate<T>,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
-        // Find the missing blobs locally and retry.
+        ensure!(!blob_ids.is_empty(), NodeError::EmptyBlobsNotFound);
         let required = certificate.inner().required_blob_ids();
+        let name = &self.name;
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
-                warn!(
-                    "validator {} requested blob {blob_id:?} but it is not required",
-                    self.name
-                );
+                warn!("validator {name} requested blob {blob_id:?} but it is not required");
                 return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
             }
         }
         let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
         if blob_ids.len() > unique_missing_blob_ids.len() {
-            warn!(
-                "blobs requested by validator {} contain duplicates",
-                self.name
-            );
+            warn!("blobs requested by validator {name} contain duplicates");
             return Err(NodeError::DuplicatesInBlobsNotFound);
         }
         Ok(())

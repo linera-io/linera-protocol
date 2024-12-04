@@ -613,6 +613,8 @@ NodeError:
     23:
       UnexpectedEntriesInBlobsNotFound: UNIT
     24:
+      EmptyBlobsNotFound: UNIT
+    25:
       ResponseHandlingError:
         STRUCT:
           - error: STR
