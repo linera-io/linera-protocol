@@ -199,6 +199,9 @@ where
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
+        if batch.is_empty() {
+            return Ok(());
+        }
         match self.store_in_use {
             StoreInUse::First => self
                 .first_store

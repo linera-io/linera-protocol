@@ -186,6 +186,9 @@ impl LocalWritableKeyValueStore for IndexedDbStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), IndexedDbStoreError> {
+        if batch.is_empty() {
+            return Ok(());
+        }
         let transaction = self
             .database
             .transaction_on_one_with_mode(&self.object_store_name, IdbTransactionMode::Readwrite)?;
