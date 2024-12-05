@@ -462,24 +462,9 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + Send + Sync + 'static,
 {
-    // NOTE: This only works for non-sharded workers!
-    #[instrument(level = "trace", skip(self, certificate, blobs))]
-    #[cfg(with_testing)]
-    pub async fn fully_handle_certificate<T>(
-        &self,
-        certificate: GenericCertificate<T>,
-        blobs: Vec<Blob>,
-    ) -> Result<ChainInfoResponse, WorkerError>
-    where
-        T: ProcessableCertificate,
-    {
-        self.fully_handle_certificate_with_notifications(certificate, blobs, &())
-            .await
-    }
-
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
-    pub(crate) async fn fully_handle_certificate_with_notifications<T>(
+    pub async fn fully_handle_certificate_with_notifications<T>(
         &self,
         certificate: GenericCertificate<T>,
         blobs: Vec<Blob>,

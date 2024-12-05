@@ -153,9 +153,10 @@ where
     let publish_certificate = make_certificate(&committee, &worker, publish_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(
+        .fully_handle_certificate_with_notifications(
             publish_certificate.clone(),
             vec![contract_blob.clone(), service_blob.clone()],
+            &(),
         )
         .await
         .unwrap()
@@ -239,7 +240,7 @@ where
     let create_certificate = make_certificate(&committee, &worker, create_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(create_certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(create_certificate.clone(), vec![], &())
         .await
         .unwrap()
         .info;
@@ -292,7 +293,7 @@ where
     let run_certificate = make_certificate(&committee, &worker, run_block_proposal);
 
     let info = worker
-        .fully_handle_certificate(run_certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(run_certificate.clone(), vec![], &())
         .await
         .unwrap()
         .info;
