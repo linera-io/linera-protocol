@@ -196,6 +196,7 @@ where
     }
 
     /// Looks for the specified blobs in the local chain manager's locked blobs.
+    /// Returns `Ok(None)` if any of the blobs is not found.
     pub async fn get_locked_blobs(
         &self,
         blob_ids: &[BlobId],
