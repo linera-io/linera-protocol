@@ -232,7 +232,7 @@ amm = { path = "./examples/amm" }
 
 [profile.release]
 lto = "fat"
-debug = false
+debug = true
 
 [profile.bench]
 debug = true
