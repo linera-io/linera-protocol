@@ -234,8 +234,12 @@ where
         .await?;
 
         let executed_block = outcome.with(block.clone());
-        let required_blobs = self.0.get_required_blobs(&executed_block, blobs).await?;
-        let required_blobs = required_blobs.into_values().collect::<Vec<_>>();
+        let required_blobs = self
+            .0
+            .get_required_blobs(&executed_block, blobs)
+            .await?
+            .into_values()
+            .collect::<Vec<_>>();
         block.check_proposal_size(policy.maximum_block_proposal_size, &required_blobs)?;
         if let Some(lite_certificate) = &validated_block_certificate {
             let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));

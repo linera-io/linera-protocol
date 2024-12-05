@@ -224,7 +224,7 @@ where
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
                 // The certificate is confirmed, so the blobs must be in storage.
-                let maybe_blobs = self.local_node.read_blobs(blob_ids).await?;
+                let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
                 self.remote_node
                     .handle_certificate(certificate, blobs, delivery)
@@ -253,7 +253,7 @@ where
                 // Take the missing blobs from our local chain manager.
                 let blobs = self
                     .local_node
-                    .find_locked_blobs(blob_ids, chain_id)
+                    .get_locked_blobs(blob_ids, chain_id)
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node

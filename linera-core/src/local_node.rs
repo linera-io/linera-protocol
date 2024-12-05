@@ -187,7 +187,7 @@ where
     }
 
     /// Reads blobs from storage.
-    pub async fn read_blobs(
+    pub async fn read_blobs_from_storage(
         &self,
         blob_ids: &[BlobId],
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
@@ -196,7 +196,7 @@ where
     }
 
     /// Looks for the specified blobs in the local chain manager's locked blobs.
-    pub async fn find_locked_blobs(
+    pub async fn get_locked_blobs(
         &self,
         blob_ids: &[BlobId],
         chain_id: ChainId,

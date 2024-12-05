@@ -1895,7 +1895,12 @@ where
                 continue;
             }
 
-            if let Some(blob) = self.client.local_node.read_blobs(&[blob_id]).await? {
+            if let Some(blob) = self
+                .client
+                .local_node
+                .read_blobs_from_storage(&[blob_id])
+                .await?
+            {
                 blobs.extend(blob);
                 continue;
             }
