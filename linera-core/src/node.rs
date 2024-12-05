@@ -227,6 +227,8 @@ pub enum NodeError {
     DuplicatesInBlobsNotFound,
     #[error("Node returned a BlobsNotFound error with unexpected blob IDs")]
     UnexpectedEntriesInBlobsNotFound,
+    #[error("Node returned a BlobsNotFound error with an empty list of missing blob IDs")]
+    EmptyBlobsNotFound,
     #[error("Local error handling validator response")]
     ResponseHandlingError { error: String },
 }

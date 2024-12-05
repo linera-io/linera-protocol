@@ -215,7 +215,6 @@ where
             published_blob_ids.iter().copied().eq(provided_blob_ids),
             WorkerError::WrongBlobsInProposal
         );
-        block.check_proposal_size(policy.maximum_block_proposal_size, blobs)?;
         for blob in blobs {
             Self::check_blob_size(blob.content(), &policy)?;
         }
@@ -233,15 +232,24 @@ where
             forced_oracle_responses.clone(),
         ))
         .await?;
+
+        let executed_block = outcome.with(block.clone());
+        let required_blobs = self
+            .0
+            .get_required_blobs(&executed_block, blobs)
+            .await?
+            .into_values()
+            .collect::<Vec<_>>();
+        block.check_proposal_size(policy.maximum_block_proposal_size, &required_blobs)?;
         if let Some(lite_certificate) = &validated_block_certificate {
-            let value = Hashed::new(ValidatedBlock::new(outcome.clone().with(block.clone())));
+            let value = Hashed::new(ValidatedBlock::new(executed_block.clone()));
             lite_certificate
                 .clone()
                 .with_value(value)
                 .ok_or_else(|| WorkerError::InvalidLiteCertificate)?;
         }
         ensure!(
-            !round.is_fast() || !outcome.has_oracle_responses(),
+            !round.is_fast() || !executed_block.outcome.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
         // Check if the counters of tip_state would be valid.
@@ -249,10 +257,10 @@ where
             .chain
             .tip_state
             .get()
-            .verify_counters(block, &outcome)?;
+            .verify_counters(block, &executed_block.outcome)?;
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         self.0.chain.validate_incoming_bundles().await?;
-        Ok(Some((outcome, local_time)))
+        Ok(Some((executed_block.outcome, local_time)))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].

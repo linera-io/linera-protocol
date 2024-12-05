@@ -1475,15 +1475,18 @@ where
     // The blob is not new on this chain, so it is not required.
     assert!(!certificate.executed_block().requires_blob(&blob0_id));
 
+    // Validators 0, 1, 2 now don't process validated block certificates. Client 2A tries to
+    // commit a block that reads blob 0 and publishes blob 1. Client 2A will have that block
+    // locked now, but the validators won't.
     builder
-        .set_fault_type([0, 1, 2], FaultType::DontSendConfirmVote)
+        .set_fault_type([0, 1, 2], FaultType::DontProcessValidated)
         .await;
 
     client2_a.synchronize_from_validators().await.unwrap();
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client2_a.add_pending_blobs([blob1]).await;
+    client2_a.add_pending_blobs([blob1.clone()]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1498,27 +1501,34 @@ where
     assert!(client2_a.pending_block().is_some());
 
     for i in 0..=2 {
-        let validator_manager = builder
+        let info = builder
             .node(i)
             .chain_info_with_manager_values(chain_id2)
-            .await
-            .unwrap()
-            .manager;
-        assert_eq!(
-            validator_manager
-                .requested_locked
-                .unwrap()
-                .executed_block()
-                .block
-                .operations,
-            blob_0_1_operations
-        );
+            .await?;
+        assert_eq!(info.manager.requested_locked, None);
     }
 
+    // Now 2 goes offline and the other validators are working again.
     builder.set_fault_type([2], FaultType::Offline).await;
     builder.set_fault_type([0, 1, 3], FaultType::Honest).await;
 
+    // We make validator 3 (who does not have the block proposal) process the validated block.
+    let info2_a = client2_a.chain_info_with_manager_values().await?;
+    let locked = *info2_a.manager.requested_locked.unwrap();
+    let blobs = vec![blob1];
+    let response = builder
+        .node(3)
+        .handle_certificate(locked.clone(), blobs, CrossChainMessageDelivery::Blocking)
+        .await?;
+    assert_eq!(
+        response.info.manager.pending.unwrap().round,
+        Round::MultiLeader(0)
+    );
+
+    // Client 2B should be able to synchronize the locked block and the blobs from validator 3.
     client2_b.synchronize_from_validators().await.unwrap();
+    let info2_b = client2_b.chain_info_with_manager_values().await?;
+    assert_eq!(locked, *info2_b.manager.requested_locked.unwrap());
     let bt_certificate = client2_b
         .burn(None, Amount::from_tokens(1))
         .await
@@ -1798,7 +1808,7 @@ where
     let blob1 = Blob::new_data(b"blob1".to_vec());
     let blob1_hash = blob1.id().hash;
 
-    client3_a.add_pending_blobs([blob1]).await;
+    client3_a.add_pending_blobs([blob1.clone()]).await;
     let blob_0_1_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob0_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1825,7 +1835,7 @@ where
         .node(2)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
+            vec![blob1],
             CrossChainMessageDelivery::Blocking,
         )
         .await;
@@ -1872,7 +1882,7 @@ where
     let blob3 = Blob::new_data(b"blob3".to_vec());
     let blob3_hash = blob3.id().hash;
 
-    client3_b.add_pending_blobs([blob3]).await;
+    client3_b.add_pending_blobs([blob3.clone()]).await;
     let blob_2_3_operations = vec![
         Operation::System(SystemOperation::ReadBlob { blob_id: blob2_id }),
         Operation::System(SystemOperation::PublishDataBlob {
@@ -1897,7 +1907,7 @@ where
         .node(3)
         .handle_certificate(
             validated_block_certificate,
-            Vec::new(),
+            vec![blob3],
             CrossChainMessageDelivery::Blocking,
         )
         .await;
