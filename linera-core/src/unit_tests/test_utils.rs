@@ -703,11 +703,13 @@ where
         );
     }
 
-    pub async fn add_initial_chain(
+    /// Creates the root chain with the given `index`, and returns a client for it.
+    pub async fn add_root_chain(
         &mut self,
-        description: ChainDescription,
+        index: u32,
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+        let description = ChainDescription::Root(index);
         let key_pair = KeyPair::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.

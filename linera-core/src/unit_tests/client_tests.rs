@@ -10,9 +10,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::*,
     data_types::*,
-    identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainDescription, ChainId, MessageId, Owner,
-    },
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, MessageId, Owner},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -92,9 +90,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     // Listen to the notifications on the sender chain.
     let mut notifications = sender.subscribe().await?;
     let (listener, _listen_handle, _) = sender.listen().await?;
@@ -146,20 +142,17 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner_identity = sender.identity().await?;
     let owner = AccountOwner::User(owner_identity);
-    let receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-        .await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let receiver_id = receiver.chain_id();
     let friend = receiver.identity().await?;
     sender
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
-            Account::owner(ChainId::root(2), owner),
+            Account::owner(receiver_id, owner),
         )
         .await
         .unwrap()
@@ -168,7 +161,7 @@ where
         .transfer_to_account(
             None,
             Amount::from_millis(100),
-            Account::owner(ChainId::root(2), friend),
+            Account::owner(receiver_id, friend),
         )
         .await
         .unwrap()
@@ -219,7 +212,7 @@ where
     sender
         .claim(
             owner_identity,
-            ChainId::root(2),
+            receiver_id,
             Recipient::root(1),
             Amount::from_tokens(5),
         )
@@ -229,7 +222,7 @@ where
     let cert = sender
         .claim(
             owner_identity,
-            ChainId::root(2),
+            receiver_id,
             Recipient::root(1),
             Amount::from_tokens(2),
         )
@@ -278,9 +271,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     let new_owner = Owner::from(new_key_pair.public());
     let certificate = sender.rotate_key_pair(new_key_pair).await.unwrap().unwrap();
@@ -300,14 +291,7 @@ where
     );
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain.
-    sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-        )
-        .await
-        .unwrap();
+    sender.burn(None, Amount::from_tokens(3)).await.unwrap();
     Ok(())
 }
 
@@ -324,9 +308,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
 
     let new_key_pair = KeyPair::generate();
     let certificate = sender
@@ -354,13 +336,7 @@ where
     sender.synchronize_from_validators().await.unwrap();
     // Cannot use the chain any more.
     assert_matches!(
-        sender
-            .transfer_to_account(
-                None,
-                Amount::from_tokens(3),
-                Account::chain(ChainId::root(2)),
-            )
-            .await,
+        sender.burn(None, Amount::from_tokens(3)).await,
         Err(ChainClientError::CannotFindKeyForChain(_))
     );
     Ok(())
@@ -377,9 +353,7 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     let certificate = sender
         .share_ownership(new_key_pair.public(), 100)
@@ -402,14 +376,7 @@ where
     );
     sender.synchronize_from_validators().await.unwrap();
     // Can still use the chain with the old client.
-    sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(2),
-            Account::chain(ChainId::root(2)),
-        )
-        .await
-        .unwrap();
+    sender.burn(None, Amount::from_tokens(2)).await.unwrap();
     assert_eq!(sender.next_block_height(), BlockHeight::from(2));
     // Make a client to try the new key.
     let client = builder
@@ -432,11 +399,9 @@ where
         Amount::from_tokens(2)
     );
 
-    // We need at least three validators for making a transfer.
+    // We need at least three validators for making an operation.
     builder.set_fault_type([0, 1], FaultType::Offline).await;
-    let result = client
-        .transfer_to_account(None, Amount::ONE, Account::chain(ChainId::root(3)))
-        .await;
+    let result = client.burn(None, Amount::ONE).await;
     assert_matches!(
         result,
         Err(ChainClientError::CommunicationError(
@@ -446,9 +411,7 @@ where
     builder.set_fault_type([0, 1], FaultType::Honest).await;
     builder.set_fault_type([2, 3], FaultType::Offline).await;
     assert_matches!(
-        sender
-            .transfer_to_account(None, Amount::ONE, Account::chain(ChainId::root(3)),)
-            .await,
+        sender.burn(None, Amount::ONE).await,
         Err(ChainClientError::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
@@ -466,21 +429,14 @@ where
         Amount::from_tokens(2)
     );
     client.clear_pending_block();
-    client
-        .transfer_to_account(None, Amount::ONE, Account::chain(ChainId::root(3)))
-        .await
-        .unwrap()
-        .unwrap();
+    client.burn(None, Amount::ONE).await.unwrap().unwrap();
 
     // The other client doesn't know the new round number yet:
     sender.synchronize_from_validators().await.unwrap();
     sender.process_inbox().await.unwrap();
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_block();
-    sender
-        .transfer_to_account(None, Amount::ONE, Account::chain(ChainId::root(2)))
-        .await
-        .unwrap();
+    sender.burn(None, Amount::ONE).await.unwrap();
 
     // That's it, we spent all our money on this test!
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ZERO);
@@ -502,12 +458,8 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
-        .await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
     let (message_id, certificate) = sender
@@ -568,18 +520,12 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
-        .await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
-    let parent = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-        .await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let parent = builder.add_root_chain(2, Amount::ZERO).await?;
     let new_key_pair = KeyPair::generate();
     let new_id = ChainId::child(MessageId {
-        chain_id: ChainId::root(2),
+        chain_id: parent.chain_id(),
         height: BlockHeight::ZERO,
         index: 0,
     });
@@ -639,14 +585,7 @@ where
         client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
-    client
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(3)),
-        )
-        .await
-        .unwrap();
+    client.burn(None, Amount::from_tokens(3)).await.unwrap();
     Ok(())
 }
 
@@ -662,15 +601,11 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
-        .await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     let new_id = ChainId::child(MessageId {
-        chain_id: ChainId::root(1),
+        chain_id: sender.chain_id(),
         height: BlockHeight::from(1),
         index: 0,
     });
@@ -714,13 +649,7 @@ where
         .receive_certificate_and_update_validators(certificate)
         .await
         .unwrap();
-    let result = client
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(3)),
-        )
-        .await;
+    let result = client.burn(None, Amount::from_tokens(3)).await;
     assert_matches!(
         result,
         Err(ChainClientError::LocalNodeError(
@@ -746,12 +675,8 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ZERO)
-        .await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain. We are both regular and super owner.
     let ownership = ChainOwnership::single(new_key_pair.public())
@@ -789,14 +714,7 @@ where
         client.query_balance().await.unwrap(),
         Amount::from_tokens(3)
     );
-    client
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(3)),
-        )
-        .await
-        .unwrap();
+    client.burn(None, Amount::from_tokens(3)).await.unwrap();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ZERO);
     Ok(())
 }
@@ -814,12 +732,8 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
-    let client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::from_tokens(4))
-        .await?;
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let client2 = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
 
     let certificate = client1.close_chain().await.unwrap().unwrap().unwrap();
     assert_matches!(
@@ -838,13 +752,7 @@ where
         certificate
     );
     // Cannot use the chain for operations any more.
-    let result = client1
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-        )
-        .await;
+    let result = client1.burn(None, Amount::from_tokens(3)).await;
     assert!(
         matches!(
             &result,
@@ -861,7 +769,7 @@ where
         .transfer_to_account(
             None,
             Amount::from_tokens(3),
-            Account::chain(ChainId::root(1)),
+            Account::chain(client1.chain_id()),
         )
         .await
         .unwrap()
@@ -880,7 +788,7 @@ where
                 messages,
                 ..
             },
-        } if *sender == ChainId::root(2) && matches!(messages[..],
+        } if *sender == client2.chain_id() && matches!(messages[..],
             [PostedMessage {
                 message: Message::System(SystemMessage::Credit { .. }),
                 kind: MessageKind::Tracked,
@@ -914,9 +822,7 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 2).await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let result = sender
         .transfer_to_account_unsafe_unconfirmed(
             None,
@@ -951,12 +857,8 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
-        .await?;
-    let client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-        .await?;
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     assert_eq!(
         client1.local_balance().await.unwrap(),
         Amount::from_tokens(3)
@@ -964,7 +866,7 @@ where
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
-            chain_id: ChainId::root(1),
+            chain_id: client1.chain_id(),
             balance: Amount::from_tokens(3),
         }
     );
@@ -984,7 +886,7 @@ where
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
-            chain_id: ChainId::root(1),
+            chain_id: client1.chain_id(),
             balance: Amount::ZERO,
         }
     );
@@ -1004,7 +906,7 @@ where
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
-            chain_id: ChainId::root(2),
+            chain_id: client2.chain_id(),
             balance: Amount::from_tokens(0),
         }
     );
@@ -1028,7 +930,7 @@ where
     assert_eq!(
         client2.query_system_application(SystemQuery).await.unwrap(),
         SystemResponse {
-            chain_id: ChainId::root(2),
+            chain_id: client2.chain_id(),
             balance: Amount::from_tokens(2),
         }
     );
@@ -1048,12 +950,8 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
-        .await?;
-    let client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-        .await?;
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
     let certificate = client1
         .transfer_to_account_unsafe_unconfirmed(
             None,
@@ -1098,15 +996,9 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let client1 = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
-        .await?;
-    let client2 = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-        .await?;
-    let client3 = builder
-        .add_initial_chain(ChainDescription::Root(3), Amount::ZERO)
-        .await?;
+    let client1 = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
+    let client3 = builder.add_root_chain(3, Amount::ZERO).await?;
 
     // Transferring funds from client1 to client2.
     // Confirming to a quorum of nodes only at the end.
@@ -1196,12 +1088,8 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let admin = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
-        .await?;
-    let user = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ZERO)
-        .await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let user = builder.add_root_chain(1, Amount::ZERO).await?;
     let validators = builder.initial_committee.validators().clone();
 
     let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel());
@@ -1238,13 +1126,13 @@ where
         .transfer_to_account(
             None,
             Amount::from_tokens(2),
-            Account::chain(ChainId::root(1)),
+            Account::chain(user.chain_id()),
         )
         .await
         .unwrap()
         .unwrap();
     admin
-        .transfer_to_account(None, Amount::ONE, Account::chain(ChainId::root(1)))
+        .transfer_to_account(None, Amount::ONE, Account::chain(user.chain_id()))
         .await
         .unwrap()
         .unwrap();
@@ -1269,7 +1157,7 @@ where
         .await
         .unwrap();
     builder
-        .check_that_validators_have_empty_outboxes(ChainId::root(0))
+        .check_that_validators_have_empty_outboxes(admin.chain_id())
         .await;
     admin.process_inbox().await.unwrap();
 
@@ -1281,7 +1169,7 @@ where
         .transfer_to_account(
             None,
             Amount::from_tokens(2),
-            Account::chain(ChainId::root(0)),
+            Account::chain(admin.chain_id()),
         )
         .await
         .unwrap()
@@ -1302,7 +1190,7 @@ where
 
     // Try again to make a transfer back to the admin chain.
     let cert = user
-        .transfer_to_account(None, Amount::ONE, Account::chain(ChainId::root(0)))
+        .transfer_to_account(None, Amount::ONE, Account::chain(admin.chain_id()))
         .await
         .unwrap()
         .unwrap();
@@ -1326,16 +1214,8 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::fuel_and_block());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
-        .await?;
-    let obtained_error = sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(4),
-            Account::chain(ChainId::root(2)),
-        )
-        .await;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let obtained_error = sender.burn(None, Amount::from_tokens(4)).await;
 
     // TODO(#1649): Make this code nicer.
     assert_matches!(obtained_error,
@@ -1348,13 +1228,7 @@ where
             ExecutionError::SystemError(SystemExecutionError::InsufficientFunding { .. })
         ))
     );
-    let obtained_error = sender
-        .transfer_to_account(
-            None,
-            Amount::from_tokens(3),
-            Account::chain(ChainId::root(2)),
-        )
-        .await;
+    let obtained_error = sender.burn(None, Amount::from_tokens(3)).await;
     // TODO(#1649): Make this code nicer.
     assert_matches!(obtained_error,
         Err(ChainClientError::LocalNodeError(
@@ -1379,11 +1253,8 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let description1 = ChainDescription::Root(1);
-    let chain_id1 = ChainId::from(description1);
-    let client1_a = builder
-        .add_initial_chain(description1, Amount::ZERO)
-        .await?;
+    let client1_a = builder.add_root_chain(1, Amount::ZERO).await?;
+    let chain_id1 = client1_a.chain_id();
     let pub_key1_a = client1_a.public_key().await.unwrap();
     let key_pair1_b = KeyPair::generate();
     let pub_key1_b = key_pair1_b.public();
@@ -1404,11 +1275,8 @@ where
         )
         .await?;
 
-    let description2 = ChainDescription::Root(2);
-    let chain_id2 = ChainId::from(description2);
-    let client2_a = builder
-        .add_initial_chain(description2, Amount::from_tokens(10))
-        .await?;
+    let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+    let chain_id2 = client2_a.chain_id();
     let pub_key2_a = client2_a.public_key().await.unwrap();
     let key_pair2_b = KeyPair::generate();
     let pub_key2_b = key_pair2_b.public();
@@ -1576,15 +1444,9 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let description1 = ChainDescription::Root(1);
-    let description2 = ChainDescription::Root(2);
-    let chain_id2 = ChainId::from(description2);
-    let client1 = builder
-        .add_initial_chain(description1, Amount::ZERO)
-        .await?;
-    let client2_a = builder
-        .add_initial_chain(description2, Amount::from_tokens(10))
-        .await?;
+    let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
+    let client2_a = builder.add_root_chain(2, Amount::from_tokens(10)).await?;
+    let chain_id2 = client2_a.chain_id();
     let pub_key2_a = client2_a.public_key().await.unwrap();
     let key_pair2_b = KeyPair::generate();
     let pub_key2_b = key_pair2_b.public();
@@ -1715,19 +1577,10 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let description1 = ChainDescription::Root(1);
-    let description2 = ChainDescription::Root(2);
-    let description3 = ChainDescription::Root(3);
-    let chain_id3 = ChainId::from(description3);
-    let client1 = builder
-        .add_initial_chain(description1, Amount::ZERO)
-        .await?;
-    let client2 = builder
-        .add_initial_chain(description2, Amount::ZERO)
-        .await?;
-    let client3_a = builder
-        .add_initial_chain(description3, Amount::from_tokens(10))
-        .await?;
+    let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
+    let client2 = builder.add_root_chain(2, Amount::ZERO).await?;
+    let client3_a = builder.add_root_chain(3, Amount::from_tokens(10)).await?;
+    let chain_id3 = client3_a.chain_id();
     let pub_key3_a = client3_a.public_key().await.unwrap();
     let key_pair3_b = KeyPair::generate();
     let pub_key3_b = key_pair3_b.public();
@@ -1997,11 +1850,8 @@ where
 {
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let description = ChainDescription::Root(1);
-    let chain_id = ChainId::from(description);
-    let client = builder
-        .add_initial_chain(description, Amount::from_tokens(3))
-        .await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let chain_id = client.chain_id();
     let pub_key0 = client.public_key().await.unwrap();
     let pub_key1 = KeyPair::generate().public();
 
@@ -2118,11 +1968,8 @@ where
 {
     // Configure a chain with two regular and no super owners.
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let description = ChainDescription::Root(1);
-    let chain_id = ChainId::from(description);
-    let client0 = builder
-        .add_initial_chain(description, Amount::from_tokens(10))
-        .await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
     let pub_key0 = client0.public_key().await.unwrap();
     let key_pair1 = KeyPair::generate();
     let pub_key1 = key_pair1.public();
@@ -2222,10 +2069,7 @@ where
     B: StorageBuilder,
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let description = ChainDescription::Root(1);
-    let client = builder
-        .add_initial_chain(description, Amount::from_tokens(10))
-        .await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
 
     // The client tries to burn 3 tokens. Two validators are offline, so nothing will get
     // validated or confirmed. However, the client now has a pending block.
@@ -2262,11 +2106,8 @@ where
 {
     // Configure a chain with two regular and no super owners.
     let mut builder = TestBuilder::new(storage_builder, 4, 0).await?;
-    let description = ChainDescription::Root(1);
-    let chain_id = ChainId::from(description);
-    let client0 = builder
-        .add_initial_chain(description, Amount::from_tokens(10))
-        .await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
     let pub_key0 = client0.public_key().await.unwrap();
     let key_pair1 = KeyPair::generate();
     let pub_key1 = key_pair1.public();
@@ -2373,13 +2214,9 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::only_fuel());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(4))
-        .await?;
-    let mut receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-        .await?;
-    let recipient = Recipient::chain(ChainId::root(2));
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient = Recipient::chain(receiver.chain_id());
     let cert = sender
         .transfer(None, Amount::ONE, recipient)
         .await
@@ -2440,13 +2277,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 0)
         .await?
         .with_policy(policy.clone());
-    let description1 = ChainDescription::Root(1);
-    let description2 = ChainDescription::Root(2);
-    let description3 = ChainDescription::Root(3);
-    let chain_id3 = ChainId::from(description3);
-    let client1 = builder.add_initial_chain(description1, Amount::ONE).await?;
-    let client2 = builder.add_initial_chain(description2, Amount::ONE).await?;
-    let client3 = builder.add_initial_chain(description3, Amount::ONE).await?;
+    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
+    let client2 = builder.add_root_chain(2, Amount::ONE).await?;
+    let client3 = builder.add_root_chain(3, Amount::ONE).await?;
+    let chain_id3 = client3.chain_id();
 
     // Configure the clients as super owners, so they make fast blocks by default.
     for client in [&client1, &client2, &client3] {

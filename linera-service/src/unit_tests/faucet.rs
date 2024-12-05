@@ -10,7 +10,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::ChainId,
 };
 use linera_client::{chain_listener, wallet::Wallet};
 use linera_core::{
@@ -73,7 +73,7 @@ async fn test_faucet_rate_limiting() {
     clock.set(Timestamp::from(0));
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
     let client = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(6))
+        .add_root_chain(1, Amount::from_tokens(6))
         .await
         .unwrap();
     let chain_id = client.chain_id();
