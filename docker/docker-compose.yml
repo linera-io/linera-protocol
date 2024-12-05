@@ -22,11 +22,33 @@ services:
     depends_on:
       shard-init:
         condition: service_completed_successfully
-  shard:
+  shard-0:
     image: "${LINERA_IMAGE:-linera}"
-    deploy:
-      replicas: 4
-    command: [ "./compose-server-entrypoint.sh" ]
+    command: [ "./compose-server-entrypoint.sh", "0" ]
+    volumes:
+      - .:/config
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+  shard-1:
+    image: "${LINERA_IMAGE:-linera}"
+    command: [ "./compose-server-entrypoint.sh", "1" ]
+    volumes:
+      - .:/config
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+  shard-2:
+    image: "${LINERA_IMAGE:-linera}"
+    command: [ "./compose-server-entrypoint.sh", "2" ]
+    volumes:
+      - .:/config
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+  shard-3:
+    image: "${LINERA_IMAGE:-linera}"
+    command: [ "./compose-server-entrypoint.sh", "3" ]
     volumes:
       - .:/config
     depends_on:
