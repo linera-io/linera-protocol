@@ -53,13 +53,9 @@ use {
 
 use crate::{
     chain_worker::{ChainWorkerActor, ChainWorkerConfig, ChainWorkerRequest, DeliveryNotifier},
-    client::ChainClientError,
-    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     join_set_ext::{JoinSet, JoinSetExt},
-    local_node::LocalNodeClient,
-    node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     notifier::Notifier,
-    remote_node::RemoteNode,
     value_cache::ValueCache,
 };
 
@@ -426,16 +422,6 @@ pub trait ProcessableCertificate: CertificateValueT + Sized + 'static {
         certificate: GenericCertificate<Self>,
         blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
-
-    async fn dispatch_certificate<
-        A: ValidatorNode + Clone + 'static + Sync,
-        S: Storage + Clone + Send + Sync + 'static,
-    >(
-        remote_node: Arc<RemoteNode<A>>,
-        local_node: LocalNodeClient<S>,
-        certificate: GenericCertificate<Self>,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError>;
 }
 
 impl ProcessableCertificate for ConfirmedBlock {
@@ -447,35 +433,6 @@ impl ProcessableCertificate for ConfirmedBlock {
         worker
             .handle_confirmed_certificate(certificate, blobs, None)
             .await
-    }
-
-    async fn dispatch_certificate<
-        A: ValidatorNode + Clone + 'static + Sync,
-        S: Storage + Clone + Send + Sync + 'static,
-    >(
-        remote_node: Arc<RemoteNode<A>>,
-        local_node: LocalNodeClient<S>,
-        certificate: ConfirmedBlockCertificate,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let result = remote_node
-            .handle_optimized_confirmed_certificate(&certificate, delivery)
-            .await;
-
-        Ok(match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                remote_node.check_blobs_not_found(&certificate, blob_ids)?;
-
-                let blobs = local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
-                    .await?
-                    .ok_or_else(|| original_err.clone())?;
-                remote_node
-                    .handle_confirmed_certificate(certificate, blobs, delivery)
-                    .await
-            }
-            _ => result,
-        }?)
     }
 }
 
@@ -489,35 +446,6 @@ impl ProcessableCertificate for ValidatedBlock {
             .handle_validated_certificate(certificate, blobs)
             .await
     }
-
-    async fn dispatch_certificate<
-        A: ValidatorNode + Clone + 'static + Sync + Send,
-        S: Storage + Clone + Send + Sync + 'static,
-    >(
-        remote_node: Arc<RemoteNode<A>>,
-        local_node: LocalNodeClient<S>,
-        certificate: ValidatedBlockCertificate,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let result = remote_node
-            .handle_optimized_validated_certificate(&certificate, delivery)
-            .await;
-
-        Ok(match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                remote_node.check_blobs_not_found(&certificate, blob_ids)?;
-
-                let blobs = local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
-                    .await?
-                    .ok_or_else(|| original_err.clone())?;
-                remote_node
-                    .handle_validated_certificate(certificate, blobs)
-                    .await
-            }
-            _ => result,
-        }?)
-    }
 }
 
 impl ProcessableCertificate for Timeout {
@@ -527,29 +455,6 @@ impl ProcessableCertificate for Timeout {
         _blobs: Vec<Blob>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         worker.handle_timeout_certificate(certificate).await
-    }
-
-    async fn dispatch_certificate<
-        A: ValidatorNode + Clone + 'static + Sync + Send,
-        S: Storage + Clone + Send + Sync + 'static,
-    >(
-        remote_node: Arc<RemoteNode<A>>,
-        _local_node: LocalNodeClient<S>,
-        certificate: TimeoutCertificate,
-        _delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let result = remote_node.handle_timeout_certificate(certificate).await;
-
-        match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                warn!(
-                    "BlobsNotFound error while handling a timeout certificate: {:?}",
-                    blob_ids
-                );
-                Err(ChainClientError::RemoteNodeError(original_err.clone()))
-            }
-            _ => Ok(result?),
-        }
     }
 }
 

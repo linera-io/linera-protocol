@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     ops::Range,
-    sync::Arc,
 };
 
 use futures::{stream, stream::TryStreamExt, Future, StreamExt};
@@ -18,14 +17,12 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{
-        ConfirmedBlockCertificate, GenericCertificate, TimeoutCertificate,
-        ValidatedBlockCertificate,
-    },
+    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
+use tracing::warn;
 
 use crate::{
     client::ChainClientError,
@@ -33,7 +30,6 @@ use crate::{
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
-    worker::ProcessableCertificate,
 };
 
 /// The amount of time we wait for additional validators to contribute to the result, as a fraction
@@ -210,38 +206,56 @@ where
 
 impl<A, S> ValidatorUpdater<A, S>
 where
-    A: ValidatorNode + Clone + 'static + Sync,
+    A: ValidatorNode + Clone + 'static,
     S: Storage + Clone + Send + Sync + 'static,
 {
-    async fn send_certificate<T: ProcessableCertificate>(
-        &mut self,
-        certificate: GenericCertificate<T>,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
-        ProcessableCertificate::dispatch_certificate(
-            Arc::new(self.remote_node.clone()),
-            self.local_node.clone(),
-            certificate,
-            delivery,
-        )
-        .await
-        .map_err(Into::into)
-    }
-
     async fn send_confirmed_certificate(
         &mut self,
         certificate: ConfirmedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        self.send_certificate(certificate, delivery).await
+        let result = self
+            .remote_node
+            .handle_optimized_confirmed_certificate(&certificate, delivery)
+            .await;
+
+        Ok(match &result {
+            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
+                self.remote_node
+                    .check_blobs_not_found(&certificate, blob_ids)?;
+
+                let blobs = self
+                    .local_node
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
+                    .await?
+                    .ok_or_else(|| original_err.clone())?;
+                self.remote_node
+                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .await
+            }
+            _ => result,
+        }?)
     }
 
     async fn send_timeout_certificate(
         &mut self,
         certificate: TimeoutCertificate,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        self.send_certificate(certificate, CrossChainMessageDelivery::default())
-            .await
+        let result = self
+            .remote_node
+            .handle_timeout_certificate(certificate)
+            .await;
+
+        match &result {
+            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
+                warn!(
+                    "BlobsNotFound error while handling a timeout certificate: {:?}",
+                    blob_ids
+                );
+                Err(ChainClientError::RemoteNodeError(original_err.clone()))
+            }
+            _ => Ok(result?),
+        }
     }
 
     async fn send_validated_certificate(
@@ -249,7 +263,27 @@ where
         certificate: ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
-        self.send_certificate(certificate, delivery).await
+        let result = self
+            .remote_node
+            .handle_optimized_validated_certificate(&certificate, delivery)
+            .await;
+
+        Ok(match &result {
+            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
+                self.remote_node
+                    .check_blobs_not_found(&certificate, blob_ids)?;
+
+                let blobs = self
+                    .local_node
+                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
+                    .await?
+                    .ok_or_else(|| original_err.clone())?;
+                self.remote_node
+                    .handle_validated_certificate(certificate, blobs)
+                    .await
+            }
+            _ => result,
+        }?)
     }
 
     async fn send_block_proposal(
