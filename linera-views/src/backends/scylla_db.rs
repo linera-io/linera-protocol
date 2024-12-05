@@ -581,9 +581,6 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     type Batch = UnorderedBatch;
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreInternalError> {
-        if batch.is_empty() {
-            return Ok(());
-        }
         let store = self.store.deref();
         let _guard = self.acquire().await;
         store.write_batch_internal(&self.root_key, batch).await

@@ -242,9 +242,6 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
-        if batch.is_empty() {
-            return Ok(());
-        }
         let Some(lru_read_values) = &self.lru_read_values else {
             return self.store.write_batch(batch).await;
         };
