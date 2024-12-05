@@ -439,7 +439,7 @@ impl StoreProcessor for ServiceStoreServer {
                 }
             }
         }
-        if batch.size() > 0 {
+        if !batch.is_empty() {
             self.write_batch(batch).await?;
         }
         let response = ReplyWriteBatchExtended {};

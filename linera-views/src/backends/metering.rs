@@ -420,7 +420,7 @@ where
         self.counter
             .write_batch_size
             .with_label_values(&[])
-            .observe(batch.size() as f64);
+            .observe(batch.len() as f64);
         self.store.write_batch(batch).await
     }
 
