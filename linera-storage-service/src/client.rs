@@ -4,6 +4,7 @@
 use std::{mem, sync::Arc};
 
 use async_lock::{Semaphore, SemaphoreGuard};
+use futures::future::join_all;
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
@@ -96,7 +97,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(value)
         } else {
-            Self::read_entries(&mut client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -161,7 +162,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
             Ok(values)
         } else {
-            Self::read_entries(&mut client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -192,7 +193,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(keys)
         } else {
-            Self::read_entries(&mut client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -227,7 +228,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                 .collect::<Vec<_>>();
             Ok(key_values)
         } else {
-            Self::read_entries(&mut client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 }
@@ -351,23 +352,40 @@ impl ServiceStoreClientInternal {
         }
     }
 
+    async fn read_single_entry(
+        &self,
+        message_index: i64,
+        index: i32,
+    ) -> Result<Vec<u8>, ServiceStoreError> {
+        let channel = self.channel.clone();
+        let query = RequestSpecificChunk {
+            message_index,
+            index,
+        };
+        let request = tonic::Request::new(query);
+        let mut client = StoreProcessorClient::new(channel);
+        let response = client.process_specific_chunk(request).await?;
+        let response = response.into_inner();
+        let ReplySpecificChunk { chunk } = response;
+        Ok(chunk)
+    }
+
     async fn read_entries<S: DeserializeOwned>(
-        client: &mut StoreProcessorClient<Channel>,
+        &self,
         message_index: i64,
         num_chunks: i32,
     ) -> Result<S, ServiceStoreError> {
-        let mut value = Vec::new();
+        let mut handles = Vec::new();
+        println!("read_entries: message_index={message_index} num_chunks={num_chunks}");
         for index in 0..num_chunks {
-            let query = RequestSpecificChunk {
-                message_index,
-                index,
-            };
-            let request = tonic::Request::new(query);
-            let response = client.process_specific_chunk(request).await?;
-            let response = response.into_inner();
-            let ReplySpecificChunk { chunk } = response;
-            value.extend(chunk);
+            let handle = self.read_single_entry(message_index, index);
+            handles.push(handle);
         }
+        let values: Vec<Vec<u8>> = join_all(handles)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()?;
+        let value = values.into_iter().flatten().collect::<Vec<_>>();
         Ok(bcs::from_bytes(&value)?)
     }
 }
