@@ -402,9 +402,6 @@ impl WritableKeyValueStore for RocksDbStoreInternal {
     const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), RocksDbStoreInternalError> {
-        if batch.is_empty() {
-            return Ok(());
-        }
         let executor = self.executor.clone();
         self.spawn_mode
             .spawn(move |x| executor.write_batch_internal(x), batch)

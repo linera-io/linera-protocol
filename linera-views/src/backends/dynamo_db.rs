@@ -35,7 +35,7 @@ use crate::metering::MeteredStore;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueStore;
 use crate::{
-    batch::{SimpleUnorderedBatch, SimplifiedBatch as _},
+    batch::SimpleUnorderedBatch,
     common::get_uleb128_size,
     journaling::{DirectWritableKeyValueStore, JournalConsistencyError, JournalingKeyValueStore},
     lru_caching::{LruCachingConfig, LruCachingStore},
@@ -930,9 +930,6 @@ impl DirectWritableKeyValueStore for DynamoDbStoreInternal {
     type Batch = SimpleUnorderedBatch;
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), DynamoDbStoreInternalError> {
-        if batch.is_empty() {
-            return Ok(());
-        }
         let mut builder = TransactionBuilder::new(&self.root_key);
         for key in batch.deletions {
             builder.insert_delete_request(key, self)?;

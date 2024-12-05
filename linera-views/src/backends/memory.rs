@@ -224,9 +224,6 @@ impl WritableKeyValueStore for MemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
-        if batch.is_empty() {
-            return Ok(());
-        }
         let mut map = self
             .map
             .write()
