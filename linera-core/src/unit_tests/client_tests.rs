@@ -458,7 +458,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder.add_root_chain(0, Amount::ZERO).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain.
@@ -520,7 +520,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder.add_root_chain(0, Amount::ZERO).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let parent = builder.add_root_chain(2, Amount::ZERO).await?;
     let new_key_pair = KeyPair::generate();
@@ -601,7 +601,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder.add_root_chain(0, Amount::ZERO).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     let new_id = ChainId::child(MessageId {
@@ -675,7 +675,7 @@ where
 {
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
     // New chains use the admin chain to verify their creation certificate.
-    builder.add_root_chain(0, Amount::ZERO).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let new_key_pair = KeyPair::generate();
     // Open the new chain. We are both regular and super owner.
