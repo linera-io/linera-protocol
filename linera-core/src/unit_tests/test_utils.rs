@@ -333,7 +333,7 @@ where
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if certificate.inner().is_validated() => None,
+            FaultType::DontProcessValidated if T::IS_VALIDATED => None,
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -382,7 +382,6 @@ where
         validator: &mut MutexGuard<'_, LocalValidator<S>>,
         blobs: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
-        let is_validated = certificate.inner().is_validated();
         let handle_certificate_result =
             Self::handle_certificate(certificate, validator, blobs).await;
         match handle_certificate_result {
@@ -391,7 +390,7 @@ where
             }
             _ => match validator.fault_type {
                 FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
-                    if is_validated =>
+                    if T::IS_VALIDATED =>
                 {
                     Err(NodeError::ClientIoError {
                         error: "refusing to confirm".to_string(),
@@ -728,11 +727,13 @@ where
         );
     }
 
-    pub async fn add_initial_chain(
+    /// Creates the root chain with the given `index`, and returns a client for it.
+    pub async fn add_root_chain(
         &mut self,
-        description: ChainDescription,
+        index: u32,
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+        let description = ChainDescription::Root(index);
         let key_pair = KeyPair::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.

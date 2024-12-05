@@ -17,12 +17,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
+    types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
-use tracing::warn;
 
 use crate::{
     client::ChainClientError,
@@ -211,7 +210,7 @@ where
 {
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: ConfirmedBlockCertificate,
+        certificate: GenericCertificate<ConfirmedBlock>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
@@ -223,12 +222,9 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
-
-                let blobs = self
-                    .local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
-                    .await?
-                    .ok_or_else(|| original_err.clone())?;
+                // The certificate is confirmed, so the blobs must be in storage.
+                let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
+                let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
                 self.remote_node
                     .handle_confirmed_certificate(certificate, blobs, delivery)
                     .await
@@ -237,30 +233,9 @@ where
         }?)
     }
 
-    async fn send_timeout_certificate(
-        &mut self,
-        certificate: TimeoutCertificate,
-    ) -> Result<Box<ChainInfo>, ChainClientError> {
-        let result = self
-            .remote_node
-            .handle_timeout_certificate(certificate)
-            .await;
-
-        match &result {
-            Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
-                warn!(
-                    "BlobsNotFound error while handling a timeout certificate: {:?}",
-                    blob_ids
-                );
-                Err(ChainClientError::RemoteNodeError(original_err.clone()))
-            }
-            _ => Ok(result?),
-        }
-    }
-
     async fn send_validated_certificate(
         &mut self,
-        certificate: ValidatedBlockCertificate,
+        certificate: GenericCertificate<ValidatedBlock>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
@@ -272,10 +247,12 @@ where
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
                     .check_blobs_not_found(&certificate, blob_ids)?;
-
+                let chain_id = certificate.inner().executed_block().block.chain_id;
+                // The certificate is for a validated block, i.e. for our locked block.
+                // Take the missing blobs from our local chain manager.
                 let blobs = self
                     .local_node
-                    .find_missing_blobs(blob_ids.clone(), certificate.inner().chain_id())
+                    .get_locked_blobs(blob_ids, chain_id)
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node
@@ -373,7 +350,9 @@ where
         }
         if let Some(cert) = manager.timeout {
             if cert.inner().chain_id == chain_id {
-                self.send_timeout_certificate(cert).await?;
+                // Timeouts are small and don't have blobs, so we can call `handle_certificate`
+                // directly.
+                self.remote_node.handle_timeout_certificate(cert).await?;
             }
         }
         Ok(())

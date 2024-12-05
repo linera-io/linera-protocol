@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use linera_base::{
     crypto::KeyPair,
     data_types::{Amount, Blob},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::ChainId,
 };
 use linera_core::test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder};
 use rand::SeedableRng as _;
@@ -22,9 +22,8 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let description = ChainDescription::Root(0);
-    let chain_id = ChainId::from(description);
-    builder.add_initial_chain(description, Amount::ONE).await?;
+    let chain_id = ChainId::root(0);
+    builder.add_root_chain(0, Amount::ONE).await?;
     let storage = builder.make_storage().await?;
     let key_pair = KeyPair::generate_from(&mut rng);
 

@@ -46,6 +46,8 @@ pub struct LocalKubernetesNetConfig {
     pub num_initial_validators: usize,
     pub num_shards: usize,
     pub binaries: BuildArg,
+    pub no_build: bool,
+    pub docker_image_name: String,
     pub policy: ResourceControlPolicy,
 }
 
@@ -62,6 +64,8 @@ pub struct LocalKubernetesNet {
     next_client_id: usize,
     tmp_dir: Arc<TempDir>,
     binaries: BuildArg,
+    no_build: bool,
+    docker_image_name: String,
     kubectl_instance: Arc<Mutex<KubectlInstance>>,
     kind_clusters: Vec<KindCluster>,
     num_initial_validators: usize,
@@ -96,6 +100,8 @@ impl SharedLocalKubernetesNetTestingConfig {
             num_initial_validators: 4,
             num_shards: 4,
             binaries,
+            no_build: false,
+            docker_image_name: String::from("linera:latest"),
             policy: ResourceControlPolicy::devnet(),
         })
     }
@@ -122,6 +128,8 @@ impl LineraNetConfig for LocalKubernetesNetConfig {
             self.network,
             self.testing_prng_seed,
             self.binaries,
+            self.no_build,
+            self.docker_image_name,
             KubectlInstance::new(Vec::new()),
             clusters,
             self.num_initial_validators,
@@ -300,10 +308,13 @@ impl LineraNet for LocalKubernetesNet {
 }
 
 impl LocalKubernetesNet {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         network: Network,
         testing_prng_seed: Option<u64>,
         binaries: BuildArg,
+        no_build: bool,
+        docker_image_name: String,
         kubectl_instance: KubectlInstance,
         kind_clusters: Vec<KindCluster>,
         num_initial_validators: usize,
@@ -315,6 +326,8 @@ impl LocalKubernetesNet {
             next_client_id: 0,
             tmp_dir: Arc::new(tempdir()?),
             binaries,
+            no_build,
+            docker_image_name,
             kubectl_instance: Arc::new(Mutex::new(kubectl_instance)),
             kind_clusters,
             num_initial_validators,
@@ -394,8 +407,12 @@ impl LocalKubernetesNet {
     async fn run(&mut self) -> Result<()> {
         let github_root = get_github_root().await?;
         // Build Docker image
-        let docker_image =
-            DockerImage::build(String::from("linera:latest"), &self.binaries, &github_root).await?;
+        let docker_image_name = if self.no_build {
+            self.docker_image_name.clone()
+        } else {
+            DockerImage::build(&self.docker_image_name, &self.binaries, &github_root).await?;
+            self.docker_image_name.clone()
+        };
 
         let base_dir = github_root
             .join("kubernetes")
@@ -412,13 +429,13 @@ impl LocalKubernetesNet {
 
         let mut validators_initialization_futures = Vec::new();
         for (i, kind_cluster) in self.kind_clusters.iter().cloned().enumerate() {
-            let docker_image_name = docker_image.name().to_string();
             let base_dir = base_dir.clone();
             let github_root = github_root.clone();
 
             let kubectl_instance = kubectl_instance_clone.clone();
             let tmp_dir_path = tmp_dir_path_clone.clone();
 
+            let docker_image_name = docker_image_name.clone();
             let future = async move {
                 let cluster_id = kind_cluster.id();
                 kind_cluster.load_docker_image(&docker_image_name).await?;

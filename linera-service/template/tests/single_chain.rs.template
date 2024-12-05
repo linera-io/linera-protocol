@@ -24,7 +24,7 @@ async fn single_chain_test() {{
         .await;
 
     let increment = 10u64;
-     chain
+    chain
         .add_block(|block| {{
             block.with_operation(application_id, Operation::Increment {{ value: increment }});
         }})

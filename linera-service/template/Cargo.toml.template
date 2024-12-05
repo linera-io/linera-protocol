@@ -10,12 +10,9 @@ futures = {{ version = "0.3 "}}
 serde = {{ version = "1.0", features = ["derive"] }}
 serde_json = {{ version = "1.0" }}
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-{linera_sdk_testing_dep}
-tokio = {{ version = "1.40", features = ["rt", "sync"] }}
-
 [dev-dependencies]
 {linera_sdk_dev_dep}
+tokio = {{ version = "1.40", features = ["rt", "sync"] }}
 
 [[bin]]
 name = "{contract_binary_name}"

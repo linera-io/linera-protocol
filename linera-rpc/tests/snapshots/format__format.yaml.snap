@@ -285,12 +285,9 @@ ChainManagerInfo:
     - round_timeout:
         OPTION:
           TYPENAME: Timestamp
-    - pending_blobs:
-        MAP:
-          KEY:
-            TYPENAME: BlobId
-          VALUE:
-            TYPENAME: BlobContent
+    - locked_blobs:
+        SEQ:
+          TYPENAME: BlobContent
 ChainOwnership:
   STRUCT:
     - super_owners:
@@ -627,6 +624,8 @@ NodeError:
     23:
       UnexpectedEntriesInBlobsNotFound: UNIT
     24:
+      EmptyBlobsNotFound: UNIT
+    25:
       ResponseHandlingError:
         STRUCT:
           - error: STR

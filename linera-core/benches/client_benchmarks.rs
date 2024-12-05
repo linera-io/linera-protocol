@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{criterion_group, criterion_main, measurement::Measurement, BatchSize, Criterion};
-use linera_base::{
-    data_types::Amount,
-    identifiers::{Account, ChainDescription},
-    time::Duration,
-};
+use linera_base::{data_types::Amount, identifiers::Account, time::Duration};
 use linera_core::{
     client,
     test_utils::{MemoryStorageBuilder, NodeProvider, StorageBuilder, TestBuilder},
@@ -40,13 +36,10 @@ where
     futures::executor::block_on(async move {
         let mut builder = TestBuilder::new(storage_builder, 4, 1).await.unwrap();
         let chain1 = builder
-            .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(10))
+            .add_root_chain(1, Amount::from_tokens(10))
             .await
             .unwrap();
-        let chain2 = builder
-            .add_initial_chain(ChainDescription::Root(2), Amount::ZERO)
-            .await
-            .unwrap();
+        let chain2 = builder.add_root_chain(2, Amount::ZERO).await.unwrap();
         (chain1, chain2)
     })
 }

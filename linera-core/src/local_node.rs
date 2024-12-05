@@ -186,47 +186,28 @@ where
         Ok((executed_block, info))
     }
 
-    /// Given a list of missing `BlobId`s and a `Certificate` for a block:
-    /// - Searches for the blob in different places of the local node: blob cache,
-    ///   chain manager's pending blobs, and blob storage.
-    /// - Returns `None` if not all blobs could be found.
-    pub async fn find_missing_blobs(
+    /// Reads blobs from storage.
+    pub async fn read_blobs_from_storage(
         &self,
-        mut missing_blob_ids: Vec<BlobId>,
+        blob_ids: &[BlobId],
+    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
+        let storage = self.storage_client();
+        Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
+    }
+
+    /// Looks for the specified blobs in the local chain manager's locked blobs.
+    /// Returns `Ok(None)` if any of the blobs is not found.
+    pub async fn get_locked_blobs(
+        &self,
+        blob_ids: &[BlobId],
         chain_id: ChainId,
     ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
-        if missing_blob_ids.is_empty() {
-            return Ok(Some(Vec::new()));
-        }
-
-        let mut chain_manager_pending_blobs = self
-            .chain_state_view(chain_id)
-            .await?
-            .manager
-            .get()
-            .pending_blobs
-            .clone();
-        let mut found_blobs = Vec::new();
-        missing_blob_ids.retain(|blob_id| {
-            if let Some(blob) = chain_manager_pending_blobs.remove(blob_id) {
-                found_blobs.push(blob);
-                false
-            } else {
-                true
-            }
-        });
-
-        let storage = self.storage_client();
-        let Some(read_blobs) = storage
-            .read_blobs(&missing_blob_ids)
-            .await?
-            .into_iter()
-            .collect::<Option<Vec<_>>>()
-        else {
-            return Ok(None);
-        };
-        found_blobs.extend(read_blobs);
-        Ok(Some(found_blobs))
+        let chain = self.chain_state_view(chain_id).await?;
+        let manager = chain.manager.get();
+        Ok(blob_ids
+            .iter()
+            .map(|blob_id| manager.locked_blobs.get(blob_id).cloned())
+            .collect())
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
