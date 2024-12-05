@@ -9,7 +9,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{
+        ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
+        ValidatedBlock,
+    },
 };
 use linera_client::{
     chain_listener::{ChainListenerConfig, ClientContext},
@@ -51,11 +54,26 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
-    async fn handle_certificate<T>(
+    async fn handle_timeout_certificate(
         &self,
-        _: GenericCertificate<T>,
+        _: GenericCertificate<Timeout>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn handle_confirmed_certificate(
+        &self,
+        _: GenericCertificate<ConfirmedBlock>,
         _: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn handle_validated_certificate(
+        &self,
+        _: GenericCertificate<ValidatedBlock>,
+        _: Vec<Blob>,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

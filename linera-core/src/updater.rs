@@ -22,7 +22,6 @@ use linera_chain::{
 use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use thiserror::Error;
-use tracing::error;
 
 use crate::{
     client::ChainClientError,
@@ -216,7 +215,7 @@ where
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
             .remote_node
-            .handle_optimized_certificate(&certificate, delivery)
+            .handle_optimized_confirmed_certificate(&certificate, delivery)
             .await;
 
         Ok(match &result {
@@ -227,7 +226,7 @@ where
                 let maybe_blobs = self.local_node.read_blobs_from_storage(blob_ids).await?;
                 let blobs = maybe_blobs.ok_or_else(|| original_err.clone())?;
                 self.remote_node
-                    .handle_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, blobs, delivery)
                     .await
             }
             _ => result,
@@ -241,7 +240,7 @@ where
     ) -> Result<Box<ChainInfo>, ChainClientError> {
         let result = self
             .remote_node
-            .handle_optimized_certificate(&certificate, delivery)
+            .handle_optimized_validated_certificate(&certificate, delivery)
             .await;
 
         Ok(match &result {
@@ -257,7 +256,7 @@ where
                     .await?
                     .ok_or_else(|| original_err.clone())?;
                 self.remote_node
-                    .handle_certificate(certificate, blobs, delivery)
+                    .handle_validated_certificate(certificate, blobs)
                     .await
             }
             _ => result,
@@ -353,9 +352,7 @@ where
             if cert.inner().chain_id == chain_id {
                 // Timeouts are small and don't have blobs, so we can call `handle_certificate`
                 // directly.
-                self.remote_node
-                    .handle_certificate(cert, Vec::new(), delivery)
-                    .await?;
+                self.remote_node.handle_timeout_certificate(cert).await?;
             }
         }
         Ok(())

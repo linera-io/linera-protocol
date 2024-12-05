@@ -14,7 +14,9 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{
+        ConfirmedBlockCertificate, LiteCertificate, TimeoutCertificate, ValidatedBlockCertificate,
+    },
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
@@ -24,8 +26,9 @@ use linera_version::VersionInfo;
 
 use super::{codec, transport::TransportProtocol};
 use crate::{
-    config::ValidatorPublicNetworkPreConfig, mass_client, HandleCertificateRequest,
-    HandleLiteCertRequest, RpcMessage,
+    config::ValidatorPublicNetworkPreConfig, mass_client, HandleConfirmedCertificateRequest,
+    HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    RpcMessage,
 };
 
 #[derive(Clone)]
@@ -97,22 +100,38 @@ impl ValidatorNode for SimpleClient {
         self.query(request.into()).await
     }
 
-    /// Processes a certificate.
-    async fn handle_certificate<T>(
+    /// Processes a validated certificate.
+    async fn handle_validated_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: ValidatedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let request = HandleValidatedCertificateRequest { certificate, blobs };
+        self.query(request.into()).await
+    }
+
+    /// Processes a confirmed certificate.
+    async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
-        let request = HandleCertificateRequest {
-            certificate: certificate.into(),
+        let request = HandleConfirmedCertificateRequest {
+            certificate,
             blobs,
             wait_for_outgoing_messages,
         };
+        self.query(request.into()).await
+    }
+
+    /// Processes a timeout certificate.
+    async fn handle_timeout_certificate(
+        &self,
+        certificate: TimeoutCertificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let request = HandleTimeoutCertificateRequest { certificate };
         self.query(request.into()).await
     }
 

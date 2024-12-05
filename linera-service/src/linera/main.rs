@@ -64,7 +64,7 @@ mod net_up_utils;
 use {
     linera_chain::types::{ConfirmedBlock, Hashed},
     linera_core::data_types::ChainInfoResponse,
-    linera_rpc::{HandleCertificateRequest, RpcMessage},
+    linera_rpc::{HandleConfirmedCertificateRequest, RpcMessage},
     std::collections::HashSet,
 };
 
@@ -787,8 +787,8 @@ impl Runnable for Job {
                 let messages = certificates
                     .iter()
                     .map(|certificate| {
-                        HandleCertificateRequest {
-                            certificate: certificate.clone().into(),
+                        HandleConfirmedCertificateRequest {
+                            certificate: certificate.clone(),
                             blobs: vec![],
                             wait_for_outgoing_messages: true,
                         }

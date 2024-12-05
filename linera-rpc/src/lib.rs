@@ -33,10 +33,23 @@ pub struct HandleLiteCertRequest<'a> {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct HandleCertificateRequest {
-    pub certificate: linera_chain::types::Certificate,
+pub struct HandleConfirmedCertificateRequest {
+    pub certificate: linera_chain::types::ConfirmedBlockCertificate,
     pub wait_for_outgoing_messages: bool,
     pub blobs: Vec<linera_base::data_types::Blob>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct HandleValidatedCertificateRequest {
+    pub certificate: linera_chain::types::ValidatedBlockCertificate,
+    pub blobs: Vec<linera_base::data_types::Blob>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct HandleTimeoutCertificateRequest {
+    pub certificate: linera_chain::types::TimeoutCertificate,
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("file_descriptor_set");

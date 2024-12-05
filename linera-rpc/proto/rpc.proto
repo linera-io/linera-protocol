@@ -22,8 +22,11 @@ service ValidatorWorker {
   // Process a certificate without value.
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
-  // Process a certificate.
-  rpc HandleCertificate(HandleCertificateRequest) returns (ChainInfoResult);
+  rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleTimeoutCertificate(HandleTimeoutCertificateRequest) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -40,8 +43,11 @@ service ValidatorNode {
   // Process a certificate without value.
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
-  // Process a certificate.
-  rpc HandleCertificate(HandleCertificateRequest) returns (ChainInfoResult);
+  rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
+
+  rpc HandleTimeoutCertificate(HandleTimeoutCertificateRequest) returns (ChainInfoResult);
 
   // Handle information queries for this chain.
   rpc HandleChainInfoQuery(ChainInfoQuery) returns (ChainInfoResult);
@@ -216,19 +222,42 @@ message LiteCertificate {
 
 // A certified statement from the committee, together with other certificates
 // required for execution.
-message HandleCertificateRequest {
+message HandleTimeoutCertificateRequest {
   // The ID of the chain (used for routing).
   ChainId chain_id = 1;
 
-  // Wait until all outgoing cross-chain messages from this certificate have
-  // been received by the target chains.
-  bool wait_for_outgoing_messages = 2;
+  // A certified statement from the committee.
+  Certificate certificate = 4;
+}
+
+// A certified statement from the committee, together with other certificates
+// required for execution.
+message HandleValidatedCertificateRequest {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 1;
+
+  // A certified statement from the committee.
+  Certificate certificate = 2;
 
   // Blobs required by this certificate
   bytes blobs = 3;
+}
+
+// A certified statement from the committee, together with other certificates
+// required for execution.
+message HandleConfirmedCertificateRequest {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 1;
 
   // A certified statement from the committee.
-  Certificate certificate = 4;
+  Certificate certificate = 2;
+
+  // Wait until all outgoing cross-chain messages from this certificate have
+  // been received by the target chains.
+  bool wait_for_outgoing_messages = 3;
+
+  // Blobs required by this certificate
+  bytes blobs = 4;
 }
 
 // A certified statement from the committee.
@@ -242,20 +271,17 @@ message Certificate {
   // Signatures on the value hash and round
   bytes signatures = 3;
 
-  // The type of the `value` field.
-  CertificateType kind = 4;
+  // The kind of certificate serialized in `value` field.
+  CertificateKind kind = 4;
 }
 
-// Type of the value within the certificate.
-enum CertificateType {
-  // A value for validated block.
-  ValidatedBlock = 0;
-
-  // A value for confirmed block.
-  ConfirmedBlock = 1;
-
-  // A value for a timeout message.
-  Timeout = 2;
+enum CertificateKind {
+  // Certificate for a timeout vote.
+  Timeout = 0;
+  // Certificate for a validated block.
+  Validated = 1;
+  // Certificate for a confirmed block.
+  Confirmed = 2;
 }
 
 message ChainId {

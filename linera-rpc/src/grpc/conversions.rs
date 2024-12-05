@@ -24,7 +24,10 @@ use thiserror::Error;
 use tonic::{Code, Status};
 
 use super::api;
-use crate::{HandleCertificateRequest, HandleLiteCertRequest};
+use crate::{
+    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
+    HandleValidatedCertificateRequest,
+};
 
 #[derive(Error, Debug)]
 pub enum GrpcProtoConversionError {
@@ -319,11 +322,11 @@ impl<'a> TryFrom<HandleLiteCertRequest<'a>> for api::LiteCertificate {
     }
 }
 
-impl TryFrom<api::HandleCertificateRequest> for HandleCertificateRequest {
+impl TryFrom<api::HandleTimeoutCertificateRequest> for HandleTimeoutCertificateRequest {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(cert_request: api::HandleCertificateRequest) -> Result<Self, Self::Error> {
-        let certificate: Certificate = cert_request
+    fn try_from(cert_request: api::HandleTimeoutCertificateRequest) -> Result<Self, Self::Error> {
+        let certificate: TimeoutCertificate = cert_request
             .certificate
             .ok_or(GrpcProtoConversionError::MissingField)?
             .try_into()?;
@@ -334,11 +337,56 @@ impl TryFrom<api::HandleCertificateRequest> for HandleCertificateRequest {
             .try_into()?;
 
         ensure!(
-            certificate.chain_id() == req_chain_id,
+            certificate.inner().chain_id() == req_chain_id,
+            GrpcProtoConversionError::InconsistentChainId
+        );
+        Ok(HandleTimeoutCertificateRequest { certificate })
+    }
+}
+
+impl TryFrom<api::HandleValidatedCertificateRequest> for HandleValidatedCertificateRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(cert_request: api::HandleValidatedCertificateRequest) -> Result<Self, Self::Error> {
+        let certificate: ValidatedBlockCertificate = cert_request
+            .certificate
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+
+        let req_chain_id: ChainId = cert_request
+            .chain_id
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+
+        ensure!(
+            certificate.inner().chain_id() == req_chain_id,
             GrpcProtoConversionError::InconsistentChainId
         );
         let blobs = bincode::deserialize(&cert_request.blobs)?;
-        Ok(HandleCertificateRequest {
+        Ok(HandleValidatedCertificateRequest { certificate, blobs })
+    }
+}
+
+impl TryFrom<api::HandleConfirmedCertificateRequest> for HandleConfirmedCertificateRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(cert_request: api::HandleConfirmedCertificateRequest) -> Result<Self, Self::Error> {
+        let certificate: ConfirmedBlockCertificate = cert_request
+            .certificate
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+
+        let req_chain_id: ChainId = cert_request
+            .chain_id
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+
+        ensure!(
+            certificate.inner().chain_id() == req_chain_id,
+            GrpcProtoConversionError::InconsistentChainId
+        );
+        let blobs = bincode::deserialize(&cert_request.blobs)?;
+        Ok(HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages: cert_request.wait_for_outgoing_messages,
             blobs,
@@ -346,12 +394,12 @@ impl TryFrom<api::HandleCertificateRequest> for HandleCertificateRequest {
     }
 }
 
-impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
+impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertificateRequest {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(request: HandleCertificateRequest) -> Result<Self, Self::Error> {
+    fn try_from(request: HandleConfirmedCertificateRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: Some(request.certificate.chain_id().into()),
+            chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             blobs: bincode::serialize(&request.blobs)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
@@ -359,63 +407,130 @@ impl TryFrom<HandleCertificateRequest> for api::HandleCertificateRequest {
     }
 }
 
-impl TryFrom<api::Certificate> for Certificate {
+impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertificateRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: HandleValidatedCertificateRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(request.certificate.inner().chain_id().into()),
+            certificate: Some(request.certificate.try_into()?),
+            blobs: bincode::serialize(&request.blobs)?,
+        })
+    }
+}
+
+impl TryFrom<HandleTimeoutCertificateRequest> for api::HandleTimeoutCertificateRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: HandleTimeoutCertificateRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(request.certificate.inner().chain_id().into()),
+            certificate: Some(request.certificate.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<api::Certificate> for TimeoutCertificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
-        let cert_type = certificate.kind;
-
         let round = bincode::deserialize(&certificate.round)?;
         let signatures = bincode::deserialize(&certificate.signatures)?;
+        let cert_type = certificate.kind;
 
-        if cert_type == api::CertificateType::ValidatedBlock as i32 {
-            let value: Hashed<ValidatedBlock> = bincode::deserialize(&certificate.value)?;
-            Ok(Certificate::Validated(ValidatedBlockCertificate::new(
-                value, round, signatures,
-            )))
-        } else if cert_type == api::CertificateType::ConfirmedBlock as i32 {
-            let value: Hashed<ConfirmedBlock> = bincode::deserialize(&certificate.value)?;
-            Ok(Certificate::Confirmed(ConfirmedBlockCertificate::new(
-                value, round, signatures,
-            )))
-        } else if cert_type == api::CertificateType::Timeout as i32 {
+        if cert_type == api::CertificateKind::Timeout as i32 {
             let value: Hashed<Timeout> = bincode::deserialize(&certificate.value)?;
-            Ok(Certificate::Timeout(TimeoutCertificate::new(
-                value, round, signatures,
-            )))
+            Ok(TimeoutCertificate::new(value, round, signatures))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
     }
 }
 
-impl TryFrom<Certificate> for api::Certificate {
+impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
-        let round = bincode::serialize(&certificate.round())?;
+    fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
+        let round = bincode::deserialize(&certificate.round)?;
+        let signatures = bincode::deserialize(&certificate.signatures)?;
+        let cert_type = certificate.kind;
+
+        if cert_type == api::CertificateKind::Validated as i32 {
+            let value: Hashed<ValidatedBlock> = bincode::deserialize(&certificate.value)?;
+            Ok(ValidatedBlockCertificate::new(value, round, signatures))
+        } else {
+            Err(GrpcProtoConversionError::InvalidCertificateType)
+        }
+    }
+}
+
+impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
+        let round = bincode::deserialize(&certificate.round)?;
+        let signatures = bincode::deserialize(&certificate.signatures)?;
+        let cert_type = certificate.kind;
+
+        if cert_type == api::CertificateKind::Confirmed as i32 {
+            let value: Hashed<ConfirmedBlock> = bincode::deserialize(&certificate.value)?;
+            Ok(ConfirmedBlockCertificate::new(value, round, signatures))
+        } else {
+            Err(GrpcProtoConversionError::InvalidCertificateType)
+        }
+    }
+}
+
+impl TryFrom<TimeoutCertificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: TimeoutCertificate) -> Result<Self, Self::Error> {
+        let round = bincode::serialize(&certificate.round)?;
         let signatures = bincode::serialize(certificate.signatures())?;
 
-        let (kind, value) = match certificate {
-            Certificate::Confirmed(confirmed) => (
-                api::CertificateType::ConfirmedBlock,
-                bincode::serialize(confirmed.value())?,
-            ),
-            Certificate::Validated(validated) => (
-                api::CertificateType::ValidatedBlock,
-                bincode::serialize(validated.value())?,
-            ),
-            Certificate::Timeout(timeout) => (
-                api::CertificateType::Timeout,
-                bincode::serialize(timeout.value())?,
-            ),
-        };
+        let value = bincode::serialize(certificate.value())?;
 
         Ok(Self {
-            kind: kind as i32,
             value,
             round,
             signatures,
+            kind: api::CertificateKind::Timeout as i32,
+        })
+    }
+}
+
+impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
+        let round = bincode::serialize(&certificate.round)?;
+        let signatures = bincode::serialize(certificate.signatures())?;
+
+        let value = bincode::serialize(certificate.value())?;
+
+        Ok(Self {
+            value,
+            round,
+            signatures,
+            kind: api::CertificateKind::Confirmed as i32,
+        })
+    }
+}
+
+impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: ValidatedBlockCertificate) -> Result<Self, Self::Error> {
+        let round = bincode::serialize(&certificate.round)?;
+        let signatures = bincode::serialize(certificate.signatures())?;
+
+        let value = bincode::serialize(certificate.value())?;
+
+        Ok(Self {
+            value,
+            round,
+            signatures,
+            kind: api::CertificateKind::Validated as i32,
         })
     }
 }
@@ -697,6 +812,61 @@ impl From<Vec<CryptoHash>> for api::CertificatesBatchRequest {
     }
 }
 
+impl TryFrom<Certificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
+        let round = bincode::serialize(&certificate.round())?;
+        let signatures = bincode::serialize(certificate.signatures())?;
+
+        let (kind, value) = match certificate {
+            Certificate::Confirmed(confirmed) => (
+                api::CertificateKind::Confirmed,
+                bincode::serialize(confirmed.value())?,
+            ),
+            Certificate::Validated(validated) => (
+                api::CertificateKind::Validated,
+                bincode::serialize(validated.value())?,
+            ),
+            Certificate::Timeout(timeout) => (
+                api::CertificateKind::Timeout,
+                bincode::serialize(timeout.value())?,
+            ),
+        };
+
+        Ok(Self {
+            value,
+            round,
+            signatures,
+            kind: kind as i32,
+        })
+    }
+}
+
+impl TryFrom<api::Certificate> for Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
+        let round = bincode::deserialize(&certificate.round)?;
+        let signatures = bincode::deserialize(&certificate.signatures)?;
+
+        let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
+            let value: Hashed<ConfirmedBlock> = bincode::deserialize(&certificate.value)?;
+            Certificate::Confirmed(ConfirmedBlockCertificate::new(value, round, signatures))
+        } else if certificate.kind == api::CertificateKind::Validated as i32 {
+            let value: Hashed<ValidatedBlock> = bincode::deserialize(&certificate.value)?;
+            Certificate::Validated(ValidatedBlockCertificate::new(value, round, signatures))
+        } else if certificate.kind == api::CertificateKind::Timeout as i32 {
+            let value: Hashed<Timeout> = bincode::deserialize(&certificate.value)?;
+            Certificate::Timeout(TimeoutCertificate::new(value, round, signatures))
+        } else {
+            return Err(GrpcProtoConversionError::InvalidCertificateType);
+        };
+
+        Ok(value)
+    }
+}
+
 impl TryFrom<Vec<Certificate>> for api::CertificatesBatchResponse {
     type Error = GrpcProtoConversionError;
 
@@ -900,13 +1070,12 @@ pub mod tests {
                 Signature::new(&Foo("test".into()), &key_pair),
             )],
         );
-        let request = HandleCertificateRequest {
-            certificate: Certificate::Validated(certificate),
+        let request = HandleValidatedCertificateRequest {
+            certificate,
             blobs: vec![],
-            wait_for_outgoing_messages: false,
         };
 
-        round_trip_check::<_, api::HandleCertificateRequest>(request);
+        round_trip_check::<_, api::HandleValidatedCertificateRequest>(request);
     }
 
     #[test]

@@ -1380,7 +1380,7 @@ where
     let blobs = vec![blob1];
     let response = builder
         .node(3)
-        .handle_certificate(locked.clone(), blobs, CrossChainMessageDelivery::Blocking)
+        .handle_validated_certificate(locked.clone(), blobs)
         .await?;
     assert_eq!(
         response.info.manager.pending.unwrap().round,
@@ -1680,11 +1680,7 @@ where
     let validated_block_certificate = *manager.requested_locked.unwrap();
     let resubmission_result = builder
         .node(2)
-        .handle_certificate(
-            validated_block_certificate,
-            vec![blob1],
-            CrossChainMessageDelivery::Blocking,
-        )
+        .handle_validated_certificate(validated_block_certificate, vec![blob1])
         .await;
     assert!(resubmission_result.is_err());
 
@@ -1752,11 +1748,7 @@ where
     let validated_block_certificate = *manager.requested_locked.unwrap();
     let resubmission_result = builder
         .node(3)
-        .handle_certificate(
-            validated_block_certificate,
-            vec![blob3],
-            CrossChainMessageDelivery::Blocking,
-        )
+        .handle_validated_certificate(validated_block_certificate, vec![blob3])
         .await;
     assert!(resubmission_result.is_err());
 
@@ -2135,11 +2127,7 @@ where
     let validated_block_certificate = *manager.requested_locked.unwrap();
     builder
         .node(0)
-        .handle_certificate(
-            validated_block_certificate,
-            Vec::new(),
-            CrossChainMessageDelivery::Blocking,
-        )
+        .handle_validated_certificate(validated_block_certificate, Vec::new())
         .await
         .unwrap();
 

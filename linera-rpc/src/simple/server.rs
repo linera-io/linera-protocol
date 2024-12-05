@@ -190,7 +190,14 @@ impl<S> MessageHandler for RunningServerState<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    #[instrument(target = "simple_server", skip_all, fields(nickname = self.server.state.nickname(), chain_id = ?message.target_chain_id()))]
+    #[instrument(
+        target = "simple_server",
+        skip_all,
+        fields(
+            nickname = self.server.state.nickname(),
+            chain_id = ?message.target_chain_id()
+        )
+    )]
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
         let reply = match message {
             RpcMessage::BlockProposal(message) => {
@@ -239,7 +246,45 @@ where
                     }
                 }
             }
-            RpcMessage::Certificate(request) => {
+            RpcMessage::TimeoutCertificate(request) => {
+                match self
+                    .server
+                    .state
+                    .handle_timeout_certificate(request.certificate)
+                    .await
+                {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions);
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle timeout certificate");
+                        Err(error.into())
+                    }
+                }
+            }
+            RpcMessage::ValidatedCertificate(request) => {
+                match self
+                    .server
+                    .state
+                    .handle_validated_certificate(request.certificate, request.blobs)
+                    .await
+                {
+                    Ok((info, actions)) => {
+                        // Cross-shard requests
+                        self.handle_network_actions(actions);
+                        // Response
+                        Ok(Some(info.into()))
+                    }
+                    Err(error) => {
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle validated certificate");
+                        Err(error.into())
+                    }
+                }
+            }
+            RpcMessage::ConfirmedCertificate(request) => {
                 let (sender, receiver) = request
                     .wait_for_outgoing_messages
                     .then(oneshot::channel)
@@ -247,7 +292,7 @@ where
                 match self
                     .server
                     .state
-                    .handle_certificate(request.certificate, request.blobs, sender)
+                    .handle_confirmed_certificate(request.certificate, request.blobs, sender)
                     .await
                 {
                     Ok((info, actions)) => {
@@ -262,7 +307,7 @@ where
                         Ok(Some(info.into()))
                     }
                     Err(error) => {
-                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle certificate");
+                        error!(nickname = self.server.state.nickname(), %error, "Failed to handle confirmed certificate");
                         Err(error.into())
                     }
                 }
