@@ -1850,7 +1850,7 @@ where
     let pub_key1 = KeyPair::generate().public();
 
     let owners = [(pub_key0, 100), (pub_key1, 100)];
-    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
     client.change_ownership(ownership).await.unwrap();
 
     let manager = client.chain_info().await.unwrap().manager;
