@@ -1,0 +1,17 @@
+{
+    "name": "@linera/client",
+    "version": "1.0.0",
+    "description": "",
+    "main": "pkg/linera_web.js",
+    "types": "pkg/linera_web.d.ts",
+    "scripts": {
+        "install": "true",
+        "build": "bash build.bash",
+        "prepare": "pnpm build",
+        "lint": "cargo fmt --check && cargo clippy -- -W clippy::pedantic",
+        "ci": "pnpm lint"
+    },
+    "keywords": [],
+    "author": "Linera <contact@linera.io>",
+    "license": "Apache-2.0"
+}

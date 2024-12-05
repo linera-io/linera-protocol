@@ -1,0 +1,84 @@
+[package]
+name = "linera-web"
+description = "The Linera Web client"
+version = "0.1.0"
+authors = ["Linera <contact@linera.io>"]
+edition = "2021"
+repository = "https://github.com/linera-io/linera-web/"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow = "1.0.82"
+bincode = "1.3.3"
+chrono = "0.4.38"
+console_error_panic_hook = "0.1.6"
+console_log = "1.0.0"
+futures = "0.3.30"
+js-sys = "0.3"
+log = "0.4.21"
+nonzero_lit = "0.1.2"
+rand = "0.8.5"
+serde = "=1.0.205"
+serde-reflection = "0.4.0"
+serde-wasm-bindgen = "0.6.5"
+serde_json = "1.0.116"
+serde_yaml = "0.9.34"
+tokio = "1.40.0"
+tracing = "0.1.40"
+wasm-bindgen = "0.2.95"
+wasm-bindgen-futures = "0.4"
+
+[dependencies.linera-base]
+path = "../linera-protocol/linera-base"
+features = ["web"]
+
+[dependencies.linera-chain]
+path = "../linera-protocol/linera-chain"
+features = ["web"]
+
+[dependencies.linera-client]
+path = "../linera-protocol/linera-client"
+default-features = false
+features = ["web", "wasmer", "indexed-db"]
+
+[dependencies.linera-core]
+path = "../linera-protocol/linera-core"
+features = ["web", "wasmer"]
+
+[dependencies.linera-execution]
+path = "../linera-protocol/linera-execution"
+features = ["web", "wasmer", "test"]
+
+[dependencies.linera-rpc]
+path = "../linera-protocol/linera-rpc"
+features = ["web"]
+
+[dependencies.linera-storage]
+path = "../linera-protocol/linera-storage"
+features = ["web", "wasmer"]
+
+[dependencies.linera-views]
+path = "../linera-protocol/linera-views"
+features = ["web", "indexeddb"]
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "console",
+    "Window",
+]
+
+[dependencies.getrandom]
+version = "*"
+features = ["js"]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.43"
+schemars = "*"
+
+[patch.crates-io.wasm_thread]
+git = "https://github.com/Twey/wasm_thread"
+branch = "post-message"
