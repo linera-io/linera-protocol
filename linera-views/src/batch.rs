@@ -186,7 +186,7 @@ impl Batch {
     }
 
     /// The total size of the batch
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.operations
             .iter()
             .map(|operation| match operation {
@@ -195,6 +195,11 @@ impl Batch {
                 WriteOperation::DeletePrefix { key_prefix } => key_prefix.len(),
             })
             .sum()
+    }
+
+    /// Whether the batch is empty or not
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
     }
 
     /// Returns the number of operations in this [`Batch`].
