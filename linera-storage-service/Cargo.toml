@@ -26,6 +26,7 @@ anyhow.workspace = true
 async-lock.workspace = true
 bcs.workspace = true
 clap.workspace = true
+futures.workspace = true
 linera-base.workspace = true
 linera-version.workspace = true
 linera-views.workspace = true
