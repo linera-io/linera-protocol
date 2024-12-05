@@ -1258,14 +1258,11 @@ where
     let pub_key1_a = client1_a.public_key().await.unwrap();
     let key_pair1_b = KeyPair::generate();
     let pub_key1_b = key_pair1_b.public();
-    let owner_change_op1 = SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
-        owners: vec![(pub_key1_a, 50), (pub_key1_b, 50)],
-        multi_leader_rounds: 10,
-        timeout_config: TimeoutConfig::default(),
-    }
-    .into();
-    client1_a.execute_operation(owner_change_op1).await.unwrap();
+
+    let owners = [(pub_key1_a, 50), (pub_key1_b, 50)];
+    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    client1_a.change_ownership(ownership).await?;
+
     let client1_b = builder
         .make_client(
             chain_id1,
@@ -1280,14 +1277,11 @@ where
     let pub_key2_a = client2_a.public_key().await.unwrap();
     let key_pair2_b = KeyPair::generate();
     let pub_key2_b = key_pair2_b.public();
-    let owner_change_op2 = SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
-        owners: vec![(pub_key2_a, 50), (pub_key2_b, 50)],
-        multi_leader_rounds: 10,
-        timeout_config: TimeoutConfig::default(),
-    }
-    .into();
-    client2_a.execute_operation(owner_change_op2).await.unwrap();
+
+    let owners = [(pub_key2_a, 50), (pub_key2_b, 50)];
+    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    client2_a.change_ownership(ownership).await.unwrap();
+
     let client2_b = builder
         .make_client(
             chain_id2,
@@ -1855,14 +1849,10 @@ where
     let pub_key0 = client.public_key().await.unwrap();
     let pub_key1 = KeyPair::generate().public();
 
-    let owner_change_op = SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: 0,
-        timeout_config: TimeoutConfig::default(),
-    }
-    .into();
-    client.execute_operation(owner_change_op).await.unwrap();
+    let owners = [(pub_key0, 100), (pub_key1, 100)];
+    let ownership = ChainOwnership::multiple(owners, 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await.unwrap();
+
     let manager = client.chain_info().await.unwrap().manager;
 
     // The round has not timed out yet, so validators will not sign a timeout certificate.
@@ -1973,17 +1963,15 @@ where
     let pub_key0 = client0.public_key().await.unwrap();
     let key_pair1 = KeyPair::generate();
     let pub_key1 = key_pair1.public();
-    let owner_change_op = SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: 10,
-        timeout_config: TimeoutConfig {
-            fast_round_duration: Some(TimeDelta::from_secs(5)),
-            ..TimeoutConfig::default()
-        },
-    }
-    .into();
-    client0.execute_operation(owner_change_op).await.unwrap();
+
+    let owners = [(pub_key0, 100), (pub_key1, 100)];
+    let timeout_config = TimeoutConfig {
+        fast_round_duration: Some(TimeDelta::from_secs(5)),
+        ..TimeoutConfig::default()
+    };
+    let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
+    client0.change_ownership(ownership).await.unwrap();
+
     let client1 = builder
         .make_client(
             chain_id,
@@ -2111,17 +2099,14 @@ where
     let pub_key0 = client0.public_key().await.unwrap();
     let key_pair1 = KeyPair::generate();
     let pub_key1 = key_pair1.public();
-    let owner_change_op = SystemOperation::ChangeOwnership {
-        super_owners: Vec::new(),
-        owners: vec![(pub_key0, 100), (pub_key1, 100)],
-        multi_leader_rounds: 10,
-        timeout_config: TimeoutConfig {
-            fast_round_duration: Some(TimeDelta::from_secs(5)),
-            ..TimeoutConfig::default()
-        },
-    }
-    .into();
-    client0.execute_operation(owner_change_op).await.unwrap();
+
+    let owners = [(pub_key0, 100), (pub_key1, 100)];
+    let timeout_config = TimeoutConfig {
+        fast_round_duration: Some(TimeDelta::from_secs(5)),
+        ..TimeoutConfig::default()
+    };
+    let ownership = ChainOwnership::multiple(owners, 10, timeout_config);
+    client0.change_ownership(ownership).await.unwrap();
     let client1 = builder
         .make_client(
             chain_id,
@@ -2285,13 +2270,8 @@ where
     // Configure the clients as super owners, so they make fast blocks by default.
     for client in [&client1, &client2, &client3] {
         let pub_key = client.public_key().await?;
-        let owner_change_op = Operation::System(SystemOperation::ChangeOwnership {
-            super_owners: vec![pub_key],
-            owners: vec![],
-            multi_leader_rounds: 10,
-            timeout_config: TimeoutConfig::default(),
-        });
-        client.execute_operation(owner_change_op.clone()).await?;
+        let ownership = ChainOwnership::single_super(pub_key);
+        client.change_ownership(ownership).await.unwrap();
     }
 
     // Take one validator down
