@@ -10,7 +10,7 @@ use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, BlockHeight, TimeDelta, Timestamp},
-    identifiers::{ChainDescription, ChainId},
+    identifiers::ChainId,
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
@@ -114,11 +114,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1).await?;
-    let description0 = ChainDescription::Root(0);
-    let description1 = ChainDescription::Root(1);
-    let chain_id0 = ChainId::from(description0);
-    let client0 = builder.add_initial_chain(description0, Amount::ONE).await?;
-    let client1 = builder.add_initial_chain(description1, Amount::ONE).await?;
+    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
+    let chain_id0 = client0.chain_id();
+    let client1 = builder.add_root_chain(1, Amount::ONE).await?;
 
     // Start a chain listener for chain 0 with a new key.
     let genesis_config = make_genesis_config(&builder);
