@@ -1104,14 +1104,12 @@ pub mod tests {
     #[test]
     pub fn test_block_proposal() {
         let key_pair = KeyPair::generate();
+        let outcome = BlockExecutionOutcome {
+            state_hash: CryptoHash::new(&Foo("validated".into())),
+            ..BlockExecutionOutcome::default()
+        };
         let cert = ValidatedBlockCertificate::new(
-            Hashed::new(ValidatedBlock::new(
-                BlockExecutionOutcome {
-                    state_hash: CryptoHash::new(&Foo("validated".into())),
-                    ..BlockExecutionOutcome::default()
-                }
-                .with(get_block()),
-            )),
+            Hashed::new(ValidatedBlock::new(outcome.clone().with(get_block()))),
             Round::SingleLeader(2),
             vec![(
                 ValidatorName::from(key_pair.public()),
@@ -1124,7 +1122,7 @@ pub mod tests {
             content: ProposalContent {
                 block: get_block(),
                 round: Round::SingleLeader(4),
-                forced_oracle_responses: Some(Vec::new()),
+                outcome: Some(outcome),
             },
             owner: Owner::from(KeyPair::generate().public()),
             signature: Signature::new(&Foo("test".into()), &KeyPair::generate()),

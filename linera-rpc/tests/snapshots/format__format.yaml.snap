@@ -719,11 +719,9 @@ ProposalContent:
         TYPENAME: Block
     - round:
         TYPENAME: Round
-    - forced_oracle_responses:
+    - outcome:
         OPTION:
-          SEQ:
-            SEQ:
-              TYPENAME: OracleResponse
+          TYPENAME: BlockExecutionOutcome
 PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

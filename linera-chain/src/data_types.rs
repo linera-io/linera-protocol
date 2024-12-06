@@ -743,10 +743,9 @@ pub struct ProposalContent {
     pub block: Block,
     /// The consensus round in which this proposal is made.
     pub round: Round,
-    /// If this is a retry from an earlier round, the oracle responses from when the block was
-    /// first validated. These are reused so the execution outcome remains the same.
+    /// If this is a retry from an earlier round, the execution outcome.
     #[debug(skip_if = Option::is_none)]
-    pub forced_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
+    pub outcome: Option<BlockExecutionOutcome>,
 }
 
 impl BlockProposal {
@@ -754,7 +753,7 @@ impl BlockProposal {
         let content = ProposalContent {
             round,
             block,
-            forced_oracle_responses: None,
+            outcome: None,
         };
         let signature = Signature::new(&content, secret);
         Self {
@@ -777,7 +776,7 @@ impl BlockProposal {
         let content = ProposalContent {
             block: executed_block.block,
             round,
-            forced_oracle_responses: Some(executed_block.outcome.oracle_responses),
+            outcome: Some(executed_block.outcome),
         };
         let signature = Signature::new(&content, secret);
         Self {

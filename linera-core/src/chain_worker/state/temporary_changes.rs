@@ -156,7 +156,7 @@ where
                 ProposalContent {
                     block,
                     round,
-                    forced_oracle_responses,
+                    outcome,
                 },
             owner,
             blobs,
@@ -164,10 +164,10 @@ where
             signature: _,
         } = proposal;
         ensure!(
-            validated_block_certificate.is_some() == forced_oracle_responses.is_some(),
+            validated_block_certificate.is_some() == outcome.is_some(),
             WorkerError::InvalidBlockProposal(
                 "Must contain a validation certificate if and only if \
-                 oracle responses are forced from a previous round"
+                 it contains the execution outcome from a previous round"
                     .to_string()
             )
         );
@@ -226,12 +226,11 @@ where
         );
         self.0.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.0.storage.clock().current_time();
-        let outcome = Box::pin(self.0.chain.execute_block(
-            block,
-            local_time,
-            forced_oracle_responses.clone(),
-        ))
-        .await?;
+        let outcome = if let Some(outcome) = outcome {
+            outcome.clone()
+        } else {
+            Box::pin(self.0.chain.execute_block(block, local_time, None)).await?
+        };
 
         let executed_block = outcome.with(block.clone());
         let required_blobs = self
