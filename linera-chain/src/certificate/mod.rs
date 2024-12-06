@@ -88,10 +88,11 @@ impl Certificate {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[repr(u8)]
 pub enum CertificateKind {
-    Validated,
-    Confirmed,
-    Timeout,
+    Timeout = 0,
+    Validated = 1,
+    Confirmed = 2,
 }
 
 pub trait CertificateValueT: Clone {

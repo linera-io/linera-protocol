@@ -163,11 +163,11 @@ Certificate:
 CertificateKind:
   ENUM:
     0:
-      Validated: UNIT
-    1:
-      Confirmed: UNIT
-    2:
       Timeout: UNIT
+    1:
+      Validated: UNIT
+    2:
+      Confirmed: UNIT
 ChainAndHeight:
   STRUCT:
     - chain_id:
