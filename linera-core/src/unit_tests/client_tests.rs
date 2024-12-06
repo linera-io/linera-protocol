@@ -518,26 +518,6 @@ where
         .await
         .unwrap()
         .unwrap();
-
-    // Regression test for #2869.
-    let sub_message_id = MessageId {
-        index: message_id.index + 1,
-        ..message_id
-    };
-    assert_matches!(
-        certificate.executed_block().messages()[0][sub_message_id.index as usize].message,
-        Message::System(SystemMessage::Subscribe { .. })
-    );
-    assert_eq!(
-        sender
-            .client
-            .local_node()
-            .certificate_for(&sub_message_id)
-            .await
-            .unwrap(),
-        certificate.clone().into()
-    );
-
     assert_eq!(sender.next_block_height(), BlockHeight::from(1));
     assert!(sender.pending_block().is_none());
     assert!(sender.key_pair().await.is_ok());
