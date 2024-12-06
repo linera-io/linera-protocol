@@ -397,7 +397,7 @@ where
     ) -> Result<Either<ConfirmedBlockCertificate, ValidatedBlockCertificate>, WorkerError> {
         if let Some(executed_block) = self
             .recent_executed_block_cache
-            .get(&certificate.value.executed_block_hash)
+            .get(&certificate.value.value_hash)
             .await
         {
             match certificate.value.kind {
@@ -802,7 +802,7 @@ where
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in handle_certificate's span.
-    #[instrument(skip_all, fields(hash = %certificate.value.executed_block_hash))]
+    #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
     pub async fn handle_lite_certificate<'a>(
         &self,
         certificate: LiteCertificate<'a>,

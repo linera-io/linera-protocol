@@ -306,7 +306,7 @@ impl<'a> TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'a> {
         };
 
         let value = LiteValue {
-            executed_block_hash: CryptoHash::try_from(certificate.hash.as_slice())?,
+            value_hash: CryptoHash::try_from(certificate.hash.as_slice())?,
             chain_id: try_proto_convert(certificate.chain_id)?,
             kind,
         };
@@ -324,12 +324,7 @@ impl<'a> TryFrom<HandleLiteCertRequest<'a>> for api::LiteCertificate {
 
     fn try_from(request: HandleLiteCertRequest) -> Result<Self, Self::Error> {
         Ok(Self {
-            hash: request
-                .certificate
-                .value
-                .executed_block_hash
-                .as_bytes()
-                .to_vec(),
+            hash: request.certificate.value.value_hash.as_bytes().to_vec(),
             round: bincode::serialize(&request.certificate.round)?,
             chain_id: Some(request.certificate.value.chain_id.into()),
             signatures: bincode::serialize(&request.certificate.signatures)?,
@@ -1054,7 +1049,7 @@ pub mod tests {
         let key_pair = KeyPair::generate();
         let certificate = LiteCertificate {
             value: LiteValue {
-                executed_block_hash: CryptoHash::new(&Foo("value".into())),
+                value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
                 kind: CertificateKind::Validated,
             },
