@@ -562,7 +562,7 @@ where
         make_certificate(&committee, &worker, value)
     };
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
 
     {
@@ -1303,7 +1303,7 @@ where
     .await;
     assert_matches!(
         worker
-            .fully_handle_certificate(certificate, vec![])
+            .fully_handle_certificate_with_notifications(certificate, vec![], &())
             .await,
         Err(WorkerError::ChainError(error)) if matches!(*error, ChainError::InactiveChain {..})
     );
@@ -1381,7 +1381,7 @@ where
     ));
     let certificate = make_certificate(&committee, &worker, value);
     let info = worker
-        .fully_handle_certificate(certificate, vec![])
+        .fully_handle_certificate_with_notifications(certificate, vec![], &())
         .await?
         .info;
     assert_eq!(info.next_block_height, BlockHeight::from(1));
@@ -1427,7 +1427,9 @@ where
     // This fails because `make_simple_transfer_certificate` uses `sender_key_pair.public()` to
     // compute the hash of the execution state.
     assert_matches!(
-        worker.fully_handle_certificate(certificate, vec![]).await,
+        worker
+            .fully_handle_certificate_with_notifications(certificate, vec![], &())
+            .await,
         Err(WorkerError::IncorrectOutcome { .. })
     );
     Ok(())
@@ -1473,9 +1475,11 @@ where
     .await;
     // Replays are ignored.
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
-    worker.fully_handle_certificate(certificate, vec![]).await?;
+    worker
+        .fully_handle_certificate_with_notifications(certificate, vec![], &())
+        .await?;
     Ok(())
 }
 
@@ -1532,7 +1536,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1622,7 +1626,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
     let new_sender_chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(new_sender_chain.is_active());
@@ -1678,7 +1682,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
     let chain = worker.chain_state_view(ChainId::root(1)).await?;
     assert!(chain.is_active());
@@ -1949,7 +1953,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -1992,7 +1996,7 @@ where
     )
     .await;
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
 
     assert_eq!(
@@ -2075,7 +2079,7 @@ where
     .await;
 
     let info = worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?
         .info;
     assert_eq!(ChainId::root(1), info.chain_id);
@@ -2146,7 +2150,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate00.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate00.clone(), vec![], &())
         .await?;
 
     let certificate01 = make_transfer_certificate(
@@ -2180,7 +2184,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate01.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate01.clone(), vec![], &())
         .await?;
 
     {
@@ -2206,7 +2210,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
         .await?;
 
     let certificate2 = make_transfer_certificate(
@@ -2225,7 +2229,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate2.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate2.clone(), vec![], &())
         .await?;
 
     // Reject the first transfer and try to use the money of the second one.
@@ -2278,7 +2282,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate.clone(), vec![], &())
         .await?;
 
     {
@@ -2319,7 +2323,7 @@ where
     .await;
 
     worker
-        .fully_handle_certificate(certificate3.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate3.clone(), vec![], &())
         .await?;
 
     {
@@ -2423,7 +2427,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
         .await?;
     {
         let admin_chain = worker.chain_state_view(admin_id).await?;
@@ -2485,7 +2489,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
         .await?;
 
     {
@@ -2637,7 +2641,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate(certificate3, vec![])
+        .fully_handle_certificate_with_notifications(certificate3, vec![], &())
         .await?;
     {
         let user_chain = worker.chain_state_view(user_id).await?;
@@ -2776,12 +2780,12 @@ where
         )),
     );
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
         .await?;
 
     // Try to execute the transfer.
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
         .await?;
 
     // The transfer was started..
@@ -2913,12 +2917,12 @@ where
         )),
     );
     worker
-        .fully_handle_certificate(certificate1.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate1.clone(), vec![], &())
         .await?;
 
     // Try to execute the transfer from the user chain to the admin chain.
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
         .await?;
 
     {
@@ -2981,7 +2985,7 @@ where
         )),
     );
     worker
-        .fully_handle_certificate(certificate2.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate2.clone(), vec![], &())
         .await?;
 
     {
@@ -2997,7 +3001,7 @@ where
     // Try again to execute the transfer from the user chain to the admin chain.
     // This time, the epoch verification should be overruled.
     worker
-        .fully_handle_certificate(certificate0.clone(), vec![])
+        .fully_handle_certificate_with_notifications(certificate0.clone(), vec![], &())
         .await?;
 
     {
@@ -3261,7 +3265,7 @@ where
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate(certificate0, vec![])
+        .fully_handle_certificate_with_notifications(certificate0, vec![], &())
         .await?;
 
     // The leader sequence is pseudorandom but deterministic. The first leader is owner 1.
@@ -3467,7 +3471,7 @@ where
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate(certificate0, vec![])
+        .fully_handle_certificate_with_notifications(certificate0, vec![], &())
         .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
@@ -3555,7 +3559,7 @@ where
     let value0 = Hashed::new(ConfirmedBlock::new(executed_block0));
     let certificate0 = make_certificate(&committee, &worker, value0.clone());
     let response = worker
-        .fully_handle_certificate(certificate0, vec![])
+        .fully_handle_certificate_with_notifications(certificate0, vec![], &())
         .await?;
 
     // The first round is the fast-block round, and owner 0 is a super owner.
@@ -3665,7 +3669,9 @@ where
     let (executed_block, _) = worker.stage_block_execution(block).await?;
     let value = Hashed::new(ConfirmedBlock::new(executed_block));
     let certificate = make_certificate(&committee, &worker, value);
-    worker.fully_handle_certificate(certificate, vec![]).await?;
+    worker
+        .fully_handle_certificate_with_notifications(certificate, vec![], &())
+        .await?;
 
     // The message only just arrived: No fallback mode.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;
@@ -3680,7 +3686,7 @@ where
     assert_eq!(vote.value.executed_block_hash, value.hash());
     assert_eq!(vote.round, round);
     let certificate = make_certificate_with_round(&committee, &worker, value, round);
-    worker.fully_handle_certificate(certificate, vec![]).await?;
+    worker.handle_timeout_certificate(certificate).await?;
 
     // Now we are in fallback mode, and the validator is the leader.
     let (response, _) = worker.handle_chain_info_query(query.clone()).await?;

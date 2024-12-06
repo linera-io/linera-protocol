@@ -323,7 +323,9 @@ where
             )))),
             BlockProposal(_)
             | LiteCertificate(_)
-            | Certificate(_)
+            | TimeoutCertificate(_)
+            | ConfirmedCertificate(_)
+            | ValidatedCertificate(_)
             | ChainInfoQuery(_)
             | CrossChainRequest(_)
             | Vote(_)

@@ -1727,23 +1727,12 @@ where
         }
         if let Some(cert) = info.manager.requested_locked {
             let hash = cert.hash();
-            let mut blobs = vec![];
-            while let Err(original_err) = self.client.handle_certificate(*cert.clone(), blobs).await
-            {
-                if let LocalNodeError::BlobsNotFound(blob_ids) = &original_err {
-                    if let Some(new_blobs) = remote_node
-                        .find_missing_blobs(blob_ids.clone(), chain_id)
-                        .await?
-                    {
-                        blobs = new_blobs;
-                        continue;
-                    }
-                }
+            let blobs = info.manager.locked_blobs.clone();
+            if let Err(err) = self.client.handle_certificate(*cert.clone(), blobs).await {
                 warn!(
-                    "Skipping certificate {} from validator {}: {}",
-                    hash, remote_node.name, original_err
+                    "Skipping certificate {hash} from validator {}: {err}",
+                    remote_node.name
                 );
-                break;
             }
         }
         Ok(())
@@ -1896,13 +1885,23 @@ where
                 chain_state_view
                     .manager
                     .get()
-                    .pending_blobs
+                    .locked_blobs
                     .get(&blob_id)
                     .cloned()
             };
 
             if let Some(blob) = maybe_blob {
                 blobs.push(blob);
+                continue;
+            }
+
+            if let Some(blob) = self
+                .client
+                .local_node
+                .read_blobs_from_storage(&[blob_id])
+                .await?
+            {
+                blobs.extend(blob);
                 continue;
             }
 
@@ -2037,13 +2036,14 @@ where
         let (executed_block, _) = self
             .stage_block_execution_and_discard_failing_messages(block)
             .await?;
+        let blobs = self
+            .read_local_blobs(executed_block.required_blob_ids())
+            .await?;
         let block = &executed_block.block;
-        let blobs = self.read_local_blobs(block.published_blob_ids()).await?;
         let committee = self.local_committee().await?;
         let max_size = committee.policy().maximum_block_proposal_size;
         block.check_proposal_size(max_size, &blobs)?;
         self.state_mut().set_pending_block(block.clone());
-
         Ok(Hashed::new(ConfirmedBlock::new(executed_block)))
     }
 

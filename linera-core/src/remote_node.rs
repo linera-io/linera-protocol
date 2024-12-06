@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use custom_debug_derive::Debug;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -14,8 +14,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        Certificate, CertificateValueT, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate,
+        CertificateValueT, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
+        TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
 use linera_execution::committee::ValidatorName;
@@ -25,7 +25,6 @@ use tracing::{instrument, warn};
 use crate::{
     data_types::{BlockHeightRange, ChainInfo, ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
-    worker::ProcessableCertificate,
 };
 
 /// A validator node together with the validator's name.
@@ -57,19 +56,38 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_certificate<T: ProcessableCertificate>(
+    pub(crate) async fn handle_timeout_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: TimeoutCertificate,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificate.inner().chain_id();
+        let response = self.node.handle_timeout_certificate(certificate).await?;
+        self.check_and_return_info(response, chain_id)
+    }
+
+    pub(crate) async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
         let response = self
             .node
-            .handle_certificate(certificate, blobs, delivery)
+            .handle_confirmed_certificate(certificate, blobs, delivery)
+            .await?;
+        self.check_and_return_info(response, chain_id)
+    }
+
+    pub(crate) async fn handle_validated_certificate(
+        &self,
+        certificate: ValidatedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificate.inner().chain_id();
+        let response = self
+            .node
+            .handle_validated_certificate(certificate, blobs)
             .await?;
         self.check_and_return_info(response, chain_id)
     }
@@ -88,14 +106,11 @@ impl<N: ValidatorNode> RemoteNode<N> {
         self.check_and_return_info(response, chain_id)
     }
 
-    pub(crate) async fn handle_optimized_certificate<T: ProcessableCertificate>(
+    pub(crate) async fn handle_optimized_validated_certificate(
         &mut self,
-        certificate: &GenericCertificate<T>,
+        certificate: &ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<Box<ChainInfo>, NodeError> {
         if certificate.is_signed_by(&self.name) {
             let result = self
                 .handle_lite_certificate(certificate.lite_certificate(), delivery)
@@ -110,7 +125,30 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 _ => return result,
             }
         }
-        self.handle_certificate(certificate.clone(), vec![], delivery)
+        self.handle_validated_certificate(certificate.clone(), vec![])
+            .await
+    }
+
+    pub(crate) async fn handle_optimized_confirmed_certificate(
+        &mut self,
+        certificate: &ConfirmedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        if certificate.is_signed_by(&self.name) {
+            let result = self
+                .handle_lite_certificate(certificate.lite_certificate(), delivery)
+                .await;
+            match result {
+                Err(NodeError::MissingCertificateValue) => {
+                    warn!(
+                        "Validator {} forgot a certificate value that they signed before",
+                        self.name
+                    );
+                }
+                _ => return result,
+            }
+        }
+        self.handle_confirmed_certificate(certificate.clone(), vec![], delivery)
             .await
     }
 
@@ -215,44 +253,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
-    /// Downloads the blobs from the specified validator and returns them, including blobs that
-    /// are still pending in the validator's chain manager. Returns `None` if not all of them
-    /// could be found.
-    pub(crate) async fn find_missing_blobs(
-        &self,
-        blob_ids: Vec<BlobId>,
-        chain_id: ChainId,
-    ) -> Result<Option<Vec<Blob>>, NodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let info = match self.handle_chain_info_query(query).await {
-            Ok(info) => Some(info),
-            Err(err) => {
-                warn!("Got error from validator {}: {}", self.name, err);
-                return Ok(None);
-            }
-        };
-
-        let mut missing_blobs = blob_ids;
-        let mut found_blobs = if let Some(info) = info {
-            let new_found_blobs = missing_blobs
-                .iter()
-                .filter_map(|blob_id| info.manager.pending_blobs.get(blob_id))
-                .map(|blob| (blob.id(), blob.clone()))
-                .collect::<HashMap<_, _>>();
-            missing_blobs.retain(|blob_id| !new_found_blobs.contains_key(blob_id));
-            new_found_blobs.into_values().collect()
-        } else {
-            Vec::new()
-        };
-
-        if let Some(blobs) = self.try_download_blobs(&missing_blobs).await {
-            found_blobs.extend(blobs);
-            Ok(Some(found_blobs))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// Returns the list of certificate hashes on the given chain in the given range of heights.
     /// Returns an error if the number of hashes does not match the size of the range.
     #[instrument(level = "trace")]
@@ -327,23 +327,18 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: &GenericCertificate<T>,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
-        // Find the missing blobs locally and retry.
+        ensure!(!blob_ids.is_empty(), NodeError::EmptyBlobsNotFound);
         let required = certificate.inner().required_blob_ids();
+        let name = &self.name;
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
-                warn!(
-                    "validator {} requested blob {blob_id:?} but it is not required",
-                    self.name
-                );
+                warn!("validator {name} requested blob {blob_id:?} but it is not required");
                 return Err(NodeError::UnexpectedEntriesInBlobsNotFound);
             }
         }
         let unique_missing_blob_ids = blob_ids.iter().cloned().collect::<HashSet<_>>();
         if blob_ids.len() > unique_missing_blob_ids.len() {
-            warn!(
-                "blobs requested by validator {} contain duplicates",
-                self.name
-            );
+            warn!("blobs requested by validator {name} contain duplicates");
             return Err(NodeError::DuplicatesInBlobsNotFound);
         }
         Ok(())

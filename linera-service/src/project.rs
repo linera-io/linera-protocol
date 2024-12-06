@@ -160,7 +160,6 @@ impl Project {
             contract_binary_name = contract_binary_name,
             service_binary_name = service_binary_name,
             linera_sdk_dep = linera_sdk_dep,
-            linera_sdk_testing_dep = linera_sdk_dev_dep,
             linera_sdk_dev_dep = linera_sdk_dev_dep,
         );
         Self::write_string_to_file(&toml_path, &toml_contents)
@@ -250,7 +249,7 @@ impl Project {
             linera_sdk_path.display()
         );
         let linera_sdk_dev_dep = format!(
-            "linera-sdk = {{ path = \"{}\", features = [\"test\"] }}",
+            "linera-sdk = {{ path = \"{}\", features = [\"test\", \"wasmer\"] }}",
             linera_sdk_path.display()
         );
         (linera_sdk_dep, linera_sdk_dev_dep)

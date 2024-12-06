@@ -28,13 +28,13 @@ use linera_rpc::{
     },
     grpc::{
         api::{
+            self,
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
-            HandleCertificateRequest, LiteCertificate, Notification, SubscriptionRequest,
-            VersionInfo,
+            LiteCertificate, Notification, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -366,14 +366,38 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
-    async fn handle_certificate(
+    async fn handle_confirmed_certificate(
         &self,
-        request: Request<HandleCertificateRequest>,
+        request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let (mut client, inner) = self.worker_client(request).await?;
         Self::log_and_return_proxy_request_outcome(
-            client.handle_certificate(inner).await,
-            "handle_certificate",
+            client.handle_confirmed_certificate(inner).await,
+            "handle_confirmed_certificate",
+        )
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn handle_validated_certificate(
+        &self,
+        request: Request<api::HandleValidatedCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let (mut client, inner) = self.worker_client(request).await?;
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_validated_certificate(inner).await,
+            "handle_validated_certificate",
+        )
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn handle_timeout_certificate(
+        &self,
+        request: Request<api::HandleTimeoutCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let (mut client, inner) = self.worker_client(request).await?;
+        Self::log_and_return_proxy_request_outcome(
+            client.handle_timeout_certificate(inner).await,
+            "handle_timeout_certificate",
         )
     }
 

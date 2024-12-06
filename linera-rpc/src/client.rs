@@ -8,12 +8,13 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Certificate, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{
+        ConfirmedBlockCertificate, LiteCertificate, TimeoutCertificate, ValidatedBlockCertificate,
+    },
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
-    worker::ProcessableCertificate,
 };
 
 use crate::grpc::GrpcClient;
@@ -76,26 +77,58 @@ impl ValidatorNode for Client {
         }
     }
 
-    async fn handle_certificate<T: ProcessableCertificate>(
+    async fn handle_timeout_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: TimeoutCertificate,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.handle_timeout_certificate(certificate).await,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client.handle_timeout_certificate(certificate).await
+            }
+        }
+    }
+
+    async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
         blobs: Vec<Blob>,
         delivery: CrossChainMessageDelivery,
-    ) -> Result<ChainInfoResponse, NodeError>
-    where
-        Certificate: From<GenericCertificate<T>>,
-    {
+    ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
                 grpc_client
-                    .handle_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, blobs, delivery)
                     .await
             }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => {
                 simple_client
-                    .handle_certificate(certificate, blobs, delivery)
+                    .handle_confirmed_certificate(certificate, blobs, delivery)
+                    .await
+            }
+        }
+    }
+
+    async fn handle_validated_certificate(
+        &self,
+        certificate: ValidatedBlockCertificate,
+        blobs: Vec<Blob>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .handle_validated_certificate(certificate, blobs)
+                    .await
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .handle_validated_certificate(certificate, blobs)
                     .await
             }
         }

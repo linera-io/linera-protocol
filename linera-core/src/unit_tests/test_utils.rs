@@ -21,7 +21,10 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{CertificateKind, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate},
+    types::{
+        CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
+        LiteCertificate, Timeout, ValidatedBlock,
+    },
 };
 use linera_execution::{
     committee::{Committee, ValidatorName},
@@ -120,9 +123,30 @@ where
         .await
     }
 
-    async fn handle_certificate<T: ProcessableCertificate>(
+    async fn handle_timeout_certificate(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: GenericCertificate<Timeout>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_handle_certificate(certificate, vec![], sender)
+        })
+        .await
+    }
+
+    async fn handle_validated_certificate(
+        &self,
+        certificate: GenericCertificate<ValidatedBlock>,
+        blobs: Vec<Blob>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_handle_certificate(certificate, blobs, sender)
+        })
+        .await
+    }
+
+    async fn handle_confirmed_certificate(
+        &self,
+        certificate: GenericCertificate<ConfirmedBlock>,
         blobs: Vec<Blob>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
@@ -705,11 +729,13 @@ where
         );
     }
 
-    pub async fn add_initial_chain(
+    /// Creates the root chain with the given `index`, and returns a client for it.
+    pub async fn add_root_chain(
         &mut self,
-        description: ChainDescription,
+        index: u32,
         balance: Amount,
     ) -> Result<ChainClient<NodeProvider<B::Storage>, B::Storage>, anyhow::Error> {
+        let description = ChainDescription::Root(index);
         let key_pair = KeyPair::generate();
         let public_key = key_pair.public();
         // Remember what's in the genesis store for future clients to join.

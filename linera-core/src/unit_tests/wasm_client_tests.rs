@@ -20,10 +20,7 @@ use async_graphql::Request;
 use counter::CounterAbi;
 use linera_base::{
     data_types::{Amount, Bytecode, OracleResponse, UserApplicationDescription},
-    identifiers::{
-        AccountOwner, ApplicationId, ChainDescription, ChainId, Destination, Owner, StreamId,
-        StreamName,
-    },
+    identifiers::{AccountOwner, ApplicationId, Destination, Owner, StreamId, StreamName},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::data_types::{EventRecord, MessageAction, OutgoingMessage};
@@ -109,12 +106,8 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(policy.clone());
-    let publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
-        .await?;
-    let creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
-        .await?;
+    let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let creator = builder.add_root_chain(1, Amount::ONE).await?;
 
     let (bytecode_id, _cert) = publisher
         .publish_bytecode(contract_bytecode, service_bytecode)
@@ -247,18 +240,12 @@ where
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
     // Will publish the bytecodes.
-    let publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
-        .await?;
+    let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
     // Will create the apps and use them to send a message.
-    let creator = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
-        .await?;
+    let creator = builder.add_root_chain(1, Amount::ONE).await?;
     // Will receive the message.
-    let receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ONE)
-        .await?;
-    let receiver_id = ChainId::root(2);
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let receiver_id = receiver.chain_id();
 
     // Handling the message causes an oracle request to the counter service, so no fast blocks
     // are allowed.
@@ -524,18 +511,10 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let _admin = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
-        .await?;
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::from_tokens(3))
-        .await?;
-    let receiver = builder
-        .add_initial_chain(ChainDescription::Root(2), Amount::ONE)
-        .await?;
-    let receiver2 = builder
-        .add_initial_chain(ChainDescription::Root(3), Amount::ONE)
-        .await?;
+    let _admin = builder.add_root_chain(0, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let receiver2 = builder.add_root_chain(3, Amount::ONE).await?;
 
     let (bytecode_id, _pub_cert) = {
         let bytecode_name = "fungible";
@@ -733,12 +712,8 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1)
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
-    let sender = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::ONE)
-        .await?;
-    let receiver = builder
-        .add_initial_chain(ChainDescription::Root(1), Amount::ONE)
-        .await?;
+    let sender = builder.add_root_chain(0, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
 
     let (bytecode_id, _pub_cert) = {
         let (contract_path, service_path) =
@@ -889,9 +864,7 @@ async fn test_memory_fuel_limit(wasm_runtime: WasmRuntime) -> anyhow::Result<()>
                 maximum_fuel_per_block: 30_000,
                 ..ResourceControlPolicy::default()
             });
-    let publisher = builder
-        .add_initial_chain(ChainDescription::Root(0), Amount::from_tokens(3))
-        .await?;
+    let publisher = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
 
     let (contract_path, service_path) =
         linera_execution::wasm_test::get_example_bytecode_paths("counter")?;
