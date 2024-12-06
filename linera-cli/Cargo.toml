@@ -1,0 +1,27 @@
+[package]
+name = "linera-cli"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true, features = ["backtrace"] }
+clap.workspace = true
+clap-markdown.workspace = true
+clap-verbosity-flag = { version = "3.0.1", features = ["tracing"] }
+color-eyre = "0.6.3"
+erased-serde = "0.4.5"
+eyre = "0.6.12"
+futures.workspace = true
+inquire = "0.7.5"
+linera-client.workspace = true
+linera-execution.workspace = true
+linera-service.workspace = true
+nonzero_lit = "0.1.2"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+url.workspace = true
