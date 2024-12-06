@@ -25,12 +25,20 @@ fn test_signed_values() {
         events: vec![Vec::new()],
     }
     .with(block);
-    let value = Hashed::new(ConfirmedBlock::new(executed_block));
+    let confirmed_value = Hashed::new(ConfirmedBlock::new(executed_block.clone()));
 
-    let v = LiteVote::new(value.lite(), Round::Fast, &key1);
-    assert!(v.check().is_ok());
+    let confirmed_vote = LiteVote::new(confirmed_value.lite(), Round::Fast, &key1);
+    assert!(confirmed_vote.check().is_ok());
 
-    let mut v = LiteVote::new(value.lite(), Round::Fast, &key2);
+    let validated_value = Hashed::new(ValidatedBlock::new(executed_block));
+    let validated_vote = LiteVote::new(validated_value.lite(), Round::Fast, &key1);
+    assert!(validated_vote.check().is_ok());
+    assert_ne!(
+        confirmed_vote.value, validated_vote.value,
+        "Confirmed and validated votes should be different, even if for the same executed block"
+    );
+
+    let mut v = LiteVote::new(confirmed_value.lite(), Round::Fast, &key2);
     v.validator = name1;
     assert!(v.check().is_err());
 }

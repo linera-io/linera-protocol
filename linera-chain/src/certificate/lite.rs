@@ -66,6 +66,7 @@ impl<'a> LiteCertificate<'a> {
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(
             self.value.executed_block_hash,
+            self.value.kind,
             self.round,
             &self.signatures,
             committee,
