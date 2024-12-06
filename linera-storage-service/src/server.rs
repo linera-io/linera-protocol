@@ -47,7 +47,7 @@ enum ServiceStoreServerInternal {
 
 #[derive(Default)]
 struct BigRead {
-    num_read: usize,
+    num_processed_chunks: usize,
     chunks: Vec<Vec<u8>>,
 }
 
@@ -226,7 +226,7 @@ impl ServiceStoreServer {
         let message_index = pending_big_reads.index;
         pending_big_reads.index += 1;
         let big_read = BigRead {
-            num_read: 0,
+            num_processed_chunks: 0,
             chunks,
         };
         pending_big_reads.big_reads.insert(message_index, big_read);
@@ -470,8 +470,8 @@ impl StoreProcessor for ServiceStoreServer {
         };
         let index = index as usize;
         let chunk = entry.chunks[index].clone();
-        entry.num_read += 1;
-        if entry.chunks.len() == entry.num_read {
+        entry.num_processed_chunks += 1;
+        if entry.chunks.len() == entry.num_processed_chunks {
             pending_big_reads.big_reads.remove(&message_index);
         }
         let response = ReplySpecificChunk { chunk };
