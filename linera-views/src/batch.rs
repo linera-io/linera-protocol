@@ -186,7 +186,7 @@ impl Batch {
     }
 
     /// The total size of the batch
-    pub fn len(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.operations
             .iter()
             .map(|operation| match operation {

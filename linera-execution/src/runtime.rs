@@ -1413,7 +1413,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
                 .map_err(|_| ExecutionError::from(ArithmeticError::Overflow))?,
         )?;
         this.resource_controller
-            .track_bytes_written(batch.len() as u64)?;
+            .track_bytes_written(batch.size() as u64)?;
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::WriteBatch {
                 id,
