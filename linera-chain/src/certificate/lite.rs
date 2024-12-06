@@ -66,6 +66,7 @@ impl<'a> LiteCertificate<'a> {
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(
             self.value.value_hash,
+            self.value.kind,
             self.round,
             &self.signatures,
             committee,
@@ -78,7 +79,9 @@ impl<'a> LiteCertificate<'a> {
         self,
         value: Hashed<T>,
     ) -> Option<GenericCertificate<T>> {
-        if self.value.chain_id != value.inner().chain_id() || self.value.value_hash != value.hash()
+        if self.value.chain_id != value.inner().chain_id()
+            || T::KIND != self.value.kind
+            || self.value.value_hash != value.hash()
         {
             return None;
         }

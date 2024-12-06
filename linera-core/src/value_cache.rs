@@ -12,13 +12,11 @@ use std::{any::type_name, sync::LazyLock};
 use std::{borrow::Cow, hash::Hash, num::NonZeroUsize};
 
 use linera_base::{crypto::CryptoHash, data_types::Blob, identifiers::BlobId};
-use linera_chain::types::{CertificateValueT, GenericCertificate, Hashed, LiteCertificate};
+use linera_chain::types::Hashed;
 use lru::LruCache;
 use tokio::sync::Mutex;
 #[cfg(with_metrics)]
 use {linera_base::prometheus_util::register_int_counter_vec, prometheus::IntCounterVec};
-
-use crate::worker::WorkerError;
 
 /// The default cache size.
 pub const DEFAULT_VALUE_CACHE_SIZE: usize = 1000;
@@ -202,24 +200,6 @@ impl<T: Clone> ValueCache<CryptoHash, Hashed<T>> {
                 cache.push(hash, value.into_owned());
             }
         }
-    }
-
-    /// Populates a [`LiteCertificate`] with its [`CertificateValue`], if it's present in
-    /// the cache.
-    pub async fn full_certificate(
-        &self,
-        certificate: LiteCertificate<'_>,
-    ) -> Result<GenericCertificate<T>, WorkerError>
-    where
-        T: CertificateValueT,
-    {
-        let value = self
-            .get(&certificate.value.value_hash)
-            .await
-            .ok_or(WorkerError::MissingCertificateValue)?;
-        certificate
-            .with_value(value)
-            .ok_or(WorkerError::InvalidLiteCertificate)
     }
 }
 

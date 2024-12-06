@@ -17,10 +17,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, MessageBundle, Origin, Target},
-    types::{
-        ConfirmedBlock, ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlock,
-        ValidatedBlockCertificate,
-    },
+    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
     ChainStateView,
 };
 use linera_execution::{
@@ -170,8 +167,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        confirmed_value_cache: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
-        validated_value_cache: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
+        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -188,8 +184,7 @@ where
         let worker = ChainWorkerState::load(
             config,
             storage,
-            confirmed_value_cache,
-            validated_value_cache,
+            executed_block_cache,
             tracked_chains,
             delivery_notifier,
             chain_id,

@@ -28,7 +28,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     types::{
-        CertificateValueT, GenericCertificate, Hashed, LiteCertificate, ValidatedBlockCertificate,
+        CertificateKind, CertificateValueT, GenericCertificate, Hashed, LiteCertificate,
+        ValidatedBlockCertificate,
     },
     ChainError,
 };
@@ -399,6 +400,8 @@ pub struct ExecutedBlock {
     pub outcome: BlockExecutionOutcome,
 }
 
+impl BcsHashable for ExecutedBlock {}
+
 /// The messages and the state hash resulting from a [`Block`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject)]
 #[cfg_attr(with_testing, derive(Default))]
@@ -433,10 +436,11 @@ pub struct EventRecord {
 pub struct LiteValue {
     pub value_hash: CryptoHash,
     pub chain_id: ChainId,
+    pub kind: CertificateKind,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-struct ValueHashAndRound(CryptoHash, Round);
+struct ValueHashAndRound(CryptoHash, Round, CertificateKind);
 
 /// A vote on a statement from a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -450,8 +454,11 @@ pub struct Vote<T> {
 
 impl<T> Vote<T> {
     /// Use signing key to create a signed object.
-    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self {
-        let hash_and_round = ValueHashAndRound(value.hash(), round);
+    pub fn new(value: Hashed<T>, round: Round, key_pair: &KeyPair) -> Self
+    where
+        T: CertificateValueT,
+    {
+        let hash_and_round = ValueHashAndRound(value.hash(), round, T::KIND);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -503,6 +510,10 @@ impl LiteVote {
             validator: self.validator,
             signature: self.signature,
         })
+    }
+
+    pub fn kind(&self) -> CertificateKind {
+        self.value.kind
     }
 }
 
@@ -796,7 +807,7 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, key_pair: &KeyPair) -> Self {
-        let hash_and_round = ValueHashAndRound(value.value_hash, round);
+        let hash_and_round = ValueHashAndRound(value.value_hash, round, value.kind);
         let signature = Signature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -808,7 +819,7 @@ impl LiteVote {
 
     /// Verifies the signature in the vote.
     pub fn check(&self) -> Result<(), ChainError> {
-        let hash_and_round = ValueHashAndRound(self.value.value_hash, self.round);
+        let hash_and_round = ValueHashAndRound(self.value.value_hash, self.round, self.value.kind);
         Ok(self.signature.check(&hash_and_round, self.validator.0)?)
     }
 }
@@ -840,9 +851,9 @@ impl<'a, T> SignatureAggregator<'a, T> {
         signature: Signature,
     ) -> Result<Option<GenericCertificate<T>>, ChainError>
     where
-        T: Clone,
+        T: CertificateValueT,
     {
-        let hash_and_round = ValueHashAndRound(self.partial.hash(), self.partial.round);
+        let hash_and_round = ValueHashAndRound(self.partial.hash(), self.partial.round, T::KIND);
         signature.check(&hash_and_round, validator.0)?;
         // Check that each validator only appears once.
         ensure!(
@@ -875,6 +886,7 @@ pub(crate) fn is_strictly_ordered(values: &[(ValidatorName, Signature)]) -> bool
 /// Verifies certificate signatures.
 pub(crate) fn check_signatures(
     value_hash: CryptoHash,
+    certificate_kind: CertificateKind,
     round: Round,
     signatures: &[(ValidatorName, Signature)],
     committee: &Committee,
@@ -899,7 +911,7 @@ pub(crate) fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = ValueHashAndRound(value_hash, round);
+    let hash_and_round = ValueHashAndRound(value_hash, round, certificate_kind);
     Signature::verify_batch(&hash_and_round, signatures.iter().map(|(v, s)| (&v.0, s)))?;
     Ok(())
 }

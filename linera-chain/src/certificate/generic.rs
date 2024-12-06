@@ -95,8 +95,17 @@ impl<T> GenericCertificate<T> {
     }
 
     /// Verifies the certificate.
-    pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
-        crate::data_types::check_signatures(self.hash(), self.round, &self.signatures, committee)?;
+    pub fn check(&self, committee: &Committee) -> Result<(), ChainError>
+    where
+        T: CertificateValueT,
+    {
+        crate::data_types::check_signatures(
+            self.hash(),
+            T::KIND,
+            self.round,
+            &self.signatures,
+            committee,
+        )?;
         Ok(())
     }
 

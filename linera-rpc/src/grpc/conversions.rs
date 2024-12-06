@@ -10,8 +10,8 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
     types::{
-        Certificate, ConfirmedBlock, ConfirmedBlockCertificate, Hashed, LiteCertificate, Timeout,
-        TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, Hashed,
+        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
 };
 use linera_core::{
@@ -295,9 +295,20 @@ impl<'a> TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'a> {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::LiteCertificate) -> Result<Self, Self::Error> {
+        let kind = if certificate.kind == api::CertificateKind::Validated as i32 {
+            CertificateKind::Validated
+        } else if certificate.kind == api::CertificateKind::Confirmed as i32 {
+            CertificateKind::Confirmed
+        } else if certificate.kind == api::CertificateKind::Timeout as i32 {
+            CertificateKind::Timeout
+        } else {
+            return Err(GrpcProtoConversionError::InvalidCertificateType);
+        };
+
         let value = LiteValue {
             value_hash: CryptoHash::try_from(certificate.hash.as_slice())?,
             chain_id: try_proto_convert(certificate.chain_id)?,
+            kind,
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
         let round = bincode::deserialize(&certificate.round)?;
@@ -318,6 +329,7 @@ impl<'a> TryFrom<HandleLiteCertRequest<'a>> for api::LiteCertificate {
             chain_id: Some(request.certificate.value.chain_id.into()),
             signatures: bincode::serialize(&request.certificate.signatures)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+            kind: request.certificate.value.kind as i32,
         })
     }
 }
@@ -903,6 +915,7 @@ pub mod tests {
     use linera_chain::{
         data_types::{Block, BlockExecutionOutcome},
         test::make_first_block,
+        types::CertificateKind,
     };
     use linera_core::data_types::ChainInfo;
     use serde::{Deserialize, Serialize};
@@ -1038,6 +1051,7 @@ pub mod tests {
             value: LiteValue {
                 value_hash: CryptoHash::new(&Foo("value".into())),
                 chain_id: ChainId::root(0),
+                kind: CertificateKind::Validated,
             },
             round: Round::MultiLeader(2),
             signatures: Cow::Owned(vec![(

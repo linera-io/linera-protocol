@@ -218,6 +218,8 @@ message LiteCertificate {
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 5;
+
+  CertificateKind kind = 6;
 }
 
 // A certified statement from the committee, together with other certificates

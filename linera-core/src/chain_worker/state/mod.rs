@@ -19,10 +19,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{Block, BlockProposal, ExecutedBlock, Medium, MessageBundle, Origin, Target},
-    types::{
-        ConfirmedBlock, ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlock,
-        ValidatedBlockCertificate,
-    },
+    types::{ConfirmedBlockCertificate, Hashed, TimeoutCertificate, ValidatedBlockCertificate},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -56,8 +53,7 @@ where
     chain: ChainStateView<StorageClient::Context>,
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
-    recent_hashed_confirmed_values: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
-    recent_hashed_validated_values: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
+    recent_executed_block_values: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -72,8 +68,7 @@ where
     pub async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        confirmed_value_cache: Arc<ValueCache<CryptoHash, Hashed<ConfirmedBlock>>>,
-        validated_value_cache: Arc<ValueCache<CryptoHash, Hashed<ValidatedBlock>>>,
+        executed_block_cache: Arc<ValueCache<CryptoHash, Hashed<ExecutedBlock>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -87,8 +82,7 @@ where
             chain,
             shared_chain_view: None,
             service_runtime_endpoint,
-            recent_hashed_confirmed_values: confirmed_value_cache,
-            recent_hashed_validated_values: validated_value_cache,
+            recent_executed_block_values: executed_block_cache,
             tracked_chains,
             delivery_notifier,
             knows_chain_is_active: false,

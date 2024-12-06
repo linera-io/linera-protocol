@@ -22,8 +22,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
-        ValidatedBlock,
+        CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
+        LiteCertificate, Timeout, ValidatedBlock,
     },
 };
 use linera_execution::{
@@ -333,7 +333,9 @@ where
         blobs: Vec<Blob>,
     ) -> Option<Result<ChainInfoResponse, NodeError>> {
         match validator.fault_type {
-            FaultType::DontProcessValidated if T::IS_VALIDATED => None,
+            FaultType::DontProcessValidated if matches!(T::KIND, CertificateKind::Validated) => {
+                None
+            }
             FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::Malicious
@@ -390,7 +392,7 @@ where
             }
             _ => match validator.fault_type {
                 FaultType::DontSendConfirmVote | FaultType::DontProcessValidated
-                    if T::IS_VALIDATED =>
+                    if matches!(T::KIND, CertificateKind::Validated) =>
                 {
                     Err(NodeError::ClientIoError {
                         error: "refusing to confirm".to_string(),

@@ -87,8 +87,16 @@ impl Certificate {
     }
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[repr(u8)]
+pub enum CertificateKind {
+    Timeout = 0,
+    Validated = 1,
+    Confirmed = 2,
+}
+
 pub trait CertificateValueT: Clone {
-    const IS_VALIDATED: bool;
+    const KIND: CertificateKind;
 
     fn chain_id(&self) -> ChainId;
 
@@ -100,7 +108,7 @@ pub trait CertificateValueT: Clone {
 }
 
 impl CertificateValueT for Timeout {
-    const IS_VALIDATED: bool = false;
+    const KIND: CertificateKind = CertificateKind::Timeout;
 
     fn chain_id(&self) -> ChainId {
         self.chain_id
@@ -120,7 +128,7 @@ impl CertificateValueT for Timeout {
 }
 
 impl CertificateValueT for ValidatedBlock {
-    const IS_VALIDATED: bool = true;
+    const KIND: CertificateKind = CertificateKind::Validated;
 
     fn chain_id(&self) -> ChainId {
         self.executed_block().block.chain_id
@@ -135,12 +143,12 @@ impl CertificateValueT for ValidatedBlock {
     }
 
     fn required_blob_ids(&self) -> HashSet<BlobId> {
-        self.executed_block().required_blob_ids()
+        self.executed_block().required_blob_ids().clone()
     }
 }
 
 impl CertificateValueT for ConfirmedBlock {
-    const IS_VALIDATED: bool = false;
+    const KIND: CertificateKind = CertificateKind::Confirmed;
 
     fn chain_id(&self) -> ChainId {
         self.executed_block().block.chain_id

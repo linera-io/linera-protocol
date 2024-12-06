@@ -160,6 +160,14 @@ Certificate:
       Timeout:
         NEWTYPE:
           TYPENAME: TimeoutCertificate
+CertificateKind:
+  ENUM:
+    0:
+      Timeout: UNIT
+    1:
+      Validated: UNIT
+    2:
+      Confirmed: UNIT
 ChainAndHeight:
   STRUCT:
     - chain_id:
@@ -469,6 +477,8 @@ LiteValue:
         TYPENAME: CryptoHash
     - chain_id:
         TYPENAME: ChainId
+    - kind:
+        TYPENAME: CertificateKind
 LiteVote:
   STRUCT:
     - value:
