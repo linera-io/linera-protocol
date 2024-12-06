@@ -98,12 +98,10 @@ impl<T: async_graphql::OutputType> async_graphql::TypeName for Hashed<T> {
     }
 }
 
-#[cfg(with_testing)]
 impl<T> PartialEq for Hashed<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash() == other.hash()
     }
 }
 
-#[cfg(with_testing)]
 impl<T> Eq for Hashed<T> {}
