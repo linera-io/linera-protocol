@@ -381,11 +381,11 @@ impl ServiceStoreClientInternal {
             let handle = self.read_single_entry(message_index, index);
             handles.push(handle);
         }
-        let values: Vec<Vec<u8>> = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()?;
-        let value = values.into_iter().flatten().collect::<Vec<_>>();
+        let mut value = Vec::new();
+        for chunk in join_all(handles).await {
+            let chunk = chunk?;
+            value.extend(chunk);
+        }
         Ok(bcs::from_bytes(&value)?)
     }
 }
