@@ -13,7 +13,9 @@ where
         let mut batch = Batch::new();
         self.register.flush(&mut batch)?;
         self.collection.flush(&mut batch)?;
-        self.context().write_batch(batch).await?;
+        if !batch.is_empty() {
+            self.context().write_batch(batch).await?;
+        }
         Ok(())
     }
 }

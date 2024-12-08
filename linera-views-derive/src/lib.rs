@@ -263,7 +263,9 @@ fn generate_save_delete_view_code(input: ItemStruct) -> TokenStream2 {
                 #increment_counter
                 let mut batch = Batch::new();
                 #(#flushes)*
-                self.context().write_batch(batch).await?;
+                if !batch.is_empty() {
+                    self.context().write_batch(batch).await?;
+                }
                 Ok(())
             }
         }
