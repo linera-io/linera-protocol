@@ -8,10 +8,11 @@ set -e
 
 # Yank the given packages.
 grep -v '^#' "$2" | while read LINE; do
-    LINE=($LINE)
+    read -a LINE <<< "$LINE"
     NAME="${LINE[0]}"
     (
         set -x;
         cargo yank "$NAME"@"$1"
     )
 done
+
